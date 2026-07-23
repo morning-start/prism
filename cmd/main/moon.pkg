@@ -1,0 +1,7 @@
+// import {
+//   "morning-start/prism" @lib,
+// }
+
+options(
+  "is-main": true,
+)
