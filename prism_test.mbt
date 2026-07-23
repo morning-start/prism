@@ -1,3 +1,1 @@
-// Blackbox tests run against the package's public API. Use `@prism` to import.
-// Prefer high-level behaviors over implementation details.
-// Run `moon test` to execute and `moon test --update` to refresh snapshots.
+// Blackbox tests — public API tests go here in Phase 1.4+
