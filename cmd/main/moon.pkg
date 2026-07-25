@@ -1,5 +1,0 @@
-// import {
-//   "morning-start/prism" @lib,
-// }
-
-pkgtype(kind: "executable")

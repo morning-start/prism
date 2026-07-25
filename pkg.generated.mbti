@@ -1,89 +1,11 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "morning-start/prism"
 
-import {
-  "moonbitlang/core/debug",
-}
-
 // Values
 
 // Errors
 
 // Types and methods
-pub struct MidChoice {
-  message : MidMessage
-  finish_reason : String
-} derive(Eq, @debug.Debug)
-
-pub enum MidContent {
-  Text(String)
-  ToolUse(String, String, String)
-  ToolResult(String, String)
-} derive(Eq, @debug.Debug)
-
-pub struct MidDelta {
-  role : MidRole?
-  content : String?
-  tool_calls : Array[MidToolCall]?
-} derive(Eq, @debug.Debug)
-
-pub struct MidMessage {
-  role : MidRole
-  content : Array[MidContent]
-} derive(Eq, @debug.Debug)
-
-pub struct MidRequest {
-  model : String
-  messages : Array[MidMessage]
-  tools : Array[MidTool]?
-  temperature : Double?
-  max_tokens : Int?
-  stream : Bool
-} derive(Eq, @debug.Debug)
-
-pub struct MidResponse {
-  id : String
-  model : String
-  choices : Array[MidChoice]
-  usage : MidUsage
-} derive(Eq, @debug.Debug)
-
-pub enum MidRole {
-  System
-  User
-  Assistant
-  Tool
-} derive(Eq, @debug.Debug)
-
-pub struct MidStreamChoice {
-  delta : MidDelta
-  finish_reason : String?
-} derive(Eq, @debug.Debug)
-
-pub struct MidStreamChunk {
-  id : String
-  model : String
-  choices : Array[MidStreamChoice]
-  usage : MidUsage?
-} derive(Eq, @debug.Debug)
-
-pub struct MidTool {
-  name : String
-  description : String
-  parameters : String
-} derive(Eq, @debug.Debug)
-
-pub struct MidToolCall {
-  id : String
-  name : String
-  arguments : String
-} derive(Eq, @debug.Debug)
-
-pub struct MidUsage {
-  prompt_tokens : Int
-  completion_tokens : Int
-  total_tokens : Int
-} derive(Eq, @debug.Debug)
 
 // Type aliases
 

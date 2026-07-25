@@ -4,3 +4,5 @@ target/
 target
 .mooncakes/
 .moonagent/
+.agents/skills/moonbit-skill/
+.claude/skills/moonbit-skill/
