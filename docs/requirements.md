@@ -7,120 +7,134 @@
 ## 架构总览
 
 ```
-MidProtocol (纯数据结构)             ← 根包 prism.mbt
+lux/          ← Lucent IR 核心（纯数据结构，无 IO、无厂商绑定）
     │
-    ├── openai/  适配器               ← 当前：Phase 1.2
-    ├── claude/  适配器               ← Phase 1.5
-    ├── ollama/  适配器               ← Phase 1.6
+    ├── provider/openai_chat/    ← OpenAI Chat 适配器 ✅
+    ├── provider/anthropic/      ← Anthropic 适配器（待实现）
+    ├── provider/openai_responses/  ← OpenAI Responses 适配器（待实现）
+    ├── provider/gemini/         ← Google Gemini 适配器（待实现）
     │
-    └── wasm/  导出层                 ← Phase 1.4
+    └── wasm/                    ← WASM 导出层（待实现）
 ```
 
-每一层都是纯函数：`String JSON → Result[MidProtocol, Error]`
+每一层都是纯函数：`String JSON → Result[LucentRequest, Error]`
 
-## Phase 1 路线图
+## 当前状态
 
-| Phase | 内容 | 验证 |
-|-------|------|------|
-| 1.1 | 中间协议数据结构 ✅ | `moon test` 11 passed |
-| 1.2 | OpenAI Chat Completion 编解码（非流式） | 输入 OpenAI JSON → 输出 MidRequest / 反向 |
-| 1.3 | OpenAI 流式适配器（SSE chunk ↔ MidStreamChunk） | chunk-by-chunk 转换 |
-| 1.4 | WASM 导出层 | 宿主语言调用 WASM 验证 |
-| 1.5 | Claude Messages API 适配器 | 同上 |
-| 1.6 | Ollama / vLLM 适配器 | 同上 |
+| 模块 | 状态 | 测试数 |
+|------|------|--------|
+| `lux/` 核心类型定义 | ✅ **已完成** | 34+ 类型，`pub(all) enum` |
+| `lux/` JSON 序列化 (to_json) | ✅ **已完成** | 73 测试 |
+| `lux/` JSON 反序列化 (from_json) | ✅ **已完成** | 31 round-trip 测试 |
+| `lux/` 流式事件 + 累加器 | ✅ **已完成** | 块生命周期模型 |
+| `schemas/lux-ir-v1.json` | ✅ **已完成** | JSON Schema v1 |
+| `provider/openai_chat/` 6 函数 | ✅ **已完成** | 35+ 测试 |
+| `provider/anthropic/` | ❌ 未开始 | |
+| `provider/openai_responses/` | ❌ 未开始 | |
+| `provider/gemini/` | ❌ 未开始 | |
+| `wasm/` 导出层 | ❌ 骨架 | |
+| 跨协议一致性测试 | ❌ 未开始 | |
 
-## Phase 1.2 详细设计
+**测试总计：191 passed, 0 failed** ✅
 
-### 分包结构
+## 分包结构
 
 ```
 prism/
-├── moon.pkg                     # 根库包，导出 MidProtocol 类型
-├── prism.mbt                    # MidProtocol 类型定义 (done)
-├── prism_wbtest.mbt             # 白盒测试 (done)
-├── openai/
-│   ├── moon.pkg                 # 依赖根包 + moonbitlang/x/json
-│   ├── chat.mbt                 # OpenAI Chat Completion 编解码
-│   └── chat_test.mbt            # 测试
 │
-├── docs/requirements.md         # ← 本文件
-└── ...
+├── moon.mod                     # 模块元数据，name = "morning-start/prism"
+│
+├── lux/                         # Lucent IR 核心包
+│   ├── moon.pkg                 # 依赖 moonbitlang/core/json
+│   ├── lux.mbt                  # 34+ 核心类型定义
+│   ├── stream.mbt               # 流式事件枚举 + 累加器
+│   ├── serialize.mbt            # to_json() 显式序列化
+│   ├── deserialize.mbt          # from_json() 显式反序列化
+│   ├── lux_wbtest.mbt           # 核心类型白盒测试
+│   ├── serialize_wbtest.mbt     # 序列化白盒测试
+│   └── deserialize_wbtest.mbt   # 反序列化 round-trip 测试
+│
+├── provider/                    # 厂商适配器
+│   ├── openai_chat/
+│   │   ├── moon.pkg             # 依赖 lux + moonbitlang/core/json
+│   │   ├── chat.mbt             # 6 函数（双向转换 + 流式）
+│   │   └── chat_wbtest.mbt      # 35+ 测试
+│   │
+│   └── ...                      # 其他适配器待实现
+│
+├── wasm/                        # WASM 导出层
+│   ├── moon.pkg                 # 依赖 lux + 各 provider
+│   └── ...
+│
+├── schemas/
+│   └── lux-ir-v1.json           # JSON Schema v1（事实标准）
+│
+└── docs/
+    ├── lux-ir-design.md         # Lux IR 形式规范
+    ├── requirements.md          # ← 本文件
+    └── protocols/               # 厂商协议规格参考
 ```
 
-### 依赖
+## 6-Function 适配器契约
 
-```toml
-# openai/moon.pkg
-import "morning-start/prism"
-import "moonbitlang/x/json"
-```
+每个适配器实现 6 个纯函数，String 进出：
 
-```bash
-moon add moonbitlang/x/json
-```
+| # | 方向 | 解码（外部 → Lux） | 编码（Lux → 外部） |
+|---|------|------------------|------------------|
+| 1 | 请求 | `ext_to_lux_request(String) → Result[LucentRequest, String]` | `lux_request_to_ext(LucentRequest) → Result[String, String]` |
+| 2 | 响应 | `ext_to_lux_response(String) → Result[LucentResponse, String]` | `lux_response_to_ext(LucentResponse) → Result[String, String]` |
+| 3 | 流式 | `ext_sse_to_events(String) → Result[Array[LucentStreamEvent], String]` | `lux_events_to_ext_sse(Array[LucentStreamEvent]) → Result[String, String]` |
 
-### API 表面
+## 映射规则（以 OpenAI Chat 为例）
 
-```moonbit
-/// 解析 OpenAI Chat Completion 请求 JSON → MidRequest
-/// 支持: text content, tool_calls, tools, temperature, max_tokens
-pub fn openai_chat_to_mid_request(json: String) -> Result[MidRequest, String]
+#### OpenAI Request → LucentRequest
 
-/// 将 MidResponse 序列化为 OpenAI Chat Completion 响应 JSON
-/// 支持: choices, usage, finish_reason
-pub fn mid_response_to_openai_chat(resp: MidResponse) -> Result[String, String]
-```
-
-### 映射规则
-
-#### OpenAI Request → MidRequest
-
-| OpenAI 字段 | MidRequest 字段 | 说明 |
-|-------------|----------------|------|
+| OpenAI 字段 | LucentRequest 字段 | 说明 |
+|-------------|-------------------|------|
 | `model` | `.model` | 直接映射 |
-| `messages[].role` | `.messages[].role` | system→System, user→User, assistant→Assistant, tool→Tool |
-| `messages[].content` (string) | `.messages[].content[Text]` | 单字符串 |
-| `messages[].content` (array) | `.messages[].content[Text/ToolResult]` | 多 content part（跳过 image_url） |
-| `messages[].tool_calls` | `.messages[].content[ToolUse]` | 每个 tool_call 转 ToolUse |
-| `messages[].tool_call_id` | `.messages[].content[ToolResult]` | tool 角色的响应 |
-| `temperature` | `.temperature` | Option 映射 |
-| `max_tokens` | `.max_tokens` | Option 映射 |
-| `stream` | `.stream` | 直接映射 |
-| `tools` | `.tools` | 取 function 内部字段 |
+| `messages[?role=system].content` | `.instructions` | 抽出为系统指令 |
+| `messages[].content` (string) | `.conversation[].Message.content[Text]` | 单字符串 |
+| `messages[].content` (array) | `.conversation[].Message.content[Text/Image]` | 多 content part |
+| `messages[].tool_calls` | `.conversation[].Message.content[ToolUse]` | 工具调用 |
+| `messages[?role=tool]` | `.conversation[].Message.content[ToolResult]` | 工具结果 |
+| `temperature` | `.options.temperature` | Option 映射 |
+| `max_tokens` | `.options.max_output_tokens` | Option 映射 |
+| `stream` | `.options.stream` | 直接映射 |
+| `tools` | `.tools` | 工具定义 |
+| `tool_choice` | `.tool_choice` | 类型化枚举 |
 
-#### MidResponse → OpenAI Response
+#### LucentResponse → OpenAI Response
 
-| MidResponse 字段 | OpenAI 字段 | 说明 |
-|-----------------|-------------|------|
+| LucentResponse 字段 | OpenAI 字段 | 说明 |
+|---------------------|-------------|------|
 | `.id` | `id` | 直接映射 |
 | `.model` | `model` | 直接映射 |
-| `object` | 固定 `"chat.completion"` | 硬编码 |
-| `.choices[].message.role` | `choices[].message.role` | 直接映射 |
-| `.choices[].message.content` | `choices[].message.content` | Text parts 拼接为字符串 |
-| `.choices[].message.tool_calls` | `choices[].message.tool_calls` | ToolUse→function call |
-| `.choices[].finish_reason` | `choices[].finish_reason` | 直接映射 |
+| — | `object: "chat.completion"` | 固定值 |
+| `.choices[].message` | `choices[].message` | 含 role/content/tool_calls/refusal |
+| `.choices[].finish_reason` | `choices[].finish_reason` | 类型化转字符串 |
 | `.usage` | `usage` | 直接映射 |
 
-### 测试场景（11 + 5 个）
+## 测试场景
 
-新增 5 个测试：
+当前测试覆盖（lux 包）：
 
-| # | 场景 | 输入 | 验证 |
-|---|------|------|------|
-| 1 | 标准用户对话 | 单 user message + content string | MidRequest.model == "gpt-4o" |
-| 2 | 系统 + 用户消息 | system + user | messages 长度为 2 |
-| 3 | 工具定义 | 带 tools 数组 | MidRequest.tools 非 None |
-| 4 | Assistant ToolCall | 带 tool_calls 的 assistant | content 含 ToolUse |
-| 5 | 带 usage 的响应 | 完整 MidResponse | OpenAI JSON 含 usage 字段 |
+| 类别 | 数量 | 说明 |
+|------|------|------|
+| 类型构造 | 30+ | 覆盖所有 Lucent* 类型 |
+| 枚举映射 | 5 | Role / FinishReason / ErrorKind 等 |
+| 流式累加 | 12 | 文本/工具调用/思考/拒绝/混合等 |
+| to_json 序列化 | 73 | 每类型至少 2 场景 |
+| from_json deserialize + round-trip | 31 | construct → to_json → from_json → assert_eq |
+| 适配器 6 函数 | 35+ | 全部 6 通路 |
 
-### 目标平台
+## 目标平台
 
 `wasm-gc`（与根模块一致）
 
 ## 开发原则
 
-1. **纯函数** — 无 IO、无状态、无副作用
-2. **String 进出** — 输入输出均为 JSON 字符串，WASM 导出自然
-3. **JSON 健壮性** — 使用 `@json.JsonValue` AST 处理，不依赖正则
-4. **可测试** — 每个转换都有独立测试，覆盖正常/缺失字段/非法输入
+1. **纯函数** — 无 IO、无状态、无副作用，WASM 安全边界
+2. **String 进出** — 输入输出均为 JSON 字符串，WASM 导出零摩擦
+3. **Round-trip 安全** — Provider → Lux → Provider 必须保持语义一致
+4. **JSON Schema 作为事实标准** — `schemas/lux-ir-v1.json` 定义协议，MoonBit 是参考实现
 5. **失败即返回 String 错误** — 不抛异常，`Result` 表达

@@ -162,6 +162,14 @@ pub enum LucentMediaSource {
 }
 ```
 
+**JSON 序列化**（`to_json` / `from_json`）：
+
+```json
+{ "type": "url",      "data": "https://example.com/photo.jpg" }
+{ "type": "inline",   "data": "iVBORw0KGgo..." }
+{ "type": "file_uri", "data": "file-abc" }
+```
+
 **适配规则**：
 - OpenAI Chat `image_url.url` 若为 `data:` URI → `Inline`；否则 → `Url`
 - Anthropic `image.source.type=base64` → `Inline`；`type=url` → `Url`
@@ -173,7 +181,7 @@ pub enum LucentMediaSource {
 pub struct LucentAnnotation {
   kind : LucentAnnotationKind
   text : String?           // 被标注的原文片段
-  ref : String?            // 引用目标 URL / file_id
+  ref_ : String?            // 引用目标 URL / file_id
   start : Int?             // 原文起始 offset
   end : Int?
 }
@@ -442,7 +450,7 @@ pub enum LucentFinishReason {
 
 **适配规则**：
 - Anthropic `stop_reason: end_turn/max_tokens/tool_use` → `Stop/Length/ToolCalls`
-- Gemini `finishReason: STOP/MAX_TOKENS/SAFETY/RECITATION` → 对应变体
+- Gemini `finishReason: STOP/MAX_TOKENS/SAFETY/RECITATION` → 对应变体（`"safety"` → `Safety`，`"content_filter"` → `ContentFilter`，二者不同义）
 - OpenAI Responses `status: completed/incomplete/failed` → `Stop/Length/Error`
 - `provider_payload` 承载 `previous_response_id` / `system_fingerprint` / `safetyRatings` 等
 

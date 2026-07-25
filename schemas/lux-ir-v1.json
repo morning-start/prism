@@ -1,0 +1,601 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://prism.morning-start.dev/schemas/lux-ir-v1.json",
+  "title": "Lux IR Protocol v1",
+  "description": "Lucent IR — Prism 中立中间协议 v1，所有 LLM 厂商协议统一收敛于此",
+  "type": "object",
+  "definitions": {
+    "LucentRole": {
+      "type": "string",
+      "enum": ["system", "user", "assistant", "tool", "model", "developer"],
+      "description": "对话角色。system/user/assistant/tool 为通用角色，model 对应 Gemini model 角色，developer 对应 OpenAI developer 角色"
+    },
+    "LucentModality": {
+      "type": "string",
+      "enum": ["text", "image", "audio", "video", "pdf"]
+    },
+    "LucentMediaSource": {
+      "oneOf": [
+        { "type": "string", "const": "inline", "description": "base64 内联数据" },
+        { "type": "string", "const": "url", "description": "远程 URL" },
+        { "type": "string", "const": "file_uri", "description": "厂商文件 URI" }
+      ]
+    },
+    "LucentMultimedia": {
+      "type": "object",
+      "properties": {
+        "media_type": { "type": "string", "description": "MIME type" },
+        "source": { "$ref": "#/definitions/LucentMediaSource" }
+      },
+      "required": ["media_type", "source"]
+    },
+    "LucentAnnotationKind": {
+      "type": "string",
+      "enum": ["url", "file_citation", "web_search_citation"]
+    },
+    "LucentAnnotation": {
+      "type": "object",
+      "properties": {
+        "kind": { "$ref": "#/definitions/LucentAnnotationKind" },
+        "text": { "type": "string", "description": "被标注的原文片段" },
+        "ref": { "type": "string", "description": "引用目标 URL / file_id" },
+        "start": { "type": "integer", "description": "原文起始 offset" },
+        "end": { "type": "integer", "description": "原文结束 offset" }
+      },
+      "required": ["kind"]
+    },
+    "LucentThinking": {
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "signature": { "type": "string" },
+        "redacted": { "type": "boolean" },
+        "summary": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/LucentContent" }
+        }
+      },
+      "required": ["text", "redacted"]
+    },
+    "LucentToolUse": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "arguments": { "type": "string", "description": "JSON 字符串格式参数" }
+      },
+      "required": ["id", "name", "arguments"]
+    },
+    "LucentToolResult": {
+      "type": "object",
+      "properties": {
+        "tool_use_id": { "type": "string" },
+        "content": { "type": "array", "items": { "$ref": "#/definitions/LucentContent" } },
+        "is_error": { "type": "boolean" }
+      },
+      "required": ["tool_use_id", "content", "is_error"]
+    },
+    "LucentAgentAction": {
+      "type": "object",
+      "properties": {
+        "kind": { "type": "string" },
+        "id": { "type": "string" },
+        "call_id": { "type": "string" },
+        "name": { "type": "string" },
+        "arguments": { "type": "string" },
+        "result": { "type": "string" },
+        "provider_payload": { "$ref": "#/definitions/JsonValue" }
+      },
+      "required": ["kind", "id"]
+    },
+    "LucentContent": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "text" },
+            "text": { "type": "string" },
+            "annotations": { "type": "array", "items": { "$ref": "#/definitions/LucentAnnotation" } }
+          },
+          "required": ["type", "text"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "tool_use" },
+            "tool_use": { "$ref": "#/definitions/LucentToolUse" }
+          },
+          "required": ["type", "tool_use"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "tool_result" },
+            "tool_result": { "$ref": "#/definitions/LucentToolResult" }
+          },
+          "required": ["type", "tool_result"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "thinking" },
+            "thinking": { "$ref": "#/definitions/LucentThinking" }
+          },
+          "required": ["type", "thinking"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "refusal" },
+            "refusal": { "type": "string" }
+          },
+          "required": ["type", "refusal"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "image" },
+            "image": { "$ref": "#/definitions/LucentMultimedia" }
+          },
+          "required": ["type", "image"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "audio" },
+            "audio": { "$ref": "#/definitions/LucentMultimedia" }
+          },
+          "required": ["type", "audio"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "video" },
+            "video": { "$ref": "#/definitions/LucentMultimedia" }
+          },
+          "required": ["type", "video"]
+        }
+      ]
+    },
+    "LucentMessage": {
+      "type": "object",
+      "properties": {
+        "role": { "$ref": "#/definitions/LucentRole" },
+        "content": { "type": "array", "items": { "$ref": "#/definitions/LucentContent" } }
+      },
+      "required": ["role", "content"]
+    },
+    "LucentConversationItem": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "message" },
+            "message": { "$ref": "#/definitions/LucentMessage" }
+          },
+          "required": ["type", "message"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "tool_call" },
+            "tool_call": { "$ref": "#/definitions/LucentToolUse" }
+          },
+          "required": ["type", "tool_call"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "tool_result" },
+            "tool_result": { "$ref": "#/definitions/LucentToolResult" }
+          },
+          "required": ["type", "tool_result"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "reasoning" },
+            "reasoning": { "$ref": "#/definitions/LucentThinking" }
+          },
+          "required": ["type", "reasoning"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "agent_action" },
+            "agent_action": { "$ref": "#/definitions/LucentAgentAction" }
+          },
+          "required": ["type", "agent_action"]
+        }
+      ]
+    },
+    "LucentTool": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "parameters": { "$ref": "#/definitions/JsonValue" },
+        "strict": { "type": "boolean" }
+      },
+      "required": ["name", "parameters"]
+    },
+    "LucentToolChoice": {
+      "oneOf": [
+        { "type": "string", "enum": ["auto", "none", "required"] },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "specific_tool" },
+            "name": { "type": "string" }
+          },
+          "required": ["type", "name"]
+        }
+      ]
+    },
+    "LucentStructuredOutput": {
+      "oneOf": [
+        { "type": "string", "const": "json_object" },
+        { "type": "string", "const": "text" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "json_schema" },
+            "schema": { "$ref": "#/definitions/JsonValue" }
+          },
+          "required": ["type", "schema"]
+        }
+      ]
+    },
+    "LucentOptions": {
+      "type": "object",
+      "properties": {
+        "temperature": { "type": "number" },
+        "top_p": { "type": "number" },
+        "top_k": { "type": "integer" },
+        "max_output_tokens": { "type": "integer" },
+        "stop": { "type": "array", "items": { "type": "string" } },
+        "stream": { "type": "boolean" },
+        "candidate_count": { "type": "integer" },
+        "seed": { "type": "integer" },
+        "structured_output": { "$ref": "#/definitions/LucentStructuredOutput" }
+      },
+      "required": ["stream"]
+    },
+    "LucentReasoningEffort": {
+      "type": "string",
+      "enum": ["low", "medium", "high"]
+    },
+    "LucentReasoningSummary": {
+      "type": "string",
+      "enum": ["auto", "concise", "detailed"]
+    },
+    "LucentReasoningConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "budget_tokens": { "type": "integer" },
+        "effort": { "$ref": "#/definitions/LucentReasoningEffort" },
+        "summary": { "$ref": "#/definitions/LucentReasoningSummary" }
+      },
+      "required": ["enabled"]
+    },
+    "LucentCapabilities": {
+      "type": "object",
+      "properties": {
+        "tool_calling": { "type": "boolean" },
+        "parallel_tool_calls": { "type": "boolean" },
+        "reasoning": { "type": "boolean" },
+        "multimodal_input": { "type": "boolean" },
+        "structured_output": { "type": "boolean" },
+        "input_modalities": { "type": "array", "items": { "$ref": "#/definitions/LucentModality" } },
+        "output_modalities": { "type": "array", "items": { "$ref": "#/definitions/LucentModality" } }
+      },
+      "required": ["tool_calling", "parallel_tool_calls", "reasoning", "multimodal_input", "structured_output", "input_modalities", "output_modalities"]
+    },
+    "LucentRequest": {
+      "type": "object",
+      "properties": {
+        "schema_version": { "type": "string", "const": "v1" },
+        "model": { "type": "string" },
+        "instructions": { "type": "array", "items": { "$ref": "#/definitions/LucentContent" } },
+        "conversation": { "type": "array", "items": { "$ref": "#/definitions/LucentConversationItem" } },
+        "tools": { "type": "array", "items": { "$ref": "#/definitions/LucentTool" } },
+        "tool_choice": { "$ref": "#/definitions/LucentToolChoice" },
+        "options": { "$ref": "#/definitions/LucentOptions" },
+        "capabilities": { "$ref": "#/definitions/LucentCapabilities" },
+        "reasoning": { "$ref": "#/definitions/LucentReasoningConfig" },
+        "metadata": { "type": "object", "additionalProperties": { "type": "string" } },
+        "extra": { "type": "object", "additionalProperties": { "$ref": "#/definitions/JsonValue" } }
+      },
+      "required": ["schema_version", "model", "conversation", "options"]
+    },
+    "LucentUsage": {
+      "type": "object",
+      "properties": {
+        "prompt_tokens": { "type": "integer" },
+        "completion_tokens": { "type": "integer" },
+        "total_tokens": { "type": "integer" },
+        "reasoning_tokens": { "type": "integer" },
+        "cached_tokens": { "type": "integer" },
+        "cache_creation_tokens": { "type": "integer" }
+      },
+      "required": ["prompt_tokens", "completion_tokens", "total_tokens"]
+    },
+    "LucentFinishReason": {
+      "type": "string",
+      "enum": ["stop", "length", "tool_calls", "content_filter", "safety", "recitation", "malformed_tool_call", "error"]
+    },
+    "LucentSafetyRating": {
+      "type": "object",
+      "properties": {
+        "category": { "type": "string" },
+        "probability": { "type": "string" }
+      },
+      "required": ["category", "probability"]
+    },
+    "LucentChoice": {
+      "type": "object",
+      "properties": {
+        "index": { "type": "integer" },
+        "message": { "$ref": "#/definitions/LucentMessage" },
+        "finish_reason": { "$ref": "#/definitions/LucentFinishReason" },
+        "safety_ratings": { "type": "array", "items": { "$ref": "#/definitions/LucentSafetyRating" } }
+      },
+      "required": ["index", "message", "finish_reason"]
+    },
+    "LucentResponse": {
+      "type": "object",
+      "properties": {
+        "schema_version": { "type": "string", "const": "v1" },
+        "id": { "type": "string" },
+        "model": { "type": "string" },
+        "created_at": { "type": "integer" },
+        "choices": { "type": "array", "items": { "$ref": "#/definitions/LucentChoice" } },
+        "usage": { "$ref": "#/definitions/LucentUsage" },
+        "provider_payload": { "$ref": "#/definitions/JsonValue" }
+      },
+      "required": ["schema_version", "id", "model", "choices"]
+    },
+    "LucentBlockType": {
+      "oneOf": [
+        { "type": "string", "const": "text" },
+        { "type": "string", "const": "thinking" },
+        { "type": "string", "const": "refusal" },
+        { "type": "string", "const": "image" },
+        { "type": "string", "const": "audio" },
+        { "type": "string", "const": "video" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "tool_call" },
+            "id": { "type": "string" },
+            "name": { "type": "string" }
+          },
+          "required": ["type", "id", "name"]
+        }
+      ]
+    },
+    "LucentBlockDelta": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "text" },
+            "text": { "type": "string" }
+          },
+          "required": ["type", "text"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "thinking" },
+            "text": { "type": "string" }
+          },
+          "required": ["type", "text"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "signature" },
+            "signature": { "type": "string" }
+          },
+          "required": ["type", "signature"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "tool_arguments" },
+            "arguments": { "type": "string" }
+          },
+          "required": ["type", "arguments"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "refusal" },
+            "text": { "type": "string" }
+          },
+          "required": ["type", "text"]
+        }
+      ]
+    },
+    "LucentErrorKind": {
+      "type": "string",
+      "enum": ["rate_limit", "invalid_request", "authentication", "server_error", "content_filter"]
+    },
+    "LucentError": {
+      "type": "object",
+      "properties": {
+        "kind": { "$ref": "#/definitions/LucentErrorKind" },
+        "message": { "type": "string" },
+        "provider_code": { "type": "string" }
+      },
+      "required": ["kind", "message"]
+    },
+    "LucentConversationMeta": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "model": { "type": "string" },
+        "usage_input": { "type": "integer" }
+      }
+    },
+    "LucentStreamEvent": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "event": { "type": "string", "const": "conversation_start" },
+            "meta": { "$ref": "#/definitions/LucentConversationMeta" }
+          },
+          "required": ["event", "meta"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "event": { "type": "string", "const": "item_start" },
+            "index": { "type": "integer" },
+            "item": { "$ref": "#/definitions/LucentConversationItem" }
+          },
+          "required": ["event", "index", "item"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "event": { "type": "string", "const": "block_start" },
+            "index": { "type": "integer" },
+            "block_type": { "$ref": "#/definitions/LucentBlockType" }
+          },
+          "required": ["event", "index", "block_type"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "event": { "type": "string", "const": "block_delta" },
+            "index": { "type": "integer" },
+            "delta": { "$ref": "#/definitions/LucentBlockDelta" }
+          },
+          "required": ["event", "index", "delta"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "event": { "type": "string", "const": "block_end" },
+            "index": { "type": "integer" }
+          },
+          "required": ["event", "index"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "event": { "type": "string", "const": "item_end" },
+            "index": { "type": "integer" }
+          },
+          "required": ["event", "index"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "event": { "type": "string", "const": "block_discard" },
+            "index": { "type": "integer" }
+          },
+          "required": ["event", "index"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "event": { "type": "string", "const": "annotations" },
+            "index": { "type": "integer" },
+            "annotations": { "type": "array", "items": { "$ref": "#/definitions/LucentAnnotation" } }
+          },
+          "required": ["event", "index", "annotations"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "event": { "type": "string", "const": "finish" },
+            "finish_reason": { "$ref": "#/definitions/LucentFinishReason" }
+          },
+          "required": ["event", "finish_reason"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "event": { "type": "string", "const": "usage" },
+            "usage": { "$ref": "#/definitions/LucentUsage" }
+          },
+          "required": ["event", "usage"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "event": { "type": "string", "const": "error" },
+            "error": { "$ref": "#/definitions/LucentError" }
+          },
+          "required": ["event", "error"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "event": { "type": "string", "const": "done" }
+          },
+          "required": ["event"]
+        }
+      ]
+    },
+    "ProviderCapability": {
+      "type": "object",
+      "properties": {
+        "model_pattern": { "type": "string", "description": "模型匹配模式，如 gpt-*、claude-*" },
+        "provider": { "type": "string", "description": "厂商名，如 openai、anthropic" },
+        "capabilities": { "$ref": "#/definitions/LucentCapabilities" },
+        "extra_params": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string" },
+              "description": { "type": "string" }
+            }
+          }
+        }
+      },
+      "required": ["model_pattern", "provider", "capabilities"]
+    },
+    "LucentDiscovery": {
+      "type": "object",
+      "properties": {
+        "schema_version": { "type": "string", "const": "v1" },
+        "protocol_version": { "type": "string", "description": "Prism 当前版本号" },
+        "schema_url": { "type": "string", "description": "JSON Schema 文档地址" },
+        "providers": { "type": "array", "items": { "$ref": "#/definitions/ProviderCapability" } }
+      },
+      "required": ["schema_version", "protocol_version", "schema_url", "providers"]
+    },
+    "JsonValue": {
+      "description": "任意 JSON 值，用于 extra、provider_payload 等透传字段",
+      "$dynamicAnchor": "JsonValue"
+    }
+  },
+  "$ref": "#/definitions/LucentRequest",
+  "examples": [
+    {
+      "schema_version": "v1",
+      "model": "gpt-4o",
+      "instructions": [{ "type": "text", "text": "You are a helpful assistant" }],
+      "conversation": [
+        {
+          "type": "message",
+          "message": {
+            "role": "user",
+            "content": [{ "type": "text", "text": "Hello!" }]
+          }
+        }
+      ],
+      "options": {
+        "stream": false,
+        "temperature": 0.7
+      }
+    }
+  ]
+}
