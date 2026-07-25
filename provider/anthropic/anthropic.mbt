@@ -1,0 +1,1118 @@
+///|
+/// Anthropic Messages 适配器 — 对齐 Lux IR v1
+///
+/// 依据：docs/lux-ir-design.md §10（6-Function 契约）
+/// 依据：docs/protocols/03-anthropic-messages.md（协议映射）
+///
+/// 6 函数：
+///   1. anthropic_to_lux_request      请求解码
+///   2. lux_request_to_anthropic      请求编码
+///   3. anthropic_to_lux_response     响应解码
+///   4. lux_response_to_anthropic     响应编码
+///   5. anthropic_sse_to_events       流解码
+///   6. lux_events_to_anthropic_sse   流编码
+///
+/// 关键差异（vs OpenAI Chat）：
+///   - 无 tool 角色：工具结果由 user 角色发送，内含 tool_result content block
+///   - 系统指令：顶层 system 字段，可以是 content block 数组
+///   - input 是 JSON 对象（非字符串）：适配层 JSON.stringify(arguments)
+///   - input_schema 非 parameters：字段名不同，语义同构
+///   - 流式使用 content_block_start/delta/stop 块生命周期（与 Lux IR 同构）
+///   - 思考块有 signature 完整性校验，redacted_thinking 表示被隐藏
+
+///|
+/// === JSON 辅助（私有）===
+
+///|
+fn obj_get(jv : Json, key : String) -> Json? {
+  match jv {
+    Object(m) => {
+      for entry in m {
+        match entry {
+          (k, v) => if k == key { return Some(v) }
+        }
+      }
+      None
+    }
+    _ => None
+  }
+}
+
+///|
+fn field_str(jv : Json, key : String) -> String? {
+  match obj_get(jv, key) {
+    Some(String(s)) => Some(s)
+    _ => None
+  }
+}
+
+///|
+fn field_arr(jv : Json, key : String) -> Array[Json]? {
+  match obj_get(jv, key) {
+    Some(Array(a)) => Some(a)
+    _ => None
+  }
+}
+
+///|
+fn field_bool(jv : Json, key : String) -> Bool? {
+  match obj_get(jv, key) {
+    Some(True) => Some(true)
+    Some(False) => Some(false)
+    _ => None
+  }
+}
+
+///|
+fn field_num(jv : Json, key : String) -> Double? {
+  match obj_get(jv, key) {
+    Some(Number(n, ..)) => Some(n)
+    _ => None
+  }
+}
+
+///|
+fn field_int(jv : Json, key : String) -> Int? {
+  match obj_get(jv, key) {
+    Some(Number(n, ..)) => Some(n.to_int())
+    _ => None
+  }
+}
+
+///|
+/// 解析 content block → LucentContent
+fn parse_content_block(block : Json) -> Result[@lux.LucentContent, String] {
+  match field_str(block, "type") {
+    Some("text") =>
+      match field_str(block, "text") {
+        Some(t) => Ok(@lux.LucentContent::text(t))
+        None => Err("text block missing 'text' field")
+      }
+    Some("tool_use") => {
+      let id = field_str(block, "id").unwrap_or("")
+      let name = field_str(block, "name").unwrap_or("")
+      // input 是 JSON 对象 → 需 stringify 为 arguments_json
+      let args_json = match obj_get(block, "input") {
+        Some(input_jv) => input_jv.stringify()
+        None => "{}"
+      }
+      Ok(@lux.LucentContent::tool_use(id, name, args_json, None))
+    }
+    Some("tool_result") => {
+      let tool_use_id = field_str(block, "tool_use_id").unwrap_or("")
+      let is_error = field_bool(block, "is_error").unwrap_or(false)
+      let content = match field_arr(block, "content") {
+        Some(parts) => {
+          let result : Array[@lux.LucentContent] = []
+          let mut i = 0
+          while i < parts.length() {
+            match parse_content_block(parts[i]) {
+              Ok(c) => result.push(c)
+              Err(_) => ()
+            }
+            i = i + 1
+          }
+          result
+        }
+        None => []
+      }
+      if is_error {
+        Ok(@lux.LucentContent::tool_result_error(tool_use_id, content))
+      } else {
+        Ok(@lux.LucentContent::tool_result(tool_use_id, content))
+      }
+    }
+    Some("thinking") => {
+      let text = field_str(block, "thinking").unwrap_or("")
+      let signature = field_str(block, "signature")
+      Ok(@lux.LucentContent::thinking(text, signature))
+    }
+    Some("redacted_thinking") => {
+      let signature = field_str(block, "signature")
+      Ok(@lux.LucentContent::redacted_thinking(signature))
+    }
+    Some("image") =>
+      // stub：简化处理 image content block
+      Err("image content block not yet supported")
+    Some(other) => Err("unknown content block type: " + other)
+    None => Err("content block missing 'type' field")
+  }
+}
+
+///|
+/// 解析单条 Anthropic message → LucentConversationItem
+fn parse_message(msg_jv : Json) -> Result[@lux.LucentConversationItem, String] {
+  let role = field_str(msg_jv, "role")
+  match role {
+    Some("user") => {
+      // 检查是否含 tool_result → 解码为 Item::ToolResult
+      let content_arr = match field_arr(msg_jv, "content") {
+        Some(arr) => arr
+        None => return Err("message missing content array")
+      }
+      let has_tool_result = {
+        let mut found = false
+        let mut i = 0
+        while i < content_arr.length() {
+          match field_str(content_arr[i], "type") {
+            Some("tool_result") => found = true
+            _ => ()
+          }
+          i = i + 1
+        }
+        found
+      }
+      if has_tool_result {
+        // 提取 tool_result block
+        let mut i = 0
+        while i < content_arr.length() {
+          match field_str(content_arr[i], "type") {
+            Some("tool_result") =>
+              match parse_content_block(content_arr[i]) {
+                Ok(tr) =>
+                  match tr {
+                    ToolResult(tr_data) =>
+                      return Ok(
+                        @lux.LucentConversationItem::tool_result(tr_data),
+                      )
+                    _ => ()
+                  }
+                Err(_) => ()
+              }
+            _ => ()
+          }
+          i = i + 1
+        }
+      }
+      // 普通 user 消息：解析所有 content blocks
+      let parts = parse_content_blocks(content_arr)
+      let msg = @lux.LucentMessage::new(@lux.User, parts)
+      Ok(@lux.LucentConversationItem::message(msg))
+    }
+    Some("assistant") => {
+      let content_arr = match field_arr(msg_jv, "content") {
+        Some(arr) => arr
+        None => return Err("assistant message missing content array")
+      }
+      let parts = parse_content_blocks(content_arr)
+      let msg = @lux.LucentMessage::new(@lux.Assistant, parts)
+      Ok(@lux.LucentConversationItem::message(msg))
+    }
+    Some(other) => Err("unknown message role: " + other)
+    None => Err("message missing 'role' field")
+  }
+}
+
+///|
+/// 解析 content blocks 数组 → Array[LucentContent]
+fn parse_content_blocks(arr : Array[Json]) -> Array[@lux.LucentContent] {
+  let result : Array[@lux.LucentContent] = []
+  let mut i = 0
+  while i < arr.length() {
+    match parse_content_block(arr[i]) {
+      Ok(c) => result.push(c)
+      Err(_) => ()
+    }
+    i = i + 1
+  }
+  result
+}
+
+///|
+/// 解析 system 字段 → Array[LucentContent]
+fn parse_system(jv : Json) -> Array[@lux.LucentContent] {
+  let result : Array[@lux.LucentContent] = []
+  match obj_get(jv, "system") {
+    Some(String(s)) => result.push(@lux.LucentContent::text(s))
+    Some(Array(arr)) => {
+      let mut i = 0
+      while i < arr.length() {
+        match field_str(arr[i], "text") {
+          Some(t) => result.push(@lux.LucentContent::text(t))
+          None => ()
+        }
+        i = i + 1
+      }
+    }
+    _ => ()
+  }
+  result
+}
+
+///|
+/// 解析 tools[] → Array[LucentTool]
+fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
+  match field_arr(jv, "tools") {
+    Some(tools) => {
+      let result : Array[@lux.LucentTool] = []
+      let mut i = 0
+      while i < tools.length() {
+        let t = tools[i]
+        let name = field_str(t, "name").unwrap_or("")
+        let desc = field_str(t, "description")
+        // Anthropic 用 input_schema 而非 parameters
+        let params = match obj_get(t, "input_schema") {
+          Some(schema) => schema.stringify()
+          None => "{}"
+        }
+        result.push(@lux.LucentTool::new(name, desc, params, None))
+        i = i + 1
+      }
+      result
+    }
+    None => []
+  }
+}
+
+///|
+/// 解析 tool_choice → LucentToolChoice?
+fn parse_tool_choice(jv : Json) -> @lux.LucentToolChoice? {
+  match obj_get(jv, "tool_choice") {
+    Some(Object(m)) =>
+      match m.get("type") {
+        Some(String("auto")) => Some(@lux.Auto)
+        Some(String("any")) => Some(@lux.Required)
+        Some(String("tool")) =>
+          match m.get("name") {
+            Some(String(n)) => Some(@lux.LucentToolChoice::SpecificTool(n))
+            _ => None
+          }
+        _ => None
+      }
+    _ => None
+  }
+}
+
+///|
+/// 解析 thinking 配置 → LucentReasoningConfig?
+fn parse_reasoning(jv : Json) -> @lux.LucentReasoningConfig? {
+  match obj_get(jv, "thinking") {
+    Some(Object(m)) =>
+      match m.get("type") {
+        Some(String("enabled")) => {
+          let budget = match m.get("budget_tokens") {
+            Some(Number(n, ..)) => Some(n.to_int())
+            _ => None
+          }
+          Some(@lux.LucentReasoningConfig::enabled(budget))
+        }
+        _ => Some(@lux.LucentReasoningConfig::disabled())
+      }
+    _ => None
+  }
+}
+
+///|
+/// 1. anthropic_to_lux_request — 请求解码
+pub fn anthropic_to_lux_request(
+  json_str : String,
+) -> Result[@lux.LucentRequest, String] {
+  let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
+  let model = field_str(jv, "model").unwrap_or("")
+  // system 指令
+  let instructions = parse_system(jv)
+  let instr_opt = if instructions.length() > 0 {
+    Some(instructions)
+  } else {
+    None
+  }
+  // messages → conversation
+  let conversation : Array[@lux.LucentConversationItem] = []
+  match field_arr(jv, "messages") {
+    Some(msgs) => {
+      let mut i = 0
+      while i < msgs.length() {
+        match parse_message(msgs[i]) {
+          Ok(item) => conversation.push(item)
+          Err(_) => ()
+        }
+        i = i + 1
+      }
+    }
+    None => ()
+  }
+  // tools
+  let tools_list = parse_tools(jv)
+  let tools = if tools_list.length() > 0 { Some(tools_list) } else { None }
+  let tool_choice = parse_tool_choice(jv)
+  // options
+  let temperature = field_num(jv, "temperature")
+  let top_p = field_num(jv, "top_p")
+  let top_k = field_int(jv, "top_k")
+  let max_tokens = field_int(jv, "max_tokens")
+  let stream = field_bool(jv, "stream").unwrap_or(false)
+  let stop = match field_arr(jv, "stop_sequences") {
+    Some(arr) => {
+      let stops : Array[String] = []
+      let mut i = 0
+      while i < arr.length() {
+        match arr[i] {
+          String(s) => stops.push(s)
+          _ => ()
+        }
+        i = i + 1
+      }
+      Some(stops)
+    }
+    None => None
+  }
+  // metadata
+  let metadata = match obj_get(jv, "metadata") {
+    Some(Object(m)) => {
+      let meta : Map[String, String] = {}
+      for entry in m {
+        match entry {
+          (k, v) =>
+            match v {
+              String(s) => meta[k] = s
+              _ => ()
+            }
+        }
+      }
+      Some(meta)
+    }
+    _ => None
+  }
+  let reasoning = parse_reasoning(jv)
+  let opts = @lux.LucentOptions::new(
+    temperature,
+    top_p,
+    top_k,
+    max_tokens,
+    stop,
+    stream,
+    None,
+    None,
+    None,
+  )
+  Ok(
+    @lux.LucentRequest::new(
+      model,
+      instr_opt,
+      conversation,
+      tools,
+      tool_choice,
+      opts,
+      None,
+      reasoning,
+      metadata,
+      None,
+    ),
+  )
+}
+
+///|
+/// JSON 字符串转义（手动构建，因 @json.String 不可跨包构造）
+fn json_escape(s : String) -> String {
+  let mut r = ""
+  let mut i = 0
+  while i < s.length() {
+    let cp = s[i]
+    if cp == '"' {
+      r = r + "\\\""
+    } else if cp == '\\' {
+      r = r + "\\\\"
+    } else if cp == '\n' {
+      r = r + "\\n"
+    } else if cp == '\t' {
+      r = r + "\\t"
+    } else if cp == '\r' {
+      r = r + "\\r"
+    } else {
+      let ch = Char::from_int(cp.to_int())
+      r = r + "\{ch}"
+    }
+    i = i + 1
+  }
+  r
+}
+
+///|
+/// 单个 LucentContent → Anthropic content block JSON 片段
+fn content_to_block(c : @lux.LucentContent) -> String {
+  match c {
+    Text(s, _) => "{\"type\":\"text\",\"text\":\"" + json_escape(s) + "\"}"
+    ToolUse(tu) =>
+      "{\"type\":\"tool_use\",\"id\":\"" +
+      json_escape(tu.id) +
+      "\",\"name\":\"" +
+      json_escape(tu.name) +
+      "\",\"input\":" +
+      tu.arguments_json +
+      "}"
+    ToolResult(tr) =>
+      "{\"type\":\"tool_result\",\"tool_use_id\":\"" +
+      json_escape(tr.tool_use_id) +
+      "\",\"content\":" +
+      content_array_to_json(tr.content) +
+      ",\"is_error\":" +
+      (if tr.is_error { "true" } else { "false" }) +
+      "}"
+    Thinking(th) =>
+      if th.redacted {
+        "{\"type\":\"redacted_thinking\",\"signature\":" +
+        (match th.signature {
+          Some(s) => "\"" + json_escape(s) + "\""
+          None => "null"
+        }) +
+        "}"
+      } else {
+        "{\"type\":\"thinking\",\"thinking\":\"" +
+        json_escape(th.text) +
+        "\"" +
+        (match th.signature {
+          Some(s) => ",\"signature\":\"" + json_escape(s) + "\""
+          None => ""
+        }) +
+        "}"
+      }
+    Refusal(s) => "{\"type\":\"text\",\"text\":\"" + json_escape(s) + "\"}"
+    Image(_) | Audio(_) | Video(_) => "" // stub
+    Native(_, _) => "" // stub
+  }
+}
+
+///|
+/// LucentMessage → Anthropic message JSON
+fn message_to_json(msg : @lux.LucentMessage) -> String {
+  let role_str = msg.role.to_string()
+  let blocks : Array[String] = []
+  let mut i = 0
+  while i < msg.content.length() {
+    let block = content_to_block(msg.content[i])
+    if block != "" {
+      blocks.push(block)
+    }
+    i = i + 1
+  }
+  "{\"role\":\"" +
+  json_escape(role_str) +
+  "\",\"content\":[" +
+  blocks.join(",") +
+  "]}"
+}
+
+///|
+/// 内容块数组 → JSON 字符串（用于 tool_result.content）
+fn content_array_to_json(content : Array[@lux.LucentContent]) -> String {
+  let blocks : Array[String] = []
+  let mut i = 0
+  while i < content.length() {
+    let block = content_to_block(content[i])
+    if block != "" {
+      blocks.push(block)
+    }
+    i = i + 1
+  }
+  "[" + blocks.join(",") + "]"
+}
+
+///|
+/// 2. lux_request_to_anthropic — 请求编码
+pub fn lux_request_to_anthropic(
+  req : @lux.LucentRequest,
+) -> Result[String, String] {
+  let parts : Array[String] = []
+  parts.push("\"model\":\"" + json_escape(req.model) + "\"")
+  // system 指令（顶层）
+  match req.instructions {
+    Some(instrs) => {
+      let texts : Array[String] = []
+      let mut i = 0
+      while i < instrs.length() {
+        match instrs[i] {
+          Text(s, _) => texts.push(s)
+          _ => ()
+        }
+        i = i + 1
+      }
+      if texts.length() == 1 {
+        parts.push("\"system\":\"" + json_escape(texts[0]) + "\"")
+      } else if texts.length() > 1 {
+        let blocks : Array[String] = []
+        let mut j = 0
+        while j < texts.length() {
+          blocks.push(
+            "{\"type\":\"text\",\"text\":\"" + json_escape(texts[j]) + "\"}",
+          )
+          j = j + 1
+        }
+        parts.push("\"system\":[" + blocks.join(",") + "]")
+      }
+    }
+    None => ()
+  }
+  // messages / conversation
+  let msgs_json : Array[String] = []
+  let items = req.conversation
+  let mut i = 0
+  while i < items.length() {
+    match items[i] {
+      Message(m) => msgs_json.push(message_to_json(m))
+      ToolCall(tu) =>
+        // 独立 ToolCall → assistant 消息含 tool_use
+        msgs_json.push(
+          "{\"role\":\"assistant\",\"content\":[{\"type\":\"tool_use\",\"id\":\"" +
+          json_escape(tu.id) +
+          "\",\"name\":\"" +
+          json_escape(tu.name) +
+          "\",\"input\":" +
+          tu.arguments_json +
+          "}]}",
+        )
+      ToolResult(tr) =>
+        // ToolResult → user 消息含 tool_result content block
+        msgs_json.push(
+          "{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"" +
+          json_escape(tr.tool_use_id) +
+          "\",\"content\":" +
+          content_array_to_json(tr.content) +
+          ",\"is_error\":" +
+          (if tr.is_error { "true" } else { "false" }) +
+          "}]}",
+        )
+      Reasoning(th) =>
+        // Reasoning → assistant 消息含 thinking block
+        if th.redacted {
+          msgs_json.push(
+            "{\"role\":\"assistant\",\"content\":[{\"type\":\"redacted_thinking\"" +
+            (match th.signature {
+              Some(s) => ",\"signature\":\"" + json_escape(s) + "\""
+              None => ""
+            }) +
+            "}]}",
+          )
+        } else {
+          msgs_json.push(
+            "{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"" +
+            json_escape(th.text) +
+            "\"" +
+            (match th.signature {
+              Some(s) => ",\"signature\":\"" + json_escape(s) + "\""
+              None => ""
+            }) +
+            "}]}",
+          )
+        }
+      AgentAction(_) => ()
+    }
+    i = i + 1
+  }
+  parts.push("\"messages\":[" + msgs_json.join(",") + "]")
+  // tools
+  match req.tools {
+    Some(tools) => {
+      let tools_json : Array[String] = []
+      let mut j = 0
+      while j < tools.length() {
+        let t = tools[j]
+        let desc_part = match t.description {
+          Some(d) => ",\"description\":\"" + json_escape(d) + "\""
+          None => ""
+        }
+        tools_json.push(
+          "{\"name\":\"" +
+          json_escape(t.name) +
+          "\"" +
+          desc_part +
+          ",\"input_schema\":" +
+          t.parameters_json +
+          "}",
+        )
+        j = j + 1
+      }
+      parts.push("\"tools\":[" + tools_json.join(",") + "]")
+    }
+    None => ()
+  }
+  // tool_choice
+  match req.tool_choice {
+    Some(Auto) => parts.push("\"tool_choice\":{\"type\":\"auto\"}")
+    Some(Required) => parts.push("\"tool_choice\":{\"type\":\"any\"}")
+    Some(SpecificTool(name)) =>
+      parts.push(
+        "\"tool_choice\":{\"type\":\"tool\",\"name\":\"" +
+        json_escape(name) +
+        "\"}",
+      )
+    _ => ()
+  }
+  // options
+  let opts = req.options
+  match opts.max_output_tokens {
+    Some(n) => parts.push("\"max_tokens\":" + n.to_string())
+    None => ()
+  }
+  match opts.temperature {
+    Some(t) => parts.push("\"temperature\":" + t.to_string())
+    None => ()
+  }
+  match opts.top_p {
+    Some(p) => parts.push("\"top_p\":" + p.to_string())
+    None => ()
+  }
+  match opts.top_k {
+    Some(k) => parts.push("\"top_k\":" + k.to_string())
+    None => ()
+  }
+  match opts.stop {
+    Some(arr) => {
+      let stops : Array[String] = []
+      let mut k = 0
+      while k < arr.length() {
+        stops.push("\"" + json_escape(arr[k]) + "\"")
+        k = k + 1
+      }
+      parts.push("\"stop_sequences\":[" + stops.join(",") + "]")
+    }
+    None => ()
+  }
+  if opts.stream {
+    parts.push("\"stream\":true")
+  }
+  // reasoning config → thinking
+  match req.reasoning {
+    Some(rc) =>
+      if rc.enabled {
+        let budget_part = match rc.budget_tokens {
+          Some(n) => ",\"budget_tokens\":" + n.to_string()
+          None => ""
+        }
+        parts.push("\"thinking\":{\"type\":\"enabled\"" + budget_part + "}")
+      } else {
+        parts.push("\"thinking\":{\"type\":\"disabled\"}")
+      }
+    None => ()
+  }
+  // metadata
+  match req.metadata {
+    Some(meta) => {
+      let fields : Array[String] = []
+      for entry in meta {
+        match entry {
+          (k, v) =>
+            fields.push("\"" + json_escape(k) + "\":\"" + json_escape(v) + "\"")
+        }
+      }
+      parts.push("\"metadata\":{" + fields.join(",") + "}")
+    }
+    None => ()
+  }
+  Ok("{" + parts.join(",") + "}")
+}
+
+///|
+/// 3. anthropic_to_lux_response — 响应解码
+pub fn anthropic_to_lux_response(
+  json_str : String,
+) -> Result[@lux.LucentResponse, String] {
+  let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
+  let id = field_str(jv, "id").unwrap_or("")
+  let model = field_str(jv, "model").unwrap_or("")
+  // content blocks → assistant message content
+  let content = match field_arr(jv, "content") {
+    Some(blocks) => parse_content_blocks(blocks)
+    None => []
+  }
+  let msg = @lux.LucentMessage::new(@lux.Assistant, content)
+  // stop_reason → finish_reason
+  let finish = match field_str(jv, "stop_reason") {
+    Some("end_turn") => @lux.Stop
+    Some("max_tokens") => @lux.Length
+    Some("tool_use") => @lux.ToolCalls
+    Some("stop_sequence") => @lux.Stop
+    Some(other) => @lux.LucentFinishReason::from_string(other)
+    None => @lux.Stop
+  }
+  let choice = @lux.LucentChoice::new(0, msg, finish, None)
+  // usage（cached_tokens / cache_creation_tokens 可选，暂不传）
+  let usage = match obj_get(jv, "usage") {
+    Some(u) => {
+      let pt = field_int(u, "input_tokens").unwrap_or(0)
+      let ct = field_int(u, "output_tokens").unwrap_or(0)
+      let tt = pt + ct
+      Some(@lux.LucentUsage::new(pt, ct, tt))
+    }
+    None => None
+  }
+  Ok(@lux.LucentResponse::new(id, model, None, [choice], usage, None))
+}
+
+///|
+/// 4. lux_response_to_anthropic — 响应编码
+pub fn lux_response_to_anthropic(
+  resp : @lux.LucentResponse,
+) -> Result[String, String] {
+  if resp.choices.length() == 0 {
+    return Err("response has no choices")
+  }
+  let choice = resp.choices[0]
+  // content blocks
+  let content_blocks : Array[String] = []
+  let mut i = 0
+  while i < choice.message.content.length() {
+    let block = content_to_block(choice.message.content[i])
+    if block != "" {
+      content_blocks.push(block)
+    }
+    i = i + 1
+  }
+  let content_json = "[" + content_blocks.join(",") + "]"
+  // stop_reason
+  let stop_reason = match choice.finish_reason {
+    Stop => "\"end_turn\""
+    Length => "\"max_tokens\""
+    ToolCalls => "\"tool_use\""
+    ContentFilter => "\"content_filter\""
+    Safety => "\"end_turn\""
+    Recitation => "\"end_turn\""
+    MalformedToolCall => "\"end_turn\""
+    Error => "\"end_turn\""
+    Native(s) => "\"" + json_escape(s) + "\""
+  }
+  // usage
+  let usage_json = match resp.usage {
+    Some(u) =>
+      ",\"usage\":{\"input_tokens\":" +
+      u.prompt_tokens.to_string() +
+      ",\"output_tokens\":" +
+      u.completion_tokens.to_string() +
+      "}"
+    None => ""
+  }
+  let body = "{\"id\":\"" +
+    json_escape(resp.id) +
+    "\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"" +
+    json_escape(resp.model) +
+    "\",\"content\":" +
+    content_json +
+    ",\"stop_reason\":" +
+    stop_reason +
+    ",\"stop_sequence\":null" +
+    usage_json +
+    "}"
+  Ok(body)
+}
+
+///|
+/// 5. anthropic_sse_to_events — 流解码
+///
+/// Anthropic SSE 格式：
+///   event: X
+///   data: {...}
+///
+/// 用 \n\n 分隔 SSE 消息，再逐条解析 event/data 行
+pub fn anthropic_sse_to_events(
+  sse_str : String,
+) -> Result[Array[@lux.LucentStreamEvent], String] {
+  let events : Array[@lux.LucentStreamEvent] = []
+  let messages = sse_str.split("\n\n").to_array()
+  let mut i = 0
+  while i < messages.length() {
+    let msg = messages[i].to_owned()
+    if msg == "" {
+      i = i + 1
+      continue
+    }
+    let lines = msg.split("\n").to_array()
+    let mut event_type = ""
+    let mut data_str = ""
+    let mut j = 0
+    while j < lines.length() {
+      let l_str = lines[j].to_owned()
+      // 检查 "event: " 前缀（前 7 个字符）
+      let is_event = l_str.length() >= 7 &&
+        l_str[0] == 'e' &&
+        l_str[1] == 'v' &&
+        l_str[2] == 'e' &&
+        l_str[3] == 'n' &&
+        l_str[4] == 't' &&
+        l_str[5] == ':' &&
+        l_str[6] == ' '
+      // 检查 "data: " 前缀（前 6 个字符，含空格）
+      let is_data = l_str.length() >= 6 &&
+        l_str[0] == 'd' &&
+        l_str[1] == 'a' &&
+        l_str[2] == 't' &&
+        l_str[3] == 'a' &&
+        l_str[4] == ':' &&
+        l_str[5] == ' '
+      if is_event {
+        // 提取 "event: " 后的内容（从第 7 个字符开始）
+        event_type = ""
+        let mut k = 7
+        while k < l_str.length() {
+          let ch = Char::from_int(l_str[k].to_int())
+          event_type = event_type + "\{ch}"
+          k = k + 1
+        }
+      } else if is_data {
+        // 提取 "data: " 后的内容（从第 6 个字符开始）
+        data_str = ""
+        let mut k = 6
+        while k < l_str.length() {
+          let ch = Char::from_int(l_str[k].to_int())
+          data_str = data_str + "\{ch}"
+          k = k + 1
+        }
+      }
+      j = j + 1
+    }
+    data_str = data_str.trim().to_owned()
+    if data_str == "" {
+      i = i + 1
+      continue
+    }
+    let jv = @json.parse(data_str) catch {
+      _ => {
+        i = i + 1
+        continue
+      }
+    }
+    match event_type {
+      "message_start" =>
+        match obj_get(jv, "message") {
+          Some(msg_jv) => {
+            let id = field_str(msg_jv, "id")
+            let model = field_str(msg_jv, "model")
+            let usage_input = match obj_get(msg_jv, "usage") {
+              Some(u) => field_int(u, "input_tokens")
+              None => None
+            }
+            events.push(
+              @lux.ConversationStart(
+                @lux.LucentConversationMeta::new(id, model, usage_input),
+              ),
+            )
+          }
+          None => ()
+        }
+      "content_block_start" => {
+        let idx = field_int(jv, "index").unwrap_or(0)
+        match obj_get(jv, "content_block") {
+          Some(block) =>
+            match field_str(block, "type") {
+              Some("text") => events.push(@lux.BlockStart(idx, @lux.Text))
+              Some("thinking") =>
+                events.push(@lux.BlockStart(idx, @lux.Thinking))
+              Some("tool_use") => {
+                let tc_id = field_str(block, "id").unwrap_or("")
+                let tc_name = field_str(block, "name").unwrap_or("")
+                events.push(
+                  @lux.BlockStart(
+                    idx,
+                    @lux.LucentBlockType::tool_call(tc_id, tc_name),
+                  ),
+                )
+              }
+              _ => ()
+            }
+          None => ()
+        }
+      }
+      "content_block_delta" => {
+        let idx = field_int(jv, "index").unwrap_or(0)
+        match obj_get(jv, "delta") {
+          Some(delta) =>
+            match field_str(delta, "type") {
+              Some("text_delta") =>
+                match field_str(delta, "text") {
+                  Some(t) =>
+                    events.push(
+                      @lux.BlockDelta(idx, @lux.LucentBlockDelta::text_delta(t)),
+                    )
+                  None => ()
+                }
+              Some("thinking_delta") =>
+                match field_str(delta, "thinking") {
+                  Some(t) =>
+                    events.push(
+                      @lux.BlockDelta(
+                        idx,
+                        @lux.LucentBlockDelta::thinking_delta(t),
+                      ),
+                    )
+                  None => ()
+                }
+              Some("signature_delta") =>
+                match field_str(delta, "signature") {
+                  Some(s) =>
+                    events.push(
+                      @lux.BlockDelta(
+                        idx,
+                        @lux.LucentBlockDelta::signature_delta(s),
+                      ),
+                    )
+                  None => ()
+                }
+              Some("input_json_delta") =>
+                match field_str(delta, "partial_json") {
+                  Some(j_str) =>
+                    events.push(
+                      @lux.BlockDelta(
+                        idx,
+                        @lux.LucentBlockDelta::tool_arguments_delta(j_str),
+                      ),
+                    )
+                  None => ()
+                }
+              _ => ()
+            }
+          None => ()
+        }
+      }
+      "content_block_stop" => {
+        let idx = field_int(jv, "index").unwrap_or(0)
+        events.push(@lux.BlockEnd(idx))
+      }
+      "message_delta" => {
+        match obj_get(jv, "delta") {
+          Some(delta) =>
+            match field_str(delta, "stop_reason") {
+              Some(reason) =>
+                events.push(
+                  @lux.Finish(@lux.LucentFinishReason::from_string(reason)),
+                )
+              None => ()
+            }
+          None => ()
+        }
+        match obj_get(jv, "usage") {
+          Some(u) => {
+            let ot = field_int(u, "output_tokens").unwrap_or(0)
+            events.push(@lux.Usage(@lux.LucentUsage::new(0, ot, ot)))
+          }
+          None => ()
+        }
+      }
+      "message_stop" => events.push(@lux.Done)
+      "error" =>
+        match field_str(jv, "error") {
+          Some(e_msg) =>
+            events.push(@lux.Error(@lux.LucentError::simple(e_msg)))
+          None => ()
+        }
+      _ => ()
+    }
+    i = i + 1
+  }
+  Ok(events)
+}
+
+///|
+/// 6. lux_events_to_anthropic_sse — 流编码
+///
+/// 把 Lux 事件流编码为 Anthropic SSE 格式（同 chromic_sse_to_events 的逆过程）
+pub fn lux_events_to_anthropic_sse(
+  events : Array[@lux.LucentStreamEvent],
+) -> Result[String, String] {
+  let lines : Array[String] = []
+  let mut i = 0
+  while i < events.length() {
+    match events[i] {
+      ConversationStart(meta) => {
+        let mut fields = "\"type\":\"message_start\""
+        match meta.id {
+          Some(id) => fields = fields + ",\"id\":\"" + json_escape(id) + "\""
+          None => ()
+        }
+        match meta.model {
+          Some(m) => fields = fields + ",\"model\":\"" + json_escape(m) + "\""
+          None => ()
+        }
+        match meta.usage_input {
+          Some(n) =>
+            fields = fields +
+              ",\"usage\":{\"input_tokens\":" +
+              n.to_string() +
+              "}"
+          None => ()
+        }
+        lines.push(
+          "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{" +
+          fields +
+          "}}",
+        )
+      }
+      ItemStart(_, _) | ItemEnd(_) | BlockDiscard(_) | Annotations(_, _) => ()
+      BlockStart(idx, bt) => {
+        let block_json = match bt {
+          Text => "{\"type\":\"text\",\"text\":\"\"}"
+          Thinking => "{\"type\":\"thinking\",\"thinking\":\"\"}"
+          ToolCall(id, name) =>
+            "{\"type\":\"tool_use\",\"id\":\"" +
+            json_escape(id) +
+            "\",\"name\":\"" +
+            json_escape(name) +
+            "\",\"input\":{}}"
+          Refusal => "{\"type\":\"text\",\"text\":\"\"}"
+          Image | Audio | Video => "{\"type\":\"text\",\"text\":\"\"}"
+          Native(tag) => "{\"type\":\"" + json_escape(tag) + "\"}"
+        }
+        lines.push(
+          "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":" +
+          idx.to_string() +
+          ",\"content_block\":" +
+          block_json +
+          "}",
+        )
+      }
+      BlockDelta(idx, delta) => {
+        let delta_json = match delta {
+          TextDelta(s) =>
+            "{\"type\":\"text_delta\",\"text\":\"" + json_escape(s) + "\"}"
+          ThinkingDelta(s) =>
+            "{\"type\":\"thinking_delta\",\"thinking\":\"" +
+            json_escape(s) +
+            "\"}"
+          SignatureDelta(s) =>
+            "{\"type\":\"signature_delta\",\"signature\":\"" +
+            json_escape(s) +
+            "\"}"
+          ToolArgumentsDelta(s) =>
+            "{\"type\":\"input_json_delta\",\"partial_json\":\"" +
+            json_escape(s) +
+            "\"}"
+          RefusalDelta(s) =>
+            "{\"type\":\"text_delta\",\"text\":\"" + json_escape(s) + "\"}"
+          NativeDelta(tag, _) => "{\"type\":\"" + json_escape(tag) + "\"}"
+        }
+        lines.push(
+          "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":" +
+          idx.to_string() +
+          ",\"delta\":" +
+          delta_json +
+          "}",
+        )
+      }
+      BlockEnd(idx) =>
+        lines.push(
+          "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":" +
+          idx.to_string() +
+          "}",
+        )
+      Finish(fr) =>
+        lines.push(
+          "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"" +
+          json_escape(fr.to_string()) +
+          "\"}}",
+        )
+      Usage(u) =>
+        lines.push(
+          "event: message_delta\ndata: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":" +
+          u.completion_tokens.to_string() +
+          "}}",
+        )
+      Error(e) =>
+        lines.push(
+          "event: error\ndata: {\"type\":\"error\",\"error\":{\"message\":\"" +
+          json_escape(e.message) +
+          "\"}}",
+        )
+      Done =>
+        lines.push("event: message_stop\ndata: {\"type\":\"message_stop\"}")
+    }
+    i = i + 1
+  }
+  Ok(lines.join("\n\n") + "\n\n")
+}
