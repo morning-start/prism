@@ -84,7 +84,7 @@ pub fn LucentAnnotation::to_json(self : LucentAnnotation) -> Json {
     Some(t) => fields["text"] = Json::string(t)
     None => ()
   }
-  match self.ref_ {
+  match self.reference {
     Some(r) => fields["ref"] = Json::string(r)
     None => ()
   }

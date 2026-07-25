@@ -57,7 +57,7 @@ pub(all) enum LucentAnnotationKind {
 pub struct LucentAnnotation {
   kind : LucentAnnotationKind
   text : String?
-  ref_ : String?
+  reference : String?
   start : Int?
   end : Int?
 } derive(Eq, Debug)
@@ -383,11 +383,11 @@ pub fn LucentMultimedia::new(
 pub fn LucentAnnotation::new(
   kind : LucentAnnotationKind,
   text : String?,
-  ref_ : String?,
+  reference : String?,
   start : Int?,
   end : Int?,
 ) -> LucentAnnotation {
-  { kind, text, ref_, start, end }
+  { kind, text, reference, start, end }
 }
 
 ///|

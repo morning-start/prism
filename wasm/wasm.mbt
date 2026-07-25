@@ -14,7 +14,10 @@ fn to_error(e : String) -> String {
 
 ///|
 /// 解析 JSON → LucentRequest，再调用编码函数
-fn encode_req(f : (@lux.LucentRequest) -> Result[String, String], s : String) -> String {
+fn encode_req(
+  f : (@lux.LucentRequest) -> Result[String, String],
+  s : String,
+) -> String {
   let jv = @json.parse(s) catch { _ => return to_error("json parse error") }
   match @lux.LucentRequest::from_json(jv) {
     Ok(req) =>
@@ -28,7 +31,10 @@ fn encode_req(f : (@lux.LucentRequest) -> Result[String, String], s : String) ->
 
 ///|
 /// 解析 JSON → LucentResponse，再调用编码函数
-fn encode_resp(f : (@lux.LucentResponse) -> Result[String, String], s : String) -> String {
+fn encode_resp(
+  f : (@lux.LucentResponse) -> Result[String, String],
+  s : String,
+) -> String {
   let jv = @json.parse(s) catch { _ => return to_error("json parse error") }
   match @lux.LucentResponse::from_json(jv) {
     Ok(resp) =>
@@ -42,7 +48,10 @@ fn encode_resp(f : (@lux.LucentResponse) -> Result[String, String], s : String) 
 
 ///|
 /// 解析 JSON 数组 → Array[LucentStreamEvent]，再调用编码函数
-fn encode_events(f : (Array[@lux.LucentStreamEvent]) -> Result[String, String], s : String) -> String {
+fn encode_events(
+  f : (Array[@lux.LucentStreamEvent]) -> Result[String, String],
+  s : String,
+) -> String {
   let jv = @json.parse(s) catch { _ => return to_error("json parse error") }
   match jv {
     Array(arr) => {

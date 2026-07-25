@@ -37,7 +37,7 @@ pub fn LucentAgentAction::to_json(Self) -> Json
 pub struct LucentAnnotation {
   kind : LucentAnnotationKind
   text : String?
-  ref_ : String?
+  reference : String?
   start : Int?
   end : Int?
 } derive(Eq, @debug.Debug)

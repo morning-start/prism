@@ -408,10 +408,10 @@ pub fn LucentAnnotation::from_json(
         None => return Err("missing kind")
       }
       let text = get_str_opt(m, "text")
-      let ref_ = get_str_opt(m, "ref")
+      let reference = get_str_opt(m, "ref")
       let start = get_int_opt(m, "start")
       let end_ = get_int_opt(m, "end")
-      Ok({ kind: km, text, ref_, start, end: end_ })
+      Ok({ kind: km, text, reference, start, end: end_ })
     }
     _ => Err("expected object for LucentAnnotation")
   }

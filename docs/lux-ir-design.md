@@ -181,7 +181,7 @@ pub enum LucentMediaSource {
 pub struct LucentAnnotation {
   kind : LucentAnnotationKind
   text : String?           // 被标注的原文片段
-  ref_ : String?            // 引用目标 URL / file_id
+  reference : String?            // 引用目标 URL / file_id
   start : Int?             // 原文起始 offset
   end : Int?
 }

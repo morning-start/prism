@@ -136,7 +136,7 @@ test "LucentContent text_with_annotations" {
         {
           kind: Url,
           text: Some(t),
-          ref_: Some(r),
+          reference: Some(r),
           start: Some(0),
           end: Some(3),
         } => {
@@ -620,7 +620,7 @@ test "LucentMultimedia new" {
 ///|
 test "LucentAnnotation new" {
   let a = LucentAnnotation::new(Url, None, Some("https://x"), None, None)
-  match a.ref_ {
+  match a.reference {
     Some(r) => assert_eq(r, "https://x")
     None => assert_true(false)
   }
