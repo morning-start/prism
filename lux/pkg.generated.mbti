@@ -1,0 +1,450 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "morning-start/prism/lux"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn lucent_collect_annotations(Array[LucentStreamEvent]) -> Array[LucentAnnotation]
+
+pub fn lucent_content_to_text(Array[LucentContent]) -> String
+
+pub fn lucent_items_from_messages(Array[LucentMessage]) -> Array[LucentConversationItem]
+
+pub fn lucent_messages_from_items(Array[LucentConversationItem]) -> Array[LucentMessage]
+
+pub fn lucent_stream_events_to_response(Array[LucentStreamEvent], String, String) -> LucentResponse
+
+pub fn lux_to_json_string(Json) -> String
+
+// Errors
+
+// Types and methods
+pub struct LucentAgentAction {
+  kind : String
+  id : String
+  call_id : String?
+  name : String?
+  arguments_json : String?
+  result : String?
+  provider_payload : Json?
+} derive(Eq, @debug.Debug)
+pub fn LucentAgentAction::from_json(Json) -> Result[Self, String]
+pub fn LucentAgentAction::new(String, String, String?, String?, String?, String?, Json?) -> Self
+pub fn LucentAgentAction::to_json(Self) -> Json
+
+pub struct LucentAnnotation {
+  kind : LucentAnnotationKind
+  text : String?
+  ref_ : String?
+  start : Int?
+  end : Int?
+} derive(Eq, @debug.Debug)
+pub fn LucentAnnotation::from_json(Json) -> Result[Self, String]
+pub fn LucentAnnotation::new(LucentAnnotationKind, String?, String?, Int?, Int?) -> Self
+pub fn LucentAnnotation::to_json(Self) -> Json
+
+pub(all) enum LucentAnnotationKind {
+  Url
+  FileCitation
+  WebSearchCitation
+  Native(String)
+} derive(Eq, @debug.Debug)
+pub fn LucentAnnotationKind::from_json(Json) -> Result[Self, String]
+pub fn LucentAnnotationKind::to_json(Self) -> String
+
+pub(all) enum LucentBlockDelta {
+  TextDelta(String)
+  ThinkingDelta(String)
+  SignatureDelta(String)
+  ToolArgumentsDelta(String)
+  RefusalDelta(String)
+  NativeDelta(String, Json)
+} derive(Eq, @debug.Debug)
+pub fn LucentBlockDelta::from_json(Json) -> Result[Self, String]
+pub fn LucentBlockDelta::native_delta(String, Json) -> Self
+pub fn LucentBlockDelta::refusal_delta(String) -> Self
+pub fn LucentBlockDelta::signature_delta(String) -> Self
+pub fn LucentBlockDelta::text_delta(String) -> Self
+pub fn LucentBlockDelta::thinking_delta(String) -> Self
+pub fn LucentBlockDelta::to_json(Self) -> Json
+pub fn LucentBlockDelta::tool_arguments_delta(String) -> Self
+
+pub(all) enum LucentBlockType {
+  Text
+  ToolCall(String, String)
+  Thinking
+  Refusal
+  Image
+  Audio
+  Video
+  Native(String)
+} derive(Eq, @debug.Debug)
+pub fn LucentBlockType::from_json(Json) -> Result[Self, String]
+pub fn LucentBlockType::native(String) -> Self
+pub fn LucentBlockType::refusal() -> Self
+pub fn LucentBlockType::text() -> Self
+pub fn LucentBlockType::thinking() -> Self
+pub fn LucentBlockType::to_json(Self) -> Json
+pub fn LucentBlockType::tool_call(String, String) -> Self
+
+pub struct LucentCapabilities {
+  tool_calling : Bool
+  parallel_tool_calls : Bool
+  reasoning : Bool
+  multimodal_input : Bool
+  structured_output : Bool
+  input_modalities : Array[LucentModality]
+  output_modalities : Array[LucentModality]
+} derive(Eq, @debug.Debug)
+pub fn LucentCapabilities::default() -> Self
+pub fn LucentCapabilities::from_json(Json) -> Result[Self, String]
+pub fn LucentCapabilities::to_json(Self) -> Json
+
+pub struct LucentChoice {
+  index : Int
+  message : LucentMessage
+  finish_reason : LucentFinishReason
+  safety_ratings : Array[LucentSafetyRating]?
+} derive(Eq, @debug.Debug)
+pub fn LucentChoice::from_json(Json) -> Result[Self, String]
+pub fn LucentChoice::new(Int, LucentMessage, LucentFinishReason, Array[LucentSafetyRating]?) -> Self
+pub fn LucentChoice::to_json(Self) -> Json
+
+pub(all) enum LucentContent {
+  Text(String, Array[LucentAnnotation]?)
+  ToolUse(LucentToolUse)
+  ToolResult(LucentToolResult)
+  Thinking(LucentThinking)
+  Refusal(String)
+  Image(LucentMultimedia)
+  Audio(LucentMultimedia)
+  Video(LucentMultimedia)
+  Native(String, Json)
+} derive(Eq, @debug.Debug)
+pub fn LucentContent::audio(String, LucentMediaSource) -> Self
+pub fn LucentContent::from_json(Json) -> Result[Self, String]
+pub fn LucentContent::image(String, LucentMediaSource) -> Self
+pub fn LucentContent::native(String, Json) -> Self
+pub fn LucentContent::redacted_thinking(String?) -> Self
+pub fn LucentContent::refusal(String) -> Self
+pub fn LucentContent::text(String) -> Self
+pub fn LucentContent::text_with_annotations(String, Array[LucentAnnotation]) -> Self
+pub fn LucentContent::thinking(String, String?) -> Self
+pub fn LucentContent::to_json(Self) -> Json
+pub fn LucentContent::tool_result(String, Array[Self]) -> Self
+pub fn LucentContent::tool_result_error(String, Array[Self]) -> Self
+pub fn LucentContent::tool_use(String, String, String, Json?) -> Self
+pub fn LucentContent::video(String, LucentMediaSource) -> Self
+
+pub(all) enum LucentConversationItem {
+  Message(LucentMessage)
+  ToolCall(LucentToolUse)
+  ToolResult(LucentToolResult)
+  Reasoning(LucentThinking)
+  AgentAction(LucentAgentAction)
+} derive(Eq, @debug.Debug)
+pub fn LucentConversationItem::agent_action(LucentAgentAction) -> Self
+pub fn LucentConversationItem::from_json(Json) -> Result[Self, String]
+pub fn LucentConversationItem::message(LucentMessage) -> Self
+pub fn LucentConversationItem::reasoning(LucentThinking) -> Self
+pub fn LucentConversationItem::to_json(Self) -> Json
+pub fn LucentConversationItem::tool_call(LucentToolUse) -> Self
+pub fn LucentConversationItem::tool_result(LucentToolResult) -> Self
+
+pub struct LucentConversationMeta {
+  id : String?
+  model : String?
+  usage_input : Int?
+} derive(Eq, @debug.Debug)
+pub fn LucentConversationMeta::from_json(Json) -> Result[Self, String]
+pub fn LucentConversationMeta::new(String?, String?, Int?) -> Self
+pub fn LucentConversationMeta::to_json(Self) -> Json
+
+pub struct LucentDiscovery {
+  schema_version : String
+  protocol_version : String
+  schema_url : String
+  providers : Array[ProviderCapability]
+} derive(Eq, @debug.Debug)
+pub fn LucentDiscovery::from_json(Json) -> Result[Self, String]
+pub fn LucentDiscovery::new(String, String, Array[ProviderCapability]) -> Self
+pub fn LucentDiscovery::to_json(Self) -> Json
+
+pub struct LucentError {
+  kind : LucentErrorKind
+  message : String
+  provider_code : String?
+} derive(Eq, @debug.Debug)
+pub fn LucentError::from_json(Json) -> Result[Self, String]
+pub fn LucentError::new(LucentErrorKind, String, String?) -> Self
+pub fn LucentError::simple(String) -> Self
+pub fn LucentError::to_json(Self) -> Json
+
+pub(all) enum LucentErrorKind {
+  RateLimit
+  InvalidRequest
+  Authentication
+  ServerError
+  ContentFilter
+  Native(String)
+} derive(Eq, @debug.Debug)
+pub fn LucentErrorKind::from_json(Json) -> Result[Self, String]
+pub fn LucentErrorKind::from_string(String) -> Self
+pub fn LucentErrorKind::to_json(Self) -> Json
+
+pub(all) enum LucentFinishReason {
+  Stop
+  Length
+  ToolCalls
+  ContentFilter
+  Safety
+  Recitation
+  MalformedToolCall
+  Error
+  Native(String)
+} derive(Eq, @debug.Debug)
+pub fn LucentFinishReason::from_json(Json) -> Result[Self, String]
+pub fn LucentFinishReason::from_string(String) -> Self
+pub fn LucentFinishReason::to_json(Self) -> Json
+pub fn LucentFinishReason::to_string(Self) -> String
+
+pub(all) enum LucentMediaSource {
+  Inline(String)
+  Url(String)
+  FileUri(String)
+} derive(Eq, @debug.Debug)
+pub fn LucentMediaSource::file_uri(String) -> Self
+pub fn LucentMediaSource::from_json(Json) -> Result[Self, String]
+pub fn LucentMediaSource::inline(String) -> Self
+pub fn LucentMediaSource::to_json(Self) -> Json
+pub fn LucentMediaSource::url(String) -> Self
+
+pub struct LucentMessage {
+  role : LucentRole
+  content : Array[LucentContent]
+} derive(Eq, @debug.Debug)
+pub fn LucentMessage::from_json(Json) -> Result[Self, String]
+pub fn LucentMessage::new(LucentRole, Array[LucentContent]) -> Self
+pub fn LucentMessage::to_json(Self) -> Json
+
+pub(all) enum LucentModality {
+  Text
+  Image
+  Audio
+  Video
+  Pdf
+  Native(String)
+} derive(Eq, @debug.Debug)
+pub fn LucentModality::from_json(Json) -> Result[Self, String]
+pub fn LucentModality::from_string(String) -> Self?
+pub fn LucentModality::to_json(Self) -> Json
+
+pub struct LucentMultimedia {
+  media_type : String
+  source : LucentMediaSource
+} derive(Eq, @debug.Debug)
+pub fn LucentMultimedia::from_json(Json) -> Result[Self, String]
+pub fn LucentMultimedia::new(String, LucentMediaSource) -> Self
+pub fn LucentMultimedia::to_json(Self) -> Json
+
+pub struct LucentOptions {
+  temperature : Double?
+  top_p : Double?
+  top_k : Int?
+  max_output_tokens : Int?
+  stop : Array[String]?
+  stream : Bool
+  candidate_count : Int?
+  seed : Int?
+  structured_output : LucentStructuredOutput?
+} derive(Eq, @debug.Debug)
+pub fn LucentOptions::default() -> Self
+pub fn LucentOptions::from_json(Json) -> Result[Self, String]
+pub fn LucentOptions::new(Double?, Double?, Int?, Int?, Array[String]?, Bool, Int?, Int?, LucentStructuredOutput?) -> Self
+pub fn LucentOptions::to_json(Self) -> Json
+
+pub struct LucentReasoningConfig {
+  enabled : Bool
+  budget_tokens : Int?
+  effort : LucentReasoningEffort?
+  summary : LucentReasoningSummary?
+} derive(Eq, @debug.Debug)
+pub fn LucentReasoningConfig::disabled() -> Self
+pub fn LucentReasoningConfig::enabled(Int?) -> Self
+pub fn LucentReasoningConfig::from_json(Json) -> Result[Self, String]
+pub fn LucentReasoningConfig::to_json(Self) -> Json
+
+pub(all) enum LucentReasoningEffort {
+  Low
+  Medium
+  High
+} derive(Eq, @debug.Debug)
+pub fn LucentReasoningEffort::from_json(Json) -> Result[Self, String]
+
+pub(all) enum LucentReasoningSummary {
+  Auto
+  Concise
+  Detailed
+} derive(Eq, @debug.Debug)
+pub fn LucentReasoningSummary::from_json(Json) -> Result[Self, String]
+
+pub struct LucentRequest {
+  schema_version : String
+  model : String
+  instructions : Array[LucentContent]?
+  conversation : Array[LucentConversationItem]
+  tools : Array[LucentTool]?
+  tool_choice : LucentToolChoice?
+  options : LucentOptions
+  capabilities : LucentCapabilities?
+  reasoning : LucentReasoningConfig?
+  metadata : Map[String, String]?
+  extra : Map[String, Json]?
+} derive(Eq, @debug.Debug)
+pub fn LucentRequest::from_json(Json) -> Result[Self, String]
+pub fn LucentRequest::from_messages(String, Array[LucentContent]?, Array[LucentMessage], Array[LucentTool]?, LucentToolChoice?, LucentOptions, LucentCapabilities?, LucentReasoningConfig?, Map[String, String]?, Map[String, Json]?) -> Self
+pub fn LucentRequest::new(String, Array[LucentContent]?, Array[LucentConversationItem], Array[LucentTool]?, LucentToolChoice?, LucentOptions, LucentCapabilities?, LucentReasoningConfig?, Map[String, String]?, Map[String, Json]?) -> Self
+pub fn LucentRequest::to_json(Self) -> Json
+
+pub struct LucentResponse {
+  schema_version : String
+  id : String
+  model : String
+  created_at : Int?
+  choices : Array[LucentChoice]
+  usage : LucentUsage?
+  provider_payload : Json?
+} derive(Eq, @debug.Debug)
+pub fn LucentResponse::from_json(Json) -> Result[Self, String]
+pub fn LucentResponse::new(String, String, Int?, Array[LucentChoice], LucentUsage?, Json?) -> Self
+pub fn LucentResponse::to_json(Self) -> Json
+
+pub(all) enum LucentRole {
+  System
+  User
+  Assistant
+  Tool
+  Model
+  Developer
+  Native(String)
+} derive(Eq, @debug.Debug)
+pub fn LucentRole::from_json(Json) -> Result[Self, String]
+pub fn LucentRole::from_string(String) -> Self?
+pub fn LucentRole::to_json(Self) -> Json
+pub fn LucentRole::to_string(Self) -> String
+
+pub struct LucentSafetyRating {
+  category : String
+  probability : String
+} derive(Eq, @debug.Debug)
+pub fn LucentSafetyRating::from_json(Json) -> Result[Self, String]
+pub fn LucentSafetyRating::new(String, String) -> Self
+pub fn LucentSafetyRating::to_json(Self) -> Json
+
+pub(all) enum LucentStreamEvent {
+  ConversationStart(LucentConversationMeta)
+  ItemStart(Int, LucentConversationItem)
+  BlockStart(Int, LucentBlockType)
+  BlockDelta(Int, LucentBlockDelta)
+  BlockEnd(Int)
+  ItemEnd(Int)
+  BlockDiscard(Int)
+  Annotations(Int, Array[LucentAnnotation])
+  Finish(LucentFinishReason)
+  Usage(LucentUsage)
+  Error(LucentError)
+  Done
+} derive(Eq, @debug.Debug)
+pub fn LucentStreamEvent::from_json(Json) -> Result[Self, String]
+pub fn LucentStreamEvent::to_json(Self) -> Json
+
+pub(all) enum LucentStructuredOutput {
+  JsonObject
+  Text
+  JsonSchema(String)
+} derive(Eq, @debug.Debug)
+pub fn LucentStructuredOutput::from_json(Json) -> Result[Self, String]
+pub fn LucentStructuredOutput::to_json(Self) -> Json
+
+pub struct LucentThinking {
+  text : String
+  signature : String?
+  redacted : Bool
+  summary : Array[LucentContent]?
+} derive(Eq, @debug.Debug)
+pub fn LucentThinking::from_json(Json) -> Result[Self, String]
+pub fn LucentThinking::new(String, String?, Bool, Array[LucentContent]?) -> Self
+pub fn LucentThinking::redacted(String?) -> Self
+pub fn LucentThinking::to_json(Self) -> Json
+pub fn LucentThinking::visible(String, String?) -> Self
+
+pub struct LucentTool {
+  name : String
+  description : String?
+  parameters_json : String
+  strict : Bool?
+} derive(Eq, @debug.Debug)
+pub fn LucentTool::from_json(Json) -> Result[Self, String]
+pub fn LucentTool::new(String, String?, String, Bool?) -> Self
+pub fn LucentTool::simple(String, String, String) -> Self
+pub fn LucentTool::to_json(Self) -> Json
+
+pub(all) enum LucentToolChoice {
+  Auto
+  None
+  Required
+  SpecificTool(String)
+} derive(Eq, @debug.Debug)
+pub fn LucentToolChoice::from_json(Json) -> Result[Self, String]
+pub fn LucentToolChoice::to_json(Self) -> Json
+
+pub struct LucentToolResult {
+  tool_use_id : String
+  content : Array[LucentContent]
+  is_error : Bool
+} derive(Eq, @debug.Debug)
+pub fn LucentToolResult::error(String, Array[LucentContent]) -> Self
+pub fn LucentToolResult::from_json(Json) -> Result[Self, String]
+pub fn LucentToolResult::new(String, Array[LucentContent], Bool) -> Self
+pub fn LucentToolResult::ok(String, Array[LucentContent]) -> Self
+pub fn LucentToolResult::to_json(Self) -> Json
+
+pub struct LucentToolUse {
+  id : String
+  name : String
+  arguments_json : String
+  arguments_value : Json?
+} derive(Eq, @debug.Debug)
+pub fn LucentToolUse::from_json(Json) -> Result[Self, String]
+pub fn LucentToolUse::new(String, String, String, Json?) -> Self
+pub fn LucentToolUse::to_json(Self) -> Json
+
+pub struct LucentUsage {
+  prompt_tokens : Int
+  completion_tokens : Int
+  total_tokens : Int
+  reasoning_tokens : Int?
+  cached_tokens : Int?
+  cache_creation_tokens : Int?
+} derive(Eq, @debug.Debug)
+pub fn LucentUsage::from_json(Json) -> Result[Self, String]
+pub fn LucentUsage::new(Int, Int, Int) -> Self
+pub fn LucentUsage::to_json(Self) -> Json
+pub fn LucentUsage::with_reasoning(Int, Int, Int, Int) -> Self
+
+pub struct ProviderCapability {
+  model_pattern : String
+  provider : String
+  capabilities : LucentCapabilities
+  extra_params : Map[String, Json]?
+} derive(Eq, @debug.Debug)
+pub fn ProviderCapability::from_json(Json) -> Result[Self, String]
+pub fn ProviderCapability::new(String, String, LucentCapabilities, Map[String, Json]?) -> Self
+pub fn ProviderCapability::to_json(Self) -> Json
+
+// Type aliases
+
+// Traits
+

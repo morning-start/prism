@@ -1,0 +1,878 @@
+///|
+/// Lux IR — Prism 中立中间协议（v1）
+///
+/// 依据：docs/lux-ir-design.md
+/// 骨干：LucentConversationItem 异质平级，承载消息/工具调用/工具结果/推理/Agent 动作
+/// 版本：schema_version = "v1"
+
+///|
+/// LucentRole — 对话角色
+pub(all) enum LucentRole {
+  System
+  User
+  Assistant
+  Tool
+  Model
+  Developer
+  Native(String)
+} derive(Eq, Debug)
+
+///|
+/// LucentModality — 模态声明
+pub(all) enum LucentModality {
+  Text
+  Image
+  Audio
+  Video
+  Pdf
+  Native(String)
+} derive(Eq, Debug)
+
+///|
+/// LucentMediaSource — 多模态来源三选一
+pub(all) enum LucentMediaSource {
+  Inline(String)
+  Url(String)
+  FileUri(String)
+} derive(Eq, Debug)
+
+///|
+/// LucentMultimedia — 多模态媒体块
+pub struct LucentMultimedia {
+  media_type : String
+  source : LucentMediaSource
+} derive(Eq, Debug)
+
+///|
+/// LucentAnnotationKind — 标注类型
+pub(all) enum LucentAnnotationKind {
+  Url
+  FileCitation
+  WebSearchCitation
+  Native(String)
+} derive(Eq, Debug)
+
+///|
+/// LucentAnnotation — 标注侧信道
+pub struct LucentAnnotation {
+  kind : LucentAnnotationKind
+  text : String?
+  ref_ : String?
+  start : Int?
+  end : Int?
+} derive(Eq, Debug)
+
+///|
+/// LucentThinking — 推理内容
+pub struct LucentThinking {
+  text : String
+  signature : String?
+  redacted : Bool
+  summary : Array[LucentContent]?
+} derive(Eq, Debug)
+
+///|
+/// LucentToolUse — 工具调用（结构化）
+pub struct LucentToolUse {
+  id : String
+  name : String
+  arguments_json : String
+  arguments_value : Json?
+} derive(Eq, Debug)
+
+///|
+/// LucentToolResult — 工具结果（多块内容）
+pub struct LucentToolResult {
+  tool_use_id : String
+  content : Array[LucentContent]
+  is_error : Bool
+} derive(Eq, Debug)
+
+///|
+/// LucentAgentAction — Agent 动作占位（v1 仅类型化，参数走 provider_payload）
+pub struct LucentAgentAction {
+  kind : String
+  id : String
+  call_id : String?
+  name : String?
+  arguments_json : String?
+  result : String?
+  provider_payload : Json?
+} derive(Eq, Debug)
+
+///|
+/// LucentContent — 内容块主枚举
+pub(all) enum LucentContent {
+  Text(String, Array[LucentAnnotation]?)
+  ToolUse(LucentToolUse)
+  ToolResult(LucentToolResult)
+  Thinking(LucentThinking)
+  Refusal(String)
+  Image(LucentMultimedia)
+  Audio(LucentMultimedia)
+  Video(LucentMultimedia)
+  Native(String, Json)
+} derive(Eq, Debug)
+
+///|
+/// LucentMessage — 消息特例（role + content 块数组）
+pub struct LucentMessage {
+  role : LucentRole
+  content : Array[LucentContent]
+} derive(Eq, Debug)
+
+///|
+/// LucentConversationItem — 会话项异质平级
+pub(all) enum LucentConversationItem {
+  Message(LucentMessage)
+  ToolCall(LucentToolUse)
+  ToolResult(LucentToolResult)
+  Reasoning(LucentThinking)
+  AgentAction(LucentAgentAction)
+} derive(Eq, Debug)
+
+///|
+/// LucentTool — 工具定义
+pub struct LucentTool {
+  name : String
+  description : String?
+  parameters_json : String
+  strict : Bool?
+} derive(Eq, Debug)
+
+///|
+/// LucentToolChoice — 工具选择（类型化）
+pub(all) enum LucentToolChoice {
+  Auto
+  None
+  Required
+  SpecificTool(String)
+} derive(Eq, Debug)
+
+///|
+/// LucentStructuredOutput — 结构化输出
+pub(all) enum LucentStructuredOutput {
+  JsonObject
+  Text
+  JsonSchema(String)
+} derive(Eq, Debug)
+
+///|
+/// LucentOptions — 生成参数
+pub struct LucentOptions {
+  temperature : Double?
+  top_p : Double?
+  top_k : Int?
+  max_output_tokens : Int?
+  stop : Array[String]?
+  stream : Bool
+  candidate_count : Int?
+  seed : Int?
+  structured_output : LucentStructuredOutput?
+} derive(Eq, Debug)
+
+///|
+/// LucentReasoningEffort — 推理力度
+pub(all) enum LucentReasoningEffort {
+  Low
+  Medium
+  High
+} derive(Eq, Debug)
+
+///|
+/// LucentReasoningSummary — 推理摘要详细度
+pub(all) enum LucentReasoningSummary {
+  Auto
+  Concise
+  Detailed
+} derive(Eq, Debug)
+
+///|
+/// LucentReasoningConfig — 推理配置
+pub struct LucentReasoningConfig {
+  enabled : Bool
+  budget_tokens : Int?
+  effort : LucentReasoningEffort?
+  summary : LucentReasoningSummary?
+} derive(Eq, Debug)
+
+///|
+/// LucentCapabilities — 标准化能力声明
+pub struct LucentCapabilities {
+  tool_calling : Bool
+  parallel_tool_calls : Bool
+  reasoning : Bool
+  multimodal_input : Bool
+  structured_output : Bool
+  input_modalities : Array[LucentModality]
+  output_modalities : Array[LucentModality]
+} derive(Eq, Debug)
+
+///|
+/// LucentRequest — 完整 LLM 请求
+pub struct LucentRequest {
+  schema_version : String
+  model : String
+  instructions : Array[LucentContent]?
+  conversation : Array[LucentConversationItem]
+  tools : Array[LucentTool]?
+  tool_choice : LucentToolChoice?
+  options : LucentOptions
+  capabilities : LucentCapabilities?
+  reasoning : LucentReasoningConfig?
+  metadata : Map[String, String]?
+  extra : Map[String, Json]?
+} derive(Eq, Debug)
+
+///|
+/// LucentUsage — Token 用量（面向 reasoning 时代）
+pub struct LucentUsage {
+  prompt_tokens : Int
+  completion_tokens : Int
+  total_tokens : Int
+  reasoning_tokens : Int?
+  cached_tokens : Int?
+  cache_creation_tokens : Int?
+} derive(Eq, Debug)
+
+///|
+/// LucentFinishReason — 结束原因
+pub(all) enum LucentFinishReason {
+  Stop
+  Length
+  ToolCalls
+  ContentFilter
+  Safety
+  Recitation
+  MalformedToolCall
+  Error
+  Native(String)
+} derive(Eq, Debug)
+
+///|
+/// LucentSafetyRating — 安全评级
+pub struct LucentSafetyRating {
+  category : String
+  probability : String
+} derive(Eq, Debug)
+
+///|
+/// LucentChoice — 候选回复
+pub struct LucentChoice {
+  index : Int
+  message : LucentMessage
+  finish_reason : LucentFinishReason
+  safety_ratings : Array[LucentSafetyRating]?
+} derive(Eq, Debug)
+
+///|
+/// LucentResponse — 非流式 LLM 响应
+pub struct LucentResponse {
+  schema_version : String
+  id : String
+  model : String
+  created_at : Int?
+  choices : Array[LucentChoice]
+  usage : LucentUsage?
+  provider_payload : Json?
+} derive(Eq, Debug)
+
+///|
+/// ProviderCapability — 适配器能力声明（SDK 自省用）
+pub struct ProviderCapability {
+  model_pattern : String
+  provider : String
+  capabilities : LucentCapabilities
+  extra_params : Map[String, Json]?
+} derive(Eq, Debug)
+
+///|
+pub fn ProviderCapability::new(
+  model_pattern : String,
+  provider : String,
+  capabilities : LucentCapabilities,
+  extra_params : Map[String, Json]?,
+) -> ProviderCapability {
+  { model_pattern, provider, capabilities, extra_params }
+}
+
+///|
+/// LucentDiscovery — 能力发现响应
+/// SDK 接入时第一步调用，获取 Prism 实例的能力清单
+pub struct LucentDiscovery {
+  schema_version : String
+  protocol_version : String
+  schema_url : String
+  providers : Array[ProviderCapability]
+} derive(Eq, Debug)
+
+///|
+pub fn LucentDiscovery::new(
+  protocol_version : String,
+  schema_url : String,
+  providers : Array[ProviderCapability],
+) -> LucentDiscovery {
+  { schema_version: "v1", protocol_version, schema_url, providers }
+}
+
+///|
+/// 构造器与辅助函数
+
+///|
+pub fn LucentRole::from_string(s : String) -> LucentRole? {
+  match s {
+    "system" => Some(System)
+    "user" => Some(User)
+    "assistant" => Some(Assistant)
+    "tool" => Some(Tool)
+    "model" => Some(Model)
+    "developer" => Some(Developer)
+    _ => None
+  }
+}
+
+///|
+pub fn LucentRole::to_string(self : LucentRole) -> String {
+  match self {
+    System => "system"
+    User => "user"
+    Assistant => "assistant"
+    Tool => "tool"
+    Model => "model"
+    Developer => "developer"
+    Native(s) => s
+  }
+}
+
+///|
+pub fn LucentModality::from_string(s : String) -> LucentModality? {
+  match s {
+    "text" => Some(Text)
+    "image" => Some(Image)
+    "audio" => Some(Audio)
+    "video" => Some(Video)
+    "pdf" => Some(Pdf)
+    _ => None
+  }
+}
+
+///|
+pub fn LucentMediaSource::inline(data : String) -> LucentMediaSource {
+  Inline(data)
+}
+
+///|
+pub fn LucentMediaSource::url(u : String) -> LucentMediaSource {
+  Url(u)
+}
+
+///|
+pub fn LucentMediaSource::file_uri(uri : String) -> LucentMediaSource {
+  FileUri(uri)
+}
+
+///|
+pub fn LucentMultimedia::new(
+  media_type : String,
+  source : LucentMediaSource,
+) -> LucentMultimedia {
+  { media_type, source }
+}
+
+///|
+pub fn LucentAnnotation::new(
+  kind : LucentAnnotationKind,
+  text : String?,
+  ref_ : String?,
+  start : Int?,
+  end : Int?,
+) -> LucentAnnotation {
+  { kind, text, ref_, start, end }
+}
+
+///|
+pub fn LucentThinking::new(
+  text : String,
+  signature : String?,
+  redacted : Bool,
+  summary : Array[LucentContent]?,
+) -> LucentThinking {
+  { text, signature, redacted, summary }
+}
+
+///|
+pub fn LucentThinking::visible(
+  text : String,
+  signature : String?,
+) -> LucentThinking {
+  { text, signature, redacted: false, summary: None }
+}
+
+///|
+pub fn LucentThinking::redacted(signature : String?) -> LucentThinking {
+  { text: "", signature, redacted: true, summary: None }
+}
+
+///|
+pub fn LucentToolUse::new(
+  id : String,
+  name : String,
+  arguments_json : String,
+  arguments_value : Json?,
+) -> LucentToolUse {
+  { id, name, arguments_json, arguments_value }
+}
+
+///|
+pub fn LucentToolResult::new(
+  tool_use_id : String,
+  content : Array[LucentContent],
+  is_error : Bool,
+) -> LucentToolResult {
+  { tool_use_id, content, is_error }
+}
+
+///|
+pub fn LucentToolResult::ok(
+  tool_use_id : String,
+  content : Array[LucentContent],
+) -> LucentToolResult {
+  { tool_use_id, content, is_error: false }
+}
+
+///|
+pub fn LucentToolResult::error(
+  tool_use_id : String,
+  content : Array[LucentContent],
+) -> LucentToolResult {
+  { tool_use_id, content, is_error: true }
+}
+
+///|
+pub fn LucentAgentAction::new(
+  kind : String,
+  id : String,
+  call_id : String?,
+  name : String?,
+  arguments_json : String?,
+  result : String?,
+  provider_payload : Json?,
+) -> LucentAgentAction {
+  { kind, id, call_id, name, arguments_json, result, provider_payload }
+}
+
+///|
+pub fn LucentContent::text(s : String) -> LucentContent {
+  Text(s, None)
+}
+
+///|
+pub fn LucentContent::text_with_annotations(
+  s : String,
+  annotations : Array[LucentAnnotation],
+) -> LucentContent {
+  Text(s, Some(annotations))
+}
+
+///|
+pub fn LucentContent::tool_use(
+  id : String,
+  name : String,
+  arguments_json : String,
+  arguments_value : Json?,
+) -> LucentContent {
+  ToolUse({ id, name, arguments_json, arguments_value })
+}
+
+///|
+pub fn LucentContent::tool_result(
+  tool_use_id : String,
+  content : Array[LucentContent],
+) -> LucentContent {
+  ToolResult({ tool_use_id, content, is_error: false })
+}
+
+///|
+pub fn LucentContent::tool_result_error(
+  tool_use_id : String,
+  content : Array[LucentContent],
+) -> LucentContent {
+  ToolResult({ tool_use_id, content, is_error: true })
+}
+
+///|
+pub fn LucentContent::thinking(
+  text : String,
+  signature : String?,
+) -> LucentContent {
+  Thinking({ text, signature, redacted: false, summary: None })
+}
+
+///|
+pub fn LucentContent::redacted_thinking(signature : String?) -> LucentContent {
+  Thinking({ text: "", signature, redacted: true, summary: None })
+}
+
+///|
+pub fn LucentContent::refusal(text : String) -> LucentContent {
+  Refusal(text)
+}
+
+///|
+pub fn LucentContent::image(
+  media_type : String,
+  source : LucentMediaSource,
+) -> LucentContent {
+  Image({ media_type, source })
+}
+
+///|
+pub fn LucentContent::audio(
+  media_type : String,
+  source : LucentMediaSource,
+) -> LucentContent {
+  Audio({ media_type, source })
+}
+
+///|
+pub fn LucentContent::video(
+  media_type : String,
+  source : LucentMediaSource,
+) -> LucentContent {
+  Video({ media_type, source })
+}
+
+///|
+pub fn LucentContent::native(type_tag : String, raw : Json) -> LucentContent {
+  Native(type_tag, raw)
+}
+
+///|
+pub fn LucentMessage::new(
+  role : LucentRole,
+  content : Array[LucentContent],
+) -> LucentMessage {
+  { role, content }
+}
+
+///|
+pub fn LucentConversationItem::message(
+  msg : LucentMessage,
+) -> LucentConversationItem {
+  Message(msg)
+}
+
+///|
+pub fn LucentConversationItem::tool_call(
+  tu : LucentToolUse,
+) -> LucentConversationItem {
+  ToolCall(tu)
+}
+
+///|
+pub fn LucentConversationItem::tool_result(
+  tr : LucentToolResult,
+) -> LucentConversationItem {
+  ToolResult(tr)
+}
+
+///|
+pub fn LucentConversationItem::reasoning(
+  th : LucentThinking,
+) -> LucentConversationItem {
+  Reasoning(th)
+}
+
+///|
+pub fn LucentConversationItem::agent_action(
+  aa : LucentAgentAction,
+) -> LucentConversationItem {
+  AgentAction(aa)
+}
+
+///|
+/// 便利：将 Array[LucentMessage] 包装为 Array[LucentConversationItem]
+pub fn lucent_items_from_messages(
+  msgs : Array[LucentMessage],
+) -> Array[LucentConversationItem] {
+  let result : Array[LucentConversationItem] = []
+  let mut i = 0
+  while i < msgs.length() {
+    result.push(LucentConversationItem::message(msgs[i]))
+    i = i + 1
+  }
+  result
+}
+
+///|
+pub fn LucentTool::new(
+  name : String,
+  description : String?,
+  parameters_json : String,
+  strict : Bool?,
+) -> LucentTool {
+  { name, description, parameters_json, strict }
+}
+
+///|
+pub fn LucentTool::simple(
+  name : String,
+  description : String,
+  parameters_json : String,
+) -> LucentTool {
+  { name, description: Some(description), parameters_json, strict: None }
+}
+
+///|
+pub fn LucentOptions::default() -> LucentOptions {
+  {
+    temperature: None,
+    top_p: None,
+    top_k: None,
+    max_output_tokens: None,
+    stop: None,
+    stream: false,
+    candidate_count: None,
+    seed: None,
+    structured_output: None,
+  }
+}
+
+///|
+pub fn LucentOptions::new(
+  temperature : Double?,
+  top_p : Double?,
+  top_k : Int?,
+  max_output_tokens : Int?,
+  stop : Array[String]?,
+  stream : Bool,
+  candidate_count : Int?,
+  seed : Int?,
+  structured_output : LucentStructuredOutput?,
+) -> LucentOptions {
+  {
+    temperature,
+    top_p,
+    top_k,
+    max_output_tokens,
+    stop,
+    stream,
+    candidate_count,
+    seed,
+    structured_output,
+  }
+}
+
+///|
+pub fn LucentCapabilities::default() -> LucentCapabilities {
+  {
+    tool_calling: false,
+    parallel_tool_calls: false,
+    reasoning: false,
+    multimodal_input: false,
+    structured_output: false,
+    input_modalities: [],
+    output_modalities: [],
+  }
+}
+
+///|
+pub fn LucentReasoningConfig::enabled(budget : Int?) -> LucentReasoningConfig {
+  { enabled: true, budget_tokens: budget, effort: None, summary: None }
+}
+
+///|
+pub fn LucentReasoningConfig::disabled() -> LucentReasoningConfig {
+  { enabled: false, budget_tokens: None, effort: None, summary: None }
+}
+
+///|
+pub fn LucentRequest::new(
+  model : String,
+  instructions : Array[LucentContent]?,
+  conversation : Array[LucentConversationItem],
+  tools : Array[LucentTool]?,
+  tool_choice : LucentToolChoice?,
+  options : LucentOptions,
+  capabilities : LucentCapabilities?,
+  reasoning : LucentReasoningConfig?,
+  metadata : Map[String, String]?,
+  extra : Map[String, Json]?,
+) -> LucentRequest {
+  {
+    schema_version: "v1",
+    model,
+    instructions,
+    conversation,
+    tools,
+    tool_choice,
+    options,
+    capabilities,
+    reasoning,
+    metadata,
+    extra,
+  }
+}
+
+///|
+/// 便利构造器：用 messages 数组（旧风格）替代 conversation
+pub fn LucentRequest::from_messages(
+  model : String,
+  instructions : Array[LucentContent]?,
+  messages : Array[LucentMessage],
+  tools : Array[LucentTool]?,
+  tool_choice : LucentToolChoice?,
+  options : LucentOptions,
+  capabilities : LucentCapabilities?,
+  reasoning : LucentReasoningConfig?,
+  metadata : Map[String, String]?,
+  extra : Map[String, Json]?,
+) -> LucentRequest {
+  {
+    schema_version: "v1",
+    model,
+    instructions,
+    conversation: lucent_items_from_messages(messages),
+    tools,
+    tool_choice,
+    options,
+    capabilities,
+    reasoning,
+    metadata,
+    extra,
+  }
+}
+
+///|
+pub fn LucentUsage::new(
+  prompt_tokens : Int,
+  completion_tokens : Int,
+  total_tokens : Int,
+) -> LucentUsage {
+  {
+    prompt_tokens,
+    completion_tokens,
+    total_tokens,
+    reasoning_tokens: None,
+    cached_tokens: None,
+    cache_creation_tokens: None,
+  }
+}
+
+///|
+pub fn LucentUsage::with_reasoning(
+  prompt_tokens : Int,
+  completion_tokens : Int,
+  total_tokens : Int,
+  reasoning_tokens : Int,
+) -> LucentUsage {
+  {
+    prompt_tokens,
+    completion_tokens,
+    total_tokens,
+    reasoning_tokens: Some(reasoning_tokens),
+    cached_tokens: None,
+    cache_creation_tokens: None,
+  }
+}
+
+///|
+pub fn LucentSafetyRating::new(
+  category : String,
+  probability : String,
+) -> LucentSafetyRating {
+  { category, probability }
+}
+
+///|
+pub fn LucentChoice::new(
+  index : Int,
+  message : LucentMessage,
+  finish_reason : LucentFinishReason,
+  safety_ratings : Array[LucentSafetyRating]?,
+) -> LucentChoice {
+  { index, message, finish_reason, safety_ratings }
+}
+
+///|
+pub fn LucentResponse::new(
+  id : String,
+  model : String,
+  created_at : Int?,
+  choices : Array[LucentChoice],
+  usage : LucentUsage?,
+  provider_payload : Json?,
+) -> LucentResponse {
+  {
+    schema_version: "v1",
+    id,
+    model,
+    created_at,
+    choices,
+    usage,
+    provider_payload,
+  }
+}
+
+///|
+/// LucentFinishReason 字符串映射（适配器共用）
+pub fn LucentFinishReason::from_string(s : String) -> LucentFinishReason {
+  match s {
+    "stop" | "end_turn" | "completed" | "STOP" => Stop
+    "length" | "max_tokens" | "MAX_TOKENS" | "incomplete" => Length
+    "tool_calls" | "tool_use" | "function_call" => ToolCalls
+    "content_filter" => ContentFilter
+    "SAFETY" | "safety" => Safety
+    "RECITATION" | "recitation" => Recitation
+    "MALFORMED_FUNCTION_CALL" | "malformed_function_call" => MalformedToolCall
+    "error" | "failed" | "ERROR" => Error
+    other => Native(other)
+  }
+}
+
+///|
+pub fn LucentFinishReason::to_string(self : LucentFinishReason) -> String {
+  match self {
+    Stop => "stop"
+    Length => "length"
+    ToolCalls => "tool_calls"
+    ContentFilter => "content_filter"
+    Safety => "safety"
+    Recitation => "recitation"
+    MalformedToolCall => "malformed_function_call"
+    Error => "error"
+    Native(s) => s
+  }
+}
+
+///|
+/// 从 conversation items 中提取所有 Message 项（用于适配器需要 messages 视图的场景）
+pub fn lucent_messages_from_items(
+  items : Array[LucentConversationItem],
+) -> Array[LucentMessage] {
+  let result : Array[LucentMessage] = []
+  let mut i = 0
+  while i < items.length() {
+    match items[i] {
+      Message(m) => result.push(m)
+      _ => ()
+    }
+    i = i + 1
+  }
+  result
+}
+
+///|
+/// 将 LucentContent 数组拼接为纯文本（Text 块拼接，其他块忽略）
+pub fn lucent_content_to_text(parts : Array[LucentContent]) -> String {
+  let buf : Array[String] = []
+  let mut i = 0
+  while i < parts.length() {
+    match parts[i] {
+      Text(s, _) => buf.push(s)
+      _ => ()
+    }
+    i = i + 1
+  }
+  buf.join("")
+}
