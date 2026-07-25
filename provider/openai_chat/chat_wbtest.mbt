@@ -1,0 +1,678 @@
+///|
+/// OpenAI Chat 适配器白盒测试 — 对齐 Lux IR v1 的 6 函数契约
+///
+/// 依据：docs/lux-ir-design.md §10
+/// 覆盖：
+///   1. openai_chat_to_lux_request      请求解码
+///   2. lux_request_to_openai_chat      请求编码
+///   3. openai_chat_to_lux_response     响应解码
+///   4. lux_response_to_openai_chat     响应编码
+///   5. openai_chat_sse_to_events       流解码
+///   6. lux_events_to_openai_chat_sse   流编码
+
+///|
+/// === 1. 请求解码 ===
+
+///|
+test "openai_chat_to_lux_request - simple user message" {
+  let json = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}],\"stream\":false}"
+  match openai_chat_to_lux_request(json) {
+    Ok(req) => {
+      assert_eq(req.model, "gpt-4o")
+      assert_eq(req.conversation.length(), 1)
+      match req.conversation[0] {
+        Message(m) => {
+          assert_eq(m.role, User)
+          assert_eq(m.content.length(), 1)
+          match m.content[0] {
+            Text(t, _) => assert_eq(t, "Hello")
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+      assert_eq(req.options.stream, false)
+      assert_eq(req.instructions, None)
+    }
+    Err(e) => fail("unexpected error: \{e}")
+  }
+}
+
+///|
+test "openai_chat_to_lux_request - system instruction extracted" {
+  let json = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"You are helpful\"},{\"role\":\"user\",\"content\":\"hi\"}]}"
+  match openai_chat_to_lux_request(json) {
+    Ok(req) => {
+      // system 抽出为 instructions，不入 conversation
+      assert_eq(req.conversation.length(), 1)
+      match req.instructions {
+        Some(instrs) => assert_eq(instrs.length(), 1)
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "openai_chat_to_lux_request - assistant with tool_calls" {
+  let json = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"weather?\"},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Beijing\\\"}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"{\\\"temp\\\":25}\"}]}"
+  match openai_chat_to_lux_request(json) {
+    Ok(req) => {
+      assert_eq(req.conversation.length(), 3)
+      // assistant 消息含 ToolUse content
+      match req.conversation[1] {
+        Message(m) =>
+          match m.content[0] {
+            ToolUse(tu) => {
+              assert_eq(tu.id, "call_1")
+              assert_eq(tu.name, "get_weather")
+            }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+      // tool 角色消息含 ToolResult
+      match req.conversation[2] {
+        Message(m) =>
+          match m.content[0] {
+            ToolResult(tr) => assert_eq(tr.tool_use_id, "call_1")
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "openai_chat_to_lux_request - tools parsed" {
+  let json = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"f\",\"description\":\"d\",\"parameters\":{\"type\":\"object\"}}}]}"
+  match openai_chat_to_lux_request(json) {
+    Ok(req) =>
+      match req.tools {
+        Some(tools) => {
+          assert_eq(tools.length(), 1)
+          assert_eq(tools[0].name, "f")
+        }
+        None => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "openai_chat_to_lux_request - tool_choice variants" {
+  let json_tc_auto = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"tool_choice\":\"auto\"}"
+  match openai_chat_to_lux_request(json_tc_auto) {
+    Ok(req) => assert_eq(req.tool_choice, Some(Auto))
+    Err(_) => assert_true(false)
+  }
+  let json_tc_req = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"tool_choice\":{\"type\":\"function\",\"function\":{\"name\":\"f\"}}}"
+  match openai_chat_to_lux_request(json_tc_req) {
+    Ok(req) => assert_eq(req.tool_choice, Some(SpecificTool("f")))
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "openai_chat_to_lux_request - options mapping" {
+  let json = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"temperature\":0.7,\"max_tokens\":1024,\"stream\":true,\"stop\":\"\\n\\n\",\"seed\":42}"
+  match openai_chat_to_lux_request(json) {
+    Ok(req) => {
+      match req.options.temperature {
+        Some(t) => assert_true(t > 0.6 && t < 0.8)
+        None => assert_true(false)
+      }
+      assert_eq(req.options.max_output_tokens, Some(1024))
+      assert_eq(req.options.stream, true)
+      assert_eq(req.options.seed, Some(42))
+      match req.options.stop {
+        Some(arr) => assert_eq(arr.length(), 1)
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "openai_chat_to_lux_request - response_format json_object" {
+  let json = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"response_format\":{\"type\":\"json_object\"}}"
+  match openai_chat_to_lux_request(json) {
+    Ok(req) => assert_eq(req.options.structured_output, Some(JsonObject))
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "openai_chat_to_lux_request - invalid json returns error" {
+  match openai_chat_to_lux_request("not json") {
+    Ok(_) => assert_true(false)
+    Err(_) => ()
+  }
+}
+
+///|
+test "openai_chat_to_lux_request - empty messages" {
+  let json = "{\"model\":\"gpt-4o\",\"messages\":[]}"
+  match openai_chat_to_lux_request(json) {
+    Ok(req) => assert_eq(req.conversation.length(), 0)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// === 2. 请求编码 ===
+
+///|
+test "lux_request_to_openai_chat - simple user message" {
+  let req = @lux.LucentRequest::from_messages(
+    "gpt-4o",
+    None,
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("Hello")])],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai_chat(req) {
+    Ok(s) => {
+      let jv = @json.parse(s)
+      match obj_get(jv, "model") {
+        Some(String("gpt-4o")) => ()
+        _ => assert_true(false)
+      }
+      match field_arr(jv, "messages") {
+        Some(arr) => assert_eq(arr.length(), 1)
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "lux_request_to_openai_chat - instructions prepended as system message" {
+  let req = @lux.LucentRequest::from_messages(
+    "gpt-4o",
+    Some([@lux.LucentContent::text("You are helpful")]),
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai_chat(req) {
+    Ok(s) => {
+      let jv = @json.parse(s)
+      match field_arr(jv, "messages") {
+        Some(arr) => {
+          assert_eq(arr.length(), 2)
+          match field_str(arr[0], "role") {
+            Some("system") => ()
+            _ => assert_true(false)
+          }
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "lux_request_to_openai_chat - tool_use encoded as tool_calls" {
+  let req = @lux.LucentRequest::from_messages(
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentMessage::new(Assistant, [
+        @lux.LucentContent::text("Let me check"),
+        @lux.LucentContent::tool_use("c1", "f", "{}", None),
+      ]),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai_chat(req) {
+    Ok(s) => {
+      let jv = @json.parse(s)
+      match field_arr(jv, "messages") {
+        Some(arr) =>
+          match obj_get(arr[0], "tool_calls") {
+            Some(Array(tc)) => assert_eq(tc.length(), 1)
+            _ => assert_true(false)
+          }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "lux_request_to_openai_chat - tool_result encoded as tool role" {
+  let req = @lux.LucentRequest::from_messages(
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentMessage::new(Tool, [
+        @lux.LucentContent::tool_result("c1", [
+          @lux.LucentContent::text("result"),
+        ]),
+      ]),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai_chat(req) {
+    Ok(s) => {
+      let jv = @json.parse(s)
+      match field_arr(jv, "messages") {
+        Some(arr) =>
+          match field_str(arr[0], "role") {
+            Some("tool") => ()
+            _ => assert_true(false)
+          }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "lux_request_to_openai_chat - tools encoded" {
+  let req = @lux.LucentRequest::from_messages(
+    "gpt-4o",
+    None,
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
+    Some([@lux.LucentTool::simple("f", "desc", "{\"type\":\"object\"}")]),
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai_chat(req) {
+    Ok(s) => {
+      let jv = @json.parse(s)
+      match field_arr(jv, "tools") {
+        Some(arr) => assert_eq(arr.length(), 1)
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// === 3. 响应解码 ===
+
+///|
+test "openai_chat_to_lux_response - text + usage" {
+  let json = "{\"id\":\"chatcmpl-1\",\"object\":\"chat.completion\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello!\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5,\"total_tokens\":15}}"
+  match openai_chat_to_lux_response(json) {
+    Ok(resp) => {
+      assert_eq(resp.id, "chatcmpl-1")
+      assert_eq(resp.model, "gpt-4o")
+      assert_eq(resp.choices.length(), 1)
+      match resp.choices[0].message.content[0] {
+        Text(t, _) => assert_eq(t, "Hello!")
+        _ => assert_true(false)
+      }
+      assert_eq(resp.choices[0].finish_reason, Stop)
+      match resp.usage {
+        Some(u) => assert_eq(u.prompt_tokens, 10)
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "openai_chat_to_lux_response - assistant with tool_calls" {
+  let json = "{\"id\":\"c-1\",\"object\":\"chat.completion\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"c1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},\"finish_reason\":\"tool_calls\"}]}"
+  match openai_chat_to_lux_response(json) {
+    Ok(resp) => {
+      assert_eq(resp.choices[0].finish_reason, ToolCalls)
+      match resp.choices[0].message.content[0] {
+        ToolUse(tu) => assert_eq(tu.name, "f")
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "ai_chat_to_lux_response - refusal decoded" {
+  let json = "{\"id\":\"c-1\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":null,\"refusal\":\"cannot\"},\"finish_reason\":\"stop\"}]}"
+  match openai_chat_to_lux_response(json) {
+    Ok(resp) =>
+      match resp.choices[0].message.content[0] {
+        Refusal(s) => assert_eq(s, "cannot")
+        _ => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "openai_chat_to_lux_response - invalid json" {
+  match openai_chat_to_lux_response("not json") {
+    Ok(_) => assert_true(false)
+    Err(_) => ()
+  }
+}
+
+///|
+/// === 4. 响应编码 ===
+
+///|
+test "lux_response_to_openai_chat - text response" {
+  let resp = @lux.LucentResponse::new(
+    "r-1",
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentChoice::new(
+        0,
+        @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("Hello")]),
+        Stop,
+        None,
+      ),
+    ],
+    Some(@lux.LucentUsage::new(10, 5, 15)),
+    None,
+  )
+  match lux_response_to_openai_chat(resp) {
+    Ok(s) => {
+      let jv = @json.parse(s)
+      match field_str(jv, "object") {
+        Some("chat.completion") => ()
+        _ => assert_true(false)
+      }
+      match field_arr(jv, "choices") {
+        Some(arr) => assert_eq(arr.length(), 1)
+        None => assert_true(false)
+      }
+      match obj_get(jv, "usage") {
+        Some(_) => ()
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "lux_response_to_openai_chat - tool_calls encoded" {
+  let resp = @lux.LucentResponse::new(
+    "r-1",
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentChoice::new(
+        0,
+        @lux.LucentMessage::new(Assistant, [
+          @lux.LucentContent::tool_use("c1", "f", "{}", None),
+        ]),
+        ToolCalls,
+        None,
+      ),
+    ],
+    None,
+    None,
+  )
+  match lux_response_to_openai_chat(resp) {
+    Ok(s) => {
+      let jv = @json.parse(s)
+      match field_arr(jv, "choices") {
+        Some(arr) =>
+          match obj_get(arr[0], "message") {
+            Some(m) =>
+              match obj_get(m, "tool_calls") {
+                Some(Array(tc)) => assert_eq(tc.length(), 1)
+                _ => assert_true(false)
+              }
+            None => assert_true(false)
+          }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "lux_response_to_openai_chat - refusal encoded" {
+  let resp = @lux.LucentResponse::new(
+    "r-1",
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentChoice::new(
+        0,
+        @lux.LucentMessage::new(Assistant, [@lux.LucentContent::refusal("no")]),
+        Stop,
+        None,
+      ),
+    ],
+    None,
+    None,
+  )
+  match lux_response_to_openai_chat(resp) {
+    Ok(s) => {
+      let jv = @json.parse(s)
+      match field_arr(jv, "choices") {
+        Some(arr) =>
+          match obj_get(arr[0], "message") {
+            Some(m) =>
+              match field_str(m, "refusal") {
+                Some("no") => ()
+                _ => assert_true(false)
+              }
+            None => assert_true(false)
+          }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// === 5. 流解码 ===
+
+///|
+test "openai_chat_sse_to_events - text chunks" {
+  let sse = "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\" world\"}}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
+  match openai_chat_sse_to_events(sse) {
+    Ok(events) => {
+      // 应有：ConversationStart + BlockStart + BlockDelta×2 + BlockEnd + Finish + Done
+      assert_true(events.length() >= 5)
+      // ConversationStart 首个事件
+      assert_true(events[0] is ConversationStart(_))
+      // Done 末事件
+      assert_true(events[events.length() - 1] is Done)
+    }
+    Err(e) => fail("sse decode error: \{e}")
+  }
+}
+
+///|
+test "openai_chat_sse_to_events - tool call stream" {
+  let sse = "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{\"}}]}}]}\n\ndata: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\"x\\\":\"}}]}}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\ndata: [DONE]\n\n"
+  match openai_chat_sse_to_events(sse) {
+    Ok(events) => {
+      // 应有 BlockStart(0, ToolCall) + BlockDelta(ToolArgumentsDelta)×2 + BlockEnd + Finish(ToolCalls) + Done
+      let has_tool_block_start = {
+        let mut found = false
+        for ev in events {
+          match ev {
+            BlockStart(0, ToolCall(_, _)) => found = true
+            _ => ()
+          }
+        }
+        found
+      }
+      assert_true(has_tool_block_start)
+      // 末事件 Done
+      assert_true(events[events.length() - 1] is Done)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "openai_chat_sse_to_events - usage frame" {
+  let sse = "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: {\"choices\":[],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":2,\"total_tokens\":12}}\n\ndata: [DONE]\n\n"
+  match openai_chat_sse_to_events(sse) {
+    Ok(events) => {
+      let has_usage = {
+        let mut found = false
+        for ev in events {
+          match ev {
+            Usage(_) => found = true
+            _ => ()
+          }
+        }
+        found
+      }
+      assert_true(has_usage)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// === 6. 流编码 ===
+
+///|
+test "lux_events_to_openai_chat_sse - text sequence" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(@lux.LucentConversationMeta::new(None, None, None)),
+    BlockStart(0, @lux.Text),
+    BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
+    BlockEnd(0),
+    Finish(Stop),
+    Done,
+  ]
+  match lux_events_to_openai_chat_sse(events) {
+    Ok(sse) => {
+      // 应含 role:assistant、content:Hello、finish_reason:stop、[DONE]
+      assert_true(sse.contains("\"role\":\"assistant\""))
+      assert_true(sse.contains("\"content\":\"Hello\""))
+      assert_true(sse.contains("\"finish_reason\":\"stop\""))
+      assert_true(sse.contains("data: [DONE]"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "lux_events_to_openai_chat_sse - tool call sequence" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    BlockStart(0, @lux.LucentBlockType::tool_call("c1", "f")),
+    BlockDelta(0, @lux.LucentBlockDelta::tool_arguments_delta("{}")),
+    Finish(ToolCalls),
+    Done,
+  ]
+  match lux_events_to_openai_chat_sse(events) {
+    Ok(sse) => {
+      // 应含 tool_calls 首帧（id + name）和 arguments 增量
+      assert_true(sse.contains("\"id\":\"c1\""))
+      assert_true(sse.contains("\"name\":\"f\""))
+      assert_true(sse.contains("\"arguments\":\"{}\""))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "lux_events_to_openai_chat_sse - usage frame" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    Finish(Stop),
+    Usage(@lux.LucentUsage::new(10, 2, 12)),
+    Done,
+  ]
+  match lux_events_to_openai_chat_sse(events) {
+    Ok(sse) => assert_true(sse.contains("\"total_tokens\":12"))
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// === round-trip 一致性 ===
+
+///|
+test "round trip - request encode then decode preserves semantics" {
+  let original = @lux.LucentRequest::from_messages(
+    "gpt-4o",
+    Some([@lux.LucentContent::text("You are helpful")]),
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai_chat(original) {
+    Ok(json) =>
+      match openai_chat_to_lux_request(json) {
+        Ok(round) => {
+          assert_eq(round.model, "gpt-4o")
+          assert_eq(round.conversation.length(), 1)
+          // instructions 应被还原（system 消息抽出）
+          match round.instructions {
+            Some(_) => ()
+            None => assert_true(false)
+          }
+        }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "round trip - response decode then encode preserves id" {
+  let json = "{\"id\":\"c-1\",\"object\":\"chat.completion\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"hi\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1,\"total_tokens\":2}}"
+  match openai_chat_to_lux_response(json) {
+    Ok(resp) =>
+      match lux_response_to_openai_chat(resp) {
+        Ok(json2) => {
+          let jv = @json.parse(json2)
+          match field_str(jv, "id") {
+            Some("c-1") => ()
+            _ => assert_true(false)
+          }
+        }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
