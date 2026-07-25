@@ -1,0 +1,251 @@
+///|
+/// OpenAI Responses 适配器白盒测试
+
+///|
+/// === 1. 请求解码 ===
+
+///|
+test "openai_responses_to_lux_request - simple user message" {
+  let json = "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"Hello\"}]}]}"
+  match openai_responses_to_lux_request(json) {
+    Ok(req) => {
+      assert_eq(req.model, "gpt-5")
+      assert_eq(req.conversation.length(), 1)
+      match req.conversation[0] {
+        Message(m) => {
+          assert_eq(m.role, User)
+          match m.content[0] {
+            Text(t, _) => assert_eq(t, "Hello")
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(e) => fail("unexpected: \{e}")
+  }
+}
+
+///|
+test "openai_responses_to_lux_request - instructions extracted" {
+  let json = "{\"model\":\"gpt-5\",\"instructions\":\"Be helpful\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hi\"}]}]}"
+  match openai_responses_to_lux_request(json) {
+    Ok(req) =>
+      match req.instructions {
+        Some(instrs) => assert_eq(instrs.length(), 1)
+        None => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "openai_responses_to_lux_request - function_call and function_call_output" {
+  let json = "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"function_call\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"search\",\"arguments\":\"{\\\"q\\\":\\\"x\\\"}\"},{\"type\":\"function_call_output\",\"call_id\":\"call_1\",\"output\":\"result\"}]}"
+  match openai_responses_to_lux_request(json) {
+    Ok(req) => {
+      assert_eq(req.conversation.length(), 2)
+      match req.conversation[0] {
+        ToolCall(tu) => {
+          assert_eq(tu.id, "fc_1")
+          assert_eq(tu.name, "search")
+        }
+        _ => assert_true(false)
+      }
+      match req.conversation[1] {
+        ToolResult(tr) => assert_eq(tr.tool_use_id, "call_1")
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "openai_responses_to_lux_request - reasoning item" {
+  let json = "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"thinking step\"}],\"signature\":\"sig_1\"}]}"
+  match openai_responses_to_lux_request(json) {
+    Ok(req) =>
+      match req.conversation[0] {
+        Reasoning(th) => assert_eq(th.signature, Some("sig_1"))
+        _ => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// === 2. 请求编码 ===
+
+///|
+test "lux_request_to_openai_responses - simple user message" {
+  let req = @lux.LucentRequest::from_messages(
+    "gpt-5",
+    None,
+    [@lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")])],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai_responses(req) {
+    Ok(s) => {
+      assert_true(s.contains("\"model\":\"gpt-5\""))
+      assert_true(s.contains("\"input\":"))
+      assert_true(s.contains("\"type\":\"message\""))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// === 3. 响应解码 ===
+
+///|
+test "openai_responses_to_lux_response - text + usage" {
+  let json = "{\"id\":\"resp_1\",\"object\":\"response\",\"status\":\"completed\",\"model\":\"gpt-5\",\"created_at\":1700000000,\"output\":[{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hello!\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":10,\"output_tokens\":5,\"total_tokens\":15}}"
+  match openai_responses_to_lux_response(json) {
+    Ok(resp) => {
+      assert_eq(resp.id, "resp_1")
+      assert_eq(resp.model, "gpt-5")
+      assert_eq(resp.choices[0].finish_reason, Stop)
+      match resp.choices[0].message.content[0] {
+        Text(t, _) => assert_eq(t, "Hello!")
+        _ => assert_true(false)
+      }
+      match resp.usage {
+        Some(u) => {
+          assert_eq(u.prompt_tokens, 10)
+          assert_eq(u.completion_tokens, 5)
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "openai_responses_to_lux_response - function_call output" {
+  let json = "{\"id\":\"resp_2\",\"model\":\"gpt-5\",\"output\":[{\"type\":\"function_call\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"search\",\"arguments\":\"{}\",\"status\":\"completed\"}],\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2}}"
+  match openai_responses_to_lux_response(json) {
+    Ok(resp) =>
+      match resp.choices[0].message.content[0] {
+        ToolUse(tu) => assert_eq(tu.name, "search")
+        _ => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// === 4. 响应编码 ===
+
+///|
+test "lux_response_to_openai_responses - text response" {
+  let msg = @lux.LucentMessage::new(@lux.Assistant, [
+    @lux.LucentContent::text("Hello"),
+  ])
+  let choice = @lux.LucentChoice::new(0, msg, @lux.Stop, None)
+  let resp = @lux.LucentResponse::new(
+    "resp_1",
+    "gpt-5",
+    None,
+    [choice],
+    Some(@lux.LucentUsage::new(10, 5, 15)),
+    None,
+  )
+  match lux_response_to_openai_responses(resp) {
+    Ok(s) => {
+      assert_true(s.contains("\"id\":\"resp_1\""))
+      assert_true(s.contains("\"object\":\"response\""))
+      assert_true(s.contains("\"output_tokens\":5"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "lux_response_to_openai_responses - empty choices error" {
+  let resp = @lux.LucentResponse::new("r", "m", None, [], None, None)
+  match lux_response_to_openai_responses(resp) {
+    Ok(_) => assert_true(false)
+    Err(e) => assert_eq(e, "response has no choices")
+  }
+}
+
+///|
+/// === 5. 流解码 ===
+
+///|
+test "openai_responses_sse_to_events - text stream" {
+  let sse = "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"r_1\",\"model\":\"gpt-5\"}}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"input_text\",\"text\":\"\"}]}}\n\nevent: response.content_part.added\ndata: {\"type\":\"response.content_part.added\",\"output_index\":0,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\"}}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"content_index\":0,\"delta\":\"Hello\"}\n\nevent: response.output_text.done\ndata: {\"type\":\"response.output_text.done\",\"output_index\":0,\"content_index\":0}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2}}}\n\n"
+  match openai_responses_sse_to_events(sse) {
+    Ok(events) => {
+      assert_true(events.length() >= 5)
+      match events[0] {
+        ConversationStart(_) => ()
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "openai_responses_sse_to_events - function_call stream" {
+  let sse = "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"r_2\",\"model\":\"gpt-5\"}}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"function_call\",\"id\":\"fc_1\",\"name\":\"search\"}}\n\nevent: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"output_index\":0,\"delta\":\"{\\\"q\\\":\\\"x\\\"}\"}\n\nevent: response.function_call_arguments.done\ndata: {\"type\":\"response.function_call_arguments.done\",\"output_index\":0}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\"}}\n\n"
+  match openai_responses_sse_to_events(sse) {
+    Ok(events) => {
+      assert_true(events.length() >= 3)
+      let has_item_start = {
+        let mut found = false
+        for ev in events {
+          match ev {
+            ItemStart(_, ToolCall(_)) => found = true
+            _ => ()
+          }
+        }
+        found
+      }
+      assert_true(has_item_start)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// === 6. 流编码 ===
+
+///|
+test "lux_events_to_openai_responses_sse - text sequence" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new(Some("r_1"), Some("gpt-5"), None),
+    ),
+    ItemStart(
+      0,
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(@lux.Assistant, [@lux.LucentContent::text("")]),
+      ),
+    ),
+    BlockStart(0, Text),
+    BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
+    BlockEnd(0),
+    Finish(Stop),
+    Done,
+  ]
+  match lux_events_to_openai_responses_sse(events) {
+    Ok(sse) => {
+      assert_true(sse.contains("event: response.created"))
+      assert_true(sse.contains("event: response.output_item.added"))
+      assert_true(sse.contains("event: response.content_part.added"))
+      assert_true(sse.contains("event: response.output_text.delta"))
+      assert_true(sse.contains("event: response.completed"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
