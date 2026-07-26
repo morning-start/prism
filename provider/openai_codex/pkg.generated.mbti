@@ -1,0 +1,30 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "morning-start/prism/provider/openai_codex"
+
+import {
+  "morning-start/prism/lux",
+}
+
+// Values
+pub fn capability() -> @lux.ProviderCapability
+
+pub fn codex_sse_to_events(String) -> Result[Array[@lux.LucentStreamEvent], String]
+
+pub fn codex_to_lux_request(String) -> Result[@lux.LucentRequest, String]
+
+pub fn codex_to_lux_response(String) -> Result[@lux.LucentResponse, String]
+
+pub fn lux_events_to_codex_sse(Array[@lux.LucentStreamEvent]) -> Result[String, String]
+
+pub fn lux_request_to_codex(@lux.LucentRequest) -> Result[String, String]
+
+pub fn lux_response_to_codex(@lux.LucentResponse) -> Result[String, String]
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+
