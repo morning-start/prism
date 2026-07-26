@@ -11,7 +11,7 @@
   "model": "gpt-4o",
   "messages": [
     {
-      "role": "system",
+      "role": "developer",
       "content": "You are a helpful assistant."
     },
     {
@@ -59,7 +59,9 @@
   "max_tokens": 1024,
   "top_p": 1.0,
   "stop": ["\n\n"],
-  "response_format": {"type": "json_object"}
+  "response_format": {"type": "json_object"},
+  "store": true,
+  "reasoning_effort": "medium"
 }
 ```
 
@@ -71,7 +73,7 @@
 | `messages` | array | **是** | 消息数组，每项含 `role` + `content` |
 | `messages[].role` | enum | **是** | `system` / `user` / `assistant` / `tool` / `developer` |
 | `messages[].content` | string/array | **是** | 字符串或 content part 数组 |
-| `messages[].content[].type` | enum | — | `text` / `image_url` |
+| `messages[].content[].type` | enum | — | `text` / `image_url` / `input_audio` |
 | `messages[].tool_calls` | array | — | assistant 消息中的工具调用列表 |
 | `messages[].tool_calls[].id` | string | — | 工具调用唯一 ID |
 | `messages[].tool_calls[].type` | string | — | 固定 `"function"` |
@@ -85,11 +87,16 @@
 | `tools[].function.parameters` | object | — | JSON Schema 参数定义 |
 | `tool_choice` | string/object | — | `"auto"` / `"none"` / `"required"` / `{"type":"function","function":{"name":"x"}}` |
 | `stream` | bool | — | 是否流式，默认 false |
-| `temperature` | number | — | 0~2 |
-| `max_tokens` / `max_completion_tokens` | int | — | 最大输出 token 数 |
+| `temperature` | number | — | 0~2（`thinking` 启用时必须为 1 或省略） |
+| `max_tokens` / `max_completion_tokens` | int | — | `max_completion_tokens` 适用于 o 系列推理模型 |
 | `top_p` | number | — | 核采样 |
 | `stop` | string/array | — | 停止词 |
 | `response_format` | object | — | `{"type":"text"}` / `{"type":"json_object"}` / `{"type":"json_schema","json_schema":{...}}` |
+| `store` | bool | — | 是否存储请求/响应，默认 true（新账号） |
+| `reasoning_effort` | enum | — | `low` / `medium` / `high`，仅推理模型（o 系列）支持 |
+| `moderation` | string | — | 审核模型 ID，启用后响应中含 `moderation` 字段 |
+| `logprobs` | bool | — | 是否返回 token 对数概率 |
+| `top_logprobs` | int | — | 每个位置返回最多 top N 个对数概率（需 `logprobs: true`） |
 
 ### 多模态 content 格式
 
@@ -98,10 +105,15 @@
   "role": "user",
   "content": [
     {"type": "text", "text": "What's in this image?"},
-    {"type": "image_url", "image_url": {"url": "https://...", "detail": "auto"}}
+    {"type": "image_url", "image_url": {"url": "https://...", "detail": "auto"}},
+    {"type": "input_audio", "input_audio": {"data": "base64...", "format": "wav"}}
   ]
 }
 ```
+
+### `role: developer` 说明
+
+`developer` 角色是较 `system` 更新的替代方案（自 GPT-4o 2024-08-06 起）。`developer` 和 `system` 角色语义相同，推荐新项目优先使用 `developer`。
 
 ---
 
@@ -131,15 +143,49 @@
         ],
         "refusal": null
       },
-      "finish_reason": "stop"
+      "finish_reason": "stop",
+      "logprobs": {
+        "content": [
+          {
+            "token": "Hello",
+            "logprob": -0.01,
+            "bytes": [72, 101, 108, 108, 111],
+            "top_logprobs": [
+              {"token": "Hello", "logprob": -0.01, "bytes": [72, 101, 108, 108, 111]},
+              {"token": "Hi", "logprob": -0.15, "bytes": [72, 105]}
+            ]
+          }
+        ]
+      }
     }
   ],
   "usage": {
     "prompt_tokens": 10,
     "completion_tokens": 20,
-    "total_tokens": 30
+    "total_tokens": 30,
+    "completion_tokens_details": {
+      "reasoning_tokens": 5
+    }
   },
-  "system_fingerprint": "fp_abc123"
+  "system_fingerprint": "fp_abc123",
+  "moderation": {
+    "input": {
+      "type": "moderation_results",
+      "model": "omni-moderation-latest",
+      "results": [
+        {
+          "flagged": false,
+          "categories": {"harassment": false},
+          "category_scores": {"harassment": 0.01}
+        }
+      ]
+    },
+    "output": {
+      "type": "moderation_results",
+      "model": "omni-moderation-latest",
+      "results": [...]
+    }
+  }
 }
 ```
 
@@ -155,10 +201,14 @@
 | `choices[].message.content` | string/null | 文本内容（tool_calls 时可为 null） |
 | `choices[].message.tool_calls` | array | 工具调用（同请求格式） |
 | `choices[].message.refusal` | string/null | 安全拒绝内容 |
-| `choices[].finish_reason` | string | `stop` / `length` / `tool_calls` / `content_filter` |
+| `choices[].finish_reason` | string | `stop` / `length` / `tool_calls` / `content_filter` / `function_call`（已弃用） |
+| `choices[].logprobs` | object | token 对数概率（需请求中设置 `logprobs: true`） |
 | `usage.prompt_tokens` | int | 输入 token 数 |
 | `usage.completion_tokens` | int | 输出 token 数 |
 | `usage.total_tokens` | int | 总计 token 数 |
+| `usage.completion_tokens_details.reasoning_tokens` | int | 推理 token 数（推理模型） |
+| `system_fingerprint` | string | 系统环境指纹 |
+| `moderation` | object | 审核结果（需请求中指定 `moderation`） |
 
 ---
 
@@ -188,6 +238,7 @@ data: [DONE]
 | `delta.tool_calls[].id` | 工具调用 ID（首帧） |
 | `delta.tool_calls[].function.name` | 函数名（首帧） |
 | `delta.tool_calls[].function.arguments` | JSON 参数增量片段 |
+| `delta.refusal` | 安全拒绝增量 |
 | `finish_reason` | 末帧出现：`stop` / `length` / `tool_calls` / `content_filter` |
 | `usage` | 可选，最后一帧可能包含 token 统计 |
 
@@ -197,18 +248,21 @@ data: [DONE]
 
 | Chat Completions | Lucent IR |
 |-----------------|-----------|
-| `messages[?role=system].content` | `LucentRequest.instructions` |
+| `messages[?role=system\|developer].content` | `LucentRequest.instructions` |
 | `messages[?role=user/assistant]` | `LucentRequest.messages[]` |
 | `messages[].content` (string) | `LucentContent::Text` |
-| `messages[].content` (array) | `LucentContent::Text` / `Image`(stub) |
+| `messages[].content` (array) | `LucentContent::Text` / `Image`(stub) / `Audio`(stub) |
 | `messages[].tool_calls[]` | `LucentContent::ToolUse` |
 | `messages[?role=tool]` | `LucentContent::ToolResult` |
 | `tools[].function` | `LucentTool` |
 | `temperature` | `LucentOptions.temperature` |
 | `max_tokens` / `max_completion_tokens` | `LucentOptions.max_output_tokens` |
 | `stream` | `LucentOptions.stream` |
+| `store` | `LucentOptions.store` |
+| `reasoning_effort` | `LucentOptions.reasoning_effort` |
 | `choices[].message.content` | `LucentContent::Text`（拼接） |
 | `choices[].message.tool_calls` | `LucentContent::ToolUse` |
 | `choices[].message.refusal` | `LucentContent::Refusal` |
 | `finish_reason` | `LucentFinishReason`（Stop/Length/ToolCalls/ContentFilter） |
 | `usage` | `LucentUsage` |
+| `usage.completion_tokens_details.reasoning_tokens` | `LucentUsage.thinking_tokens` |

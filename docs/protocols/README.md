@@ -20,14 +20,17 @@
 | 维度 | Chat Completions | Responses | Anthropic Messages | Gemini |
 |------|:---:|:---:|:---:|:---:|
 | 消息模型 | `messages[]` 数组 | `input[]` Item 数组 | `messages[]` + `system` | `contents[]` 数组 |
-| 系统指令 | 首条 system 消息 | `instructions` 字段 | 顶层 `system` 字段 | `systemInstruction` 字段 |
-| 工具定义 | `tools[].function` | `tools[].function` | `tools[].input_schema` | `tools[].functionDeclarations` |
+| 系统指令 | 首条 system/developer 消息 | `instructions` 字段 | 顶层 `system` 字段 | `systemInstruction` 字段 |
+| 工具定义 | `tools[].function` | `tools[]` 内部标签（name+parameters） | `tools[].input_schema` | `tools[].functionDeclarations` |
 | 工具调用 | `tool_calls[]` 在 assistant 消息中 | `function_call` Item | `tool_use` content block | `functionCall` part |
 | 工具结果 | `role: tool` + `tool_call_id` | `function_call_output` Item | `tool_result` content block | `functionResponse` part |
-| 流式格式 | SSE delta 增量 | SSE event 事件 | SSE content_block 事件 | SSE chunk 增量 |
-| 推理/思考 | 无原生支持 | `reasoning` Item | `thinking` content block | `thought` 字段 |
-| 多模态 | `content` 数组含 `image_url` | `input_image` / `input_file` | `image` content block | `inlineData` / `fileData` part |
+| 流式格式 | SSE delta 增量 | SSE event 事件（命名事件流） | SSE content_block 事件 | SSE chunk 独立 JSON |
+| 推理/思考 | `reasoning_effort`（o 系列） | `reasoning` Item + `encrypted_content` | `thinking` / `redacted_thinking` block | `thought` part / `thought` step |
+| 多模态 | `content` 数组含 `image_url`/`input_audio` | `input_image` / `input_file` | `image` content block | `inlineData` / `fileData` part |
 | 必填字段 | `model` | `model` | `model` + `max_tokens` | 无（全可选） |
+| 状态管理 | 手动拼接 messages | `previous_response_id` / `conversation` / compaction | 手动拼接 messages | 手动拼接 contents（GenerateContent）/ `previous_interaction_id`（Interactions） |
+| 工具参数格式 | JSON 字符串 | JSON 字符串 | JSON 对象 | JSON 对象 |
+| 思考模式 | `reasoning_effort`（low/medium/high） | `reasoning.effort`（+ Codex: xhigh） | `thinking.type: "enabled"` / `"adaptive"` | `thinking_level`（minimal/low/medium/high）|
 
 ## 文件索引
 
@@ -35,3 +38,12 @@
 - [02 — OpenAI Responses（含 Codex/Azure）](./02-openai-responses.md)
 - [03 — Anthropic Messages](./03-anthropic-messages.md)
 - [04 — Google Gemini（含 Vertex）](./04-google-gemini.md)
+
+## 版本更新记录
+
+| 日期 | 更新内容 |
+|------|---------|
+| 2026-07-26 | 补充 OpenAI Completions: `reasoning_effort`、`store`、`logprobs`、`moderation`、`developer` role、`completion_tokens_details` |
+| 2026-07-26 | 补充 OpenAI Responses: `conversation`、`background`、`context_management`(compaction)、`phase`(Codex)、`encrypted_content`、`content_filters`(Azure)、WebSocket 模式、提示缓存 |
+| 2026-07-26 | 补充 Anthropic: 自适应思考(`type:adaptive`)、`display:"omitted"`、交错思考、`output_config.effort`、`redacted_thinking`、`code_execution tool` |
+| 2026-07-26 | 补充 Gemini: `thinking_level`（替代 `thinkingBudget`）、Interactions API、thought step 签名、结构化输出 JSON Schema、Gemini 3.x 媒体分辨率、FunctionResponse `id` 必填 |
