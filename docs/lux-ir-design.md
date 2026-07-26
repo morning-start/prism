@@ -6,20 +6,22 @@
 
 ---
 
-## 0. 设计目标
+## 0. 设计目标与使用场景
+
+Lucent IR 同时服务两个场景，优先级不可倒置：
+
+1. **协议转换基础设施**：供中间站、网关、代理和兼容层通过 `Source -> Lucent -> Target` 转换请求、响应与流事件。硬门槛是转换保真、显式能力边界和不静默丢失。
+2. **工作流与 Agent SDK**：供应用直接构造上下文、注册工具、消费生成、提交工具结果并判断下一步。目标是稳定、任务导向、可组合、可发现且容易写对。
+
+场景一的正确性是场景二的前置条件。不得为了 SDK 表面简洁牺牲转换语义，也不得为了保留 Provider 原始形状把 SDK 核心退化为不透明 JSON。
+
+设计原则、字段归类标准、向后兼容策略和演进流程已独立到 [`docs/rules/lucent-ir-evolution.md`](rules/lucent-ir-evolution.md)，本文档不再重复。
+
+在此前提下，本规范还必须：
 
 1. **有效适配所有已知接口** — OpenAI Chat / Anthropic Messages / OpenAI Responses / Google Gemini 四家接口在同一 IR 下无扭曲适配。
-2. **未来新接口可接入** — 新增厂商按「能力归类 → 消息映射 → 内容映射 → 扩展归类 → 实现 6 函数」流程接入，不动 IR 骨干。
-3. **覆盖全使用场景并预判未来** — Agent 动作、结构化输出、多模态、多候选、reasoning token 统计、版本化治理已预留。
-
-## 0.1 设计原则
-
-1. **以「会话事件流」为骨干**，不以「消息数组」为骨干 —— `LucentConversationItem` 异质平级，自然承载 Responses 的 Item 模型。
-2. **内容类型用代数和 + 元数据侧信道** —— 不强行统一各家不一致字段，给「不一致部分」留类型化侧信道。
-3. **流式选 Anthropic 块生命周期作 canonical**，补齐四类缺失事件（Discard / Meta / Annotations / 错误结构化）。
-4. **用量统计面向 reasoning 时代** —— 思考 token、缓存 token 一等公民。
-5. **能力分级：标准化能力 / 厂商标识 / 不透明透传** —— 三层清晰，新增厂商按层归类。
-6. **版本化治理** —— `schema_version: "v1"` 顶层声明，未来 breaking change 走 v2，不破坏已部署 WASM 调用方。
+2. **允许未来接口接入** — 新增厂商按「能力归类 → 消息映射 → 内容映射 → 扩展归类 → 实现 6 函数」流程接入，不随意改动 IR 骨干。
+3. **支持 Agent/工作流的稳定状态机** — 对话、工具、推理、结束、错误、用量和流式生命周期具有统一消费语义。
 
 ---
 
@@ -200,21 +202,59 @@ pub enum LucentAnnotationKind {
 
 ## 3. 工具：定义与选择
 
-### 3.1 `LucentTool`
+### 3.0 设计原则：入 IR 的判断标准
+
+“是否改变对话形状”是判断 SDK 是否需要类型化分支的强证据，但不是唯一标准。字段归属必须同时通过 [`Lucent IR 演进与字段归类规则`](rules/lucent-ir-evolution.md) 的五道判定门，并分别满足转换契约与 SDK 契约。
+
+```text
+改变对话/事件形状，且语义稳定、Provider 无关
+  -> 核心类型候选（例：tool_use vs text）
+
+不形成新节点，但跨 Provider 具有稳定同构控制语义
+  -> 可移植控制候选
+
+转换不能丢失，但语义尚未成熟
+  -> 类型化孵化区或有序 Native
+
+仅控制特定 Provider 行为
+  -> 命名空间化请求扩展
+
+改变 HTTP、后台任务或轮询生命周期
+  -> Transport
+```
+
+无论归属何处，适配器都必须明确给出 `Exact`、`Degraded`、`Unsupported` 或 `Invalid` 结果，不得通过忽略字段伪装成功。
+
+### 3.1 `LucentTool` 与 `LucentToolKind`
 
 ```moonbit
+pub enum LucentToolKind {
+  Function                // 标准函数调用（用户需注册 handler）
+  FileSearch              // OpenAI 内置：文件搜索（provider 自托管）
+  WebSearch               // OpenAI 内置：网络搜索（provider 自托管）
+  CodeInterpreter         // OpenAI 内置：代码解释器（provider 自托管）
+  ComputerUse             // OpenAI 内置：计算机使用（provider 自托管）
+  CodeExecution           // Anthropic：代码执行沙箱（provider 自托管）
+  Shell                   // Codex / Anthropic：shell 命令
+  ApplyPatch              // Codex：应用代码 diff
+  MCP                     // OpenAI：MCP 远程工具
+  Native(String)          // 逃生口：未知工具类型
+}
+
 pub struct LucentTool {
   name : String
   description : String?
   parameters_json : String           // JSON Schema
   strict : Bool?                     // 严格模式（OpenAI strict:true）
+  kind : LucentToolKind              // 默认 Function
 }
 ```
 
 **适配规则**：
-- OpenAI Chat `tools[].function` → 直接映射
-- Anthropic `tools[].input_schema` → 映射为 `parameters_json`（字段名不同，语义同构）
-- Gemini `tools[].functionDeclarations[]` → 展平为 `Array[LucentTool]`
+- OpenAI Chat `tools[].function` → `kind: Function`
+- OpenAI Responses `tools[].type`（function / file_search / web_search / ...）→ 对应 `LucentToolKind`
+- Anthropic `tools[].type`（custom / code_execution_20250522 / bash_20250124）→ 对应 `LucentToolKind`
+- Gemini `tools[].functionDeclarations[]` → `kind: Function`
 
 ### 3.2 `LucentToolChoice`（类型化）
 
