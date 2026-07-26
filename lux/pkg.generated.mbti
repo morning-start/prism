@@ -98,6 +98,7 @@ pub struct LucentCapabilities {
   input_modalities : Array[LucentModality]
   output_modalities : Array[LucentModality]
 } derive(Eq, @debug.Debug)
+pub fn LucentCapabilities::create(Bool, Bool, Bool, Bool, Bool, Array[LucentModality], Array[LucentModality]) -> Self
 pub fn LucentCapabilities::default() -> Self
 pub fn LucentCapabilities::from_json(Json) -> Result[Self, String]
 pub fn LucentCapabilities::to_json(Self) -> Json
@@ -224,10 +225,12 @@ pub fn LucentMediaSource::url(String) -> Self
 pub struct LucentMessage {
   role : LucentRole
   content : Array[LucentContent]
+  phase : String?
 } derive(Eq, @debug.Debug)
 pub fn LucentMessage::from_json(Json) -> Result[Self, String]
 pub fn LucentMessage::new(LucentRole, Array[LucentContent]) -> Self
 pub fn LucentMessage::to_json(Self) -> Json
+pub fn LucentMessage::with_phase(LucentRole, Array[LucentContent], String?) -> Self
 
 pub(all) enum LucentModality {
   Text
@@ -259,11 +262,15 @@ pub struct LucentOptions {
   candidate_count : Int?
   seed : Int?
   structured_output : LucentStructuredOutput?
+  store : Bool?
+  extras : Map[String, Json]?
 } derive(Eq, @debug.Debug)
 pub fn LucentOptions::default() -> Self
 pub fn LucentOptions::from_json(Json) -> Result[Self, String]
-pub fn LucentOptions::new(Double?, Double?, Int?, Int?, Array[String]?, Bool, Int?, Int?, LucentStructuredOutput?) -> Self
+pub fn LucentOptions::new(Double?, Double?, Int?, Int?, Array[String]?, Bool, Int?, Int?, LucentStructuredOutput?, Bool?, Map[String, Json]?) -> Self
 pub fn LucentOptions::to_json(Self) -> Json
+pub fn LucentOptions::with_extras(Self, Map[String, Json]?) -> Self
+pub fn LucentOptions::with_store(Self, Bool?) -> Self
 
 pub struct LucentReasoningConfig {
   enabled : Bool
@@ -274,12 +281,14 @@ pub struct LucentReasoningConfig {
 pub fn LucentReasoningConfig::disabled() -> Self
 pub fn LucentReasoningConfig::enabled(Int?) -> Self
 pub fn LucentReasoningConfig::from_json(Json) -> Result[Self, String]
+pub fn LucentReasoningConfig::new(LucentReasoningEffort?, LucentReasoningSummary?) -> Self
 pub fn LucentReasoningConfig::to_json(Self) -> Json
 
 pub(all) enum LucentReasoningEffort {
   Low
   Medium
   High
+  XHigh
 } derive(Eq, @debug.Debug)
 pub fn LucentReasoningEffort::from_json(Json) -> Result[Self, String]
 
@@ -307,6 +316,8 @@ pub fn LucentRequest::from_json(Json) -> Result[Self, String]
 pub fn LucentRequest::from_messages(String, Array[LucentContent]?, Array[LucentMessage], Array[LucentTool]?, LucentToolChoice?, LucentOptions, LucentCapabilities?, LucentReasoningConfig?, Map[String, String]?, Map[String, Json]?) -> Self
 pub fn LucentRequest::new(String, Array[LucentContent]?, Array[LucentConversationItem], Array[LucentTool]?, LucentToolChoice?, LucentOptions, LucentCapabilities?, LucentReasoningConfig?, Map[String, String]?, Map[String, Json]?) -> Self
 pub fn LucentRequest::to_json(Self) -> Json
+pub fn LucentRequest::with_conversation(Self, Array[LucentConversationItem]) -> Self
+pub fn LucentRequest::with_stream(Self, Bool) -> Self
 
 pub struct LucentResponse {
   schema_version : String
@@ -318,8 +329,10 @@ pub struct LucentResponse {
   provider_payload : Json?
 } derive(Eq, @debug.Debug)
 pub fn LucentResponse::from_json(Json) -> Result[Self, String]
+pub fn LucentResponse::get_text(Self) -> String
 pub fn LucentResponse::new(String, String, Int?, Array[LucentChoice], LucentUsage?, Json?) -> Self
 pub fn LucentResponse::to_json(Self) -> Json
+pub fn LucentResponse::with_provider_payload(Self, Json?) -> Self
 
 pub(all) enum LucentRole {
   System
@@ -385,9 +398,10 @@ pub struct LucentTool {
   description : String?
   parameters_json : String
   strict : Bool?
+  kind : LucentToolKind
 } derive(Eq, @debug.Debug)
 pub fn LucentTool::from_json(Json) -> Result[Self, String]
-pub fn LucentTool::new(String, String?, String, Bool?) -> Self
+pub fn LucentTool::new(String, String?, String, Bool?, LucentToolKind?) -> Self
 pub fn LucentTool::simple(String, String, String) -> Self
 pub fn LucentTool::to_json(Self) -> Json
 
@@ -399,6 +413,19 @@ pub(all) enum LucentToolChoice {
 } derive(Eq, @debug.Debug)
 pub fn LucentToolChoice::from_json(Json) -> Result[Self, String]
 pub fn LucentToolChoice::to_json(Self) -> Json
+
+pub(all) enum LucentToolKind {
+  Function
+  FileSearch
+  WebSearch
+  CodeInterpreter
+  ComputerUse
+  CodeExecution
+  Shell
+  ApplyPatch
+  MCP
+  Native(String)
+} derive(Eq, @debug.Debug)
 
 pub struct LucentToolResult {
   tool_use_id : String

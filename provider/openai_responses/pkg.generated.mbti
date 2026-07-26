@@ -6,6 +6,8 @@ import {
 }
 
 // Values
+pub fn capability() -> @lux.ProviderCapability
+
 pub fn lux_events_to_openai_responses_sse(Array[@lux.LucentStreamEvent]) -> Result[String, String]
 
 pub fn lux_request_to_openai_responses(@lux.LucentRequest) -> Result[String, String]

@@ -592,6 +592,7 @@ test "LucentTool::to_json - with strict" {
     Some("Do math"),
     "{\"type\":\"object\"}",
     Some(true),
+    None,
   )
   let jv = tool.to_json()
   match json_str(jv, "name") {
@@ -669,6 +670,8 @@ test "LucentOptions::to_json - all fields" {
     Some(1),
     Some(42),
     Some(LucentStructuredOutput::JsonObject),
+    None,
+    None,
   )
   let jv = opts.to_json()
   match json_num(jv, "temperature") {

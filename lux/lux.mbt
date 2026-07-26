@@ -119,6 +119,7 @@ pub(all) enum LucentContent {
 pub struct LucentMessage {
   role : LucentRole
   content : Array[LucentContent]
+  phase : String?
 } derive(Eq, Debug)
 
 ///|
@@ -132,12 +133,28 @@ pub(all) enum LucentConversationItem {
 } derive(Eq, Debug)
 
 ///|
+/// LucentToolKind — 工具类型（消费方处理逻辑不同）
+pub(all) enum LucentToolKind {
+  Function
+  FileSearch
+  WebSearch
+  CodeInterpreter
+  ComputerUse
+  CodeExecution
+  Shell
+  ApplyPatch
+  MCP
+  Native(String)
+} derive(Eq, Debug)
+
+///|
 /// LucentTool — 工具定义
 pub struct LucentTool {
   name : String
   description : String?
   parameters_json : String
   strict : Bool?
+  kind : LucentToolKind
 } derive(Eq, Debug)
 
 ///|
@@ -167,8 +184,11 @@ pub struct LucentOptions {
   stop : Array[String]?
   stream : Bool
   candidate_count : Int?
+  /// @deprecated 仅 OpenAI Chat 使用，非通用生成参数，后续移入 extras
   seed : Int?
   structured_output : LucentStructuredOutput?
+  store : Bool?
+  extras : Map[String, Json]?
 } derive(Eq, Debug)
 
 ///|
@@ -177,6 +197,7 @@ pub(all) enum LucentReasoningEffort {
   Low
   Medium
   High
+  XHigh
 } derive(Eq, Debug)
 
 ///|
@@ -552,7 +573,16 @@ pub fn LucentMessage::new(
   role : LucentRole,
   content : Array[LucentContent],
 ) -> LucentMessage {
-  { role, content }
+  { role, content, phase: None }
+}
+
+///|
+pub fn LucentMessage::with_phase(
+  role : LucentRole,
+  content : Array[LucentContent],
+  phase : String?,
+) -> LucentMessage {
+  { role, content, phase }
 }
 
 ///|
@@ -610,8 +640,9 @@ pub fn LucentTool::new(
   description : String?,
   parameters_json : String,
   strict : Bool?,
+  kind : LucentToolKind?,
 ) -> LucentTool {
-  { name, description, parameters_json, strict }
+  { name, description, parameters_json, strict, kind: kind.or(Function) }
 }
 
 ///|
@@ -620,7 +651,13 @@ pub fn LucentTool::simple(
   description : String,
   parameters_json : String,
 ) -> LucentTool {
-  { name, description: Some(description), parameters_json, strict: None }
+  {
+    name,
+    description: Some(description),
+    parameters_json,
+    strict: None,
+    kind: Function,
+  }
 }
 
 ///|
@@ -635,6 +672,8 @@ pub fn LucentOptions::default() -> LucentOptions {
     candidate_count: None,
     seed: None,
     structured_output: None,
+    store: None,
+    extras: None,
   }
 }
 
@@ -649,6 +688,8 @@ pub fn LucentOptions::new(
   candidate_count : Int?,
   seed : Int?,
   structured_output : LucentStructuredOutput?,
+  store : Bool?,
+  extras : Map[String, Json]?,
 ) -> LucentOptions {
   {
     temperature,
@@ -660,6 +701,8 @@ pub fn LucentOptions::new(
     candidate_count,
     seed,
     structured_output,
+    store,
+    extras,
   }
 }
 
@@ -677,8 +720,37 @@ pub fn LucentCapabilities::default() -> LucentCapabilities {
 }
 
 ///|
+pub fn LucentCapabilities::create(
+  tool_calling : Bool,
+  parallel_tool_calls : Bool,
+  reasoning : Bool,
+  multimodal_input : Bool,
+  structured_output : Bool,
+  input_modalities : Array[LucentModality],
+  output_modalities : Array[LucentModality],
+) -> LucentCapabilities {
+  {
+    tool_calling,
+    parallel_tool_calls,
+    reasoning,
+    multimodal_input,
+    structured_output,
+    input_modalities,
+    output_modalities,
+  }
+}
+
+///|
 pub fn LucentReasoningConfig::enabled(budget : Int?) -> LucentReasoningConfig {
   { enabled: true, budget_tokens: budget, effort: None, summary: None }
+}
+
+///|
+pub fn LucentReasoningConfig::new(
+  effort : LucentReasoningEffort?,
+  summary : LucentReasoningSummary?,
+) -> LucentReasoningConfig {
+  { enabled: true, budget_tokens: None, effort, summary }
 }
 
 ///|
@@ -712,6 +784,39 @@ pub fn LucentRequest::new(
     metadata,
     extra,
   }
+}
+
+///|
+/// 构建含 store 值的选项副本
+pub fn LucentOptions::with_store(self : LucentOptions, store : Bool?) -> LucentOptions {
+  { ..self, store }
+}
+
+///|
+/// 构建含 extras 的选项副本
+pub fn LucentOptions::with_extras(
+  self : LucentOptions,
+  extras : Map[String, Json]?,
+) -> LucentOptions {
+  { ..self, extras }
+}
+
+///|
+/// 构建含新 conversation 的请求（子包后处理用）
+pub fn LucentRequest::with_conversation(
+  self : LucentRequest,
+  conversation : Array[LucentConversationItem],
+) -> LucentRequest {
+  { ..self, conversation, }
+}
+
+///|
+/// 构建含 stream 标志的请求副本（SDK 使用）
+pub fn LucentRequest::with_stream(
+  self : LucentRequest,
+  stream : Bool,
+) -> LucentRequest {
+  { ..self, options: { ..self.options, stream, }, }
 }
 
 ///|
@@ -811,6 +916,25 @@ pub fn LucentResponse::new(
     choices,
     usage,
     provider_payload,
+  }
+}
+
+///|
+/// 构建含 provider_payload 的新响应（外部包访问用）
+pub fn LucentResponse::with_provider_payload(
+  self : LucentResponse,
+  payload : Json?,
+) -> LucentResponse {
+  { ..self, provider_payload: payload }
+}
+
+///|
+/// 提取响应中的纯文本（L1 SDK 使用）
+pub fn LucentResponse::get_text(self : LucentResponse) -> String {
+  if self.choices.length() > 0 {
+    lucent_content_to_text(self.choices[0].message.content)
+  } else {
+    ""
   }
 }
 

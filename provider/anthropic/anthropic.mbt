@@ -255,7 +255,7 @@ fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
           Some(schema) => schema.stringify()
           None => "{}"
         }
-        result.push(@lux.LucentTool::new(name, desc, params, None))
+        result.push(@lux.LucentTool::new(name, desc, params, None, None))
         i = i + 1
       }
       result
@@ -381,6 +381,8 @@ pub fn anthropic_to_lux_request(
     max_tokens,
     stop,
     stream,
+    None,
+    None,
     None,
     None,
     None,
@@ -1115,4 +1117,16 @@ pub fn lux_events_to_anthropic_sse(
     i = i + 1
   }
   Ok(lines.join("\n\n") + "\n\n")
+}
+
+///|
+/// capability — 适配器能力声明
+pub fn capability() -> @lux.ProviderCapability {
+  @lux.ProviderCapability::new(
+    "claude-*",
+    "anthropic",
+    @lux.LucentCapabilities::create(true, true, true, true, true,
+      [@lux.Text, @lux.Image], [@lux.Text]),
+    None,
+  )
 }

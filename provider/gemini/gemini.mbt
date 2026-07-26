@@ -304,7 +304,7 @@ fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
                 Some(p) => p.stringify()
                 None => "{}"
               }
-              result.push(@lux.LucentTool::new(name, desc, params, None))
+              result.push(@lux.LucentTool::new(name, desc, params, None, None))
               j = j + 1
             }
           }
@@ -345,6 +345,8 @@ fn parse_generation_config(jv : Json) -> @lux.LucentOptions {
         },
         false, // stream
         field_int(gc, "candidateCount"),
+        None,
+        None,
         None,
         None,
       )
@@ -1031,4 +1033,16 @@ pub fn lux_events_to_gemini_sse(
     i = i + 1
   }
   Ok(lines.join("\n") + "\n")
+}
+
+///|
+/// capability — 适配器能力声明
+pub fn capability() -> @lux.ProviderCapability {
+  @lux.ProviderCapability::new(
+    "gemini-*",
+    "google",
+    @lux.LucentCapabilities::create(true, true, true, true, true,
+      [@lux.Text, @lux.Image, @lux.Audio, @lux.Video, @lux.Pdf], [@lux.Text]),
+    None,
+  )
 }

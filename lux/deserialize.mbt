@@ -300,16 +300,17 @@ fn get_arr_modality(
 }
 
 ///|
-fn get_arr_safety(
-  m : Map[String, Json],
-  key : String,
-) -> Result[Array[LucentSafetyRating], String] {
-  match m.get(key) {
-    Some(Json::Array(items)) => parse_safety_arr(items)
-    Some(_) => Err("expected array for " + key)
-    None => Err("missing required field " + key)
-  }
-}
+/// @deprecated 保留未用
+// fn get_arr_safety(
+//   m : Map[String, Json],
+//   key : String,
+// ) -> Result[Array[LucentSafetyRating], String] {
+//   match m.get(key) {
+//     Some(Json::Array(items)) => parse_safety_arr(items)
+//     Some(_) => Err("expected array for " + key)
+//     None => Err("missing required field " + key)
+//   }
+// }
 
 ///|
 /// === LucentModality ===
@@ -650,7 +651,7 @@ pub fn LucentMessage::from_json(jv : Json) -> Result[LucentMessage, String] {
         Ok(v) => v
         Err(e) => return Err(e)
       }
-      Ok({ role, content })
+      Ok({ role, content, phase: None })
     }
     _ => Err("expected object for LucentMessage")
   }
@@ -745,7 +746,7 @@ pub fn LucentTool::from_json(jv : Json) -> Result[LucentTool, String] {
         None => return Err("missing parameters")
       }
       let strict = get_bool_opt(m, "strict")
-      Ok({ name, description, parameters_json, strict })
+      Ok({ name, description, parameters_json, strict, kind: Function })
     }
     _ => Err("expected object for LucentTool")
   }
@@ -864,6 +865,11 @@ pub fn LucentOptions::from_json(jv : Json) -> Result[LucentOptions, String] {
           }
         None => None
       }
+      let store = get_bool_opt(m, "store")
+      let extras = match m.get("extras") {
+        Some(Object(entries)) => Some(entries)
+        _ => None
+      }
       Ok({
         temperature,
         top_p,
@@ -874,6 +880,8 @@ pub fn LucentOptions::from_json(jv : Json) -> Result[LucentOptions, String] {
         candidate_count,
         seed,
         structured_output,
+        store,
+        extras,
       })
     }
     _ => Err("expected object for LucentOptions")

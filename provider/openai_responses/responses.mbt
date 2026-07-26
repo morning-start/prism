@@ -214,7 +214,7 @@ fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
           Some(p) => p.stringify()
           None => "{}"
         }
-        result.push(@lux.LucentTool::new(name, desc, params, None))
+        result.push(@lux.LucentTool::new(name, desc, params, None, None))
         i = i + 1
       }
       result
@@ -291,6 +291,8 @@ pub fn openai_responses_to_lux_request(
     None,
     None,
     structured,
+    None,
+    None,
   )
   // metadata: previous_response_id → extra
   let extra = match field_str(jv, "previous_response_id") {
@@ -466,6 +468,7 @@ pub fn lux_request_to_openai_responses(
           Some(Low) => rf = ",\"effort\":\"low\""
           Some(Medium) => rf = ",\"effort\":\"medium\""
           Some(High) => rf = ",\"effort\":\"high\""
+          Some(XHigh) => rf = ",\"effort\":\"xhigh\""
           None => ()
         }
         match rc.summary {
@@ -1108,4 +1111,16 @@ pub fn lux_events_to_openai_responses_sse(
     i = i + 1
   }
   Ok(lines.join("\n\n") + "\n\n")
+}
+
+///|
+/// capability — 适配器能力声明
+pub fn capability() -> @lux.ProviderCapability {
+  @lux.ProviderCapability::new(
+    "gpt-*,o*",
+    "openai",
+    @lux.LucentCapabilities::create(true, true, true, true, true,
+      [@lux.Text, @lux.Image, @lux.Pdf], [@lux.Text]),
+    None,
+  )
 }

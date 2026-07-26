@@ -340,6 +340,14 @@ pub fn LucentOptions::to_json(self : LucentOptions) -> Json {
     Some(so) => fields["structured_output"] = so.to_json()
     None => ()
   }
+  match self.store {
+    Some(s) => fields["store"] = s.to_json()
+    None => ()
+  }
+  match self.extras {
+    Some(ext) => fields["extras"] = Json::object(ext)
+    None => ()
+  }
   Json::object(fields)
 }
 
@@ -357,6 +365,7 @@ pub fn LucentReasoningConfig::to_json(self : LucentReasoningConfig) -> Json {
         Low => Json::string("low")
         Medium => Json::string("medium")
         High => Json::string("high")
+        XHigh => Json::string("xhigh")
       }
     None => ()
   }

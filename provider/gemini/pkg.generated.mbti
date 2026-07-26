@@ -6,6 +6,8 @@ import {
 }
 
 // Values
+pub fn capability() -> @lux.ProviderCapability
+
 pub fn gemini_sse_to_events(String) -> Result[Array[@lux.LucentStreamEvent], String]
 
 pub fn gemini_to_lux_request(String) -> Result[@lux.LucentRequest, String]

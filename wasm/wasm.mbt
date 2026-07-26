@@ -74,13 +74,13 @@ fn encode_events(
 }
 
 ///|
-/// 纯转换（String → String），错误转 JSON
-fn convert(f : (String) -> Result[String, String], s : String) -> String {
-  match f(s) {
-    Ok(v) => v
-    Err(e) => to_error(e)
-  }
-}
+/// @deprecated 保留未用
+// fn convert(f : (String) -> Result[String, String], s : String) -> String {
+//   match f(s) {
+//     Ok(v) => v
+//     Err(e) => to_error(e)
+//   }
+// }
 
 ///|
 /// === OpenAI Chat（6 函数）===

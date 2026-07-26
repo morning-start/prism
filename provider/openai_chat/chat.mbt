@@ -205,7 +205,7 @@ fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
               _ => "{}"
             }
             let strict = field_bool(fn_obj, "strict")
-            result.push(@lux.LucentTool::new(name, desc, params, strict))
+            result.push(@lux.LucentTool::new(name, desc, params, strict, None))
           }
           _ => ()
         }
@@ -351,6 +351,8 @@ pub fn openai_chat_to_lux_request(
         None,
         seed,
         structured,
+        None,
+        None,
       ),
       None,
       None,
@@ -1082,4 +1084,16 @@ pub fn lux_events_to_openai_chat_sse(
     i = i + 1
   }
   Ok(out.join("\n\n") + "\n\n")
+}
+
+///|
+/// capability — 适配器能力声明
+pub fn capability() -> @lux.ProviderCapability {
+  @lux.ProviderCapability::new(
+    "gpt-*,o*",
+    "openai-chat",
+    @lux.LucentCapabilities::create(true, true, true, true, true,
+      [@lux.Text, @lux.Image, @lux.Audio], [@lux.Text]),
+    None,
+  )
 }

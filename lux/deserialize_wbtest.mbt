@@ -272,6 +272,7 @@ test "LucentTool round trip - simple and with strict" {
       Some("Do math"),
       "{\"type\":\"object\"}",
       Some(true),
+      None,
     ),
   ]
   for v in values {
@@ -336,6 +337,8 @@ test "LucentOptions round trip - defaults and all fields" {
       Some(1),
       Some(42),
       Some(LucentStructuredOutput::JsonObject),
+      None,
+      None,
     ),
   ]
   for v in values {
