@@ -29,6 +29,10 @@ You can browse and install extra skills here:
 - Before adding or changing any Lucent IR field, enum variant, tool model,
   stream event, capability, request extension, or response payload, read and
   follow [`docs/rules/lucent-ir-evolution.md`](docs/rules/lucent-ir-evolution.md).
+- Every Lucent IR proposal MUST identify whether it affects protocol conversion,
+  SDK/Agent consumption, or both. Conversion fidelity and explicit
+  `Exact`/`Degraded`/`Unsupported` boundaries are hard gates; SDK ergonomics are
+  evaluated only after those gates pass.
 - Treat `docs/lux-ir-design.md` as the current formal schema specification and
   `docs/rules/lucent-ir-evolution.md` as the mandatory governance process for
   evolving that specification. Do not change one without reconciling the other.
