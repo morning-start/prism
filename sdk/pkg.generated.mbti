@@ -1,0 +1,98 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "morning-start/prism/sdk"
+
+import {
+  "morning-start/prism/lux",
+}
+
+// Values
+pub fn context_to_lux_request(Context, String, PrismOptions) -> @lux.LucentRequest
+
+// Errors
+
+// Types and methods
+pub struct Context {
+  system_prompt : String?
+  messages : Array[SdkMessage]
+  tools : Array[SdkTool]?
+}
+pub fn Context::add_assistant(Self, String) -> Self
+pub fn Context::add_system(Self, String) -> Self
+pub fn Context::add_tools(Self, Array[SdkTool]) -> Self
+pub fn Context::add_user(Self, String) -> Self
+pub fn Context::new() -> Self
+
+pub struct Prism {
+  provider : String
+  api_key : String?
+  base_url : String?
+}
+pub fn Prism::capability(Self, String) -> @lux.ProviderCapability?
+pub fn Prism::decode_response(Self, String) -> Result[String, String]
+pub fn Prism::decode_sse(Self, String) -> Result[Array[PrismEvent], String]
+pub fn Prism::encode_request(Self, String, PrismOptions) -> Result[String, String]
+pub fn Prism::encode_stream_request(Self, String, PrismOptions) -> Result[String, String]
+pub fn Prism::new() -> Self
+pub fn Prism::with_api_key(Self, String) -> Self
+pub fn Prism::with_base_url(Self, String) -> Self
+pub fn Prism::with_provider(Self, String) -> Self
+
+pub(all) enum PrismEvent {
+  TextDelta(String)
+  ToolCall(PrismToolCall)
+  ToolResult(PrismToolResult)
+  Thinking(PrismThinking)
+  Finish(PrismFinishReason)
+}
+
+pub(all) enum PrismFinishReason {
+  Stop
+  Length
+  ToolCalls
+  ContentFilter
+  Error
+}
+
+pub struct PrismOptions {
+  model : String?
+  temperature : Double?
+  max_tokens : Int?
+  store : Bool?
+  extras : Map[String, Json]?
+}
+pub fn PrismOptions::default() -> Self
+pub fn PrismOptions::new(String?, Double?, Int?, Bool?, Map[String, Json]?) -> Self
+
+pub struct PrismThinking {
+  text : String
+  signature : String?
+  redacted : Bool
+}
+
+pub struct PrismToolCall {
+  id : String
+  name : String
+  arguments_json : String
+}
+
+pub struct PrismToolResult {
+  tool_use_id : String
+  content : String
+  is_error : Bool
+}
+
+pub struct SdkMessage {
+  role : String
+  content : String
+}
+
+pub struct SdkTool {
+  name : String
+  description : String
+  parameters_json : String
+}
+
+// Type aliases
+
+// Traits
+
