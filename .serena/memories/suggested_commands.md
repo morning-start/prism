@@ -1,0 +1,1 @@
+Required MoonBit workflow from repo rules: `moon info && moon fmt` updates public interfaces and formats sources; then `moon test`; when expected snapshots change, use `moon test --update`. Use `moon ide` navigation helpers for MoonBit symbol/reference queries where available.

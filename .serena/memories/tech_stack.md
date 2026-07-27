@@ -1,0 +1,1 @@
+MoonBit module. Packages: `lux` depends on core/json; each provider depends on lux+json; `sdk` depends on lux, the primary providers, json; `wasm` is an aggregate export façade over lux/sdk/providers/json. Root package aggregates selected foundational providers. The preferred build target is `wasm-gc` in `moon.mod`.

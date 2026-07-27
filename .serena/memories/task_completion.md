@@ -1,0 +1,1 @@
+For a changed MoonBit package: run `moon info && moon fmt`, inspect any generated `.mbti` API change for intent, then run `moon test`; run `moon test --update` only for intentional snapshot-output changes. Run focused smoke/behavior verification for the changed contract where possible.
