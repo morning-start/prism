@@ -1,3 +1,5 @@
+import "morning-start/prism/lux/json_helper" as json_helper
+
 ///|
 /// OpenAI Codex Responses — 基于标准 openai_responses 的薄封装
 ///
@@ -7,66 +9,6 @@
 /// 实现策略：
 ///   - 解码函数（codex→lux）：先调用主包，再后处理添加 phase
 ///   - 编码函数（lux→codex）：先调用主包，再后处理 JSON 插入 phase 和 xhigh
-
-///|
-/// === JSON 辅助函数 ===
-
-///|
-fn obj_get(jv : Json, key : String) -> Json? {
-  match jv {
-    Object(m) => {
-      for entry in m {
-        match entry {
-          (k, v) => if k == key { return Some(v) }
-        }
-      }
-      None
-    }
-    _ => None
-  }
-}
-
-///|
-fn field_str(jv : Json, key : String) -> String? {
-  match obj_get(jv, key) {
-    Some(String(s)) => Some(s)
-    _ => None
-  }
-}
-
-///|
-fn field_arr(jv : Json, key : String) -> Array[Json]? {
-  match obj_get(jv, key) {
-    Some(Array(a)) => Some(a)
-    _ => None
-  }
-}
-
-///|
-/// JSON 字符串转义
-fn json_escape(s : String) -> String {
-  let mut r = ""
-  let mut i = 0
-  while i < s.length() {
-    let cp = s[i]
-    if cp == '"' {
-      r = r + "\\\""
-    } else if cp == '\\' {
-      r = r + "\\\\"
-    } else if cp == '\n' {
-      r = r + "\\n"
-    } else if cp == '\t' {
-      r = r + "\\t"
-    } else if cp == '\r' {
-      r = r + "\\r"
-    } else {
-      let ch = Int::unsafe_to_char(cp.to_int())
-      r = r + "\{ch}"
-    }
-    i = i + 1
-  }
-  r
-}
 
 ///|
 /// 在 JSON 对象中设置/替换一个键值对（重建 Object）
@@ -100,7 +42,10 @@ fn json_set(obj : Json, key : String, val : Json) -> Json {
 /// 在 ,"content":[ 前插入 ,"phase":"<value>"
 fn insert_phase_into_json(s : String, phase : String) -> String {
   let marker = ",\"content\":["
-  let replacement = ",\"phase\":\"" + json_escape(phase) + "\"" + marker
+  let replacement = ",\"phase\":\"" +
+    @json_helper.json_escape(phase) +
+    "\"" +
+    marker
   s.replace(old=marker, new=replacement)
 }
 
@@ -114,10 +59,10 @@ pub fn codex_to_lux_request(
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
   // 提取 phase 信息：按 input 数组顺序
   let phases : Array[String?] = []
-  match field_arr(jv, "input") {
+  match @json_helper.field_arr(jv, "input") {
     Some(items) =>
       for item in items {
-        let phase = field_str(item, "phase")
+        let phase = @json_helper.field_str(item, "phase")
         phases.push(phase)
       }
     None => ()
@@ -193,7 +138,7 @@ pub fn lux_request_to_codex(req : @lux.LucentRequest) -> Result[String, String] 
       }
       // 处理 phase
       if needs_phase {
-        match field_arr(jv, "input") {
+        match @json_helper.field_arr(jv, "input") {
           Some(items) => {
             let new_items : Array[Json] = []
             let mut conv_idx = 0
@@ -283,7 +228,7 @@ pub fn lux_response_to_codex(
       let mut jv = @json.parse(base_json) catch {
         _ => return Err("json parse error")
       }
-      match field_arr(jv, "output") {
+      match @json_helper.field_arr(jv, "output") {
         Some(items) => {
           let new_items : Array[Json] = []
           let mut choice_idx = 0

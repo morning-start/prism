@@ -84,7 +84,9 @@ pub fn context_to_lux_request(
     Some(tools) => {
       let arr : Array[@lux.LucentTool] = []
       for t in tools {
-        arr.push(@lux.LucentTool::simple(t.name, t.description, t.parameters_json))
+        arr.push(
+          @lux.LucentTool::simple(t.name, t.description, t.parameters_json),
+        )
       }
       Some(arr)
     }

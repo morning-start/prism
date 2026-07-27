@@ -19,89 +19,30 @@
 ///   - input_schema 非 parameters：字段名不同，语义同构
 ///   - 流式使用 content_block_start/delta/stop 块生命周期（与 Lux IR 同构）
 ///   - 思考块有 signature 完整性校验，redacted_thinking 表示被隐藏
-
-///|
-/// === JSON 辅助（私有）===
-
-///|
-fn obj_get(jv : Json, key : String) -> Json? {
-  match jv {
-    Object(m) => {
-      for entry in m {
-        match entry {
-          (k, v) => if k == key { return Some(v) }
-        }
-      }
-      None
-    }
-    _ => None
-  }
-}
-
-///|
-fn field_str(jv : Json, key : String) -> String? {
-  match obj_get(jv, key) {
-    Some(String(s)) => Some(s)
-    _ => None
-  }
-}
-
-///|
-fn field_arr(jv : Json, key : String) -> Array[Json]? {
-  match obj_get(jv, key) {
-    Some(Array(a)) => Some(a)
-    _ => None
-  }
-}
-
-///|
-fn field_bool(jv : Json, key : String) -> Bool? {
-  match obj_get(jv, key) {
-    Some(True) => Some(true)
-    Some(False) => Some(false)
-    _ => None
-  }
-}
-
-///|
-fn field_num(jv : Json, key : String) -> Double? {
-  match obj_get(jv, key) {
-    Some(Number(n, ..)) => Some(n)
-    _ => None
-  }
-}
-
-///|
-fn field_int(jv : Json, key : String) -> Int? {
-  match obj_get(jv, key) {
-    Some(Number(n, ..)) => Some(n.to_int())
-    _ => None
-  }
-}
-
+import "morning-start/prism/lux/json_helper" json_helper
 ///|
 /// 解析 content block → LucentContent
 fn parse_content_block(block : Json) -> Result[@lux.LucentContent, String] {
-  match field_str(block, "type") {
+  match @json_helper.field_str(block, "type") {
     Some("text") =>
-      match field_str(block, "text") {
+      match @json_helper.field_str(block, "text") {
         Some(t) => Ok(@lux.LucentContent::text(t))
         None => Err("text block missing 'text' field")
       }
     Some("tool_use") => {
-      let id = field_str(block, "id").unwrap_or("")
-      let name = field_str(block, "name").unwrap_or("")
+      let id = @json_helper.field_str(block, "id").unwrap_or("")
+      let name = @json_helper.field_str(block, "name").unwrap_or("")
       // input 是 JSON 对象 → 需 stringify 为 arguments_json
-      let args_json = match obj_get(block, "input") {
+      let args_json = match @json_helper.obj_get(block, "input") {
         Some(input_jv) => input_jv.stringify()
         None => "{}"
       }
       Ok(@lux.LucentContent::tool_use(id, name, args_json, None))
     }
     Some("tool_result") => {
-      let tool_use_id = field_str(block, "tool_use_id").unwrap_or("")
-      let is_error = field_bool(block, "is_error").unwrap_or(false)
-      let content = match field_arr(block, "content") {
+      let tool_use_id = @json_helper.field_str(block, "tool_use_id").unwrap_or("")
+      let is_error = @json_helper.field_bool(block, "is_error").unwrap_or(false)
+      let content = match @json_helper.field_arr(block, "content") {
         Some(parts) => {
           let result : Array[@lux.LucentContent] = []
           let mut i = 0
@@ -123,12 +64,12 @@ fn parse_content_block(block : Json) -> Result[@lux.LucentContent, String] {
       }
     }
     Some("thinking") => {
-      let text = field_str(block, "thinking").unwrap_or("")
-      let signature = field_str(block, "signature")
+      let text = @json_helper.field_str(block, "thinking").unwrap_or("")
+      let signature = @json_helper.field_str(block, "signature")
       Ok(@lux.LucentContent::thinking(text, signature))
     }
     Some("redacted_thinking") => {
-      let signature = field_str(block, "signature")
+      let signature = @json_helper.field_str(block, "signature")
       Ok(@lux.LucentContent::redacted_thinking(signature))
     }
     Some("image") =>
@@ -141,12 +82,16 @@ fn parse_content_block(block : Json) -> Result[@lux.LucentContent, String] {
 
 ///|
 /// 解析单条 Anthropic message → LucentConversationItem
+/// 注意：Anthropic 的 user 消息若含 tool_result block，本函数仅提取 tool_result 并
+/// 丢弃同消息中的其他 content blocks。这是已知的有损行为（Degraded），
+/// 因为 Anthropic 实际使用中 user 消息通常只有一个 tool_result。
+/// 若消费方需完整记录，应在外层使用 ConversionDiagnostic 记录该字段丢失。
 fn parse_message(msg_jv : Json) -> Result[@lux.LucentConversationItem, String] {
-  let role = field_str(msg_jv, "role")
+  let role = @json_helper.field_str(msg_jv, "role")
   match role {
     Some("user") => {
       // 检查是否含 tool_result → 解码为 Item::ToolResult
-      let content_arr = match field_arr(msg_jv, "content") {
+      let content_arr = match @json_helper.field_arr(msg_jv, "content") {
         Some(arr) => arr
         None => return Err("message missing content array")
       }
@@ -154,7 +99,7 @@ fn parse_message(msg_jv : Json) -> Result[@lux.LucentConversationItem, String] {
         let mut found = false
         let mut i = 0
         while i < content_arr.length() {
-          match field_str(content_arr[i], "type") {
+          match @json_helper.field_str(content_arr[i], "type") {
             Some("tool_result") => found = true
             _ => ()
           }
@@ -166,7 +111,7 @@ fn parse_message(msg_jv : Json) -> Result[@lux.LucentConversationItem, String] {
         // 提取 tool_result block
         let mut i = 0
         while i < content_arr.length() {
-          match field_str(content_arr[i], "type") {
+          match @json_helper.field_str(content_arr[i], "type") {
             Some("tool_result") =>
               match parse_content_block(content_arr[i]) {
                 Ok(tr) =>
@@ -190,7 +135,7 @@ fn parse_message(msg_jv : Json) -> Result[@lux.LucentConversationItem, String] {
       Ok(@lux.LucentConversationItem::message(msg))
     }
     Some("assistant") => {
-      let content_arr = match field_arr(msg_jv, "content") {
+      let content_arr = match @json_helper.field_arr(msg_jv, "content") {
         Some(arr) => arr
         None => return Err("assistant message missing content array")
       }
@@ -222,12 +167,12 @@ fn parse_content_blocks(arr : Array[Json]) -> Array[@lux.LucentContent] {
 /// 解析 system 字段 → Array[LucentContent]
 fn parse_system(jv : Json) -> Array[@lux.LucentContent] {
   let result : Array[@lux.LucentContent] = []
-  match obj_get(jv, "system") {
+  match @json_helper.obj_get(jv, "system") {
     Some(String(s)) => result.push(@lux.LucentContent::text(s))
     Some(Array(arr)) => {
       let mut i = 0
       while i < arr.length() {
-        match field_str(arr[i], "text") {
+        match @json_helper.field_str(arr[i], "text") {
           Some(t) => result.push(@lux.LucentContent::text(t))
           None => ()
         }
@@ -242,20 +187,20 @@ fn parse_system(jv : Json) -> Array[@lux.LucentContent] {
 ///|
 /// 解析 tools[] → Array[LucentTool]
 fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
-  match field_arr(jv, "tools") {
+  match @json_helper.field_arr(jv, "tools") {
     Some(tools) => {
       let result : Array[@lux.LucentTool] = []
       let mut i = 0
       while i < tools.length() {
         let t = tools[i]
-        let name = field_str(t, "name").unwrap_or("")
-        let desc = field_str(t, "description")
+        let name = @json_helper.field_str(t, "name").unwrap_or("")
+        let desc = @json_helper.field_str(t, "description")
         // Anthropic 用 input_schema 而非 parameters
-        let params = match obj_get(t, "input_schema") {
+        let params = match @json_helper.obj_get(t, "input_schema") {
           Some(schema) => schema.stringify()
           None => "{}"
         }
-        result.push(@lux.LucentTool::new(name, desc, params, None, None))
+        result.push(@lux.LucentTool::new(name, desc, params, None, @lux.Function))
         i = i + 1
       }
       result
@@ -267,7 +212,7 @@ fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
 ///|
 /// 解析 tool_choice → LucentToolChoice?
 fn parse_tool_choice(jv : Json) -> @lux.LucentToolChoice? {
-  match obj_get(jv, "tool_choice") {
+  match @json_helper.obj_get(jv, "tool_choice") {
     Some(Object(m)) =>
       match m.get("type") {
         Some(String("auto")) => Some(@lux.Auto)
@@ -286,7 +231,7 @@ fn parse_tool_choice(jv : Json) -> @lux.LucentToolChoice? {
 ///|
 /// 解析 thinking 配置 → LucentReasoningConfig?
 fn parse_reasoning(jv : Json) -> @lux.LucentReasoningConfig? {
-  match obj_get(jv, "thinking") {
+  match @json_helper.obj_get(jv, "thinking") {
     Some(Object(m)) =>
       match m.get("type") {
         Some(String("enabled")) => {
@@ -308,7 +253,7 @@ pub fn anthropic_to_lux_request(
   json_str : String,
 ) -> Result[@lux.LucentRequest, String] {
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
-  let model = field_str(jv, "model").unwrap_or("")
+  let model = @json_helper.field_str(jv, "model").unwrap_or("")
   // system 指令
   let instructions = parse_system(jv)
   let instr_opt = if instructions.length() > 0 {
@@ -318,7 +263,7 @@ pub fn anthropic_to_lux_request(
   }
   // messages → conversation
   let conversation : Array[@lux.LucentConversationItem] = []
-  match field_arr(jv, "messages") {
+  match @json_helper.field_arr(jv, "messages") {
     Some(msgs) => {
       let mut i = 0
       while i < msgs.length() {
@@ -336,12 +281,12 @@ pub fn anthropic_to_lux_request(
   let tools = if tools_list.length() > 0 { Some(tools_list) } else { None }
   let tool_choice = parse_tool_choice(jv)
   // options
-  let temperature = field_num(jv, "temperature")
-  let top_p = field_num(jv, "top_p")
-  let top_k = field_int(jv, "top_k")
-  let max_tokens = field_int(jv, "max_tokens")
-  let stream = field_bool(jv, "stream").unwrap_or(false)
-  let stop = match field_arr(jv, "stop_sequences") {
+  let temperature = @json_helper.field_num(jv, "temperature")
+  let top_p = @json_helper.field_num(jv, "top_p")
+  let top_k = @json_helper.field_int(jv, "top_k")
+  let max_tokens = @json_helper.field_int(jv, "max_tokens")
+  let stream = @json_helper.field_bool(jv, "stream").unwrap_or(false)
+  let stop = match @json_helper.field_arr(jv, "stop_sequences") {
     Some(arr) => {
       let stops : Array[String] = []
       let mut i = 0
@@ -357,7 +302,7 @@ pub fn anthropic_to_lux_request(
     None => None
   }
   // metadata
-  let metadata = match obj_get(jv, "metadata") {
+  let metadata = match @json_helper.obj_get(jv, "metadata") {
     Some(Object(m)) => {
       let meta : Map[String, String] = {}
       for entry in m {
@@ -709,16 +654,16 @@ pub fn anthropic_to_lux_response(
   json_str : String,
 ) -> Result[@lux.LucentResponse, String] {
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
-  let id = field_str(jv, "id").unwrap_or("")
-  let model = field_str(jv, "model").unwrap_or("")
+  let id = @json_helper.field_str(jv, "id").unwrap_or("")
+  let model = @json_helper.field_str(jv, "model").unwrap_or("")
   // content blocks → assistant message content
-  let content = match field_arr(jv, "content") {
+  let content = match @json_helper.field_arr(jv, "content") {
     Some(blocks) => parse_content_blocks(blocks)
     None => []
   }
   let msg = @lux.LucentMessage::new(@lux.Assistant, content)
   // stop_reason → finish_reason
-  let finish = match field_str(jv, "stop_reason") {
+  let finish = match @json_helper.field_str(jv, "stop_reason") {
     Some("end_turn") => @lux.Stop
     Some("max_tokens") => @lux.Length
     Some("tool_use") => @lux.ToolCalls
@@ -728,10 +673,10 @@ pub fn anthropic_to_lux_response(
   }
   let choice = @lux.LucentChoice::new(0, msg, finish, None)
   // usage（cached_tokens / cache_creation_tokens 可选，暂不传）
-  let usage = match obj_get(jv, "usage") {
+  let usage = match @json_helper.obj_get(jv, "usage") {
     Some(u) => {
-      let pt = field_int(u, "input_tokens").unwrap_or(0)
-      let ct = field_int(u, "output_tokens").unwrap_or(0)
+      let pt = @json_helper.field_int(u, "input_tokens").unwrap_or(0)
+      let ct = @json_helper.field_int(u, "output_tokens").unwrap_or(0)
       let tt = pt + ct
       Some(@lux.LucentUsage::new(pt, ct, tt))
     }
@@ -873,12 +818,12 @@ pub fn anthropic_sse_to_events(
     }
     match event_type {
       "message_start" =>
-        match obj_get(jv, "message") {
+        match @json_helper.obj_get(jv, "message") {
           Some(msg_jv) => {
-            let id = field_str(msg_jv, "id")
-            let model = field_str(msg_jv, "model")
-            let usage_input = match obj_get(msg_jv, "usage") {
-              Some(u) => field_int(u, "input_tokens")
+            let id = @json_helper.field_str(msg_jv, "id")
+            let model = @json_helper.field_str(msg_jv, "model")
+            let usage_input = match @json_helper.obj_get(msg_jv, "usage") {
+              Some(u) => @json_helper.field_int(u, "input_tokens")
               None => None
             }
             events.push(
@@ -890,16 +835,16 @@ pub fn anthropic_sse_to_events(
           None => ()
         }
       "content_block_start" => {
-        let idx = field_int(jv, "index").unwrap_or(0)
-        match obj_get(jv, "content_block") {
+        let idx = @json_helper.field_int(jv, "index").unwrap_or(0)
+        match @json_helper.obj_get(jv, "content_block") {
           Some(block) =>
-            match field_str(block, "type") {
+            match @json_helper.field_str(block, "type") {
               Some("text") => events.push(@lux.BlockStart(idx, @lux.Text))
               Some("thinking") =>
                 events.push(@lux.BlockStart(idx, @lux.Thinking))
               Some("tool_use") => {
-                let tc_id = field_str(block, "id").unwrap_or("")
-                let tc_name = field_str(block, "name").unwrap_or("")
+                let tc_id = @json_helper.field_str(block, "id").unwrap_or("")
+                let tc_name = @json_helper.field_str(block, "name").unwrap_or("")
                 events.push(
                   @lux.BlockStart(
                     idx,
@@ -913,12 +858,12 @@ pub fn anthropic_sse_to_events(
         }
       }
       "content_block_delta" => {
-        let idx = field_int(jv, "index").unwrap_or(0)
-        match obj_get(jv, "delta") {
+        let idx = @json_helper.field_int(jv, "index").unwrap_or(0)
+        match @json_helper.obj_get(jv, "delta") {
           Some(delta) =>
-            match field_str(delta, "type") {
+            match @json_helper.field_str(delta, "type") {
               Some("text_delta") =>
-                match field_str(delta, "text") {
+                match @json_helper.field_str(delta, "text") {
                   Some(t) =>
                     events.push(
                       @lux.BlockDelta(idx, @lux.LucentBlockDelta::text_delta(t)),
@@ -926,7 +871,7 @@ pub fn anthropic_sse_to_events(
                   None => ()
                 }
               Some("thinking_delta") =>
-                match field_str(delta, "thinking") {
+                match @json_helper.field_str(delta, "thinking") {
                   Some(t) =>
                     events.push(
                       @lux.BlockDelta(
@@ -937,7 +882,7 @@ pub fn anthropic_sse_to_events(
                   None => ()
                 }
               Some("signature_delta") =>
-                match field_str(delta, "signature") {
+                match @json_helper.field_str(delta, "signature") {
                   Some(s) =>
                     events.push(
                       @lux.BlockDelta(
@@ -948,7 +893,7 @@ pub fn anthropic_sse_to_events(
                   None => ()
                 }
               Some("input_json_delta") =>
-                match field_str(delta, "partial_json") {
+                match @json_helper.field_str(delta, "partial_json") {
                   Some(j_str) =>
                     events.push(
                       @lux.BlockDelta(
@@ -964,13 +909,13 @@ pub fn anthropic_sse_to_events(
         }
       }
       "content_block_stop" => {
-        let idx = field_int(jv, "index").unwrap_or(0)
+        let idx = @json_helper.field_int(jv, "index").unwrap_or(0)
         events.push(@lux.BlockEnd(idx))
       }
       "message_delta" => {
-        match obj_get(jv, "delta") {
+        match @json_helper.obj_get(jv, "delta") {
           Some(delta) =>
-            match field_str(delta, "stop_reason") {
+            match @json_helper.field_str(delta, "stop_reason") {
               Some(reason) =>
                 events.push(
                   @lux.Finish(@lux.LucentFinishReason::from_string(reason)),
@@ -979,9 +924,9 @@ pub fn anthropic_sse_to_events(
             }
           None => ()
         }
-        match obj_get(jv, "usage") {
+        match @json_helper.obj_get(jv, "usage") {
           Some(u) => {
-            let ot = field_int(u, "output_tokens").unwrap_or(0)
+            let ot = @json_helper.field_int(u, "output_tokens").unwrap_or(0)
             events.push(@lux.Usage(@lux.LucentUsage::new(0, ot, ot)))
           }
           None => ()
@@ -989,7 +934,7 @@ pub fn anthropic_sse_to_events(
       }
       "message_stop" => events.push(@lux.Done)
       "error" =>
-        match field_str(jv, "error") {
+        match @json_helper.field_str(jv, "error") {
           Some(e_msg) =>
             events.push(@lux.Error(@lux.LucentError::simple(e_msg)))
           None => ()
@@ -1125,8 +1070,15 @@ pub fn capability() -> @lux.ProviderCapability {
   @lux.ProviderCapability::new(
     "claude-*",
     "anthropic",
-    @lux.LucentCapabilities::create(true, true, true, true, true,
-      [@lux.Text, @lux.Image], [@lux.Text]),
+    @lux.LucentCapabilities::create(
+      true,
+      true,
+      true,
+      true,
+      true,
+      [@lux.Text, @lux.Image],
+      [@lux.Text],
+    ),
     None,
   )
 }

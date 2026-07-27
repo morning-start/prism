@@ -320,10 +320,10 @@ pub fn ProviderCapability::new(
 ///|
 /// ConversionStatus — 字段转换状态（五道门治理要求）
 pub(all) enum ConversionStatus {
-  Exact            // 字段完全对等映射，无信息丢失
-  Degraded         // 字段被近似映射，部分语义丢失
-  Unsupported      // 字段不被目标协议支持，已舍弃
-  Invalid          // 字段格式错误或值非法
+  Exact // 字段完全对等映射，无信息丢失
+  Degraded // 字段被近似映射，部分语义丢失
+  Unsupported // 字段不被目标协议支持，已舍弃
+  Invalid // 字段格式错误或值非法
 } derive(Eq, Debug)
 
 ///|
@@ -352,7 +352,7 @@ pub struct ConversionResult[T] {
 } derive(Eq, Debug)
 
 ///|
-pub fn ConversionResult::new[T](value : T) -> ConversionResult[T] {
+pub fn[T] ConversionResult::new(value : T) -> ConversionResult[T] {
   { value, diagnostics: [] }
 }
 
@@ -679,9 +679,9 @@ pub fn LucentTool::new(
   description : String?,
   parameters_json : String,
   strict : Bool?,
-  kind : LucentToolKind?,
+  kind : LucentToolKind,
 ) -> LucentTool {
-  { name, description, parameters_json, strict, kind: kind.or(Function) }
+  { name, description, parameters_json, strict, kind }
 }
 
 ///|
@@ -827,8 +827,11 @@ pub fn LucentRequest::new(
 
 ///|
 /// 构建含 store 值的选项副本
-pub fn LucentOptions::with_store(self : LucentOptions, store : Bool?) -> LucentOptions {
-  { ..self, store }
+pub fn LucentOptions::with_store(
+  self : LucentOptions,
+  store : Bool?,
+) -> LucentOptions {
+  { ..self, store, }
 }
 
 ///|
@@ -837,7 +840,7 @@ pub fn LucentOptions::with_extras(
   self : LucentOptions,
   extras : Map[String, Json]?,
 ) -> LucentOptions {
-  { ..self, extras }
+  { ..self, extras, }
 }
 
 ///|
@@ -855,7 +858,7 @@ pub fn LucentRequest::with_stream(
   self : LucentRequest,
   stream : Bool,
 ) -> LucentRequest {
-  { ..self, options: { ..self.options, stream, }, }
+  { ..self, options: { ..self.options, stream, } }
 }
 
 ///|

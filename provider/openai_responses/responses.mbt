@@ -10,111 +10,32 @@
 ///   - 流式使用 SSE event 命名而非 delta 增量
 ///   - 推理思考有 reasoning Item（summary + signature）
 
-///|
-/// === JSON 辅助（私有）===
+import "morning-start/prism/lux/json_helper" as json_helper
+
+
 
 ///|
-fn obj_get(jv : Json, key : String) -> Json? {
-  match jv {
-    Object(m) => {
-      for entry in m {
-        match entry {
-          (k, v) => if k == key { return Some(v) }
-        }
-      }
-      None
-    }
-    _ => None
-  }
-}
-
-///|
-fn field_str(jv : Json, key : String) -> String? {
-  match obj_get(jv, key) {
-    Some(String(s)) => Some(s)
-    _ => None
-  }
-}
-
-///|
-fn field_arr(jv : Json, key : String) -> Array[Json]? {
-  match obj_get(jv, key) {
-    Some(Array(a)) => Some(a)
-    _ => None
-  }
-}
-
-///|
-fn field_bool(jv : Json, key : String) -> Bool? {
-  match obj_get(jv, key) {
-    Some(True) => Some(true)
-    Some(False) => Some(false)
-    _ => None
-  }
-}
-
-///|
-fn field_num(jv : Json, key : String) -> Double? {
-  match obj_get(jv, key) {
-    Some(Number(n, ..)) => Some(n)
-    _ => None
-  }
-}
-
-///|
-fn field_int(jv : Json, key : String) -> Int? {
-  match obj_get(jv, key) {
-    Some(Number(n, ..)) => Some(n.to_int())
-    _ => None
-  }
-}
-
-///|
-/// JSON 字符串转义
-fn json_escape(s : String) -> String {
-  let mut r = ""
-  let mut i = 0
-  while i < s.length() {
-    let cp = s[i]
-    if cp == '"' {
-      r = r + "\\\""
-    } else if cp == '\\' {
-      r = r + "\\\\"
-    } else if cp == '\n' {
-      r = r + "\\n"
-    } else if cp == '\t' {
-      r = r + "\\t"
-    } else if cp == '\r' {
-      r = r + "\\r"
-    } else {
-      let ch = Char::from_int(cp.to_int())
-      r = r + "\{ch}"
-    }
-    i = i + 1
-  }
-  r
-}
 
 ///|
 /// 解析 input Item → LucentConversationItem
 fn parse_input_item(item : Json) -> @lux.LucentConversationItem? {
-  match field_str(item, "type") {
+  match @json_helper.field_str(item, "type") {
     Some("message") => {
-      let role_str = field_str(item, "role").unwrap_or("user")
+      let role_str = @json_helper.field_str(item, "role").unwrap_or("user")
       let role = match role_str {
         "user" => @lux.User
         "assistant" => @lux.Assistant
         "developer" => @lux.Developer
         _ => @lux.User
       }
-      let content = match field_arr(item, "content") {
+      let content = match @json_helper.field_arr(item, "content") {
         Some(parts) => {
           let result : Array[@lux.LucentContent] = []
           let mut i = 0
           while i < parts.length() {
-            match field_str(parts[i], "type") {
+            match @json_helper.field_str(parts[i], "type") {
               Some("input_text") =>
-                match field_str(parts[i], "text") {
+                match @json_helper.field_str(parts[i], "text") {
                   Some(t) => result.push(@lux.LucentContent::text(t))
                   None => ()
                 }
@@ -132,27 +53,27 @@ fn parse_input_item(item : Json) -> @lux.LucentConversationItem? {
       Some(@lux.LucentConversationItem::message(msg))
     }
     Some("function_call") => {
-      let id = field_str(item, "id").unwrap_or("")
-      let name = field_str(item, "name").unwrap_or("")
-      let args = field_str(item, "arguments").unwrap_or("{}")
+      let id = @json_helper.field_str(item, "id").unwrap_or("")
+      let name = @json_helper.field_str(item, "name").unwrap_or("")
+      let args = @json_helper.field_str(item, "arguments").unwrap_or("{}")
       let tu = @lux.LucentToolUse::new(id, name, args, None)
       Some(@lux.LucentConversationItem::tool_call(tu))
     }
     Some("function_call_output") => {
-      let call_id = field_str(item, "call_id").unwrap_or("")
-      let output = field_str(item, "output").unwrap_or("")
+      let call_id = @json_helper.field_str(item, "call_id").unwrap_or("")
+      let output = @json_helper.field_str(item, "output").unwrap_or("")
       let tr = @lux.LucentToolResult::ok(call_id, [
         @lux.LucentContent::text(output),
       ])
       Some(@lux.LucentConversationItem::tool_result(tr))
     }
     Some("reasoning") => {
-      let summary = match field_arr(item, "summary") {
+      let summary = match @json_helper.field_arr(item, "summary") {
         Some(arr) => {
           let texts : Array[@lux.LucentContent] = []
           let mut i = 0
           while i < arr.length() {
-            match field_str(arr[i], "text") {
+            match @json_helper.field_str(arr[i], "text") {
               Some(t) => texts.push(@lux.LucentContent::text(t))
               None => ()
             }
@@ -162,7 +83,7 @@ fn parse_input_item(item : Json) -> @lux.LucentConversationItem? {
         }
         None => None
       }
-      let signature = field_str(item, "signature")
+      let signature = @json_helper.field_str(item, "signature")
       let th = @lux.LucentThinking::new(
         // thinking text from summary array
         match summary {
@@ -183,7 +104,7 @@ fn parse_input_item(item : Json) -> @lux.LucentConversationItem? {
 /// 解析 input[] → Array[LucentConversationItem]
 fn parse_input(jv : Json) -> Array[@lux.LucentConversationItem] {
   let result : Array[@lux.LucentConversationItem] = []
-  match field_arr(jv, "input") {
+  match @json_helper.field_arr(jv, "input") {
     Some(items) => {
       let mut i = 0
       while i < items.length() {
@@ -202,19 +123,19 @@ fn parse_input(jv : Json) -> Array[@lux.LucentConversationItem] {
 ///|
 /// 解析 tools[] → Array[LucentTool]
 fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
-  match field_arr(jv, "tools") {
+  match @json_helper.field_arr(jv, "tools") {
     Some(tools) => {
       let result : Array[@lux.LucentTool] = []
       let mut i = 0
       while i < tools.length() {
         let t = tools[i]
-        let name = field_str(t, "name").unwrap_or("")
-        let desc = field_str(t, "description")
-        let params = match obj_get(t, "parameters") {
+        let name = @json_helper.field_str(t, "name").unwrap_or("")
+        let desc = @json_helper.field_str(t, "description")
+        let params = match @json_helper.obj_get(t, "parameters") {
           Some(p) => p.stringify()
           None => "{}"
         }
-        result.push(@lux.LucentTool::new(name, desc, params, None, None))
+        result.push(@lux.LucentTool::new(name, desc, params, None, @lux.Function))
         i = i + 1
       }
       result
@@ -226,7 +147,7 @@ fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
 ///|
 /// 解析 reasoning 配置
 fn parse_reasoning(jv : Json) -> @lux.LucentReasoningConfig? {
-  match obj_get(jv, "reasoning") {
+  match @json_helper.obj_get(jv, "reasoning") {
     _ => None
   }
 }
@@ -234,15 +155,15 @@ fn parse_reasoning(jv : Json) -> @lux.LucentReasoningConfig? {
 ///|
 /// 解析 text.format → LucentStructuredOutput
 fn parse_text_format(jv : Json) -> @lux.LucentStructuredOutput? {
-  match obj_get(jv, "text") {
+  match @json_helper.obj_get(jv, "text") {
     Some(obj) =>
-      match obj_get(obj, "format") {
+      match @json_helper.obj_get(obj, "format") {
         Some(fmt) =>
-          match field_str(fmt, "type") {
+          match @json_helper.field_str(fmt, "type") {
             Some("text") => Some(@lux.Text)
             Some("json_object") => Some(@lux.JsonObject)
             Some("json_schema") =>
-              match obj_get(fmt, "schema") {
+              match @json_helper.obj_get(fmt, "schema") {
                 Some(s) =>
                   Some(@lux.LucentStructuredOutput::JsonSchema(s.stringify()))
                 None => None
@@ -261,24 +182,24 @@ pub fn openai_responses_to_lux_request(
   json_str : String,
 ) -> Result[@lux.LucentRequest, String] {
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
-  let model = field_str(jv, "model").unwrap_or("")
-  let instructions = match field_str(jv, "instructions") {
+  let model = @json_helper.field_str(jv, "model").unwrap_or("")
+  let instructions = match @json_helper.field_str(jv, "instructions") {
     Some(s) => Some([@lux.LucentContent::text(s)])
     None => None
   }
   let conversation = parse_input(jv)
   let tools_list = parse_tools(jv)
   let tools = if tools_list.length() > 0 { Some(tools_list) } else { None }
-  let tool_choice = match field_str(jv, "tool_choice") {
+  let tool_choice = match @json_helper.field_str(jv, "tool_choice") {
     Some("auto") => Some(@lux.LucentToolChoice::Auto)
     Some("none") => Some(@lux.None)
     Some("required") => Some(@lux.Required)
     _ => None
   }
-  let temperature = field_num(jv, "temperature")
-  let top_p = field_num(jv, "top_p")
-  let max_tokens = field_int(jv, "max_output_tokens")
-  let stream = field_bool(jv, "stream").unwrap_or(false)
+  let temperature = @json_helper.field_num(jv, "temperature")
+  let top_p = @json_helper.field_num(jv, "top_p")
+  let max_tokens = @json_helper.field_int(jv, "max_output_tokens")
+  let stream = @json_helper.field_bool(jv, "stream").unwrap_or(false)
   let reasoning = parse_reasoning(jv)
   let structured = parse_text_format(jv)
   let opts = @lux.LucentOptions::new(
@@ -295,7 +216,7 @@ pub fn openai_responses_to_lux_request(
     None,
   )
   // metadata: previous_response_id → extra
-  let extra = match field_str(jv, "previous_response_id") {
+  let extra = match @json_helper.field_str(jv, "previous_response_id") {
     Some(_id) => None // previous_response_id → metadata, skip extra for now
     None => None
   }
@@ -321,13 +242,15 @@ pub fn lux_request_to_openai_responses(
   req : @lux.LucentRequest,
 ) -> Result[String, String] {
   let parts : Array[String] = []
-  parts.push("\"model\":\"" + json_escape(req.model) + "\"")
+  parts.push("\"model\":\"" + @json_helper.json_escape(req.model) + "\"")
   // instructions
   match req.instructions {
     Some(instrs) => {
       let text = @lux.lucent_content_to_text(instrs)
       if text != "" {
-        parts.push("\"instructions\":\"" + json_escape(text) + "\"")
+        parts.push(
+          "\"instructions\":\"" + @json_helper.json_escape(text) + "\"",
+        )
       }
     }
     None => ()
@@ -345,7 +268,9 @@ pub fn lux_request_to_openai_responses(
           match m.content[j] {
             Text(s, _) =>
               content_parts.push(
-                "{\"type\":\"input_text\",\"text\":\"" + json_escape(s) + "\"}",
+                "{\"type\":\"input_text\",\"text\":\"" +
+                @json_helper.json_escape(s) +
+                "\"}",
               )
             Image(_) => () // stub
             _ => ()
@@ -354,7 +279,7 @@ pub fn lux_request_to_openai_responses(
         }
         items.push(
           "{\"type\":\"message\",\"role\":\"" +
-          json_escape(role_str) +
+          @json_helper.json_escape(role_str) +
           "\",\"content\":[" +
           content_parts.join(",") +
           "]}",
@@ -363,21 +288,21 @@ pub fn lux_request_to_openai_responses(
       ToolCall(tu) =>
         items.push(
           "{\"type\":\"function_call\",\"id\":\"" +
-          json_escape(tu.id) +
+          @json_helper.json_escape(tu.id) +
           "\",\"call_id\":\"" +
-          json_escape(tu.id) +
+          @json_helper.json_escape(tu.id) +
           "\",\"name\":\"" +
-          json_escape(tu.name) +
+          @json_helper.json_escape(tu.name) +
           "\",\"arguments\":\"" +
-          json_escape(tu.arguments_json) +
+          @json_helper.json_escape(tu.arguments_json) +
           "\"}",
         )
       ToolResult(tr) =>
         items.push(
           "{\"type\":\"function_call_output\",\"call_id\":\"" +
-          json_escape(tr.tool_use_id) +
+          @json_helper.json_escape(tr.tool_use_id) +
           "\",\"output\":\"" +
-          json_escape(@lux.lucent_content_to_text(tr.content)) +
+          @json_helper.json_escape(@lux.lucent_content_to_text(tr.content)) +
           "\"}",
         )
       Reasoning(th) => {
@@ -390,7 +315,7 @@ pub fn lux_request_to_openai_responses(
                 Text(t, _) =>
                   summary_parts.push(
                     "{\"type\":\"summary_text\",\"text\":\"" +
-                    json_escape(t) +
+                    @json_helper.json_escape(t) +
                     "\"}",
                   )
                 _ => ()
@@ -406,7 +331,10 @@ pub fn lux_request_to_openai_responses(
         }
         match th.signature {
           Some(s) =>
-            r_item = r_item + ",\"signature\":\"" + json_escape(s) + "\""
+            r_item = r_item +
+              ",\"signature\":\"" +
+              @json_helper.json_escape(s) +
+              "\""
           None => ()
         }
         items.push(r_item + "}")
@@ -424,12 +352,12 @@ pub fn lux_request_to_openai_responses(
       while j < tools.length() {
         let t = tools[j]
         let desc_part = match t.description {
-          Some(d) => ",\"description\":\"" + json_escape(d) + "\""
+          Some(d) => ",\"description\":\"" + @json_helper.json_escape(d) + "\""
           None => ""
         }
         tools_json.push(
           "{\"type\":\"function\",\"name\":\"" +
-          json_escape(t.name) +
+          @json_helper.json_escape(t.name) +
           "\"" +
           desc_part +
           ",\"parameters\":" +
@@ -503,21 +431,21 @@ pub fn lux_request_to_openai_responses(
 ///|
 /// 解析 output Item 为 LucentContent[]
 fn parse_output_content(output_item : Json) -> Array[@lux.LucentContent] {
-  match field_str(output_item, "type") {
+  match @json_helper.field_str(output_item, "type") {
     Some("message") => {
-      let content = match field_arr(output_item, "content") {
+      let content = match @json_helper.field_arr(output_item, "content") {
         Some(parts) => {
           let result : Array[@lux.LucentContent] = []
           let mut i = 0
           while i < parts.length() {
-            match field_str(parts[i], "type") {
+            match @json_helper.field_str(parts[i], "type") {
               Some("output_text") =>
-                match field_str(parts[i], "text") {
+                match @json_helper.field_str(parts[i], "text") {
                   Some(t) => result.push(@lux.LucentContent::text(t))
                   None => ()
                 }
               Some("refusal") =>
-                match field_str(parts[i], "text") {
+                match @json_helper.field_str(parts[i], "text") {
                   Some(t) => result.push(@lux.LucentContent::refusal(t))
                   None => ()
                 }
@@ -532,18 +460,20 @@ fn parse_output_content(output_item : Json) -> Array[@lux.LucentContent] {
       content
     }
     Some("function_call") => {
-      let id = field_str(output_item, "id").unwrap_or("")
-      let name = field_str(output_item, "name").unwrap_or("")
-      let args = field_str(output_item, "arguments").unwrap_or("{}")
+      let id = @json_helper.field_str(output_item, "id").unwrap_or("")
+      let name = @json_helper.field_str(output_item, "name").unwrap_or("")
+      let args = @json_helper.field_str(output_item, "arguments").unwrap_or(
+        "{}",
+      )
       [@lux.LucentContent::tool_use(id, name, args, None)]
     }
     Some("reasoning") => {
-      let summary = match field_arr(output_item, "summary") {
+      let summary = match @json_helper.field_arr(output_item, "summary") {
         Some(arr) => {
           let texts : Array[@lux.LucentContent] = []
           let mut i = 0
           while i < arr.length() {
-            match field_str(arr[i], "text") {
+            match @json_helper.field_str(arr[i], "text") {
               Some(t) => texts.push(@lux.LucentContent::text(t))
               None => ()
             }
@@ -553,7 +483,7 @@ fn parse_output_content(output_item : Json) -> Array[@lux.LucentContent] {
         }
         None => None
       }
-      let signature = field_str(output_item, "signature")
+      let signature = @json_helper.field_str(output_item, "signature")
       let text = match summary {
         Some(ref_summary) => @lux.lucent_content_to_text(ref_summary)
         None => ""
@@ -570,12 +500,12 @@ pub fn openai_responses_to_lux_response(
   json_str : String,
 ) -> Result[@lux.LucentResponse, String] {
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
-  let id = field_str(jv, "id").unwrap_or("")
-  let model = field_str(jv, "model").unwrap_or("")
-  let created = field_int(jv, "created_at")
+  let id = @json_helper.field_str(jv, "id").unwrap_or("")
+  let model = @json_helper.field_str(jv, "model").unwrap_or("")
+  let created = @json_helper.field_int(jv, "created_at")
   // output items → choices[0].message.content
   let content : Array[@lux.LucentContent] = []
-  match field_arr(jv, "output") {
+  match @json_helper.field_arr(jv, "output") {
     Some(outputs) => {
       let mut i = 0
       while i < outputs.length() {
@@ -589,7 +519,7 @@ pub fn openai_responses_to_lux_response(
     None => ()
   }
   let msg = @lux.LucentMessage::new(@lux.Assistant, content)
-  let finish = match field_str(jv, "status") {
+  let finish = match @json_helper.field_str(jv, "status") {
     Some("completed") => @lux.Stop
     Some("incomplete") => @lux.Length
     Some("failed") => @lux.Error
@@ -598,11 +528,11 @@ pub fn openai_responses_to_lux_response(
   }
   let choice = @lux.LucentChoice::new(0, msg, finish, None)
   // usage
-  let usage = match obj_get(jv, "usage") {
+  let usage = match @json_helper.obj_get(jv, "usage") {
     Some(u) => {
-      let pt = field_int(u, "input_tokens").unwrap_or(0)
-      let ct = field_int(u, "output_tokens").unwrap_or(0)
-      let tt = field_int(u, "total_tokens").unwrap_or(pt + ct)
+      let pt = @json_helper.field_int(u, "input_tokens").unwrap_or(0)
+      let ct = @json_helper.field_int(u, "output_tokens").unwrap_or(0)
+      let tt = @json_helper.field_int(u, "total_tokens").unwrap_or(pt + ct)
       @lux.LucentUsage::new(pt, ct, tt)
     }
     None => @lux.LucentUsage::new(0, 0, 0)
@@ -630,19 +560,19 @@ pub fn lux_response_to_openai_responses(
           i.to_string() +
           "\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[" +
           "{\"type\":\"output_text\",\"text\":\"" +
-          json_escape(s) +
+          @json_helper.json_escape(s) +
           "\",\"annotations\":[]}]}",
         )
       ToolUse(tu) =>
         output_items.push(
           "{\"type\":\"function_call\",\"id\":\"" +
-          json_escape(tu.id) +
+          @json_helper.json_escape(tu.id) +
           "\",\"call_id\":\"call_" +
-          json_escape(tu.id) +
+          @json_helper.json_escape(tu.id) +
           "\",\"name\":\"" +
-          json_escape(tu.name) +
+          @json_helper.json_escape(tu.name) +
           "\",\"arguments\":\"" +
-          json_escape(tu.arguments_json) +
+          @json_helper.json_escape(tu.arguments_json) +
           "\",\"status\":\"completed\"}",
         )
       Thinking(th) => {
@@ -655,7 +585,7 @@ pub fn lux_response_to_openai_responses(
                 Text(t, _) =>
                   parts.push(
                     "{\"type\":\"summary_text\",\"text\":\"" +
-                    json_escape(t) +
+                    @json_helper.json_escape(t) +
                     "\"}",
                   )
                 _ => ()
@@ -667,7 +597,7 @@ pub fn lux_response_to_openai_responses(
           None => ""
         }
         let sig_part = match th.signature {
-          Some(s) => ",\"signature\":\"" + json_escape(s) + "\""
+          Some(s) => ",\"signature\":\"" + @json_helper.json_escape(s) + "\""
           None => ""
         }
         output_items.push(
@@ -685,7 +615,7 @@ pub fn lux_response_to_openai_responses(
           i.to_string() +
           "\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[" +
           "{\"type\":\"refusal\",\"refusal\":\"" +
-          json_escape(s) +
+          @json_helper.json_escape(s) +
           "\"}]}",
         )
       _ => ()
@@ -714,13 +644,13 @@ pub fn lux_response_to_openai_responses(
     None => ""
   }
   let body = "{\"id\":\"" +
-    json_escape(resp.id) +
+    @json_helper.json_escape(resp.id) +
     "\",\"object\":\"response\"" +
     created_part +
     ",\"status\":" +
     status_str +
     ",\"model\":\"" +
-    json_escape(resp.model) +
+    @json_helper.json_escape(resp.model) +
     "\",\"output\":[" +
     output_items.join(",") +
     "]" +
@@ -796,10 +726,10 @@ pub fn openai_responses_sse_to_events(
     }
     match event_type {
       "response.created" =>
-        match obj_get(jv, "response") {
+        match @json_helper.obj_get(jv, "response") {
           Some(r) => {
-            let rid = field_str(r, "id")
-            let rmodel = field_str(r, "model")
+            let rid = @json_helper.field_str(r, "id")
+            let rmodel = @json_helper.field_str(r, "model")
             events.push(
               @lux.ConversationStart(
                 @lux.LucentConversationMeta::new(rid, rmodel, None),
@@ -809,8 +739,8 @@ pub fn openai_responses_sse_to_events(
           None => ()
         }
       "response.output_item.added" => {
-        let idx = field_int(jv, "output_index").unwrap_or(0)
-        match obj_get(jv, "item") {
+        let idx = @json_helper.field_int(jv, "output_index").unwrap_or(0)
+        match @json_helper.obj_get(jv, "item") {
           Some(item) =>
             match parse_input_item(item) {
               Some(ci) => events.push(@lux.ItemStart(idx, ci))
@@ -820,10 +750,10 @@ pub fn openai_responses_sse_to_events(
         }
       }
       "response.content_part.added" => {
-        let idx = field_int(jv, "content_index").unwrap_or(0)
-        match obj_get(jv, "part") {
+        let idx = @json_helper.field_int(jv, "content_index").unwrap_or(0)
+        match @json_helper.obj_get(jv, "part") {
           Some(part) =>
-            match field_str(part, "type") {
+            match @json_helper.field_str(part, "type") {
               Some("output_text") =>
                 events.push(@lux.BlockStart(idx, @lux.Text))
               Some("refusal") => events.push(@lux.BlockStart(idx, @lux.Refusal))
@@ -833,8 +763,8 @@ pub fn openai_responses_sse_to_events(
         }
       }
       "response.output_text.delta" => {
-        let idx = field_int(jv, "content_index").unwrap_or(0)
-        match field_str(jv, "delta") {
+        let idx = @json_helper.field_int(jv, "content_index").unwrap_or(0)
+        match @json_helper.field_str(jv, "delta") {
           Some(t) =>
             events.push(
               @lux.BlockDelta(idx, @lux.LucentBlockDelta::text_delta(t)),
@@ -843,12 +773,12 @@ pub fn openai_responses_sse_to_events(
         }
       }
       "response.output_text.done" => {
-        let idx = field_int(jv, "content_index").unwrap_or(0)
+        let idx = @json_helper.field_int(jv, "content_index").unwrap_or(0)
         events.push(@lux.BlockEnd(idx))
       }
       "response.reasoning_summary_text.delta" => {
-        let idx = field_int(jv, "content_index").unwrap_or(0)
-        match field_str(jv, "delta") {
+        let idx = @json_helper.field_int(jv, "content_index").unwrap_or(0)
+        match @json_helper.field_str(jv, "delta") {
           Some(t) =>
             events.push(
               @lux.BlockDelta(idx, @lux.LucentBlockDelta::thinking_delta(t)),
@@ -857,12 +787,12 @@ pub fn openai_responses_sse_to_events(
         }
       }
       "response.reasoning_summary_text.done" => {
-        let idx = field_int(jv, "content_index").unwrap_or(0)
+        let idx = @json_helper.field_int(jv, "content_index").unwrap_or(0)
         events.push(@lux.BlockEnd(idx))
       }
       "response.function_call_arguments.delta" => {
-        let idx = field_int(jv, "output_index").unwrap_or(0)
-        match field_str(jv, "delta") {
+        let idx = @json_helper.field_int(jv, "output_index").unwrap_or(0)
+        match @json_helper.field_str(jv, "delta") {
           Some(a) =>
             events.push(
               @lux.BlockDelta(
@@ -874,24 +804,26 @@ pub fn openai_responses_sse_to_events(
         }
       }
       "response.function_call_arguments.done" => {
-        let idx = field_int(jv, "output_index").unwrap_or(0)
+        let idx = @json_helper.field_int(jv, "output_index").unwrap_or(0)
         events.push(@lux.BlockEnd(idx))
       }
       "response.completed" => {
-        match obj_get(jv, "response") {
+        match @json_helper.obj_get(jv, "response") {
           Some(r) => {
-            match field_str(r, "status") {
+            match @json_helper.field_str(r, "status") {
               Some(s) =>
                 events.push(
                   @lux.Finish(@lux.LucentFinishReason::from_string(s)),
                 )
               None => ()
             }
-            match obj_get(r, "usage") {
+            match @json_helper.obj_get(r, "usage") {
               Some(u) => {
-                let pt = field_int(u, "input_tokens").unwrap_or(0)
-                let ct = field_int(u, "output_tokens").unwrap_or(0)
-                let tt = field_int(u, "total_tokens").unwrap_or(pt + ct)
+                let pt = @json_helper.field_int(u, "input_tokens").unwrap_or(0)
+                let ct = @json_helper.field_int(u, "output_tokens").unwrap_or(0)
+                let tt = @json_helper.field_int(u, "total_tokens").unwrap_or(
+                  pt + ct,
+                )
                 events.push(@lux.Usage(@lux.LucentUsage::new(pt, ct, tt)))
               }
               None => ()
@@ -902,7 +834,7 @@ pub fn openai_responses_sse_to_events(
         events.push(@lux.Done)
       }
       "error" =>
-        match field_str(jv, "error") {
+        match @json_helper.field_str(jv, "error") {
           Some(err_msg) =>
             events.push(@lux.Error(@lux.LucentError::simple(err_msg)))
           None => ()
@@ -927,7 +859,7 @@ pub fn lux_events_to_openai_responses_sse(
       ConversationStart(meta) => {
         let mut fields = ""
         match meta.id {
-          Some(id) => fields = "\"id\":\"" + json_escape(id) + "\""
+          Some(id) => fields = "\"id\":\"" + @json_helper.json_escape(id) + "\""
           None => ()
         }
         match meta.model {
@@ -935,7 +867,7 @@ pub fn lux_events_to_openai_responses_sse(
             fields = fields +
               (if fields == "" { "" } else { "," }) +
               "\"model\":\"" +
-              json_escape(m) +
+              @json_helper.json_escape(m) +
               "\""
           None => ()
         }
@@ -956,7 +888,7 @@ pub fn lux_events_to_openai_responses_sse(
                 Text(t, _) =>
                   cparts.push(
                     "{\"type\":\"input_text\",\"text\":\"" +
-                    json_escape(t) +
+                    @json_helper.json_escape(t) +
                     "\"}",
                   )
                 _ => ()
@@ -964,20 +896,20 @@ pub fn lux_events_to_openai_responses_sse(
               k = k + 1
             }
             "{\"type\":\"message\",\"role\":\"" +
-            json_escape(role_str) +
+            @json_helper.json_escape(role_str) +
             "\",\"content\":[" +
             cparts.join(",") +
             "]}"
           }
           ToolCall(tu) =>
             "{\"type\":\"function_call\",\"id\":\"" +
-            json_escape(tu.id) +
+            @json_helper.json_escape(tu.id) +
             "\",\"name\":\"" +
-            json_escape(tu.name) +
+            @json_helper.json_escape(tu.name) +
             "\"}"
           ToolResult(tr) =>
             "{\"type\":\"function_call_output\",\"call_id\":\"" +
-            json_escape(tr.tool_use_id) +
+            @json_helper.json_escape(tr.tool_use_id) +
             "\"}"
           Reasoning(th) => {
             let summary = match th.summary {
@@ -989,7 +921,7 @@ pub fn lux_events_to_openai_responses_sse(
                     Text(t, _) =>
                       parts.push(
                         "{\"type\":\"summary_text\",\"text\":\"" +
-                        json_escape(t) +
+                        @json_helper.json_escape(t) +
                         "\"}",
                       )
                     _ => ()
@@ -1001,13 +933,16 @@ pub fn lux_events_to_openai_responses_sse(
               None => ""
             }
             let sig = match th.signature {
-              Some(s) => ",\"signature\":\"" + json_escape(s) + "\""
+              Some(s) =>
+                ",\"signature\":\"" + @json_helper.json_escape(s) + "\""
               None => ""
             }
             "{\"type\":\"reasoning\"" + summary + sig + "}"
           }
           AgentAction(aa) =>
-            "{\"type\":\"computer_call\",\"id\":\"" + json_escape(aa.id) + "\"}"
+            "{\"type\":\"computer_call\",\"id\":\"" +
+            @json_helper.json_escape(aa.id) +
+            "\"}"
         }
         lines.push(
           "event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"output_index\":" +
@@ -1043,7 +978,7 @@ pub fn lux_events_to_openai_responses_sse(
               ",\"content_index\":" +
               idx.to_string() +
               ",\"delta\":\"" +
-              json_escape(s) +
+              @json_helper.json_escape(s) +
               "\"}",
             )
           ThinkingDelta(s) =>
@@ -1053,7 +988,7 @@ pub fn lux_events_to_openai_responses_sse(
               ",\"content_index\":" +
               idx.to_string() +
               ",\"delta\":\"" +
-              json_escape(s) +
+              @json_helper.json_escape(s) +
               "\"}",
             )
           ToolArgumentsDelta(s) =>
@@ -1061,7 +996,7 @@ pub fn lux_events_to_openai_responses_sse(
               "event: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"output_index\":" +
               idx.to_string() +
               ",\"delta\":\"" +
-              json_escape(s) +
+              @json_helper.json_escape(s) +
               "\"}",
             )
           _ => ()
@@ -1103,7 +1038,7 @@ pub fn lux_events_to_openai_responses_sse(
       Error(e) =>
         lines.push(
           "event: error\ndata: {\"type\":\"error\",\"error\":\"" +
-          json_escape(e.message) +
+          @json_helper.json_escape(e.message) +
           "\"}",
         )
       Done => () // Responses 流以 response.completed 结束，无独立 done 事件
@@ -1119,8 +1054,15 @@ pub fn capability() -> @lux.ProviderCapability {
   @lux.ProviderCapability::new(
     "gpt-*,o*",
     "openai",
-    @lux.LucentCapabilities::create(true, true, true, true, true,
-      [@lux.Text, @lux.Image, @lux.Pdf], [@lux.Text]),
+    @lux.LucentCapabilities::create(
+      true,
+      true,
+      true,
+      true,
+      true,
+      [@lux.Text, @lux.Image, @lux.Pdf],
+      [@lux.Text],
+    ),
     None,
   )
 }

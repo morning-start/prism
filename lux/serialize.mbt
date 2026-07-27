@@ -221,10 +221,15 @@ pub fn LucentContent::to_json(self : LucentContent) -> Json {
 ///|
 /// === LucentMessage ===
 pub fn LucentMessage::to_json(self : LucentMessage) -> Json {
-  Json::object({
+  let fields : Map[String, Json] = {
     "role": self.role.to_json(),
     "content": Json::array(self.content.map(fn(c) { c.to_json() })),
-  })
+  }
+  match self.phase {
+    Some(p) => fields["phase"] = Json::string(p)
+    None => ()
+  }
+  Json::object(fields)
 }
 
 ///|

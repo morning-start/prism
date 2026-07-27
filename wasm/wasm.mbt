@@ -402,10 +402,7 @@ pub fn wasm_lux_events_to_vertex_sse(json_str : String) -> String {
 
 ///|
 /// 对文本请求进行编码（provider JSON 出），Host 发送 HTTP
-pub fn wasm_sdk_encode_request(
-  provider : String,
-  text : String,
-) -> String {
+pub fn wasm_sdk_encode_request(provider : String, text : String) -> String {
   let prism = @sdk.Prism::new().with_provider(provider)
   match prism.encode_request(text, @sdk.PrismOptions::default()) {
     Ok(v) => v
@@ -428,10 +425,7 @@ pub fn wasm_sdk_decode_response(
 
 ///|
 /// 对文本请求进行流式编码（provider JSON 出），Host 发送 HTTP
-pub fn wasm_sdk_encode_stream(
-  provider : String,
-  text : String,
-) -> String {
+pub fn wasm_sdk_encode_stream(provider : String, text : String) -> String {
   let prism = @sdk.Prism::new().with_provider(provider)
   match prism.encode_stream_request(text, @sdk.PrismOptions::default()) {
     Ok(v) => v
@@ -441,10 +435,7 @@ pub fn wasm_sdk_encode_stream(
 
 ///|
 /// 解码提供商 SSE → PrismEvent JSON 数组
-pub fn wasm_sdk_decode_sse(
-  provider : String,
-  sse_str : String,
-) -> String {
+pub fn wasm_sdk_decode_sse(provider : String, sse_str : String) -> String {
   let prism = @sdk.Prism::new().with_provider(provider)
   match prism.decode_sse(sse_str) {
     Ok(events) => {
@@ -462,16 +453,26 @@ pub fn wasm_sdk_decode_sse(
 /// PrismEvent → JSON 字符串（WASM 序列化）
 fn prism_event_json(ev : @sdk.PrismEvent) -> String {
   match ev {
-    TextDelta(s) => "{\"type\":\"text_delta\",\"text\":\"" + json_escape_sdk(s) + "\"}"
-    ToolCall(tc) => "{\"type\":\"tool_call\",\"id\":\"" + json_escape_sdk(tc.id) +
-      "\",\"name\":\"" + json_escape_sdk(tc.name) +
-      "\",\"arguments\":" + tc.arguments_json + "}"
-    ToolResult(tr) => "{\"type\":\"tool_result\",\"tool_use_id\":\"" +
-      json_escape_sdk(tr.tool_use_id) + "\",\"content\":\"" +
-      json_escape_sdk(tr.content) + "\",\"is_error\":" +
-      (if tr.is_error { "true" } else { "false" }) + "}"
-    Thinking(th) => "{\"type\":\"thinking\",\"text\":\"" + json_escape_sdk(th.text) +
-      "\"}"
+    TextDelta(s) =>
+      "{\"type\":\"text_delta\",\"text\":\"" + json_escape_sdk(s) + "\"}"
+    ToolCall(tc) =>
+      "{\"type\":\"tool_call\",\"id\":\"" +
+      json_escape_sdk(tc.id) +
+      "\",\"name\":\"" +
+      json_escape_sdk(tc.name) +
+      "\",\"arguments\":" +
+      tc.arguments_json +
+      "}"
+    ToolResult(tr) =>
+      "{\"type\":\"tool_result\",\"tool_use_id\":\"" +
+      json_escape_sdk(tr.tool_use_id) +
+      "\",\"content\":\"" +
+      json_escape_sdk(tr.content) +
+      "\",\"is_error\":" +
+      (if tr.is_error { "true" } else { "false" }) +
+      "}"
+    Thinking(th) =>
+      "{\"type\":\"thinking\",\"text\":\"" + json_escape_sdk(th.text) + "\"}"
     Finish(fr) => {
       let r = match fr {
         Stop => "stop"
@@ -492,11 +493,17 @@ fn json_escape_sdk(s : String) -> String {
   let mut i = 0
   while i < s.length() {
     let cp = s[i]
-    if cp == '"' { r = r + "\\\"" }
-    else if cp == '\\' { r = r + "\\\\" }
-    else if cp == '\n' { r = r + "\\n" }
-    else if cp == '\t' { r = r + "\\t" }
-    else { r = r + "\{Int::unsafe_to_char(cp.to_int())}" }
+    if cp == '"' {
+      r = r + "\\\""
+    } else if cp == '\\' {
+      r = r + "\\\\"
+    } else if cp == '\n' {
+      r = r + "\\n"
+    } else if cp == '\t' {
+      r = r + "\\t"
+    } else {
+      r = r + "\{Int::unsafe_to_char(cp.to_int())}"
+    }
     i = i + 1
   }
   r
