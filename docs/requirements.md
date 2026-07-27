@@ -27,15 +27,20 @@ lux/          ← Lucent IR 核心（纯数据结构，无 IO、无厂商绑定�
 | `lux/` JSON 序列化 (to_json) | ✅ **已完成** | 73 测试 |
 | `lux/` JSON 反序列化 (from_json) | ✅ **已完成** | 31 round-trip 测试 |
 | `lux/` 流式事件 + 累加器 | ✅ **已完成** | 块生命周期模型 |
+| `lux/` 转换诊断类型 | ✅ **已完成** | ConversionStatus / ConversionResult |
 | `schemas/lux-ir-v1.json` | ✅ **已完成** | JSON Schema v1 |
 | `provider/openai_chat/` 6 函数 | ✅ **已完成** | 35+ 测试 |
-| `provider/anthropic/` | ❌ 未开始 | |
-| `provider/openai_responses/` | ❌ 未开始 | |
-| `provider/gemini/` | ❌ 未开始 | |
-| `wasm/` 导出层 | ❌ 骨架 | |
-| 跨协议一致性测试 | ❌ 未开始 | |
+| `provider/anthropic/` | ✅ **已完成** | 35+ 测试 |
+| `provider/openai_responses/` | ✅ **已完成** | 35+ 测试 |
+| `provider/gemini/` | ✅ **已完成** | 35+ 测试 |
+| `provider/openai_codex/` Codex 变体 | ✅ **已完成** | phase + xhigh |
+| `provider/openai_azure/` Azure 变体 | ✅ **已完成** | content_filters |
+| `provider/gemini_vertex/` Vertex 变体 | ✅ **已完成** | 纯转发 |
+| `sdk/` 表层 API | ✅ **已完成** | Prism, Context, PrismEvent |
+| `wasm/` 导出层 | ✅ **已完成** | 42 导出函数，7 provider + SDK |
+| 跨协议一致性测试 | ✅ **已完成** | 301 测试全部通过 |
 
-**测试总计：191 passed, 0 failed** ✅
+**测试总计：301 passed, 0 failed** ✅
 
 ## 分包结构
 

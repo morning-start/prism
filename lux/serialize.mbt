@@ -260,8 +260,21 @@ pub fn LucentConversationItem::to_json(self : LucentConversationItem) -> Json {
 /// === LucentTool ===
 pub fn LucentTool::to_json(self : LucentTool) -> Json {
   let params = @json.parse(self.parameters_json) catch { _ => Json::null() }
+  let kind_str = match self.kind {
+    Function => "function"
+    FileSearch => "file_search"
+    WebSearch => "web_search"
+    CodeInterpreter => "code_interpreter"
+    ComputerUse => "computer_use"
+    CodeExecution => "code_execution"
+    Shell => "shell"
+    ApplyPatch => "apply_patch"
+    MCP => "mcp"
+    Native(s) => s
+  }
   let fields : Map[String, Json] = {
     "name": Json::string(self.name),
+    "kind": Json::string(kind_str),
     "parameters": params,
   }
   match self.description {

@@ -21,6 +21,26 @@ pub fn lux_to_json_string(Json) -> String
 // Errors
 
 // Types and methods
+pub struct ConversionDiagnostic {
+  field : String
+  status : ConversionStatus
+  detail : String?
+} derive(Eq, @debug.Debug)
+pub fn ConversionDiagnostic::new(String, ConversionStatus, String?) -> Self
+
+pub struct ConversionResult[T] {
+  value : T
+  diagnostics : Array[ConversionDiagnostic]
+} derive(Eq, @debug.Debug)
+pub fn[T] ConversionResult::new(T) -> Self[T]
+
+pub(all) enum ConversionStatus {
+  Exact
+  Degraded
+  Unsupported
+  Invalid
+} derive(Eq, @debug.Debug)
+
 pub struct LucentAgentAction {
   kind : String
   id : String

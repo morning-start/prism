@@ -8,6 +8,12 @@ pub fn wasm_anthropic_to_lux_request(String) -> String
 
 pub fn wasm_anthropic_to_lux_response(String) -> String
 
+pub fn wasm_azure_sse_to_events(String) -> String
+
+pub fn wasm_azure_to_lux_request(String) -> String
+
+pub fn wasm_azure_to_lux_response(String) -> String
+
 pub fn wasm_gemini_sse_to_events(String) -> String
 
 pub fn wasm_gemini_to_lux_request(String) -> String
@@ -16,27 +22,45 @@ pub fn wasm_gemini_to_lux_response(String) -> String
 
 pub fn wasm_lux_events_to_anthropic_sse(String) -> String
 
+pub fn wasm_lux_events_to_azure_sse(String) -> String
+
 pub fn wasm_lux_events_to_gemini_sse(String) -> String
 
 pub fn wasm_lux_events_to_openai_chat_sse(String) -> String
 
+pub fn wasm_lux_events_to_openai_codex_sse(String) -> String
+
 pub fn wasm_lux_events_to_openai_responses_sse(String) -> String
 
+pub fn wasm_lux_events_to_vertex_sse(String) -> String
+
 pub fn wasm_lux_request_to_anthropic(String) -> String
+
+pub fn wasm_lux_request_to_azure(String) -> String
 
 pub fn wasm_lux_request_to_gemini(String) -> String
 
 pub fn wasm_lux_request_to_openai_chat(String) -> String
 
+pub fn wasm_lux_request_to_openai_codex(String) -> String
+
 pub fn wasm_lux_request_to_openai_responses(String) -> String
 
+pub fn wasm_lux_request_to_vertex(String) -> String
+
 pub fn wasm_lux_response_to_anthropic(String) -> String
+
+pub fn wasm_lux_response_to_azure(String) -> String
 
 pub fn wasm_lux_response_to_gemini(String) -> String
 
 pub fn wasm_lux_response_to_openai_chat(String) -> String
 
+pub fn wasm_lux_response_to_openai_codex(String) -> String
+
 pub fn wasm_lux_response_to_openai_responses(String) -> String
+
+pub fn wasm_lux_response_to_vertex(String) -> String
 
 pub fn wasm_openai_chat_sse_to_events(String) -> String
 
@@ -44,11 +68,33 @@ pub fn wasm_openai_chat_to_lux_request(String) -> String
 
 pub fn wasm_openai_chat_to_lux_response(String) -> String
 
+pub fn wasm_openai_codex_sse_to_events(String) -> String
+
+pub fn wasm_openai_codex_to_lux_request(String) -> String
+
+pub fn wasm_openai_codex_to_lux_response(String) -> String
+
 pub fn wasm_openai_responses_sse_to_events(String) -> String
 
 pub fn wasm_openai_responses_to_lux_request(String) -> String
 
 pub fn wasm_openai_responses_to_lux_response(String) -> String
+
+pub fn wasm_sdk_capability(String) -> String
+
+pub fn wasm_sdk_decode_response(String, String) -> String
+
+pub fn wasm_sdk_decode_sse(String, String) -> String
+
+pub fn wasm_sdk_encode_request(String, String) -> String
+
+pub fn wasm_sdk_encode_stream(String, String) -> String
+
+pub fn wasm_vertex_sse_to_events(String) -> String
+
+pub fn wasm_vertex_to_lux_request(String) -> String
+
+pub fn wasm_vertex_to_lux_response(String) -> String
 
 // Errors
 

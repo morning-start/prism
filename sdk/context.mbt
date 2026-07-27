@@ -90,9 +90,19 @@ pub fn context_to_lux_request(
     }
     None => None
   }
-  let lux_opts = @lux.LucentOptions::default()
-    .with_store(opts.store)
-    .with_extras(opts.extras)
+  let lux_opts = @lux.LucentOptions::new(
+    opts.temperature,
+    None,
+    None,
+    opts.max_tokens,
+    None,
+    false,
+    None,
+    None,
+    None,
+    opts.store,
+    opts.extras,
+  )
   @lux.LucentRequest::new(
     model,
     match ctx.system_prompt {

@@ -651,7 +651,7 @@ pub fn LucentMessage::from_json(jv : Json) -> Result[LucentMessage, String] {
         Ok(v) => v
         Err(e) => return Err(e)
       }
-      Ok({ role, content, phase: None })
+      Ok({ role, content, phase: get_str_opt(m, "phase") })
     }
     _ => Err("expected object for LucentMessage")
   }
@@ -746,7 +746,20 @@ pub fn LucentTool::from_json(jv : Json) -> Result[LucentTool, String] {
         None => return Err("missing parameters")
       }
       let strict = get_bool_opt(m, "strict")
-      Ok({ name, description, parameters_json, strict, kind: Function })
+      let kind = match get_str_opt(m, "kind") {
+        Some("function") => Function
+        Some("file_search") => FileSearch
+        Some("web_search") => WebSearch
+        Some("code_interpreter") => CodeInterpreter
+        Some("computer_use") => ComputerUse
+        Some("code_execution") => CodeExecution
+        Some("shell") => Shell
+        Some("apply_patch") => ApplyPatch
+        Some("mcp") => MCP
+        Some(s) => Native(s)
+        _ => Function
+      }
+      Ok({ name, description, parameters_json, strict, kind })
     }
     _ => Err("expected object for LucentTool")
   }
@@ -817,6 +830,7 @@ pub fn LucentReasoningEffort::from_json(
         "low" => Ok(Low)
         "medium" => Ok(Medium)
         "high" => Ok(High)
+        "xhigh" => Ok(XHigh)
         _ => Err("unknown reasoning effort")
       }
     _ => Err("expected string for LucentReasoningEffort")

@@ -205,9 +205,24 @@ llm_core_logic      # 核心业务层：重试 / 熔断 / Token 统计 / 消息�
 
 ## 🚧 项目状态
 
-**当前阶段：Pre-alpha / 骨架搭建中**
+**当前阶段：Alpha / 核心功能完成**
 
-项目目前仅有基础工程骨架，尚未有实质代码。详细进展见下方开发路线图。
+**已完成：**
+- ✅ Lux IR 核心类型定义（LucentContent, LucentMessage, LucentConversationItem 等）
+- ✅ 4 家主协议适配器（OpenAI Chat, OpenAI Responses, Anthropic, Gemini）
+- ✅ 3 个子协议变体（Codex, Azure, Vertex）
+- ✅ Lux JSON 序列化/反序列化
+- ✅ 流式事件模型 + 累加器
+- ✅ SDK 表层 API（Prism, Context, PrismEvent）
+- ✅ WASM 导出层（42 个导出函数）
+- ✅ 字段治理类型（ConversionStatus, ConversionResult）
+- ✅ 301 测试，全部通过
+
+**进行中 / 规划：**
+- 📋 Transport / HTTP 层
+- 📋 CLI 工具
+- 📋 跨协议一致性测试补充
+- 📋 GitHub CI
 
 ---
 

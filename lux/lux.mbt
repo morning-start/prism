@@ -318,6 +318,45 @@ pub fn ProviderCapability::new(
 }
 
 ///|
+/// ConversionStatus — 字段转换状态（五道门治理要求）
+pub(all) enum ConversionStatus {
+  Exact            // 字段完全对等映射，无信息丢失
+  Degraded         // 字段被近似映射，部分语义丢失
+  Unsupported      // 字段不被目标协议支持，已舍弃
+  Invalid          // 字段格式错误或值非法
+} derive(Eq, Debug)
+
+///|
+/// ConversionDiagnostic — 单个字段的转换结果诊断
+pub struct ConversionDiagnostic {
+  field : String
+  status : ConversionStatus
+  detail : String?
+} derive(Eq, Debug)
+
+///|
+pub fn ConversionDiagnostic::new(
+  field : String,
+  status : ConversionStatus,
+  detail : String?,
+) -> ConversionDiagnostic {
+  { field, status, detail }
+}
+
+///|
+/// ConversionResult — 带诊断的转换结果
+/// 成功时不等于 Exact：value 可用但部分字段已丢失
+pub struct ConversionResult[T] {
+  value : T
+  diagnostics : Array[ConversionDiagnostic]
+} derive(Eq, Debug)
+
+///|
+pub fn ConversionResult::new[T](value : T) -> ConversionResult[T] {
+  { value, diagnostics: [] }
+}
+
+///|
 /// LucentDiscovery — 能力发现响应
 /// SDK 接入时第一步调用，获取 Prism 实例的能力清单
 pub struct LucentDiscovery {
