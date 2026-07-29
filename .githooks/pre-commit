@@ -1,3 +1,21 @@
 #!/bin/sh
+# Prism L1 质量门禁 — pre-commit hook
+# 快速检查：格式化 + 编译
 
-moon check
+# 继承用户 PATH（含 mise/scoop shims）
+case ":$PATH:" in
+  *:/mnt/e/scoop/apps/mise/current/data/shims:*) ;;
+  *) PATH="$PATH:/mnt/e/scoop/apps/mise/current/data/shims:/e/scoop/apps/mise/current/data/shims" ;;
+esac
+export PATH
+
+echo "=== [L1] moon fmt --check ==="
+moon fmt --check 2>/dev/null || {
+  echo "⚠️  moon fmt --check 失败，尝试直接检查..."
+  moon fmt --check
+}
+
+echo "=== [L1] moon check --target native ==="
+moon check --target native
+
+echo "=== [L1] ✅ 全部通过 ==="

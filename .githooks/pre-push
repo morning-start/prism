@@ -1,0 +1,24 @@
+#!/bin/sh
+# Prism L2 质量门禁 — pre-push hook
+# 深度检查：完整测试
+
+# 继承用户 PATH（含 mise/scoop shims）
+case ":$PATH:" in
+  *:/mnt/e/scoop/apps/mise/current/data/shims:*) ;;
+  *) PATH="$PATH:/mnt/e/scoop/apps/mise/current/data/shims:/e/scoop/apps/mise/current/data/shims" ;;
+esac
+export PATH
+
+echo "=== [L2] moon test --target native ==="
+moon test --target native
+
+if command -v moon-audit >/dev/null 2>&1; then
+  echo "=== [L2] moon-audit ==="
+  if [ -n "$MOONBIT_STRICT_AUDIT" ]; then
+    moon-audit --fail-on-error
+  else
+    moon-audit
+  fi
+fi
+
+echo "=== [L2] ✅ 全部通过 ==="

@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "plugins": {
+    "moonbit-skills@moonbit-skills": {
+      "marketplace": "moonbit-skills",
+      "plugin": "moonbit-skills",
+      "plugin_dir": "installed/moonbit-skills/moonbit-skills",
+      "installed_at": "2026-07-29T02:45:00.436706900+00:00",
+      "scope": "project"
+    }
+  }
+}
