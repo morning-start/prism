@@ -1,5 +1,3 @@
-import "morning-start/prism/lux/json_helper" as json_helper
-
 ///|
 /// Google Gemini 适配器 — 对齐 Lux IR v1
 ///
@@ -26,10 +24,10 @@ import "morning-start/prism/lux/json_helper" as json_helper
 /// 解析单个 part → 可能产生多个 LucentContent（thought:true 同时发 Text + Thinking）
 fn parse_part(part : Json) -> Array[@lux.LucentContent] {
   // text
-  match @json_helper.field_str(part, "text") {
+  match @lux.field_str(part, "text") {
     Some(t) =>
       // 检查是否为 thought part
-      match @json_helper.obj_get(part, "thought") {
+      match @lux.obj_get(part, "thought") {
         Some(True) => {
           // thought:true → 同时发 Text 和 Thinking
           let th = @lux.LucentThinking::visible(t, None)
@@ -43,10 +41,10 @@ fn parse_part(part : Json) -> Array[@lux.LucentContent] {
       }
     None =>
       // functionCall
-      match @json_helper.obj_get(part, "functionCall") {
+      match @lux.obj_get(part, "functionCall") {
         Some(fc) => {
-          let name = @json_helper.field_str(fc, "name").unwrap_or("")
-          let args = match @json_helper.obj_get(fc, "args") {
+          let name = @lux.field_str(fc, "name").unwrap_or("")
+          let args = match @lux.obj_get(fc, "args") {
             Some(a) => a.stringify()
             None => "{}"
           }
@@ -55,13 +53,13 @@ fn parse_part(part : Json) -> Array[@lux.LucentContent] {
         }
         None =>
           // functionResponse
-          match @json_helper.obj_get(part, "functionResponse") {
+          match @lux.obj_get(part, "functionResponse") {
             Some(fr) => {
-              let name = @json_helper.field_str(fr, "name").unwrap_or("")
-              let response = @json_helper.obj_get(fr, "response")
+              let name = @lux.field_str(fr, "name").unwrap_or("")
+              let response = @lux.obj_get(fr, "response")
               let content_str = match response {
                 Some(r) => {
-                  let c = @json_helper.obj_get(r, "content")
+                  let c = @lux.obj_get(r, "content")
                   match c {
                     Some(v) => v.stringify()
                     None => "{}"
@@ -77,10 +75,10 @@ fn parse_part(part : Json) -> Array[@lux.LucentContent] {
             }
             None =>
               // inlineData / fileData → Image stub
-              match @json_helper.obj_get(part, "inlineData") {
+              match @lux.obj_get(part, "inlineData") {
                 Some(_) => [@lux.LucentContent::text("[inline data]")]
                 None =>
-                  match @json_helper.obj_get(part, "fileData") {
+                  match @lux.obj_get(part, "fileData") {
                     Some(_) => [@lux.LucentContent::text("[file data]")]
                     None => [] // thought-only marker, skip
                   }
@@ -109,31 +107,29 @@ fn parse_parts(arr : Array[Json]) -> Array[@lux.LucentContent] {
 /// 解析 contents[] → Array[LucentConversationItem]
 fn parse_contents(jv : Json) -> Array[@lux.LucentConversationItem] {
   let result : Array[@lux.LucentConversationItem] = []
-  match @json_helper.field_arr(jv, "contents") {
+  match @lux.field_arr(jv, "contents") {
     Some(contents) => {
       let mut i = 0
       while i < contents.length() {
-        let role_str = @json_helper.field_str(contents[i], "role").unwrap_or(
-          "user",
-        )
+        let role_str = @lux.field_str(contents[i], "role").unwrap_or("user")
         let role = match role_str {
           "user" => @lux.User
           "model" => @lux.Assistant // Gemini model → IR Assistant
           "tool" => @lux.Tool
           _ => @lux.User
         }
-        let parts = match @json_helper.field_arr(contents[i], "parts") {
+        let parts = match @lux.field_arr(contents[i], "parts") {
           Some(arr) => parse_parts(arr)
           None => []
         }
         // 检查是否含 functionResponse → 解码为 Item::ToolResult
         let has_tool_result = {
           let mut found = false
-          match @json_helper.field_arr(contents[i], "parts") {
+          match @lux.field_arr(contents[i], "parts") {
             Some(arr) => {
               let mut j = 0
               while j < arr.length() {
-                match @json_helper.obj_get(arr[j], "functionResponse") {
+                match @lux.obj_get(arr[j], "functionResponse") {
                   Some(_) => found = true
                   None => ()
                 }
@@ -146,17 +142,17 @@ fn parse_contents(jv : Json) -> Array[@lux.LucentConversationItem] {
         }
         if has_tool_result {
           // Extract ToolResult from parts
-          match @json_helper.field_arr(contents[i], "parts") {
+          match @lux.field_arr(contents[i], "parts") {
             Some(arr) => {
               let mut j = 0
               while j < arr.length() {
-                match @json_helper.obj_get(arr[j], "functionResponse") {
+                match @lux.obj_get(arr[j], "functionResponse") {
                   Some(fr) => {
-                    let name = @json_helper.field_str(fr, "name").unwrap_or("")
-                    let response = @json_helper.obj_get(fr, "response")
+                    let name = @lux.field_str(fr, "name").unwrap_or("")
+                    let response = @lux.obj_get(fr, "response")
                     let content_str = match response {
                       Some(r) =>
-                        match @json_helper.obj_get(r, "content") {
+                        match @lux.obj_get(r, "content") {
                           Some(c) => c.stringify()
                           None => "{}"
                         }
@@ -190,13 +186,13 @@ fn parse_contents(jv : Json) -> Array[@lux.LucentConversationItem] {
 /// 解析 systemInstruction → Array[LucentContent]
 fn parse_system_instruction(jv : Json) -> Array[@lux.LucentContent] {
   let result : Array[@lux.LucentContent] = []
-  match @json_helper.obj_get(jv, "systemInstruction") {
+  match @lux.obj_get(jv, "systemInstruction") {
     Some(si) =>
-      match @json_helper.field_arr(si, "parts") {
+      match @lux.field_arr(si, "parts") {
         Some(parts) => {
           let mut i = 0
           while i < parts.length() {
-            match @json_helper.field_str(parts[i], "text") {
+            match @lux.field_str(parts[i], "text") {
               Some(t) => result.push(@lux.LucentContent::text(t))
               None => ()
             }
@@ -214,22 +210,24 @@ fn parse_system_instruction(jv : Json) -> Array[@lux.LucentContent] {
 /// 解析 tools[].functionDeclarations[] → Array[LucentTool]
 fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
   let result : Array[@lux.LucentTool] = []
-  match @json_helper.field_arr(jv, "tools") {
+  match @lux.field_arr(jv, "tools") {
     Some(tools) => {
       let mut i = 0
       while i < tools.length() {
-        match @json_helper.field_arr(tools[i], "functionDeclarations") {
+        match @lux.field_arr(tools[i], "functionDeclarations") {
           Some(decls) => {
             let mut j = 0
             while j < decls.length() {
               let d = decls[j]
-              let name = @json_helper.field_str(d, "name").unwrap_or("")
-              let desc = @json_helper.field_str(d, "description")
-              let params = match @json_helper.obj_get(d, "parameters") {
+              let name = @lux.field_str(d, "name").unwrap_or("")
+              let desc = @lux.field_str(d, "description")
+              let params = match @lux.obj_get(d, "parameters") {
                 Some(p) => p.stringify()
                 None => "{}"
               }
-              result.push(@lux.LucentTool::new(name, desc, params, None, @lux.Function))
+              result.push(
+                @lux.LucentTool::new(name, desc, params, None, @lux.Function),
+              )
               j = j + 1
             }
           }
@@ -246,14 +244,14 @@ fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
 ///|
 /// 解析 generationConfig → LucentOptions
 fn parse_generation_config(jv : Json) -> @lux.LucentOptions {
-  match @json_helper.obj_get(jv, "generationConfig") {
+  match @lux.obj_get(jv, "generationConfig") {
     Some(gc) =>
       @lux.LucentOptions::new(
-        @json_helper.field_num(gc, "temperature"),
-        @json_helper.field_num(gc, "topP"),
-        @json_helper.field_int(gc, "topK"),
-        @json_helper.field_int(gc, "maxOutputTokens"),
-        match @json_helper.field_arr(gc, "stopSequences") {
+        @lux.field_num(gc, "temperature"),
+        @lux.field_num(gc, "topP"),
+        @lux.field_int(gc, "topK"),
+        @lux.field_int(gc, "maxOutputTokens"),
+        match @lux.field_arr(gc, "stopSequences") {
           Some(arr) => {
             let stops : Array[String] = []
             let mut i = 0
@@ -269,7 +267,7 @@ fn parse_generation_config(jv : Json) -> @lux.LucentOptions {
           None => None
         },
         false, // stream
-        @json_helper.field_int(gc, "candidateCount"),
+        @lux.field_int(gc, "candidateCount"),
         None,
         None,
         None,
@@ -282,11 +280,11 @@ fn parse_generation_config(jv : Json) -> @lux.LucentOptions {
 ///|
 /// 解析 toolConfig.functionCallingConfig.mode → LucentToolChoice
 fn parse_tool_config(jv : Json) -> @lux.LucentToolChoice? {
-  match @json_helper.obj_get(jv, "toolConfig") {
+  match @lux.obj_get(jv, "toolConfig") {
     Some(tc) =>
-      match @json_helper.obj_get(tc, "functionCallingConfig") {
+      match @lux.obj_get(tc, "functionCallingConfig") {
         Some(fcc) =>
-          match @json_helper.field_str(fcc, "mode") {
+          match @lux.field_str(fcc, "mode") {
             Some("AUTO") => Some(@lux.LucentToolChoice::Auto)
             Some("ANY") => Some(@lux.Required)
             Some("NONE") => Some(@lux.None)
@@ -301,13 +299,13 @@ fn parse_tool_config(jv : Json) -> @lux.LucentToolChoice? {
 ///|
 /// 解析 thinkingConfig → LucentReasoningConfig
 fn parse_thinking_config(jv : Json) -> @lux.LucentReasoningConfig? {
-  match @json_helper.obj_get(jv, "generationConfig") {
+  match @lux.obj_get(jv, "generationConfig") {
     Some(gc) =>
-      match @json_helper.obj_get(gc, "thinkingConfig") {
+      match @lux.obj_get(gc, "thinkingConfig") {
         Some(tc) =>
-          match @json_helper.field_bool(tc, "includeThoughts") {
+          match @lux.field_bool(tc, "includeThoughts") {
             Some(true) => {
-              let budget = @json_helper.field_int(tc, "thinkingBudget")
+              let budget = @lux.field_int(tc, "thinkingBudget")
               Some(@lux.LucentReasoningConfig::enabled(budget))
             }
             _ => Some(@lux.LucentReasoningConfig::disabled())
@@ -324,7 +322,7 @@ pub fn gemini_to_lux_request(
   json_str : String,
 ) -> Result[@lux.LucentRequest, String] {
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
-  let model = @json_helper.field_str(jv, "model").unwrap_or("")
+  let model = @lux.field_str(jv, "model").unwrap_or("")
   let instructions = parse_system_instruction(jv)
   let instr_opt = if instructions.length() > 0 {
     Some(instructions)
@@ -360,7 +358,7 @@ pub fn lux_request_to_gemini(
 ) -> Result[String, String] {
   let parts : Array[String] = []
   // model 在 Gemini 中通过端点路径传递，非 JSON 体内，但仍保留以备用
-  parts.push("\"model\":\"" + @json_helper.json_escape(req.model) + "\"")
+  parts.push("\"model\":\"" + @lux.json_escape(req.model) + "\"")
   // systemInstruction
   match req.instructions {
     Some(instrs) => {
@@ -369,9 +367,7 @@ pub fn lux_request_to_gemini(
       while i < instrs.length() {
         match instrs[i] {
           Text(t, _) =>
-            text_parts.push(
-              "{\"text\":\"" + @json_helper.json_escape(t) + "\"}",
-            )
+            text_parts.push("{\"text\":\"" + @lux.json_escape(t) + "\"}")
           _ => ()
         }
         i = i + 1
@@ -402,13 +398,11 @@ pub fn lux_request_to_gemini(
         while j < m.content.length() {
           match m.content[j] {
             Text(s, _) =>
-              content_parts.push(
-                "{\"text\":\"" + @json_helper.json_escape(s) + "\"}",
-              )
+              content_parts.push("{\"text\":\"" + @lux.json_escape(s) + "\"}")
             ToolUse(tu) =>
               content_parts.push(
                 "{\"functionCall\":{\"name\":\"" +
-                @json_helper.json_escape(tu.name) +
+                @lux.json_escape(tu.name) +
                 "\",\"args\":" +
                 tu.arguments_json +
                 "}}",
@@ -416,9 +410,9 @@ pub fn lux_request_to_gemini(
             ToolResult(tr) =>
               content_parts.push(
                 "{\"functionResponse\":{\"name\":\"" +
-                @json_helper.json_escape(tr.tool_use_id) +
+                @lux.json_escape(tr.tool_use_id) +
                 "\",\"response\":{\"name\":\"" +
-                @json_helper.json_escape(tr.tool_use_id) +
+                @lux.json_escape(tr.tool_use_id) +
                 "\",\"content\":" +
                 @lux.lucent_content_to_text(tr.content) +
                 "}}}",
@@ -426,7 +420,7 @@ pub fn lux_request_to_gemini(
             Thinking(th) =>
               content_parts.push(
                 "{\"text\":\"" +
-                @json_helper.json_escape(th.text) +
+                @lux.json_escape(th.text) +
                 "\",\"thought\":true}",
               )
             _ => ()
@@ -444,7 +438,7 @@ pub fn lux_request_to_gemini(
       ToolCall(tu) =>
         contents.push(
           "{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"" +
-          @json_helper.json_escape(tu.name) +
+          @lux.json_escape(tu.name) +
           "\",\"args\":" +
           tu.arguments_json +
           "}}]}",
@@ -452,17 +446,17 @@ pub fn lux_request_to_gemini(
       ToolResult(tr) =>
         contents.push(
           "{\"role\":\"tool\",\"parts\":[{\"functionResponse\":{\"name\":\"" +
-          @json_helper.json_escape(tr.tool_use_id) +
+          @lux.json_escape(tr.tool_use_id) +
           "\",\"response\":{\"name\":\"" +
-          @json_helper.json_escape(tr.tool_use_id) +
+          @lux.json_escape(tr.tool_use_id) +
           "\",\"content\":" +
-          @json_helper.json_escape(@lux.lucent_content_to_text(tr.content)) +
+          @lux.json_escape(@lux.lucent_content_to_text(tr.content)) +
           "}}}]}",
         )
       Reasoning(th) =>
         contents.push(
           "{\"role\":\"model\",\"parts\":[{\"text\":\"" +
-          @json_helper.json_escape(th.text) +
+          @lux.json_escape(th.text) +
           "\",\"thought\":true}]}",
         )
       AgentAction(_) => ()
@@ -478,12 +472,12 @@ pub fn lux_request_to_gemini(
       while j < tools.length() {
         let t = tools[j]
         let desc_part = match t.description {
-          Some(d) => ",\"description\":\"" + @json_helper.json_escape(d) + "\""
+          Some(d) => ",\"description\":\"" + @lux.json_escape(d) + "\""
           None => ""
         }
         decls.push(
           "{\"name\":\"" +
-          @json_helper.json_escape(t.name) +
+          @lux.json_escape(t.name) +
           "\"" +
           desc_part +
           ",\"parameters\":" +
@@ -542,7 +536,7 @@ pub fn lux_request_to_gemini(
       let stops : Array[String] = []
       let mut k = 0
       while k < arr.length() {
-        stops.push("\"" + @json_helper.json_escape(arr[k]) + "\"")
+        stops.push("\"" + @lux.json_escape(arr[k]) + "\"")
         k = k + 1
       }
       gc_parts.push("\"stopSequences\":[" + stops.join(",") + "]")
@@ -585,24 +579,23 @@ pub fn gemini_to_lux_response(
   json_str : String,
 ) -> Result[@lux.LucentResponse, String] {
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
-  let id = @json_helper.field_str(jv, "model").unwrap_or("")
-  let model = @json_helper.field_str(jv, "modelVersion").unwrap_or(id)
+  let id = @lux.field_str(jv, "model").unwrap_or("")
+  let model = @lux.field_str(jv, "modelVersion").unwrap_or(id)
   // candidates
   let choices : Array[@lux.LucentChoice] = []
-  match @json_helper.field_arr(jv, "candidates") {
+  match @lux.field_arr(jv, "candidates") {
     Some(cands) => {
       let mut i = 0
       while i < cands.length() {
-        let idx = @json_helper.field_int(cands[i], "index").unwrap_or(i)
-        match @json_helper.obj_get(cands[i], "content") {
+        let idx = @lux.field_int(cands[i], "index").unwrap_or(i)
+        match @lux.obj_get(cands[i], "content") {
           Some(content) => {
-            let parts = match @json_helper.field_arr(content, "parts") {
+            let parts = match @lux.field_arr(content, "parts") {
               Some(arr) => parse_parts(arr)
               None => []
             }
             let msg = @lux.LucentMessage::new(@lux.Assistant, parts)
-            let finish = match
-              @json_helper.field_str(cands[i], "finishReason") {
+            let finish = match @lux.field_str(cands[i], "finishReason") {
               Some("STOP") => @lux.Stop
               Some("MAX_TOKENS") => @lux.Length
               Some("SAFETY") => @lux.Safety
@@ -612,16 +605,13 @@ pub fn gemini_to_lux_response(
               None => @lux.Stop
             }
             // safety ratings
-            let ratings = match
-              @json_helper.field_arr(cands[i], "safetyRatings") {
+            let ratings = match @lux.field_arr(cands[i], "safetyRatings") {
               Some(ratings) => {
                 let result : Array[@lux.LucentSafetyRating] = []
                 let mut k = 0
                 while k < ratings.length() {
-                  let cat = @json_helper.field_str(ratings[k], "category").unwrap_or(
-                    "",
-                  )
-                  let prob = @json_helper.field_str(ratings[k], "probability").unwrap_or(
+                  let cat = @lux.field_str(ratings[k], "category").unwrap_or("")
+                  let prob = @lux.field_str(ratings[k], "probability").unwrap_or(
                     "",
                   )
                   result.push(@lux.LucentSafetyRating::new(cat, prob))
@@ -644,11 +634,11 @@ pub fn gemini_to_lux_response(
     return Err("response has no candidates")
   }
   // usage
-  let usage = match @json_helper.obj_get(jv, "usageMetadata") {
+  let usage = match @lux.obj_get(jv, "usageMetadata") {
     Some(u) => {
-      let pt = @json_helper.field_int(u, "promptTokenCount").unwrap_or(0)
-      let ct = @json_helper.field_int(u, "candidatesTokenCount").unwrap_or(0)
-      let tt = @json_helper.field_int(u, "totalTokenCount").unwrap_or(pt + ct)
+      let pt = @lux.field_int(u, "promptTokenCount").unwrap_or(0)
+      let ct = @lux.field_int(u, "candidatesTokenCount").unwrap_or(0)
+      let tt = @lux.field_int(u, "totalTokenCount").unwrap_or(pt + ct)
       @lux.LucentUsage::new(pt, ct, tt)
     }
     None => @lux.LucentUsage::new(0, 0, 0)
@@ -672,21 +662,18 @@ pub fn lux_response_to_gemini(
     let mut j = 0
     while j < c.message.content.length() {
       match c.message.content[j] {
-        Text(s, _) =>
-          parts.push("{\"text\":\"" + @json_helper.json_escape(s) + "\"}")
+        Text(s, _) => parts.push("{\"text\":\"" + @lux.json_escape(s) + "\"}")
         ToolUse(tu) =>
           parts.push(
             "{\"functionCall\":{\"name\":\"" +
-            @json_helper.json_escape(tu.name) +
+            @lux.json_escape(tu.name) +
             "\",\"args\":" +
             tu.arguments_json +
             "}}",
           )
         Thinking(th) =>
           parts.push(
-            "{\"text\":\"" +
-            @json_helper.json_escape(th.text) +
-            "\",\"thought\":true}",
+            "{\"text\":\"" + @lux.json_escape(th.text) + "\",\"thought\":true}",
           )
         _ => ()
       }
@@ -715,9 +702,9 @@ pub fn lux_response_to_gemini(
         while k < ratings.length() {
           rs.push(
             "{\"category\":\"" +
-            @json_helper.json_escape(ratings[k].category) +
+            @lux.json_escape(ratings[k].category) +
             "\",\"probability\":\"" +
-            @json_helper.json_escape(ratings[k].probability) +
+            @lux.json_escape(ratings[k].probability) +
             "\"}",
           )
           k = k + 1
@@ -756,7 +743,6 @@ pub fn gemini_sse_to_events(
   let mut has_text_block = false
   let mut current_text = ""
   let mut text_block_index = 0
-  let mut first_line = true
   let mut i = 0
   while i < lines.length() {
     let l_str = lines[i].to_owned()
@@ -771,7 +757,7 @@ pub fn gemini_sse_to_events(
       let mut payload_str = ""
       let mut k = 6
       while k < l_str.length() {
-        let ch = Char::from_int(l_str[k].to_int())
+        let ch = Int::unsafe_to_char(l_str[k].to_int())
         payload_str = payload_str + "\{ch}"
         k = k + 1
       }
@@ -788,16 +774,16 @@ pub fn gemini_sse_to_events(
       }
       // 每一帧都是完整 candidates 数组
       // 对 text 部分做简单 diff：检测新文本增量
-      match @json_helper.field_arr(jv, "candidates") {
+      match @lux.field_arr(jv, "candidates") {
         Some(cands) =>
           if cands.length() > 0 {
-            match @json_helper.obj_get(cands[0], "content") {
+            match @lux.obj_get(cands[0], "content") {
               Some(content) =>
-                match @json_helper.field_arr(content, "parts") {
+                match @lux.field_arr(content, "parts") {
                   Some(parts) => {
                     let mut j = 0
                     while j < parts.length() {
-                      match @json_helper.field_str(parts[j], "text") {
+                      match @lux.field_str(parts[j], "text") {
                         Some(t) => {
                           if !has_text_block {
                             events.push(
@@ -821,12 +807,10 @@ pub fn gemini_sse_to_events(
                         None => ()
                       }
                       // functionCall（全量返回，一次性完成）
-                      match @json_helper.obj_get(parts[j], "functionCall") {
+                      match @lux.obj_get(parts[j], "functionCall") {
                         Some(fc) => {
-                          let name = @json_helper.field_str(fc, "name").unwrap_or(
-                            "",
-                          )
-                          let args = match @json_helper.obj_get(fc, "args") {
+                          let name = @lux.field_str(fc, "name").unwrap_or("")
+                          let args = match @lux.obj_get(fc, "args") {
                             Some(a) => a.stringify()
                             None => "{}"
                           }
@@ -856,7 +840,7 @@ pub fn gemini_sse_to_events(
                         None => ()
                       }
                       // thought marker（仅检查是否为 thought，不产生额外事件）
-                      let _thought = @json_helper.obj_get(parts[j], "thought")
+                      let _thought = @lux.obj_get(parts[j], "thought")
                       j = j + 1
                     }
                   }
@@ -865,7 +849,7 @@ pub fn gemini_sse_to_events(
               None => ()
             }
             // finishReason
-            match @json_helper.field_str(cands[0], "finishReason") {
+            match @lux.field_str(cands[0], "finishReason") {
               Some(fr) => {
                 if has_text_block {
                   events.push(@lux.BlockEnd(text_block_index))
@@ -881,21 +865,16 @@ pub fn gemini_sse_to_events(
         None => ()
       }
       // usageMetadata（最后一帧含 finishReason）
-      match @json_helper.obj_get(jv, "usageMetadata") {
+      match @lux.obj_get(jv, "usageMetadata") {
         Some(u) => {
-          let pt = @json_helper.field_int(u, "promptTokenCount").unwrap_or(0)
-          let ct = @json_helper.field_int(u, "candidatesTokenCount").unwrap_or(
-            0,
-          )
-          let tt = @json_helper.field_int(u, "totalTokenCount").unwrap_or(
-            pt + ct,
-          )
+          let pt = @lux.field_int(u, "promptTokenCount").unwrap_or(0)
+          let ct = @lux.field_int(u, "candidatesTokenCount").unwrap_or(0)
+          let tt = @lux.field_int(u, "totalTokenCount").unwrap_or(pt + ct)
           events.push(@lux.Usage(@lux.LucentUsage::new(pt, ct, tt)))
           events.push(@lux.Done)
         }
         None => ()
       }
-      first_line = false
     }
     i = i + 1
   }
@@ -924,14 +903,14 @@ pub fn lux_events_to_gemini_sse(
         if acc_text != last_text {
           lines.push(
             "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"" +
-            @json_helper.json_escape(acc_text) +
+            @lux.json_escape(acc_text) +
             "\"}]}}]}",
           )
           last_text = acc_text
         }
       }
       BlockDelta(_, ToolArgumentsDelta(s)) => blocks_with_args.push(s)
-      BlockStart(_, ToolCall(id, name)) => {
+      BlockStart(_, ToolCall(_, name)) => {
         let args = if blocks_with_args.length() > 0 {
           blocks_with_args.join("")
         } else {
@@ -939,7 +918,7 @@ pub fn lux_events_to_gemini_sse(
         }
         lines.push(
           "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"" +
-          @json_helper.json_escape(name) +
+          @lux.json_escape(name) +
           "\",\"args\":" +
           args +
           "}}]}}]}",
@@ -959,7 +938,7 @@ pub fn lux_events_to_gemini_sse(
         }
         lines.push(
           "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"" +
-          @json_helper.json_escape(acc_text) +
+          @lux.json_escape(acc_text) +
           "\"}]},\"finishReason\":\"" +
           finish_str +
           "\"}]}",

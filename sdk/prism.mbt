@@ -98,7 +98,6 @@ pub fn Prism::decode_response(
   self : Prism,
   json_str : String,
 ) -> Result[String, String] {
-  let provider = self.provider
   match self.decode_to_lux(json_str) {
     Ok(resp) => Ok(resp.get_text())
     Err(e) => Err(e)
@@ -112,8 +111,8 @@ fn Prism::decode_to_lux(
   json_str : String,
 ) -> Result[@lux.LucentResponse, String] {
   let provider = self.provider
-  match @provider_capability.match_provider_name(provider) {
-    Some(reg) => reg.response_decode(json_str)
+  match match_provider_name(provider) {
+    Some(reg) => (reg.response_decode)(json_str)
     None => Err("unknown provider: " + provider)
   }
 }
@@ -125,8 +124,8 @@ fn Prism::encode_lux_request(
   req : @lux.LucentRequest,
 ) -> Result[String, String] {
   let provider = self.provider
-  match @provider_capability.match_provider_name(provider) {
-    Some(reg) => reg.request_encode(req)
+  match match_provider_name(provider) {
+    Some(reg) => (reg.request_encode)(req)
     None => Err("unknown provider: " + provider)
   }
 }
@@ -171,8 +170,8 @@ fn decode_sse_inner(
   provider : String,
   sse_str : String,
 ) -> Result[Array[@lux.LucentStreamEvent], String] {
-  match @provider_capability.match_provider_name(provider) {
-    Some(reg) => reg.events_decode(sse_str)
+  match match_provider_name(provider) {
+    Some(reg) => (reg.events_decode)(sse_str)
     None => Err("unknown provider: " + provider)
   }
 }
@@ -237,10 +236,10 @@ fn lucent_events_to_prism(
 ///|
 /// 查询指定 provider 的能力声明（基于注册表）
 pub fn Prism::capability(
-  self : Prism,
+  _self : Prism,
   provider_name : String,
 ) -> @lux.ProviderCapability? {
-  match @provider_capability.match_provider_name(provider_name) {
+  match match_provider_name(provider_name) {
     Some(reg) => Some(reg.capability)
     None => None
   }

@@ -5,8 +5,6 @@
 /// 差异：端点 URL 和认证方式不同，JSON 接口与标准 Responses 基本相同
 /// 特有扩展：content_filters[] 提取到 provider_payload
 
-import "morning-start/prism/lux/json_helper" json_helper
-
 ///|
 /// 1. 请求解码
 pub fn azure_to_lux_request(
@@ -29,7 +27,7 @@ pub fn azure_to_lux_response(
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
   match @openai_responses.openai_responses_to_lux_response(json_str) {
     Ok(base) =>
-      match @json_helper.obj_get(jv, "content_filters") {
+      match @lux.obj_get(jv, "content_filters") {
         Some(filters) => Ok(base.with_provider_payload(Some(filters)))
         None => Ok(base)
       }

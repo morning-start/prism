@@ -62,7 +62,7 @@ pub fn ProviderRegistration::new(
 ///
 /// 新增 Provider 只需在此处追加。
 /// 注意：条目顺序影响匹配优先级（精确匹配优先于正则匹配）。
-pub fn ALL_PROVIDERS() -> Array[ProviderRegistration] {
+pub fn all_providers() -> Array[ProviderRegistration] {
   [
     ///| OpenAI Responses（主）
     ProviderRegistration::new(
@@ -161,7 +161,7 @@ pub fn ALL_PROVIDERS() -> Array[ProviderRegistration] {
 ///
 /// 若需通过 model_name 正则匹配，调用 `match_by_model`。
 pub fn match_provider_name(provider_name : String) -> ProviderRegistration? {
-  let providers = ALL_PROVIDERS()
+  let providers = all_providers()
   let mut i = 0
   while i < providers.length() {
     let reg = providers[i]
@@ -190,7 +190,7 @@ pub fn match_provider_name(provider_name : String) -> ProviderRegistration? {
 ///
 /// 返回最先匹配（按 ALL_PROVIDERS 顺序）的 ProviderRegistration，或 None。
 pub fn match_by_model(model_name : String) -> ProviderRegistration? {
-  let providers = ALL_PROVIDERS()
+  let providers = all_providers()
   let mut i = 0
   while i < providers.length() {
     let reg = providers[i]
@@ -227,12 +227,19 @@ fn model_pattern_matches(pattern : String, model_name : String) -> Bool {
       let second_star = find_first_star(suffix)
       let mid_end = substring(suffix, 0, second_star)
       let final_suffix = substring(suffix, second_star + 1, suffix.length())
-      model_name.startswith(prefix)
-        && mid_end != ""
-        && contains_after(model_name, prefix, mid_end)
-        && model_name.endswith(final_suffix)
+      if model_name[:prefix.length()] == prefix &&
+        mid_end != "" &&
+        contains_after(model_name, prefix, mid_end) &&
+        model_name[model_name.length() - final_suffix.length():] == final_suffix {
+        true
+      } else {
+        false
+      }
+    } else if model_name[:prefix.length()] == prefix &&
+      model_name[model_name.length() - suffix.length():] == suffix {
+      true
     } else {
-      model_name.startswith(prefix) && model_name.endswith(suffix)
+      false
     }
   } else {
     pattern == model_name
@@ -255,8 +262,13 @@ fn find_first_star(s : String) -> Int {
 ///|
 /// 提取子串
 fn substring(s : String, start : Int, end : Int) -> String {
-  let len = max(0, end - start)
-  s.substring(start, start + len)
+  let mut result = ""
+  let mut i = start
+  while i < end {
+    result = result + s[i].to_string()
+    i = i + 1
+  }
+  result
 }
 
 ///|
@@ -269,7 +281,7 @@ fn contains_after(s : String, skip_prefix : String, needle : String) -> Bool {
 ///|
 /// 获取所有 Provider 的主名称列表
 pub fn list_provider_names() -> Array[String] {
-  let providers = ALL_PROVIDERS()
+  let providers = all_providers()
   let result : Array[String] = []
   let mut i = 0
   while i < providers.length() {

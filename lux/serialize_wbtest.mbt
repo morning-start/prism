@@ -592,7 +592,7 @@ test "LucentTool::to_json - with strict" {
     Some("Do math"),
     "{\"type\":\"object\"}",
     Some(true),
-    None,
+    Function,
   )
   let jv = tool.to_json()
   match json_str(jv, "name") {

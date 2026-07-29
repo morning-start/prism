@@ -67,8 +67,9 @@ pub fn field_int(jv : Json, key : String) -> Int? {
 /// 提取数值字段（Int，直接读不经过 Double）
 pub fn field_int_exact(jv : Json, key : String) -> Int? {
   match obj_get(jv, key) {
-    Some(Json::Number(n, dec)) =>
-      if dec == 0.0 {
+    Some(Json::Number(n, ..)) =>
+      // ignore decimal repr, check if the number's integer value is exact
+      if n.to_int().to_double() == n {
         Some(n.to_int())
       } else {
         None
@@ -95,7 +96,7 @@ pub fn json_escape(s : String) -> String {
     } else if cp == '\r' {
       r = r + "\\r"
     } else {
-      let ch = Char::from_int(cp.to_int())
+      let ch = Int::unsafe_to_char(cp.to_int())
       r = r + "\{ch}"
     }
     i = i + 1
@@ -109,7 +110,7 @@ pub fn obj_set(jv : Json, key : String, value : Json) -> Json {
   match jv {
     Object(m) => {
       m[key] = value
-      Object(m)
+      Json::object(m)
     }
     _ => value
   }
@@ -120,15 +121,21 @@ pub fn obj_set(jv : Json, key : String, value : Json) -> Json {
 pub fn obj_delete(jv : Json, key : String) -> Json {
   match jv {
     Object(m) => {
-      m.delete(key)
-      Object(m)
+      let new_map : Map[String, Json] = Map([])
+      for k, v in m {
+        if k != key {
+          new_map[k] = v
+        }
+      }
+      Json::object(new_map)
     }
     _ => jv
   }
+}
 
 ///|
 /// 安全解析 JSON 字符串为 Json，失败返回 None
 pub fn parse_json_opt(s : String) -> Json? {
-  @json.parse(s) catch {
-    _ => None
-  }
+  let v = @json.parse(s) catch { _ => return None }
+  Some(v)
+}

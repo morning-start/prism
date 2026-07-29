@@ -55,7 +55,10 @@ test "consistency - openai_chat roundtrip" {
         Ok(req) => {
           assert_eq(req.model, base_req.model)
           assert_eq(req.conversation.length(), base_req.conversation.length())
-          assert_eq(req.instructions.is_some(), base_req.instructions.is_some())
+          assert_eq(
+            req.instructions is Some(_),
+            base_req.instructions is Some(_),
+          )
           match req.tools {
             Some(tools) => assert_eq(tools.length(), 1)
             None => assert_true(false)
@@ -490,7 +493,7 @@ test "multi - system instruction preserved" {
           @openai_responses.openai_responses_to_lux_request
         }
         match decoder(j) {
-          Ok(d) => assert_eq(d.instructions.is_some(), true)
+          Ok(d) => assert_eq(d.instructions is Some(_), true)
           Err(e) => fail("decode " + i.to_string() + ": " + e)
         }
       }
@@ -567,7 +570,7 @@ fn kind_rt(kind : @lux.LucentToolKind, name : String) -> Result[Bool, String] {
     Some("desc"),
     "{\"type\":\"object\"}",
     None,
-    Some(kind),
+    kind,
   )
   match @lux.LucentTool::from_json(t.to_json()) {
     Ok(d) => Ok(d.kind == kind)

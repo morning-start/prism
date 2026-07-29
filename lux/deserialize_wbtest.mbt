@@ -272,7 +272,7 @@ test "LucentTool round trip - simple and with strict" {
       Some("Do math"),
       "{\"type\":\"object\"}",
       Some(true),
-      None,
+      Function,
     ),
   ]
   for v in values {
