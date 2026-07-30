@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "morning-start/prism"
 
+import {
+  "morning-start/prism/sdk",
+}
+
 // Values
 
 // Errors
@@ -8,6 +12,19 @@ package "morning-start/prism"
 // Types and methods
 
 // Type aliases
+pub using @sdk {type Prism}
+
+pub using @sdk {type PrismEvent}
+
+pub using @sdk {type PrismFinishReason}
+
+pub using @sdk {type PrismOptions}
+
+pub using @sdk {type PrismThinking}
+
+pub using @sdk {type PrismToolCall}
+
+pub using @sdk {type PrismToolResult}
 
 // Traits
 
