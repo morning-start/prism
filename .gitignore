@@ -6,3 +6,5 @@ target
 .moonagent/
 .agents/skills/moonbit-skill/
 .claude/skills/moonbit-skill/
+temp/
+**/memory.md
