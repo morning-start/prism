@@ -20,24 +20,24 @@
 ///|
 /// 解析 content：string → [Text]；array → content parts（text/image_url）
 fn parse_content_parts(msg_jv : Json) -> Array[@lux.LucentContent] {
-  match @lux.obj_get(msg_jv, "content") {
+  match @internal.obj_get(msg_jv, "content") {
     Some(String(s)) => [@lux.LucentContent::text(s)]
     Some(Array(parts)) => {
       let result : Array[@lux.LucentContent] = []
       let mut i = 0
       while i < parts.length() {
         let part = parts[i]
-        match @lux.field_str(part, "type") {
+        match @internal.field_str(part, "type") {
           Some("text") =>
-            match @lux.field_str(part, "text") {
+            match @internal.field_str(part, "text") {
               Some(t) => result.push(@lux.LucentContent::text(t))
               _ => ()
             }
           Some("image_url") =>
             // stub：简化处理，仅当 url 以 data: 开头时识别为 inline，否则为 url
-            match @lux.obj_get(part, "image_url") {
+            match @internal.obj_get(part, "image_url") {
               Some(url_obj) =>
-                match @lux.field_str(url_obj, "url") {
+                match @internal.field_str(url_obj, "url") {
                   Some(u) =>
                     if u == "" {
                       ()
@@ -77,16 +77,16 @@ fn append_tool_calls(
   msg_jv : Json,
   result : Array[@lux.LucentContent],
 ) -> Array[@lux.LucentContent] {
-  match @lux.field_arr(msg_jv, "tool_calls") {
+  match @internal.field_arr(msg_jv, "tool_calls") {
     Some(calls) => {
       let mut i = 0
       while i < calls.length() {
         let tc = calls[i]
-        let id = @lux.field_str(tc, "id").unwrap_or("")
-        match @lux.obj_get(tc, "function") {
+        let id = @internal.field_str(tc, "id").unwrap_or("")
+        match @internal.obj_get(tc, "function") {
           Some(fn_obj) => {
-            let name = @lux.field_str(fn_obj, "name").unwrap_or("")
-            let args = @lux.field_str(fn_obj, "arguments").unwrap_or("{}")
+            let name = @internal.field_str(fn_obj, "name").unwrap_or("")
+            let args = @internal.field_str(fn_obj, "arguments").unwrap_or("{}")
             result.push(@lux.LucentContent::tool_use(id, name, args, None))
           }
           _ => ()
@@ -103,15 +103,15 @@ fn append_tool_calls(
 /// 解析单条 message → LucentMessage（role + content blocks）
 /// system/developer 角色消息由上层抽出为 instructions，不在本函数处理
 fn parse_message(msg_jv : Json) -> @lux.LucentMessage? {
-  let role_str = @lux.field_str(msg_jv, "role")
+  let role_str = @internal.field_str(msg_jv, "role")
   match role_str {
     Some(s) =>
       match @lux.LucentRole::from_string(s) {
         Some(role) =>
           // tool 角色：tool_call_id + content → ToolResult content
-          match @lux.field_str(msg_jv, "tool_call_id") {
+          match @internal.field_str(msg_jv, "tool_call_id") {
             Some(id) => {
-              let content = @lux.field_str(msg_jv, "content").unwrap_or("")
+              let content = @internal.field_str(msg_jv, "content").unwrap_or("")
               let tr = @lux.LucentContent::tool_result(id, [
                 @lux.LucentContent::text(content),
               ])
@@ -133,21 +133,21 @@ fn parse_message(msg_jv : Json) -> @lux.LucentMessage? {
 ///|
 /// 解析 tools[] → LucentTool[]
 fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
-  match @lux.field_arr(jv, "tools") {
+  match @internal.field_arr(jv, "tools") {
     Some(tools) => {
       let result : Array[@lux.LucentTool] = []
       let mut i = 0
       while i < tools.length() {
         let tool = tools[i]
-        match @lux.obj_get(tool, "function") {
+        match @internal.obj_get(tool, "function") {
           Some(fn_obj) => {
-            let name = @lux.field_str(fn_obj, "name").unwrap_or("")
-            let desc = @lux.field_str(fn_obj, "description")
-            let params = match @lux.obj_get(fn_obj, "parameters") {
+            let name = @internal.field_str(fn_obj, "name").unwrap_or("")
+            let desc = @internal.field_str(fn_obj, "description")
+            let params = match @internal.obj_get(fn_obj, "parameters") {
               Some(p) => p.stringify()
               _ => "{}"
             }
-            let strict = @lux.field_bool(fn_obj, "strict")
+            let strict = @internal.field_bool(fn_obj, "strict")
             result.push(
               @lux.LucentTool::new(name, desc, params, strict, @lux.Function),
             )
@@ -165,19 +165,19 @@ fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
 ///|
 /// 解析 tool_choice → LucentToolChoice
 fn parse_tool_choice(jv : Json) -> @lux.LucentToolChoice? {
-  match @lux.obj_get(jv, "tool_choice") {
+  match @internal.obj_get(jv, "tool_choice") {
     Some(String("auto")) => Some(@lux.LucentToolChoice::Auto)
     Some(String("none")) => Some(@lux.LucentToolChoice::None)
     Some(String("required")) => Some(@lux.LucentToolChoice::Required)
     Some(Object(_)) =>
       // {"type":"function","function":{"name":"x"}}
-      match @lux.obj_get(jv, "tool_choice") {
+      match @internal.obj_get(jv, "tool_choice") {
         Some(tc_obj) =>
-          match @lux.field_str(tc_obj, "type") {
+          match @internal.field_str(tc_obj, "type") {
             Some("function") =>
-              match @lux.obj_get(tc_obj, "function") {
+              match @internal.obj_get(tc_obj, "function") {
                 Some(fn_obj) =>
-                  match @lux.field_str(fn_obj, "name") {
+                  match @internal.field_str(fn_obj, "name") {
                     Some(n) => Some(@lux.LucentToolChoice::SpecificTool(n))
                     None => None
                   }
@@ -197,16 +197,16 @@ pub fn openai_chat_to_lux_request(
   json_str : String,
 ) -> Result[@lux.LucentRequest, String] {
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
-  let model = @lux.field_str(jv, "model").unwrap_or("")
+  let model = @internal.field_str(jv, "model").unwrap_or("")
   // 系统指令：role=system/developer 的消息抽出为 instructions
   let instructions : Array[@lux.LucentContent] = []
   let business_msgs : Array[@lux.LucentMessage] = []
-  match @lux.field_arr(jv, "messages") {
+  match @internal.field_arr(jv, "messages") {
     Some(msgs) => {
       let mut i = 0
       while i < msgs.length() {
         let m = msgs[i]
-        match @lux.field_str(m, "role") {
+        match @internal.field_str(m, "role") {
           Some("system") | Some("developer") =>
             // 系统指令内容抽出
             for c in parse_content_parts(m) {
@@ -232,15 +232,15 @@ pub fn openai_chat_to_lux_request(
   let tools = if tools_list.length() > 0 { Some(tools_list) } else { None }
   let tool_choice = parse_tool_choice(jv)
   // options
-  let temperature = @lux.field_num(jv, "temperature")
-  let top_p = @lux.field_num(jv, "top_p")
+  let temperature = @internal.field_num(jv, "temperature")
+  let top_p = @internal.field_num(jv, "top_p")
   // 优先 max_completion_tokens，回退 max_tokens
-  let max_tokens = match @lux.field_int(jv, "max_completion_tokens") {
+  let max_tokens = match @internal.field_int(jv, "max_completion_tokens") {
     Some(n) => Some(n)
-    None => @lux.field_int(jv, "max_tokens")
+    None => @internal.field_int(jv, "max_tokens")
   }
-  let stream = @lux.field_bool(jv, "stream").unwrap_or(false)
-  let stop = match @lux.obj_get(jv, "stop") {
+  let stream = @internal.field_bool(jv, "stream").unwrap_or(false)
+  let stop = match @internal.obj_get(jv, "stop") {
     Some(String(s)) => Some([s])
     Some(Array(arr)) => {
       let stops : Array[String] = []
@@ -256,17 +256,17 @@ pub fn openai_chat_to_lux_request(
     }
     _ => None
   }
-  let seed = @lux.field_int(jv, "seed")
+  let seed = @internal.field_int(jv, "seed")
   // response_format → structured_output
-  let structured = match @lux.obj_get(jv, "response_format") {
+  let structured = match @internal.obj_get(jv, "response_format") {
     Some(rf) =>
-      match @lux.field_str(rf, "type") {
+      match @internal.field_str(rf, "type") {
         Some("json_object") => Some(@lux.LucentStructuredOutput::JsonObject)
         Some("text") => Some(@lux.LucentStructuredOutput::Text)
         Some("json_schema") =>
-          match @lux.obj_get(rf, "json_schema") {
+          match @internal.obj_get(rf, "json_schema") {
             Some(js_obj) =>
-              match @lux.obj_get(js_obj, "schema") {
+              match @internal.obj_get(js_obj, "schema") {
                 Some(schema) =>
                   Some(
                     @lux.LucentStructuredOutput::JsonSchema(schema.stringify()),
@@ -585,36 +585,38 @@ pub fn lux_request_to_openai_chat(
 ///|
 /// 解析 choices[] → LucentChoice[]
 fn parse_choices(jv : Json) -> Array[@lux.LucentChoice] {
-  match @lux.field_arr(jv, "choices") {
+  match @internal.field_arr(jv, "choices") {
     Some(choices) => {
       let result : Array[@lux.LucentChoice] = []
       let mut i = 0
       while i < choices.length() {
         let c = choices[i]
-        let idx = @lux.field_int(c, "index").unwrap_or(0)
-        match @lux.obj_get(c, "message") {
+        let idx = @internal.field_int(c, "index").unwrap_or(0)
+        match @internal.obj_get(c, "message") {
           Some(msg_jv) => {
-            let role = match @lux.field_str(msg_jv, "role") {
+            let role = match @internal.field_str(msg_jv, "role") {
               Some("assistant") => @lux.Assistant
               _ => @lux.Assistant
             }
             let content : Array[@lux.LucentContent] = []
             // content 字符串
-            match @lux.field_str(msg_jv, "content") {
+            match @internal.field_str(msg_jv, "content") {
               Some(s) => content.push(@lux.LucentContent::text(s))
               None => ()
             }
             // tool_calls[]
-            match @lux.field_arr(msg_jv, "tool_calls") {
+            match @internal.field_arr(msg_jv, "tool_calls") {
               Some(calls) => {
                 let mut k = 0
                 while k < calls.length() {
                   let tc = calls[k]
-                  let id = @lux.field_str(tc, "id").unwrap_or("")
-                  match @lux.obj_get(tc, "function") {
+                  let id = @internal.field_str(tc, "id").unwrap_or("")
+                  match @internal.obj_get(tc, "function") {
                     Some(fn_obj) => {
-                      let name = @lux.field_str(fn_obj, "name").unwrap_or("")
-                      let args = @lux.field_str(fn_obj, "arguments").unwrap_or(
+                      let name = @internal.field_str(fn_obj, "name").unwrap_or(
+                        "",
+                      )
+                      let args = @internal.field_str(fn_obj, "arguments").unwrap_or(
                         "{}",
                       )
                       content.push(
@@ -629,11 +631,11 @@ fn parse_choices(jv : Json) -> Array[@lux.LucentChoice] {
               None => ()
             }
             // refusal
-            match @lux.field_str(msg_jv, "refusal") {
+            match @internal.field_str(msg_jv, "refusal") {
               Some(r) => content.push(@lux.LucentContent::refusal(r))
               None => ()
             }
-            let finish = match @lux.field_str(c, "finish_reason") {
+            let finish = match @internal.field_str(c, "finish_reason") {
               Some(fr) => @lux.LucentFinishReason::from_string(fr)
               None => @lux.Stop
             }
@@ -662,18 +664,18 @@ pub fn openai_chat_to_lux_response(
   json_str : String,
 ) -> Result[@lux.LucentResponse, String] {
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
-  let id = @lux.field_str(jv, "id").unwrap_or("")
-  let model = @lux.field_str(jv, "model").unwrap_or("")
-  let created = @lux.field_int(jv, "created")
+  let id = @internal.field_str(jv, "id").unwrap_or("")
+  let model = @internal.field_str(jv, "model").unwrap_or("")
+  let created = @internal.field_int(jv, "created")
   let choices = parse_choices(jv)
   // usage
-  let usage = match @lux.obj_get(jv, "usage") {
+  let usage = match @internal.obj_get(jv, "usage") {
     Some(u) =>
       Some(
         @lux.LucentUsage::new(
-          @lux.field_int(u, "prompt_tokens").unwrap_or(0),
-          @lux.field_int(u, "completion_tokens").unwrap_or(0),
-          @lux.field_int(u, "total_tokens").unwrap_or(0),
+          @internal.field_int(u, "prompt_tokens").unwrap_or(0),
+          @internal.field_int(u, "completion_tokens").unwrap_or(0),
+          @internal.field_int(u, "total_tokens").unwrap_or(0),
         ),
       )
     None => None
@@ -826,23 +828,23 @@ pub fn openai_chat_sse_to_events(
         }
       }
       // usage 帧（choices 空的最后一帧）
-      match @lux.obj_get(jv, "usage") {
+      match @internal.obj_get(jv, "usage") {
         Some(u) => {
-          let pt = @lux.field_int(u, "prompt_tokens").unwrap_or(0)
-          let ct = @lux.field_int(u, "completion_tokens").unwrap_or(0)
-          let tt = @lux.field_int(u, "total_tokens").unwrap_or(0)
+          let pt = @internal.field_int(u, "prompt_tokens").unwrap_or(0)
+          let ct = @internal.field_int(u, "completion_tokens").unwrap_or(0)
+          let tt = @internal.field_int(u, "total_tokens").unwrap_or(0)
           events.push(@lux.Usage(@lux.LucentUsage::new(pt, ct, tt)))
         }
         None => ()
       }
       // choices[0].delta
-      match @lux.field_arr(jv, "choices") {
+      match @internal.field_arr(jv, "choices") {
         Some(choices) =>
           if choices.length() > 0 {
-            match @lux.obj_get(choices[0], "delta") {
+            match @internal.obj_get(choices[0], "delta") {
               Some(delta) => {
                 // role
-                match @lux.field_str(delta, "role") {
+                match @internal.field_str(delta, "role") {
                   Some("assistant") =>
                     events.push(
                       @lux.ConversationStart(
@@ -852,7 +854,7 @@ pub fn openai_chat_sse_to_events(
                   _ => ()
                 }
                 // content
-                match @lux.field_str(delta, "content") {
+                match @internal.field_str(delta, "content") {
                   Some(s) => {
                     if !text_block_open {
                       events.push(@lux.BlockStart(0, @lux.Text))
@@ -865,22 +867,22 @@ pub fn openai_chat_sse_to_events(
                   None => ()
                 }
                 // tool_calls
-                match @lux.field_arr(delta, "tool_calls") {
+                match @internal.field_arr(delta, "tool_calls") {
                   Some(tcs) => {
                     let mut k = 0
                     while k < tcs.length() {
                       let tc = tcs[k]
-                      let idx = @lux.field_int(tc, "index").unwrap_or(0)
+                      let idx = @internal.field_int(tc, "index").unwrap_or(0)
                       // 切换块：若旧块未关闭，先关旧块
                       if current_tool_block >= 0 && current_tool_block != idx {
                         events.push(@lux.BlockEnd(current_tool_block))
                       }
                       if current_tool_block != idx {
                         // 新工具调用块开始：id + function.name（首帧）
-                        let id = @lux.field_str(tc, "id").unwrap_or("")
-                        let name = match @lux.obj_get(tc, "function") {
+                        let id = @internal.field_str(tc, "id").unwrap_or("")
+                        let name = match @internal.obj_get(tc, "function") {
                           Some(fn_obj) =>
-                            @lux.field_str(fn_obj, "name").unwrap_or("")
+                            @internal.field_str(fn_obj, "name").unwrap_or("")
                           None => ""
                         }
                         events.push(
@@ -892,9 +894,9 @@ pub fn openai_chat_sse_to_events(
                         current_tool_block = idx
                       }
                       // arguments 增量
-                      match @lux.obj_get(tc, "function") {
+                      match @internal.obj_get(tc, "function") {
                         Some(fn_obj) =>
-                          match @lux.field_str(fn_obj, "arguments") {
+                          match @internal.field_str(fn_obj, "arguments") {
                             Some(args) =>
                               events.push(
                                 @lux.BlockDelta(
@@ -917,7 +919,7 @@ pub fn openai_chat_sse_to_events(
               None => ()
             }
             // finish_reason
-            match @lux.field_str(choices[0], "finish_reason") {
+            match @internal.field_str(choices[0], "finish_reason") {
               Some(fr) => {
                 // 闭合未关闭的块
                 if text_block_open {

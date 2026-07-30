@@ -40,7 +40,10 @@ fn json_set(obj : Json, key : String, val : Json) -> Json {
 /// 在 ,"content":[ 前插入 ,"phase":"<value>"
 fn insert_phase_into_json(s : String, phase : String) -> String {
   let marker = ",\"content\":["
-  let replacement = ",\"phase\":\"" + @lux.json_escape(phase) + "\"" + marker
+  let replacement = ",\"phase\":\"" +
+    @internal.json_escape(phase) +
+    "\"" +
+    marker
   s.replace(old=marker, new=replacement)
 }
 
@@ -54,10 +57,10 @@ pub fn codex_to_lux_request(
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
   // 提取 phase 信息：按 input 数组顺序
   let phases : Array[String?] = []
-  match @lux.field_arr(jv, "input") {
+  match @internal.field_arr(jv, "input") {
     Some(items) =>
       for item in items {
-        let phase = @lux.field_str(item, "phase")
+        let phase = @internal.field_str(item, "phase")
         phases.push(phase)
       }
     None => ()
@@ -133,7 +136,7 @@ pub fn lux_request_to_codex(req : @lux.LucentRequest) -> Result[String, String] 
       }
       // 处理 phase
       if needs_phase {
-        match @lux.field_arr(jv, "input") {
+        match @internal.field_arr(jv, "input") {
           Some(items) => {
             let new_items : Array[Json] = []
             let mut conv_idx = 0
@@ -223,7 +226,7 @@ pub fn lux_response_to_codex(
       let mut jv = @json.parse(base_json) catch {
         _ => return Err("json parse error")
       }
-      match @lux.field_arr(jv, "output") {
+      match @internal.field_arr(jv, "output") {
         Some(items) => {
           let new_items : Array[Json] = []
           let mut choice_idx = 0

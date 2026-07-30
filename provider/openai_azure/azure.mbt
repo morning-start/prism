@@ -27,7 +27,7 @@ pub fn azure_to_lux_response(
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
   match @openai_responses.openai_responses_to_lux_response(json_str) {
     Ok(base) =>
-      match @lux.obj_get(jv, "content_filters") {
+      match @internal.obj_get(jv, "content_filters") {
         Some(filters) => Ok(base.with_provider_payload(Some(filters)))
         None => Ok(base)
       }

@@ -1,4 +1,5 @@
 import {
   "morning-start/prism/provider/gemini",
   "morning-start/prism/lux",
+  "morning-start/prism/internal",
 }

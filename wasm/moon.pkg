@@ -1,5 +1,6 @@
 import {
   "morning-start/prism/lux",
+  "morning-start/prism/internal",
   "morning-start/prism/sdk",
   "morning-start/prism/provider/openai_chat",
   "morning-start/prism/provider/anthropic",

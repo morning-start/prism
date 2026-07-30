@@ -1,0 +1,136 @@
+///|
+/// 测试 internal/sse.mbt — SSE 行解析
+
+///|
+/// === parse_sse_line - event 行 ===
+test "parse_sse_line - event type extracted" {
+  match @internal.parse_sse_line("event: message_start") {
+    Some(line) => assert_eq(line.event, Some("message_start"))
+    None => fail("expected Some")
+  }
+}
+
+///|
+test "parse_sse_line - event with trailing space" {
+  match @internal.parse_sse_line("event: done ") {
+    Some(line) => assert_eq(line.event, Some("done "))
+    None => fail("expected Some")
+  }
+}
+
+///|
+test "parse_sse_line - event with no data" {
+  match @internal.parse_sse_line("event: ping") {
+    Some(line) => {
+      assert_eq(line.event, Some("ping"))
+      assert_eq(line.data, None)
+    }
+    None => fail("expected Some")
+  }
+}
+
+///|
+/// === parse_sse_line - data 行 ===
+test "parse_sse_line - data with space after colon" {
+  match @internal.parse_sse_line("data: {\"key\":\"val\"}") {
+    Some(line) => assert_eq(line.data, Some("{\"key\":\"val\"}"))
+    None => fail("expected Some")
+  }
+}
+
+///|
+test "parse_sse_line - data without space after colon" {
+  match @internal.parse_sse_line("data:hello") {
+    Some(line) => assert_eq(line.data, Some("hello"))
+    None => fail("expected Some")
+  }
+}
+
+///|
+test "parse_sse_line - data [DONE] sentinel" {
+  match @internal.parse_sse_line("data: [DONE]") {
+    Some(line) => assert_eq(line.data, Some("[DONE]"))
+    None => fail("expected Some")
+  }
+}
+
+///|
+test "parse_sse_line - data with no event" {
+  match @internal.parse_sse_line("data: {\"a\":1}") {
+    Some(line) => {
+      assert_eq(line.event, None)
+      assert_eq(line.data, Some("{\"a\":1}"))
+    }
+    None => fail("expected Some")
+  }
+}
+
+///|
+/// === parse_sse_line - 空行/注释 ===
+test "parse_sse_line - empty line returns None" {
+  assert_true(@internal.parse_sse_line("") is None)
+}
+
+///|
+test "parse_sse_line - comment line returns None" {
+  assert_true(@internal.parse_sse_line(":comment") is None)
+}
+
+///|
+/// === parse_sse_line - 非 SSE 行 ===
+test "parse_sse_line - unknown line returns None" {
+  assert_true(@internal.parse_sse_line("random text") is None)
+  assert_true(@internal.parse_sse_line("x") is None)
+}
+
+///|
+/// === parse_sse_line - event + data 两次调用（模拟双行流） ===
+test "parse_sse_line - event then data sequenced" {
+  let event_line = @internal.parse_sse_line("event: response.created").unwrap()
+  let data_line = @internal.parse_sse_line("data: {\"id\":\"rsp_1\"}").unwrap()
+  assert_eq(event_line.event, Some("response.created"))
+  assert_eq(data_line.data, Some("{\"id\":\"rsp_1\"}"))
+}
+
+///|
+/// === parse_sse_line - 边界场景 ===
+test "parse_sse_line - data with empty content" {
+  // "data: " → data 之后无内容，返回空字符串
+  match @internal.parse_sse_line("data: ") {
+    Some(line) => assert_eq(line.data, Some(""))
+    None => fail("expected Some")
+  }
+}
+
+///|
+test "parse_sse_line - data: with nothing after" {
+  // "data:" 无空格 → 经短路径解析，内容为空字符串
+  match @internal.parse_sse_line("data:") {
+    Some(line) => assert_eq(line.data, Some(""))
+    None => fail("expected Some")
+  }
+}
+
+///|
+test "parse_sse_line - event with very long name" {
+  let _long_name : String = "x"
+  let mut long_event = "event: "
+  let mut i = 0
+  while i < 100 {
+    long_event = long_event + "x"
+    i = i + 1
+  }
+  match @internal.parse_sse_line(long_event) {
+    Some(line) => assert_true(line.event is Some(_))
+    None => fail("expected Some for long event")
+  }
+}
+
+///|
+test "parse_sse_line - event without data content" {
+  // "event: " → event 后无内容，返回空字符串
+  match @internal.parse_sse_line("event: ") {
+    Some(line) => assert_eq(line.event, Some(""))
+    None => fail("expected Some")
+  }
+}

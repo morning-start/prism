@@ -183,11 +183,11 @@ test "lux_request_to_openai_chat - simple user message" {
   match lux_request_to_openai_chat(req) {
     Ok(s) => {
       let jv = @json.parse(s)
-      match @lux.obj_get(jv, "model") {
+      match @internal.obj_get(jv, "model") {
         Some(String("gpt-4o")) => ()
         _ => assert_true(false)
       }
-      match @lux.field_arr(jv, "messages") {
+      match @internal.field_arr(jv, "messages") {
         Some(arr) => assert_eq(arr.length(), 1)
         None => assert_true(false)
       }
@@ -213,10 +213,10 @@ test "lux_request_to_openai_chat - instructions prepended as system message" {
   match lux_request_to_openai_chat(req) {
     Ok(s) => {
       let jv = @json.parse(s)
-      match @lux.field_arr(jv, "messages") {
+      match @internal.field_arr(jv, "messages") {
         Some(arr) => {
           assert_eq(arr.length(), 2)
-          match @lux.field_str(arr[0], "role") {
+          match @internal.field_str(arr[0], "role") {
             Some("system") => ()
             _ => assert_true(false)
           }
@@ -250,9 +250,9 @@ test "lux_request_to_openai_chat - tool_use encoded as tool_calls" {
   match lux_request_to_openai_chat(req) {
     Ok(s) => {
       let jv = @json.parse(s)
-      match @lux.field_arr(jv, "messages") {
+      match @internal.field_arr(jv, "messages") {
         Some(arr) =>
-          match @lux.obj_get(arr[0], "tool_calls") {
+          match @internal.obj_get(arr[0], "tool_calls") {
             Some(Array(tc)) => assert_eq(tc.length(), 1)
             _ => assert_true(false)
           }
@@ -286,9 +286,9 @@ test "lux_request_to_openai_chat - tool_result encoded as tool role" {
   match lux_request_to_openai_chat(req) {
     Ok(s) => {
       let jv = @json.parse(s)
-      match @lux.field_arr(jv, "messages") {
+      match @internal.field_arr(jv, "messages") {
         Some(arr) =>
-          match @lux.field_str(arr[0], "role") {
+          match @internal.field_str(arr[0], "role") {
             Some("tool") => ()
             _ => assert_true(false)
           }
@@ -316,7 +316,7 @@ test "lux_request_to_openai_chat - tools encoded" {
   match lux_request_to_openai_chat(req) {
     Ok(s) => {
       let jv = @json.parse(s)
-      match @lux.field_arr(jv, "tools") {
+      match @internal.field_arr(jv, "tools") {
         Some(arr) => assert_eq(arr.length(), 1)
         None => assert_true(false)
       }
@@ -409,15 +409,15 @@ test "lux_response_to_openai_chat - text response" {
   match lux_response_to_openai_chat(resp) {
     Ok(s) => {
       let jv = @json.parse(s)
-      match @lux.field_str(jv, "object") {
+      match @internal.field_str(jv, "object") {
         Some("chat.completion") => ()
         _ => assert_true(false)
       }
-      match @lux.field_arr(jv, "choices") {
+      match @internal.field_arr(jv, "choices") {
         Some(arr) => assert_eq(arr.length(), 1)
         None => assert_true(false)
       }
-      match @lux.obj_get(jv, "usage") {
+      match @internal.obj_get(jv, "usage") {
         Some(_) => ()
         None => assert_true(false)
       }
@@ -448,11 +448,11 @@ test "lux_response_to_openai_chat - tool_calls encoded" {
   match lux_response_to_openai_chat(resp) {
     Ok(s) => {
       let jv = @json.parse(s)
-      match @lux.field_arr(jv, "choices") {
+      match @internal.field_arr(jv, "choices") {
         Some(arr) =>
-          match @lux.obj_get(arr[0], "message") {
+          match @internal.obj_get(arr[0], "message") {
             Some(m) =>
-              match @lux.obj_get(m, "tool_calls") {
+              match @internal.obj_get(m, "tool_calls") {
                 Some(Array(tc)) => assert_eq(tc.length(), 1)
                 _ => assert_true(false)
               }
@@ -485,11 +485,11 @@ test "lux_response_to_openai_chat - refusal encoded" {
   match lux_response_to_openai_chat(resp) {
     Ok(s) => {
       let jv = @json.parse(s)
-      match @lux.field_arr(jv, "choices") {
+      match @internal.field_arr(jv, "choices") {
         Some(arr) =>
-          match @lux.obj_get(arr[0], "message") {
+          match @internal.obj_get(arr[0], "message") {
             Some(m) =>
-              match @lux.field_str(m, "refusal") {
+              match @internal.field_str(m, "refusal") {
                 Some("no") => ()
                 _ => assert_true(false)
               }
@@ -666,7 +666,7 @@ test "round trip - response decode then encode preserves id" {
       match lux_response_to_openai_chat(resp) {
         Ok(json2) => {
           let jv = @json.parse(json2)
-          match @lux.field_str(jv, "id") {
+          match @internal.field_str(jv, "id") {
             Some("c-1") => ()
             _ => assert_true(false)
           }
