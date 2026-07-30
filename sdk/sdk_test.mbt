@@ -264,8 +264,8 @@ test "decode_sse - openai_chat returns events with text content" {
       let mut found_finish = false
       for ev in events {
         match ev {
-          TextDelta(_) => { found_text = true }
-          Finish(_) => { found_finish = true }
+          TextDelta(_) => found_text = true
+          Finish(_) => found_finish = true
           _ => ()
         }
       }

@@ -17,7 +17,7 @@ fn lookup(provider : String) -> @sdk.ProviderRegistration? {
 }
 
 ///|
-/// provider JSON → LucentRequest JSON（decode request）
+/// provider JSON → LucentReq JSON（decode req）
 pub fn wasm_to_lux_req(provider : String, json_str : String) -> String {
   match lookup(provider) {
     Some(reg) =>
@@ -30,7 +30,7 @@ pub fn wasm_to_lux_req(provider : String, json_str : String) -> String {
 }
 
 ///|
-/// LucentRequest JSON → provider JSON（encode request）
+/// LucentReq JSON → provider JSON（encode req）
 pub fn wasm_lux_req_to_provider(provider : String, json_str : String) -> String {
   let jv = @json.parse(json_str) catch {
     _ => return to_error("json parse error")
@@ -50,7 +50,7 @@ pub fn wasm_lux_req_to_provider(provider : String, json_str : String) -> String 
 }
 
 ///|
-/// provider JSON → LucentResponse JSON（decode response）
+/// provider JSON → LucentResp JSON（decode resp）
 pub fn wasm_to_lux_resp(provider : String, json_str : String) -> String {
   match lookup(provider) {
     Some(reg) =>
@@ -63,8 +63,11 @@ pub fn wasm_to_lux_resp(provider : String, json_str : String) -> String {
 }
 
 ///|
-/// LucentResponse JSON → provider JSON（encode response）
-pub fn wasm_lux_resp_to_provider(provider : String, json_str : String) -> String {
+/// LucentResp JSON → provider JSON（encode resp）
+pub fn wasm_lux_resp_to_provider(
+  provider : String,
+  json_str : String,
+) -> String {
   let jv = @json.parse(json_str) catch {
     _ => return to_error("json parse error")
   }
@@ -132,7 +135,7 @@ pub fn wasm_events_to_sse(provider : String, json_str : String) -> String {
 /// === SDK 层 API ===
 
 ///|
-/// 对文本请求进行编码（provider JSON 出），Host 发送 HTTP
+/// 文本 → provider JSON（encode req）
 pub fn wasm_sdk_encode_req(provider : String, text : String) -> String {
   let prism = @sdk.Prism::new().with_provider(provider)
   match prism.encode_request(text, @sdk.PrismOptions::default()) {
@@ -142,7 +145,7 @@ pub fn wasm_sdk_encode_req(provider : String, text : String) -> String {
 }
 
 ///|
-/// 解码提供商响应 JSON → 纯文本
+/// provider JSON → 文本（decode resp）
 pub fn wasm_sdk_decode_resp(provider : String, resp_json : String) -> String {
   let prism = @sdk.Prism::new().with_provider(provider)
   match prism.decode_response(resp_json) {
@@ -152,7 +155,7 @@ pub fn wasm_sdk_decode_resp(provider : String, resp_json : String) -> String {
 }
 
 ///|
-/// 对文本请求进行流式编码（provider JSON 出），Host 发送 HTTP
+/// 文本 → 流式 provider JSON（encode stream）
 pub fn wasm_sdk_encode_stream(provider : String, text : String) -> String {
   let prism = @sdk.Prism::new().with_provider(provider)
   match prism.encode_stream_request(text, @sdk.PrismOptions::default()) {
