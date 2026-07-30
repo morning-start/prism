@@ -6,7 +6,15 @@ import {
 }
 
 // Values
+pub fn all_providers() -> Array[ProviderRegistration]
+
 pub fn context_to_lux_request(Context, String, PrismOptions) -> @lux.LucentRequest
+
+pub fn list_provider_names() -> Array[String]
+
+pub fn match_by_model(String) -> ProviderRegistration?
+
+pub fn match_provider_name(String) -> ProviderRegistration?
 
 // Errors
 
@@ -80,6 +88,19 @@ pub struct PrismToolResult {
   content : String
   is_error : Bool
 }
+
+pub struct ProviderRegistration {
+  name : String
+  aliases : Array[String]
+  capability : @lux.ProviderCapability
+  request_decode : (String) -> Result[@lux.LucentRequest, String]
+  request_encode : (@lux.LucentRequest) -> Result[String, String]
+  response_decode : (String) -> Result[@lux.LucentResponse, String]
+  response_encode : (@lux.LucentResponse) -> Result[String, String]
+  events_decode : (String) -> Result[Array[@lux.LucentStreamEvent], String]
+  events_encode : (Array[@lux.LucentStreamEvent]) -> Result[String, String]
+}
+pub fn ProviderRegistration::new(String, Array[String], @lux.ProviderCapability, (String) -> Result[@lux.LucentRequest, String], (@lux.LucentRequest) -> Result[String, String], (String) -> Result[@lux.LucentResponse, String], (@lux.LucentResponse) -> Result[String, String], (String) -> Result[Array[@lux.LucentStreamEvent], String], (Array[@lux.LucentStreamEvent]) -> Result[String, String]) -> Self
 
 pub struct SdkMessage {
   role : String

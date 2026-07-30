@@ -421,7 +421,7 @@ pub struct LucentTool {
   kind : LucentToolKind
 } derive(Eq, @debug.Debug)
 pub fn LucentTool::from_json(Json) -> Result[Self, String]
-pub fn LucentTool::new(String, String?, String, Bool?, LucentToolKind?) -> Self
+pub fn LucentTool::new(String, String?, String, Bool?, LucentToolKind) -> Self
 pub fn LucentTool::simple(String, String, String) -> Self
 pub fn LucentTool::to_json(Self) -> Json
 
