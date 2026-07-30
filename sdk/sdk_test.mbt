@@ -184,7 +184,7 @@ test "encode_request - anthropic returns valid JSON" {
 test "encode_request - openai-responses returns valid JSON" {
   let p = Prism::new().with_provider("openai-responses")
   match p.encode_request("Hello", PrismOptions::default()) {
-    Ok(json) => assert_true(json.length() > 0)
+    Ok(json) => assert_true(json.contains("model"))
     Err(e) => fail("responses encode failed: " + e)
   }
 }
@@ -193,7 +193,7 @@ test "encode_request - openai-responses returns valid JSON" {
 test "encode_request - gemini returns valid JSON" {
   let p = Prism::new().with_provider("gemini")
   match p.encode_request("Hello", PrismOptions::default()) {
-    Ok(json) => assert_true(json.length() > 0)
+    Ok(json) => assert_true(json.contains("model"))
     Err(e) => fail("gemini encode failed: " + e)
   }
 }
@@ -254,11 +254,24 @@ test "decode_response - unknown provider returns error" {
 /// === Prism::decode_sse ===
 
 ///|
-test "decode_sse - openai_chat returns events" {
+test "decode_sse - openai_chat returns events with text content" {
   let p = Prism::new().with_provider("openai-chat")
   let sse = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n"
   match p.decode_sse(sse) {
-    Ok(events) => assert_true(events.length() > 0)
+    Ok(events) => {
+      assert_true(events.length() > 1)
+      let mut found_text = false
+      let mut found_finish = false
+      for ev in events {
+        match ev {
+          TextDelta(_) => { found_text = true }
+          Finish(_) => { found_finish = true }
+          _ => ()
+        }
+      }
+      assert_true(found_text)
+      assert_true(found_finish)
+    }
     Err(e) => fail("sse decode failed: " + e)
   }
 }

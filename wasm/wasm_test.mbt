@@ -96,9 +96,14 @@ test "wasm_lux_response_to_provider - openai_chat encode" {
 
 ///|
 test "wasm_lux_response_to_provider - unknown provider returns error" {
-  let lux_resp = "{\"schema_version\":\"v1\",\"id\":\"r\",\"model\":\"m\",\"choices\":[],\"usage\":null}"
-  let result = wasm_lux_response_to_provider("nonexistent", lux_resp)
+  let content = [@lux.LucentContent::text("Hi")]
+  let msg = @lux.LucentMessage::new(@lux.Assistant, content)
+  let choice = @lux.LucentChoice::new(0, msg, @lux.Stop, None)
+  let resp = @lux.LucentResponse::new("r", "m", None, [choice], None, None)
+  let json_str = resp.to_json().stringify()
+  let result = wasm_lux_response_to_provider("nonexistent", json_str)
   assert_true(result.contains("error"))
+  assert_true(result.contains("unknown provider"))
 }
 
 ///|
@@ -129,10 +134,20 @@ test "wasm_sse_to_events - unknown provider returns error" {
 
 ///|
 test "wasm_events_to_sse - openai_chat SSE encode" {
-  let events_json = "[{\"ConversationStart\":{\"meta\":{\"id\":\"r1\",\"model\":\"gpt-4o\",\"created\":null}}},{\"BlockStart\":[0,{\"Text\":{}}]},{\"BlockDelta\":[0,{\"TextDelta\":\"Hello\"}]},{\"BlockEnd\":0},{\"Finish\":\"stop\"},{\"Done\":{}}]"
-  let result = wasm_events_to_sse("openai-chat", events_json)
-  // 成功时应返回 SSE 文本
-  assert_true(result.length() > 0)
+  let meta = @lux.LucentConversationMeta::new(Some("r1"), Some("gpt-4o"), None)
+  let bt = @lux.LucentBlockType::text()
+  let events = [
+    @lux.LucentStreamEvent::ConversationStart(meta),
+    @lux.LucentStreamEvent::BlockStart(0, bt),
+    @lux.LucentStreamEvent::BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
+    @lux.LucentStreamEvent::BlockEnd(0),
+    @lux.LucentStreamEvent::Finish(@lux.Stop),
+    @lux.LucentStreamEvent::Done,
+  ]
+  let json_arr = events.map(fn(ev) { ev.to_json() })
+  let json_str = "[" + json_arr.map(fn(j) { j.stringify() }).join(",") + "]"
+  let result = wasm_events_to_sse("openai-chat", json_str)
+  assert_true(result.contains("data:"))
 }
 
 ///|
