@@ -1,13 +1,5 @@
 import {
   "morning-start/prism/lux",
-  "morning-start/prism/internal",
   "morning-start/prism/sdk",
-  "morning-start/prism/provider/openai_chat",
-  "morning-start/prism/provider/anthropic",
-  "morning-start/prism/provider/openai_responses",
-  "morning-start/prism/provider/openai_codex",
-  "morning-start/prism/provider/openai_azure",
-  "morning-start/prism/provider/gemini",
-  "morning-start/prism/provider/gemini_vertex",
   "moonbitlang/core/json",
 }
