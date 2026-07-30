@@ -1,280 +1,167 @@
 <div align="center">
-
-# Prism
-
-**LLM 统一协议中间件**
-
-一套内核 · 三种运行形态 · 全协议互通 · 全语言可调用
-
-> 基于 MoonBit 构建的下一代 AI 协议转换与统一调度基础设施，彻底解决 LLM 厂商协议碎片化问题。
-
+  <img src="./assets/readme/hero.svg" width="100%" alt="Prism — LLM 统一协议中间件">
 </div>
 
 ---
 
-## 目录
+## 快速示例
 
-- [核心定位](#核心定位)
-- [✨ 核心特性](#-核心特性)
-- [🏗️ 整体架构设计](#-整体架构设计)
-- [🚀 三种部署 / 运行模式](#-三种部署--运行模式)
-- [💻 跨语言调用支持](#-跨语言调用支持)
-- [📌 核心优势](#-核心优势对比-litellm--oneapi)
-- [⚠️ 关键设计规范](#-关键设计规范与避坑准则)
-- [✅ 原生能力优势](#-原生能力优势)
-- [🚧 项目状态](#-项目状态)
-- [🗺️ 开发路线图](#-开发路线图)
-- [🤝 贡献](#-贡献)
-- [📄 开源协议](#-开源协议)
+三行代码，调用任意 LLM 厂商：
 
----
-
-## 核心定位
-
-> **双层转换架构** — 外部协议 ↔ 标准化中间协议 ↔ 目标协议，摒弃 N×N 杂乱适配。
-
-原生内置多模型统一抽象调用能力 + 全协议双向智能转换能力，补齐跨进程、跨语言、低延迟部署能力，是**轻量化、可嵌入、可部署**的开源 LLM 协议网关。
-
----
-
-## ✨ 核心特性
-
-### 🔀 极简双层协议架构
-
-- 所有厂商协议收敛为自研**中立中间协议**，无 OpenAI / Claude 技术绑定
-- 新增模型仅需实现「外部协议 ↔ 中间协议」双向适配，**O(N) 成本**替代 O(N²) 全量适配
-- 支持任意协议双向互转：OpenAI、Claude、百度文心、讯飞星火、通义千问、Ollama、vLLM 等
-
-### 🎯 双使用模式全覆盖
-
-| 模式 | 描述 |
-| --- | --- |
-| **业务调用模式** | 上层直接使用统一中间协议开发，完全屏蔽底层厂商差异 |
-| **协议转发模式** | 任意客户端协议接入，网关自动转换为目标后端协议，实现无感转发 |
-
-### 🧩 三种运行形态，一套内核复用
-
-| 模式 | 适用场景 | 特点 |
-| --- | --- | --- |
-| HTTP 网关 | 分布式集群部署 | 多机器共享、多语言通用调用 |
-| IPC-UDS | 单机低延迟专属通道 | 内核级传输，优于 Localhost TCP |
-| WASM 嵌入 | 多语言进程内嵌入 | 无进程依赖、沙箱隔离 |
-
-### 🛠️ 完整工程能力
-
-- 原生支持非流式对话、SSE 流式输出、工具调用（ToolCall）、Token 用量统计
-- 原生内置主流协议智能转换规则、流式分片适配、多模型上下文管理、异常重试容错机制
-- 厂商独有参数通过 `extra` 字段透传，标准化不丢失私有能力
-- 协议版本化治理、JSON Schema 自动生成、多语言结构体同步
-
----
-
-## 🏗️ 整体架构设计
-
-严格分层、解耦 IO 与核心逻辑，一份核心代码适配所有运行模式，无重复开发、无逻辑分支差异。
-
-### 层级结构
-
-```
-llm_mid_schema      # 核心：中立标准化中间协议（纯数据结构、无 IO、无厂商绑定）
-llm_adapters        # 协议适配层：所有厂商双向编解码逻辑（纯 JSON 转换）
-llm_core_logic      # 核心业务层：重试 / 熔断 / Token 统计 / 消息分片 / Agent 循环
-├─ llm_http_server  # 形态 1：HTTP/TCP 网关服务（集群部署）
-├─ llm_ipc_server   # 形态 2：UDS IPC 进程通信服务（单机低延迟）
-└─ llm_wasm_bind    # 形态 3：WASM 胶水层（多语言进程内嵌入）
+```moonbit
+let prism = Prism::new().with_provider("openai")
+let req_json = prism.encode_request("你好", PrismOptions::default())
+let reply = prism.decode_response(resp_json)   // Ok("你好！有什么可以帮你的？")
 ```
 
-### 核心流转逻辑
+切换厂商只需改 provider 名：
 
-**协议转发（网关能力）**
-
-```
-外部协议请求
-  → 解码器转中间协议
-  → 网关路由 / 处理
-  → 编码器转目标协议
-  → 模型服务响应
-  → 原路协议回包
-```
-
-**统一调用（业务能力）**
-
-```
-业务构造中间协议请求
-  → 自动适配目标厂商协议
-  → 调用模型
-  → 标准化中间协议结果返回
+```moonbit
+let prism = Prism::new().with_provider("anthropic")  // 自动适配 Claude 格式
 ```
 
 ---
 
-## 🚀 三种部署 / 运行模式
+## 架构设计
 
-### 1. HTTP 网关模式
+> **从概念到代码**：四层递进，每个包只有单一职责。
 
-> **推荐：集群 / 多机器场景**
+### 概念：为何需要中间协议？
 
-标准 REST / SSE 接口，所有语言可直接通过 HTTP 调用，支持容器 / K8s 部署、负载均衡、多实例扩容。
+传统 N 个厂商 × N 个格式 = N² 适配的工作量。Prism 通过一层中立协议（**Lucent IR**）解耦，新增厂商只需 1 次双向适配：
 
-**适用场景：** 微服务集群、多服务共享网关、公网/内网统一接入、多语言通用调用
+```
+Provider A  ──┐
+Provider B  ──┤── Lucent IR ──→ 任意目标协议
+Provider C  ──┘                (O(N) 替代 O(N²))
+```
 
-**核心接口：**
+### 协议层：6-Function 适配器契约
 
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| `POST` | `/v1/mid/chat` | 标准化非流式对话（中间协议入参 / 出参） |
-| `GET` | `/v1/mid/chat/stream` | 标准化 SSE 流式对话 |
-| `POST` | `/gateway/forward` | 任意协议双向转发网关 |
+每个 Provider 适配器实现 **6 个纯函数**，String 进出：
 
-### 2. IPC-UDS 进程通信模式
+| 方向 | 解码（外部 → Lucent IR） | 编码（Lucent IR → 外部） |
+|------|------------------------|------------------------|
+| **请求** | `ext_to_lux_request(String) → Result[LucentRequest, String]` | `lux_request_to_ext(LucentRequest) → Result[String, String]` |
+| **响应** | `ext_to_lux_response(String) → Result[LucentResponse, String]` | `lux_response_to_ext(LucentResponse) → Result[String, String]` |
+| **流式** | `ext_sse_to_events(String) → Result[Array[LucentStreamEvent], String]` | `lux_events_to_ext_sse(Array[LucentStreamEvent]) → Result[String, String]` |
 
-> **推荐：单机私有化场景**
+当前已实现 **7 个适配器**：
 
-基于 Unix Domain Socket / Windows 命名管道实现本机进程间通信，不走网卡、内核直传，延迟远低于 localhost TCP。由宿主进程托管子进程，自动拉起、重启、资源清理。
+| 适配器 | 协议 | 状态 |
+|--------|------|------|
+| `provider/openai_chat` | OpenAI Chat Completions | ✅ |
+| `provider/openai_responses` | OpenAI Responses API | ✅ |
+| `provider/openai_codex` | OpenAI Codex 变体 | ✅ |
+| `provider/openai_azure` | Azure OpenAI | ✅ |
+| `provider/anthropic` | Anthropic Messages API | ✅ |
+| `provider/gemini` | Google Gemini API | ✅ |
+| `provider/gemini_vertex` | Google Vertex AI | ✅ |
 
-**适用场景：** 单机私有化部署、低延迟需求、内网高性能调用、进程隔离部署
+### 代码层：四层包结构
 
-### 3. WASM 嵌入模式
+<div align="center">
+  <img src="./assets/readme/flow.svg" width="100%" alt="Prism 四层代码架构图">
+</div>
 
-> **推荐：高安全 / 跨语言场景**
+| 层级 | 包路径 | 职责 | 依赖 |
+|------|--------|------|------|
+| **L0** | `lux/` | Lucent IR 核心类型 + JSON 序列化 | 仅 `core/json` |
+| **L1** | `provider/*/` | 厂商双向编解码适配器 | 仅 `lux/` |
+| **L2** | `sdk/` | Provider 注册表 + Prism / Context / Event | 所有 provider |
+| **L3** | `wasm/` | 通用 WASM 导出层 | 仅 `sdk/` + `lux/` |
 
-核心逻辑编译为 WASI 标准 WASM 包，无平台依赖，可嵌入 Go / Python / Java / Node / 浏览器。WASM 仅做协议转换，网络、密钥、鉴权完全交由宿主语言，安全隔离。
+### 运行时：一次 encode_request 的完整路径
 
-**适用场景：** 密钥禁止独立进程托管、跨语言统一协议、端侧浏览器/移动端、插件化热更新
+```
+Prism::encode_request("你好", opts)
+  → Context::new().add_user("你好")
+    → context_to_lux_request()           # L0: 构建 LucentRequest
+      → match_provider_name("openai")    # L2: SDK 注册表调度
+        → reg.request_encode(req)         # L1: openai_chat 适配器
+          → OpenAI JSON 字符串 → Host 发 HTTP
+```
 
----
+### 数据流全景
 
-## 💻 跨语言调用支持
+```
+                    ┌──────────────┐
+  Provider JSON ──► │  Lucent IR   │ ──► Provider JSON
+  (decode ←)        │  (中立格式)    │     (→ encode)
+                    └──────────────┘
+                         ↕
+                    SDK 注册表调度
+                         ↕
+                    WASM 通用导出层
+```
 
-本项目原生全语言兼容，所有编程语言仅需对接标准化中间协议 JSON / SSE，无需适配各家厂商 API：
+### 依赖收敛
 
-| 语言 | 推荐方式 | 备注 |
-| --- | --- | --- |
-| Go | 优先 IPC | 本地低延迟，直接进程间通信 |
-| Python / Java / TS / Rust / C# | 优先 HTTP 调用 | 本地嵌入可选 WASM |
-| 前端浏览器 | 纯 WASM 端侧 | 无需后端中转 |
-
-> 所有语言共用一套 JSON Schema + OpenAPI 规范，可自动生成结构体与 SDK，杜绝适配偏差。
-
----
-
-## 📌 核心优势（对比 LiteLLM / OneAPI）
-
-| 维度 | Prism | LiteLLM / OneAPI |
-| --- | --- | --- |
-| **可嵌入性** | WASM 进程内嵌入 + IPC 低延迟 | 局限于独立网关部署 |
-| **架构设计** | 中立中间协议解耦，无厂商绑定 | 传统硬编码映射，厂商协议耦合 |
-| **覆盖范围** | 服务端 / 单机 / 端侧浏览器 / 移动端 | 以服务端网关为主 |
-| **运行时依赖** | MoonBit 原生编译，零 Python / Node 依赖 | 依赖 Python / Node 运行时 |
-
----
-
-## ⚠️ 关键设计规范与避坑准则
-
-> 以下准则是项目长期可维护性的基石，务必严格遵守。
-
-1. **核心逻辑唯一**
-
-   协议转换、业务调度、流式处理核心逻辑仅维护一份源码，三种运行形态仅做外层传输封装，杜绝逻辑分叉、行为不一致问题。
-
-2. **中间协议永久中立**
-
-   主干协议字段固定，不偏向任何厂商，不做破坏性变更；所有厂商独有特性、新增能力统一通过 `extra` 拓展字段透传，保证长期兼容性。
-
-3. **传输层可插拔解耦**
-
-   统一报文协议规范，底层传输层支持 TCP/HTTP、UDS 进程通信、WASM 内存调用自由切换，业务逻辑无需改动。
-
-4. **WASM 安全隔离规范**
-
-   WASM 嵌入模式仅负责纯协议格式转换，网络请求、密钥管理、权限鉴权全部交由宿主语言全权管控，规避安全风险。
-
-5. **三模式行为强一致**
-
-   同一请求参数、模型配置，在 HTTP、IPC、WASM 三种运行模式下的返回结果、流式分片、错误信息、Token 统计数据完全对齐。
+```
+优化前: 根包 + sdk + wasm 各独立 import 7 个 provider  →  3 处修改
+优化后: 只需在 sdk/ 注册 1 处 → wasm 和根包零感知
+```
 
 ---
 
-## ✅ 原生能力优势
+## 多级 API
 
-本项目所有协议转换、模型调度、流式处理、Agent 基础能力均为**原生自研实现**，无第三方协议库绑定，自主可控、轻量化无冗余，可按需裁剪适配各类部署场景。
+### L1：应用开发者——一行调用
 
-同时深度依托 MoonBit 生态原生异步、JSON 编解码、网络通信能力，性能高效、跨平台一致性强。
+```moonbit
+let prism = Prism::new().with_provider("openai").with_api_key("sk-xxx")
+let req = prism.encode_request("写一首诗", PrismOptions::default())
+let reply = prism.decode_response(resp_json)
+```
+
+### L2：框架作者——事件循环
+
+```moonbit
+let ctx = Context::new()
+  .add_system("你是一个有用的助手")
+  .add_user("帮我查北京的天气")
+  .add_tools([SdkTool { name: "get_weather", ... }])
+
+match prism.decode_sse(sse_text) {
+  Ok(events) => {
+    for event in events {
+      match event {
+        TextDelta(s) => ui.append(s)        // 流式文本
+        ToolCall(tc) => execute_tool(tc)    // 工具调用
+        Thinking(t) => ui.show_thinking(t)  // 推理过程
+        Finish(r) => break                  // 结束
+      }
+    }
+  }
+}
+```
 
 ---
 
-## 🚧 项目状态
+## 项目状态
 
-**当前阶段：Alpha / 核心功能完成**
-
-**已完成：**
-- ✅ Lux IR 核心类型定义（LucentContent, LucentMessage, LucentConversationItem 等）
-- ✅ 4 家主协议适配器（OpenAI Chat, OpenAI Responses, Anthropic, Gemini）
-- ✅ 3 个子协议变体（Codex, Azure, Vertex）
-- ✅ Lux JSON 序列化/反序列化
-- ✅ 流式事件模型 + 累加器
-- ✅ SDK 表层 API（Prism, Context, PrismEvent）
-- ✅ WASM 导出层（42 个导出函数）
-- ✅ 字段治理类型（ConversionStatus, ConversionResult）
-- ✅ 301 测试，全部通过
-
-**进行中 / 规划：**
-- 📋 Transport / HTTP 层
-- 📋 CLI 工具
-- 📋 跨协议一致性测试补充
-- 📋 GitHub CI
-
----
-
-## 🗺️ 开发路线图
-
-### 阶段一：WASM 核心内核（当前 → 优先实现）
-
-> **策略：先做最简单的，把核心跑通。**
-
-| 步骤 | 内容 | 验证方式 |
-|------|------|----------|
-| 1.1 | 定义中间协议数据结构（MidMessage / MidRequest / MidResponse / ToolCall / StreamChunk） | `moon test` 序列化/反序列化 |
-| 1.2 | 实现 OpenAI 适配器（Chat Completion 请求编解码 + 响应编解码） | 输入 OpenAI JSON → 输出中间协议 JSON |
-| 1.3 | 实现 OpenAI 流式适配器（SSE chunk ↔ 中间协议 StreamChunk） | chunk-by-chunk 转换测试 |
-| 1.4 | WASM 导出层 — 对外暴露 `fn convert_request()`, `fn convert_response()` 等纯函数接口 | 宿主语言调用 WASM 验证 |
-| 1.5 | 扩展适配器：Claude Messages API | 同上 |
-| 1.6 | 扩展适配器：Ollama / vLLM（OpenAI 兼容协议） | 同上 |
-
-**阶段一完成后：** 核心协议转换能力以 WASM 形式可用，任何语言通过 WASM runtime 即可调用。
-
-### 阶段二：HTTP 网关模式
-
-| 步骤 | 内容 |
+| 模块 | 状态 |
 |------|------|
-| 2.1 | 基于 MoonBit `@http` 搭建 HTTP 服务端，复用阶段一内核 |
-| 2.2 | 实现 `/v1/mid/chat` 非流式接口 |
-| 2.3 | 实现 `/v1/mid/chat/stream` SSE 流式接口 |
-| 2.4 | 实现 `/gateway/forward` 协议转发接口 |
-| 2.5 | 配置管理（API Key / 端点 / 模型路由） |
-
-### 阶段三：IPC-UDS 进程通信模式
-
-| 步骤 | 内容 |
-|------|------|
-| 3.1 | Unix Domain Socket / Windows Named Pipe 传输层实现 |
-| 3.2 | 报文协议封装（请求/响应帧定界） |
-| 3.3 | 宿主进程托管（自动拉起、重启、资源清理） |
-
-### 长期规划
-
-- 完成主流大模型全量适配器（文心、讯飞、通义等）
-- 协议版本化治理、自动化行为一致性校验
-- JSON Schema 自动生成、多语言结构体同步
+| Lucent IR 核心类型 (34+ 类型) | ✅ |
+| JSON 序列化 / 反序列化 | ✅ |
+| 流式事件 + 累加器 | ✅ |
+| 7 个 Provider 适配器（各 6 函数） | ✅ |
+| 跨协议往返一致性测试 | ✅ |
+| SDK 表层 API（Prism / Context / Event） | ✅ |
+| WASM 导出层（11 个通用函数） | ✅ |
+| 301 测试，全部通过 | ✅ |
 
 ---
 
-## 🤝 贡献
+## 开发原则
 
-欢迎提交 Issue、PR，共建 LLM 统一协议生态。新增模型适配器、场景能力、多语言 SDK 均可参与社区贡献。
+1. **纯函数** — 无 IO、无状态、无副作用
+2. **String 进出** — WASM 导出零摩擦
+3. **Round-trip 安全** — Provider → Lux → Provider 语义一致
+4. **JSON Schema 事实标准** — `schemas/lux-ir-v1.json`
 
 ---
 
-## 📄 开源协议
+## 开源协议
 
 [MIT License](LICENSE) — 自由商用、二次开发，保留开源声明即可。
