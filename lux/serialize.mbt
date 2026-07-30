@@ -15,7 +15,7 @@ pub fn LucentRole::to_json(self : LucentRole) -> Json {
 ///|
 pub fn LucentRole::from_json(jv : Json) -> Result[LucentRole, String] {
   match jv {
-    Json::String(s) =>
+    String(s) =>
       match LucentRole::from_string(s) {
         Some(r) => Ok(r)
         None => Ok(Native(s))

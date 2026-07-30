@@ -194,7 +194,7 @@ fn lucent_events_to_prism(
         ()
       ItemStart(_, ToolCall(tu)) =>
         result.push(
-          PrismEvent::ToolCall({
+          ToolCall({
             id: tu.id,
             name: tu.name,
             arguments_json: tu.arguments_json,
@@ -202,16 +202,14 @@ fn lucent_events_to_prism(
         )
       ItemStart(_, ToolResult(tr)) =>
         result.push(
-          PrismEvent::ToolResult({
+          ToolResult({
             tool_use_id: tr.tool_use_id,
             content: @lux.lucent_content_to_text(tr.content),
             is_error: tr.is_error,
           }),
         )
       BlockStart(_, Thinking) =>
-        result.push(
-          PrismEvent::Thinking({ text: "", signature: None, redacted: false }),
-        )
+        result.push(Thinking({ text: "", signature: None, redacted: false }))
       BlockDelta(_, ThinkingDelta(s)) => result.push(TextDelta(s)) // thinking 文本流式输出
       Finish(fr) => {
         let pfr = match fr {

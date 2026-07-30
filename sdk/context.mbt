@@ -71,10 +71,10 @@ pub fn context_to_lux_request(
   for msg in ctx.messages {
     let role = match msg.role {
       "system" => @lux.System
-      "user" => @lux.User
-      "assistant" => @lux.Assistant
-      "tool" => @lux.Tool
-      _ => @lux.User
+      "user" => User
+      "assistant" => Assistant
+      "tool" => Tool
+      _ => User
     }
     let content = [@lux.LucentContent::text(msg.content)]
     let lmsg = @lux.LucentMessage::new(role, content)

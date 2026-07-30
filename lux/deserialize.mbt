@@ -7,7 +7,7 @@
 /// === Helpers ===
 fn get_str(m : Map[String, Json], key : String) -> Result[String, String] {
   match m.get(key) {
-    Some(Json::String(s)) => Ok(s)
+    Some(String(s)) => Ok(s)
     Some(_) => Err("expected string for " + key)
     None => Err("missing required field " + key)
   }
@@ -16,7 +16,7 @@ fn get_str(m : Map[String, Json], key : String) -> Result[String, String] {
 ///|
 fn get_str_opt(m : Map[String, Json], key : String) -> String? {
   match m.get(key) {
-    Some(Json::String(s)) => Some(s)
+    Some(String(s)) => Some(s)
     _ => None
   }
 }
@@ -24,7 +24,7 @@ fn get_str_opt(m : Map[String, Json], key : String) -> String? {
 ///|
 fn get_int(m : Map[String, Json], key : String) -> Result[Int, String] {
   match m.get(key) {
-    Some(Json::Number(n, ..)) => Ok(n.to_int())
+    Some(Number(n, ..)) => Ok(n.to_int())
     Some(_) => Err("expected number for " + key)
     None => Err("missing required field " + key)
   }
@@ -33,7 +33,7 @@ fn get_int(m : Map[String, Json], key : String) -> Result[Int, String] {
 ///|
 fn get_int_opt(m : Map[String, Json], key : String) -> Int? {
   match m.get(key) {
-    Some(Json::Number(n, ..)) => Some(n.to_int())
+    Some(Number(n, ..)) => Some(n.to_int())
     _ => None
   }
 }
@@ -41,7 +41,7 @@ fn get_int_opt(m : Map[String, Json], key : String) -> Int? {
 ///|
 fn get_double_opt(m : Map[String, Json], key : String) -> Double? {
   match m.get(key) {
-    Some(Json::Number(n, ..)) => Some(n)
+    Some(Number(n, ..)) => Some(n)
     _ => None
   }
 }
@@ -49,8 +49,8 @@ fn get_double_opt(m : Map[String, Json], key : String) -> Double? {
 ///|
 fn get_bool(m : Map[String, Json], key : String) -> Result[Bool, String] {
   match m.get(key) {
-    Some(Json::True) => Ok(true)
-    Some(Json::False) => Ok(false)
+    Some(True) => Ok(true)
+    Some(False) => Ok(false)
     Some(_) => Err("expected boolean for " + key)
     None => Err("missing required field " + key)
   }
@@ -59,8 +59,8 @@ fn get_bool(m : Map[String, Json], key : String) -> Result[Bool, String] {
 ///|
 fn get_bool_opt(m : Map[String, Json], key : String) -> Bool? {
   match m.get(key) {
-    Some(Json::True) => Some(true)
-    Some(Json::False) => Some(false)
+    Some(True) => Some(true)
+    Some(False) => Some(false)
     _ => None
   }
 }
@@ -68,12 +68,12 @@ fn get_bool_opt(m : Map[String, Json], key : String) -> Bool? {
 ///|
 fn get_str_arr_opt(m : Map[String, Json], key : String) -> Array[String]? {
   match m.get(key) {
-    Some(Json::Array(items)) => {
+    Some(Array(items)) => {
       let result : Array[String] = []
       let mut i = 0
       while i < items.length() {
         match items[i] {
-          Json::String(s) => result.push(s)
+          String(s) => result.push(s)
           _ => return None
         }
         i = i + 1
@@ -222,7 +222,7 @@ fn get_arr_content(
   key : String,
 ) -> Result[Array[LucentContent], String] {
   match m.get(key) {
-    Some(Json::Array(items)) => parse_content_arr(items)
+    Some(Array(items)) => parse_content_arr(items)
     Some(_) => Err("expected array for " + key)
     None => Err("missing required field " + key)
   }
@@ -234,7 +234,7 @@ fn get_arr_content_opt(
   key : String,
 ) -> Array[LucentContent]? {
   match m.get(key) {
-    Some(Json::Array(items)) => parse_content_opt(items)
+    Some(Array(items)) => parse_content_opt(items)
     _ => None
   }
 }
@@ -245,7 +245,7 @@ fn get_arr_item(
   key : String,
 ) -> Result[Array[LucentConversationItem], String] {
   match m.get(key) {
-    Some(Json::Array(items)) => parse_item_arr(items)
+    Some(Array(items)) => parse_item_arr(items)
     Some(_) => Err("expected array for " + key)
     None => Err("missing required field " + key)
   }
@@ -257,7 +257,7 @@ fn get_arr_choice(
   key : String,
 ) -> Result[Array[LucentChoice], String] {
   match m.get(key) {
-    Some(Json::Array(items)) => parse_choice_arr(items)
+    Some(Array(items)) => parse_choice_arr(items)
     Some(_) => Err("expected array for " + key)
     None => Err("missing required field " + key)
   }
@@ -269,7 +269,7 @@ fn get_arr_annotation(
   key : String,
 ) -> Result[Array[LucentAnnotation], String] {
   match m.get(key) {
-    Some(Json::Array(items)) => parse_annotation_arr(items)
+    Some(Array(items)) => parse_annotation_arr(items)
     Some(_) => Err("expected array for " + key)
     None => Err("missing required field " + key)
   }
@@ -281,7 +281,7 @@ fn get_arr_provider(
   key : String,
 ) -> Result[Array[ProviderCapability], String] {
   match m.get(key) {
-    Some(Json::Array(items)) => parse_provider_arr(items)
+    Some(Array(items)) => parse_provider_arr(items)
     Some(_) => Err("expected array for " + key)
     None => Err("missing required field " + key)
   }
@@ -293,7 +293,7 @@ fn get_arr_modality(
   key : String,
 ) -> Result[Array[LucentModality], String] {
   match m.get(key) {
-    Some(Json::Array(items)) => parse_modality_arr(items)
+    Some(Array(items)) => parse_modality_arr(items)
     Some(_) => Err("expected array for " + key)
     None => Err("missing required field " + key)
   }
@@ -306,7 +306,7 @@ fn get_arr_modality(
 //   key : String,
 // ) -> Result[Array[LucentSafetyRating], String] {
 //   match m.get(key) {
-//     Some(Json::Array(items)) => parse_safety_arr(items)
+//     Some(Array(items)) => parse_safety_arr(items)
 //     Some(_) => Err("expected array for " + key)
 //     None => Err("missing required field " + key)
 //   }
@@ -316,7 +316,7 @@ fn get_arr_modality(
 /// === LucentModality ===
 pub fn LucentModality::from_json(jv : Json) -> Result[LucentModality, String] {
   match jv {
-    Json::String(s) =>
+    String(s) =>
       match LucentModality::from_string(s) {
         Some(m) => Ok(m)
         None => Ok(Native(s))
@@ -331,7 +331,7 @@ pub fn LucentMediaSource::from_json(
   jv : Json,
 ) -> Result[LucentMediaSource, String] {
   match jv {
-    Json::Object(m) => {
+    Object(m) => {
       let typ = match get_str(m, "type") {
         Ok(t) => t
         Err(e) => return Err(e)
@@ -357,7 +357,7 @@ pub fn LucentMultimedia::from_json(
   jv : Json,
 ) -> Result[LucentMultimedia, String] {
   match jv {
-    Json::Object(m) => {
+    Object(m) => {
       let media_type = match get_str(m, "media_type") {
         Ok(s) => s
         Err(e) => return Err(e)
@@ -382,7 +382,7 @@ pub fn LucentAnnotationKind::from_json(
   jv : Json,
 ) -> Result[LucentAnnotationKind, String] {
   match jv {
-    Json::String(s) =>
+    String(s) =>
       match s {
         "url" => Ok(Url)
         "file_citation" => Ok(FileCitation)
@@ -399,7 +399,7 @@ pub fn LucentAnnotation::from_json(
   jv : Json,
 ) -> Result[LucentAnnotation, String] {
   match jv {
-    Json::Object(m) => {
+    Object(m) => {
       let km = match m.get("kind") {
         Some(k) =>
           match LucentAnnotationKind::from_json(k) {
@@ -422,7 +422,7 @@ pub fn LucentAnnotation::from_json(
 /// === LucentThinking ===
 pub fn LucentThinking::from_json(jv : Json) -> Result[LucentThinking, String] {
   match jv {
-    Json::Object(m) => {
+    Object(m) => {
       let text = match get_str(m, "text") {
         Ok(s) => s
         Err(e) => return Err(e)
@@ -445,7 +445,7 @@ pub fn LucentThinking::from_json(jv : Json) -> Result[LucentThinking, String] {
 /// === LucentToolUse ===
 pub fn LucentToolUse::from_json(jv : Json) -> Result[LucentToolUse, String] {
   match jv {
-    Json::Object(m) => {
+    Object(m) => {
       let id = match get_str(m, "id") {
         Ok(s) => s
         Err(e) => return Err(e)
@@ -470,7 +470,7 @@ pub fn LucentToolResult::from_json(
   jv : Json,
 ) -> Result[LucentToolResult, String] {
   match jv {
-    Json::Object(m) => {
+    Object(m) => {
       let tool_use_id = match get_str(m, "tool_use_id") {
         Ok(s) => s
         Err(e) => return Err(e)
@@ -495,7 +495,7 @@ pub fn LucentAgentAction::from_json(
   jv : Json,
 ) -> Result[LucentAgentAction, String] {
   match jv {
-    Json::Object(m) => {
+    Object(m) => {
       let kind = match get_str(m, "kind") {
         Ok(s) => s
         Err(e) => return Err(e)
@@ -522,9 +522,9 @@ pub fn LucentAgentAction::from_json(
 /// === LucentContent ===
 pub fn LucentContent::from_json(jv : Json) -> Result[LucentContent, String] {
   match jv {
-    Json::Object(m) =>
+    Object(m) =>
       match m.get("type") {
-        Some(Json::String(tp)) =>
+        Some(String(tp)) =>
           match tp {
             "text" => {
               let text = match get_str(m, "text") {
@@ -532,7 +532,7 @@ pub fn LucentContent::from_json(jv : Json) -> Result[LucentContent, String] {
                 Err(e) => return Err(e)
               }
               let anns : Array[LucentAnnotation]? = match m.get("annotations") {
-                Some(Json::Array(items)) =>
+                Some(Array(items)) =>
                   match parse_annotation_arr(items) {
                     Ok(arr) => Some(arr)
                     Err(_) => None
@@ -638,7 +638,7 @@ pub fn LucentContent::from_json(jv : Json) -> Result[LucentContent, String] {
 /// === LucentMessage ===
 pub fn LucentMessage::from_json(jv : Json) -> Result[LucentMessage, String] {
   match jv {
-    Json::Object(m) => {
+    Object(m) => {
       let role = match m.get("role") {
         Some(r) =>
           match LucentRole::from_json(r) {
@@ -663,9 +663,9 @@ pub fn LucentConversationItem::from_json(
   jv : Json,
 ) -> Result[LucentConversationItem, String] {
   match jv {
-    Json::Object(m) =>
+    Object(m) =>
       match m.get("type") {
-        Some(Json::String(tp)) =>
+        Some(String(tp)) =>
           match tp {
             "message" => {
               let msg = match m.get("message") {
@@ -735,7 +735,7 @@ pub fn LucentConversationItem::from_json(
 /// === LucentTool ===
 pub fn LucentTool::from_json(jv : Json) -> Result[LucentTool, String] {
   match jv {
-    Json::Object(m) => {
+    Object(m) => {
       let name = match get_str(m, "name") {
         Ok(s) => s
         Err(e) => return Err(e)
@@ -771,18 +771,18 @@ pub fn LucentToolChoice::from_json(
   jv : Json,
 ) -> Result[LucentToolChoice, String] {
   match jv {
-    Json::String(s) =>
+    String(s) =>
       match s {
         "auto" => Ok(Auto)
         "none" => Ok(LucentToolChoice::None)
         "required" => Ok(Required)
         _ => Err("unknown tool_choice")
       }
-    Json::Object(m) =>
+    Object(m) =>
       match m.get("type") {
-        Some(Json::String(tp)) if tp == "specific_tool" =>
+        Some(String(tp)) if tp == "specific_tool" =>
           match m.get("name") {
-            Some(Json::String(name)) => Ok(SpecificTool(name))
+            Some(String(name)) => Ok(SpecificTool(name))
             Some(_) => Err("expected string for name")
             None => Err("missing name for specific_tool")
           }
@@ -799,15 +799,15 @@ pub fn LucentStructuredOutput::from_json(
   jv : Json,
 ) -> Result[LucentStructuredOutput, String] {
   match jv {
-    Json::String(s) =>
+    String(s) =>
       match s {
         "json_object" => Ok(JsonObject)
         "text" => Ok(Text)
         _ => Err("unknown structured_output")
       }
-    Json::Object(m) =>
+    Object(m) =>
       match m.get("type") {
-        Some(Json::String(tp)) if tp == "json_schema" =>
+        Some(String(tp)) if tp == "json_schema" =>
           match m.get("schema") {
             Some(schema) => Ok(JsonSchema(schema.stringify()))
             None => Err("missing schema for json_schema")
@@ -825,7 +825,7 @@ pub fn LucentReasoningEffort::from_json(
   jv : Json,
 ) -> Result[LucentReasoningEffort, String] {
   match jv {
-    Json::String(s) =>
+    String(s) =>
       match s {
         "low" => Ok(Low)
         "medium" => Ok(Medium)
@@ -843,7 +843,7 @@ pub fn LucentReasoningSummary::from_json(
   jv : Json,
 ) -> Result[LucentReasoningSummary, String] {
   match jv {
-    Json::String(s) =>
+    String(s) =>
       match s {
         "auto" => Ok(Auto)
         "concise" => Ok(Concise)
@@ -858,7 +858,7 @@ pub fn LucentReasoningSummary::from_json(
 /// === LucentOptions ===
 pub fn LucentOptions::from_json(jv : Json) -> Result[LucentOptions, String] {
   match jv {
-    Json::Object(m) => {
+    Object(m) => {
       let temperature = get_double_opt(m, "temperature")
       let top_p = get_double_opt(m, "top_p")
       let top_k = get_int_opt(m, "top_k")
@@ -908,7 +908,7 @@ pub fn LucentReasoningConfig::from_json(
   jv : Json,
 ) -> Result[LucentReasoningConfig, String] {
   match jv {
-    Json::Object(m) => {
+    Object(m) => {
       let enabled = match get_bool(m, "enabled") {
         Ok(b) => b
         Err(e) => return Err(e)
@@ -942,7 +942,7 @@ pub fn LucentCapabilities::from_json(
   jv : Json,
 ) -> Result[LucentCapabilities, String] {
   match jv {
-    Json::Object(m) => {
+    Object(m) => {
       let tool_calling = match get_bool(m, "tool_calling") {
         Ok(b) => b
         Err(e) => return Err(e)
@@ -989,7 +989,7 @@ pub fn LucentCapabilities::from_json(
 /// === LucentRequest ===
 pub fn LucentRequest::from_json(jv : Json) -> Result[LucentRequest, String] {
   match jv {
-    Json::Object(m) => {
+    Object(m) => {
       let schema_version = match get_str(m, "schema_version") {
         Ok(s) => s
         Err(e) => return Err(e)
@@ -999,7 +999,7 @@ pub fn LucentRequest::from_json(jv : Json) -> Result[LucentRequest, String] {
         Err(e) => return Err(e)
       }
       let instructions : Array[LucentContent]? = match m.get("instructions") {
-        Some(Json::Array(items)) => parse_content_opt(items)
+        Some(Array(items)) => parse_content_opt(items)
         _ => None
       }
       let conversation = match get_arr_item(m, "conversation") {
@@ -1007,7 +1007,7 @@ pub fn LucentRequest::from_json(jv : Json) -> Result[LucentRequest, String] {
         Err(e) => return Err(e)
       }
       let tools : Array[LucentTool]? = match m.get("tools") {
-        Some(Json::Array(items)) =>
+        Some(Array(items)) =>
           match parse_tool_arr(items) {
             Ok(arr) => Some(arr)
             Err(_) => None
@@ -1047,13 +1047,13 @@ pub fn LucentRequest::from_json(jv : Json) -> Result[LucentRequest, String] {
         None => None
       }
       let metadata : Map[String, String]? = match m.get("metadata") {
-        Some(Json::Object(map)) => {
+        Some(Object(map)) => {
           let result : Map[String, String] = Map([])
           for entry in map {
             match entry {
               (k, v) =>
                 match v {
-                  Json::String(s) => result[k] = s
+                  String(s) => result[k] = s
                   _ => ()
                 }
             }
@@ -1063,7 +1063,7 @@ pub fn LucentRequest::from_json(jv : Json) -> Result[LucentRequest, String] {
         _ => None
       }
       let extra : Map[String, Json]? = match m.get("extra") {
-        Some(Json::Object(map)) => Some(map)
+        Some(Object(map)) => Some(map)
         _ => None
       }
       Ok({
@@ -1088,7 +1088,7 @@ pub fn LucentRequest::from_json(jv : Json) -> Result[LucentRequest, String] {
 /// === LucentUsage ===
 pub fn LucentUsage::from_json(jv : Json) -> Result[LucentUsage, String] {
   match jv {
-    Json::Object(m) => {
+    Object(m) => {
       let prompt_tokens = match get_int(m, "prompt_tokens") {
         Ok(n) => n
         Err(e) => return Err(e)
@@ -1123,7 +1123,7 @@ pub fn LucentFinishReason::from_json(
   jv : Json,
 ) -> Result[LucentFinishReason, String] {
   match jv {
-    Json::String(s) => Ok(LucentFinishReason::from_string(s))
+    String(s) => Ok(LucentFinishReason::from_string(s))
     _ => Err("expected string for LucentFinishReason")
   }
 }
@@ -1134,7 +1134,7 @@ pub fn LucentSafetyRating::from_json(
   jv : Json,
 ) -> Result[LucentSafetyRating, String] {
   match jv {
-    Json::Object(m) => {
+    Object(m) => {
       let category = match get_str(m, "category") {
         Ok(s) => s
         Err(e) => return Err(e)
@@ -1153,7 +1153,7 @@ pub fn LucentSafetyRating::from_json(
 /// === LucentChoice ===
 pub fn LucentChoice::from_json(jv : Json) -> Result[LucentChoice, String] {
   match jv {
-    Json::Object(m) => {
+    Object(m) => {
       let index = match get_int(m, "index") {
         Ok(n) => n
         Err(e) => return Err(e)
@@ -1176,7 +1176,7 @@ pub fn LucentChoice::from_json(jv : Json) -> Result[LucentChoice, String] {
       }
       let safety_ratings : Array[LucentSafetyRating]? = match
         m.get("safety_ratings") {
-        Some(Json::Array(items)) =>
+        Some(Array(items)) =>
           match parse_safety_arr(items) {
             Ok(arr) => Some(arr)
             Err(_) => None
@@ -1193,7 +1193,7 @@ pub fn LucentChoice::from_json(jv : Json) -> Result[LucentChoice, String] {
 /// === LucentResponse ===
 pub fn LucentResponse::from_json(jv : Json) -> Result[LucentResponse, String] {
   match jv {
-    Json::Object(m) => {
+    Object(m) => {
       let schema_version = match get_str(m, "schema_version") {
         Ok(s) => s
         Err(e) => return Err(e)
@@ -1241,7 +1241,7 @@ pub fn LucentResponse::from_json(jv : Json) -> Result[LucentResponse, String] {
 /// === LucentErrorKind ===
 pub fn LucentErrorKind::from_json(jv : Json) -> Result[LucentErrorKind, String] {
   match jv {
-    Json::String(s) => Ok(LucentErrorKind::from_string(s))
+    String(s) => Ok(LucentErrorKind::from_string(s))
     _ => Err("expected string for LucentErrorKind")
   }
 }
@@ -1250,7 +1250,7 @@ pub fn LucentErrorKind::from_json(jv : Json) -> Result[LucentErrorKind, String] 
 /// === LucentError ===
 pub fn LucentError::from_json(jv : Json) -> Result[LucentError, String] {
   match jv {
-    Json::Object(m) => {
+    Object(m) => {
       let kind = match m.get("kind") {
         Some(k) =>
           match LucentErrorKind::from_json(k) {
@@ -1276,7 +1276,7 @@ pub fn LucentConversationMeta::from_json(
   jv : Json,
 ) -> Result[LucentConversationMeta, String] {
   match jv {
-    Json::Object(m) => {
+    Object(m) => {
       let id = get_str_opt(m, "id")
       let model = get_str_opt(m, "model")
       let usage_input = get_int_opt(m, "usage_input")
@@ -1290,7 +1290,7 @@ pub fn LucentConversationMeta::from_json(
 /// === LucentBlockType ===
 pub fn LucentBlockType::from_json(jv : Json) -> Result[LucentBlockType, String] {
   match jv {
-    Json::String(s) =>
+    String(s) =>
       match s {
         "text" => Ok(Text)
         "thinking" => Ok(Thinking)
@@ -1300,16 +1300,16 @@ pub fn LucentBlockType::from_json(jv : Json) -> Result[LucentBlockType, String] 
         "video" => Ok(Video)
         _ => Ok(Native(s))
       }
-    Json::Object(m) =>
+    Object(m) =>
       match m.get("type") {
-        Some(Json::String(tp)) if tp == "tool_call" => {
+        Some(String(tp)) if tp == "tool_call" => {
           let id = match m.get("id") {
-            Some(Json::String(i)) => i
+            Some(String(i)) => i
             Some(_) => return Err("expected string for id")
             None => return Err("missing id")
           }
           let name = match m.get("name") {
-            Some(Json::String(n)) => n
+            Some(String(n)) => n
             Some(_) => return Err("expected string for name")
             None => return Err("missing name")
           }
@@ -1328,9 +1328,9 @@ pub fn LucentBlockDelta::from_json(
   jv : Json,
 ) -> Result[LucentBlockDelta, String] {
   match jv {
-    Json::Object(m) =>
+    Object(m) =>
       match m.get("type") {
-        Some(Json::String(tp)) =>
+        Some(String(tp)) =>
           match tp {
             "text" => {
               let text = match get_str(m, "text") {
@@ -1393,9 +1393,9 @@ pub fn LucentStreamEvent::from_json(
   jv : Json,
 ) -> Result[LucentStreamEvent, String] {
   match jv {
-    Json::Object(m) =>
+    Object(m) =>
       match m.get("event") {
-        Some(Json::String(ev)) =>
+        Some(String(ev)) =>
           match ev {
             "conversation_start" => {
               let meta = match m.get("meta") {
@@ -1534,7 +1534,7 @@ pub fn ProviderCapability::from_json(
   jv : Json,
 ) -> Result[ProviderCapability, String] {
   match jv {
-    Json::Object(m) => {
+    Object(m) => {
       let model_pattern = match get_str(m, "model_pattern") {
         Ok(s) => s
         Err(e) => return Err(e)
@@ -1552,7 +1552,7 @@ pub fn ProviderCapability::from_json(
         None => return Err("missing capabilities")
       }
       let extra_params : Map[String, Json]? = match m.get("extra_params") {
-        Some(Json::Object(map)) => Some(map)
+        Some(Object(map)) => Some(map)
         _ => None
       }
       Ok({ model_pattern, provider, capabilities, extra_params })
@@ -1565,7 +1565,7 @@ pub fn ProviderCapability::from_json(
 /// === LucentDiscovery ===
 pub fn LucentDiscovery::from_json(jv : Json) -> Result[LucentDiscovery, String] {
   match jv {
-    Json::Object(m) => {
+    Object(m) => {
       let schema_version = match get_str(m, "schema_version") {
         Ok(s) => s
         Err(e) => return Err(e)
