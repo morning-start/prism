@@ -1,5 +1,28 @@
 pkgtype(kind: "executable")
 
 import {
-  "morning-start/prism/wasm",
+  "morning-start/prism/lux",
+  "morning-start/prism/sdk",
+  "moonbitlang/core/json",
 }
+
+options(
+  link: {
+    "wasm": {
+      "exports": [
+        "wasm_to_lux_req",
+        "wasm_lux_req_to_provider",
+        "wasm_to_lux_resp",
+        "wasm_lux_resp_to_provider",
+        "wasm_sse_to_events",
+        "wasm_events_to_sse",
+        "wasm_sdk_encode_req",
+        "wasm_sdk_decode_resp",
+        "wasm_sdk_encode_stream",
+        "wasm_sdk_decode_sse",
+        "wasm_sdk_capability",
+      ],
+      "export-memory-name": "memory",
+    },
+  },
+)

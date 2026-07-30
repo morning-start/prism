@@ -586,10 +586,67 @@ WASM 导出函数在错误时返回 `{"error": "message"}` 格式。wrapper 层�
 
 ---
 
-## 九、注意事项
+## 九、MoonBit WASM 导出限制
+
+### 9.1 已知问题
+
+**MoonBit 0.1.20260713（当前版本）不支持将 `pub fn` 暴露为 WASM exports。**
+
+| 构建方式 | 结果 |
+|---------|------|
+| `moon build --target wasm-gc` (library) | 产生 `.core`/`.mi` 中间文件，无 `.wasm` |
+| `moon build --target wasm-gc` (executable) | 产生 `.wasm`，但仅导出 `_start` |
+| `moon test --target wasm-gc` | 按需生成 `.wasm`，函数编译在内但无 export section |
+
+**影响**：两个 wrapper 包的 WASM 加载层代码已编写完成且语法正确，但实际的 `wasm_*` 函数调用无法通过 WASM export 访问。一旦 MoonBit 工具链添加 WASM exports 支持，wrapper 包即可直接工作，无需修改代码。
+
+### 9.2 临时替代方案
+
+在 MoonBit 支持 WASM exports 之前，有以下替代方案：
+
+1. **MoonBit JS 目标**：使用 `moon build --target js` 编译为 JavaScript，通过 JS 桥接层在各语言中调用
+2. **Go wazero 中间层**：编写一个极薄的 Go 程序，用 wazero 加载 MoonBit WASM 并通过 Go 的 C ABI 或 HTTP 暴露函数
+3. **直接集成**：在 Go 项目中直接使用 MoonBit 的 Go SDK（`import prism` 的方式）
+
+## 十、构建与测试
+
+### Python (UV) wrapper
+
+```bash
+# 安装依赖
+cd wrappers/py
+uv sync
+
+# 运行测试
+uv run pytest -v
+```
+
+### TypeScript (Bun) wrapper
+
+```bash
+# 安装依赖
+cd wrappers/ts
+bun install
+
+# 运行测试
+bun test
+```
+
+### 编译 WASM 并更新 wrapper
+
+```bash
+# 编译 WASM-GC 目标
+moon build --target wasm-gc
+
+# 复制 WASM 文件到 wrapper 目录
+cp _build/wasm-gc/debug/build/cmd/main/main.wasm wrappers/py/prism.wasm
+cp _build/wasm-gc/debug/build/cmd/main/main.wasm wrappers/ts/prism.wasm
+```
+
+## 十一、注意事项
 
 1. **WASM 文件不 gitignore** — wrapper 包需要包含 `prism.wasm` 文件才能独立安装使用。可以在 CI 中编译后自动更新。
 2. **版本对齐** — wrapper 包版本与 Prism 主版本保持一致，用 `0.1.x` 系列。
 3. **开发流程** — 修改 MoonBit 核心后 → `moon build` → 覆盖 `wrappers/*/prism.wasm` → 在 wrapper 目录运行测试。
-4. **Bun 的 WebAssembly** — Bun 使用 V8 引擎，对标准 WASM 支持良好。但 `wasm-gc` 需要 V8 ≥119，当前 Bun 版本需要确认。
+4. **Bun 的 WebAssembly** — Bun 使用 V8 引擎，对标准 WASM 支持良好。
 5. **UV 的 wasmtime** — `wasmtime-py` 支持标准 WASM，跨平台（Win/Mac/Linux），不需额外二进制。
