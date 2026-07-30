@@ -8,16 +8,22 @@
 
 三行代码，调用任意 LLM 厂商：
 
-```moonbit
+```moonbit nocheck
+///|
 let prism = Prism::new().with_provider("openai")
+
+///|
 let req_json = prism.encode_request("你好", PrismOptions::default())
-let reply = prism.decode_response(resp_json)   // Ok("你好！有什么可以帮你的？")
+
+///|
+let reply = prism.decode_response(resp_json) // Ok("你好！有什么可以帮你的？")
 ```
 
 切换厂商只需改 provider 名：
 
-```moonbit
-let prism = Prism::new().with_provider("anthropic")  // 自动适配 Claude 格式
+```moonbit nocheck
+///|
+let prism = Prism::new().with_provider("anthropic") // 自动适配 Claude 格式
 ```
 
 ---
@@ -108,15 +114,20 @@ Prism::encode_request("你好", opts)
 
 ### L1：应用开发者——一行调用
 
-```moonbit
+```moonbit nocheck
+///|
 let prism = Prism::new().with_provider("openai").with_api_key("sk-xxx")
+
+///|
 let req = prism.encode_request("写一首诗", PrismOptions::default())
+
+///|
 let reply = prism.decode_response(resp_json)
 ```
 
 ### L2：框架作者——事件循环
 
-```moonbit
+```moonbit nocheck
 let ctx = Context::new()
   .add_system("你是一个有用的助手")
   .add_user("帮我查北京的天气")

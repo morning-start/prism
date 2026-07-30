@@ -33,10 +33,20 @@ test "wasm_to_lux_request - invalid JSON returns error" {
 
 ///|
 test "wasm_lux_request_to_provider - openai_chat encode" {
-  let msg = @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("Hello")])
+  let msg = @lux.LucentMessage::new(@lux.User, [
+    @lux.LucentContent::text("Hello"),
+  ])
   let req = @lux.LucentRequest::from_messages(
-    "gpt-4o", None, [msg], None, None, @lux.LucentOptions::default(),
-    None, None, None, None,
+    "gpt-4o",
+    None,
+    [msg],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
   )
   let json_str = req.to_json().stringify()
   let result = wasm_lux_request_to_provider("openai-chat", json_str)
@@ -48,8 +58,16 @@ test "wasm_lux_request_to_provider - openai_chat encode" {
 test "wasm_lux_request_to_provider - unknown provider returns error" {
   let msg = @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("Hi")])
   let req = @lux.LucentRequest::from_messages(
-    "test", None, [msg], None, None, @lux.LucentOptions::default(),
-    None, None, None, None,
+    "test",
+    None,
+    [msg],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
   )
   let json_str = req.to_json().stringify()
   let result = wasm_lux_request_to_provider("invalid", json_str)
@@ -88,7 +106,14 @@ test "wasm_lux_response_to_provider - openai_chat encode" {
   let content = [@lux.LucentContent::text("Hi")]
   let msg = @lux.LucentMessage::new(@lux.Assistant, content)
   let choice = @lux.LucentChoice::new(0, msg, @lux.Stop, None)
-  let resp = @lux.LucentResponse::new("resp-1", "gpt-4o", None, [choice], None, None)
+  let resp = @lux.LucentResponse::new(
+    "resp-1",
+    "gpt-4o",
+    None,
+    [choice],
+    None,
+    None,
+  )
   let json_str = resp.to_json().stringify()
   let result = wasm_lux_response_to_provider("openai-chat", json_str)
   assert_true(result.contains("choices"))
@@ -139,7 +164,10 @@ test "wasm_events_to_sse - openai_chat SSE encode" {
   let events = [
     @lux.LucentStreamEvent::ConversationStart(meta),
     @lux.LucentStreamEvent::BlockStart(0, bt),
-    @lux.LucentStreamEvent::BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
+    @lux.LucentStreamEvent::BlockDelta(
+      0,
+      @lux.LucentBlockDelta::text_delta("Hello"),
+    ),
     @lux.LucentStreamEvent::BlockEnd(0),
     @lux.LucentStreamEvent::Finish(@lux.Stop),
     @lux.LucentStreamEvent::Done,
