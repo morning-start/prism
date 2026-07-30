@@ -1,0 +1,5 @@
+pkgtype(kind: "executable")
+
+import {
+  "morning-start/prism/wasm",
+}
