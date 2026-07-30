@@ -1,0 +1,23 @@
+{
+  "name": "@morning-start/prism-wasm",
+  "version": "0.1.0",
+  "description": "Prism LLM protocol converter - universal WASM wrapper for TypeScript (Bun)",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "files": ["src/", "prism.wasm"],
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "bun run tsc --noEmit"
+  },
+  "keywords": ["llm", "ai", "protocol", "converter", "wasm"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/morning-start/prism"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.0.0"
+  }
+}
