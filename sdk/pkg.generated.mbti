@@ -10,6 +10,8 @@ pub fn all_providers() -> Array[ProviderRegistration]
 
 pub fn context_to_lux_request(Context, String, PrismOptions) -> @lux.LucentRequest
 
+pub fn get_schema(String) -> ProviderSchema?
+
 pub fn list_provider_names() -> Array[String]
 
 pub fn match_by_model(String) -> ProviderRegistration?
@@ -29,6 +31,14 @@ pub fn Context::add_system(Self, String) -> Self
 pub fn Context::add_tools(Self, Array[SdkTool]) -> Self
 pub fn Context::add_user(Self, String) -> Self
 pub fn Context::new() -> Self
+
+pub struct FieldConstraint {
+  min_val : Double?
+  max_val : Double?
+  required : Bool
+  allowed_values : Array[String]?
+}
+pub fn FieldConstraint::new(Double?, Double?, Bool, Array[String]?) -> Self
 
 pub struct Prism {
   provider : String
@@ -101,6 +111,25 @@ pub struct ProviderRegistration {
   events_encode : (Array[@lux.LucentStreamEvent]) -> Result[String, String]
 }
 pub fn ProviderRegistration::new(String, Array[String], @lux.ProviderCapability, (String) -> Result[@lux.LucentRequest, String], (@lux.LucentRequest) -> Result[String, String], (String) -> Result[@lux.LucentResponse, String], (@lux.LucentResponse) -> Result[String, String], (String) -> Result[Array[@lux.LucentStreamEvent], String], (Array[@lux.LucentStreamEvent]) -> Result[String, String]) -> Self
+
+pub struct ProviderSchema {
+  provider_name : String
+  temperature : FieldConstraint
+  top_p : FieldConstraint
+  top_k : FieldConstraint
+  max_output_tokens : FieldConstraint
+  resp_min_choices : Int
+  supports_tools : Bool
+  supports_system_instruction : Bool
+  supported_reasoning_efforts : Array[String]?
+  extra_checks : Array[() -> Array[String]]?
+}
+pub fn ProviderSchema::anthropic() -> Self
+pub fn ProviderSchema::azure() -> Self
+pub fn ProviderSchema::gemini() -> Self
+pub fn ProviderSchema::openai() -> Self
+pub fn ProviderSchema::validate_request(Self, @lux.LucentRequest) -> Array[String]
+pub fn ProviderSchema::validate_response(Self, @lux.LucentResponse) -> Array[String]
 
 pub struct SdkMessage {
   role : String
