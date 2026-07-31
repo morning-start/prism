@@ -746,6 +746,7 @@ pub fn LucentOptions::new(
 }
 
 ///|
+///|
 pub fn LucentCapabilities::default() -> LucentCapabilities {
   {
     tool_calling: false,
@@ -841,6 +842,77 @@ pub fn LucentOptions::with_extras(
   extras : Map[String, Json]?,
 ) -> LucentOptions {
   { ..self, extras, }
+}
+
+///|
+/// ValidateResult — 校验结果
+pub struct ValidateResult {
+  valid : Bool
+  errors : Array[String]
+  warnings : Array[String]
+}
+
+///|
+pub fn ValidateResult::ok() -> ValidateResult {
+  { valid: true, errors: [], warnings: [] }
+}
+
+///|
+pub fn ValidateResult::error(msg : String) -> ValidateResult {
+  { valid: false, errors: [msg], warnings: [] }
+}
+
+///|
+/// 校验 LucentRequest 的字段值合法性（与 ProviderCapability 无关的基本校验）
+/// 例如：temperature 范围 [0, 2]，max_output_tokens >= 1，model 非空
+pub fn LucentRequest::validate(self : LucentRequest) -> ValidateResult {
+  let errors : Array[String] = []
+  let warnings : Array[String] = []
+
+  if self.model == "" {
+    errors.push("model is required")
+  }
+  match self.options.temperature {
+    Some(t) => if t < 0.0 || t > 2.0 {
+      errors.push("temperature must be in [0, 2], got " + t.to_string())
+    }
+    None => ()
+  }
+  match self.options.top_p {
+    Some(p) => if p < 0.0 || p > 1.0 {
+      errors.push("top_p must be in [0, 1], got " + p.to_string())
+    }
+    None => ()
+  }
+  match self.options.top_k {
+    Some(k) => if k < 1 {
+      errors.push("top_k must be >= 1, got " + k.to_string())
+    }
+    None => ()
+  }
+  match self.options.max_output_tokens {
+    Some(m) => if m < 1 {
+      errors.push("max_output_tokens must be >= 1, got " + m.to_string())
+    }
+    None => ()
+  }
+  { valid: errors.length() == 0, errors, warnings }
+}
+
+///|
+/// 校验 LucentResponse 字段合法性
+pub fn LucentResponse::validate(self : LucentResponse) -> ValidateResult {
+  let errors : Array[String] = []
+  if self.id == "" {
+    errors.push("response id is required")
+  }
+  if self.model == "" {
+    errors.push("response model is required")
+  }
+  if self.choices.length() == 0 {
+    errors.push("response must have at least one choice")
+  }
+  { valid: errors.length() == 0, errors, warnings: [] }
 }
 
 ///|
