@@ -9,12 +9,15 @@
 ```
 lux/          ← Lucent IR 核心（纯数据结构，无 IO、无厂商绑定）
     │
-    ├── provider/openai_chat/    ← OpenAI Chat 适配器 ✅
-    ├── provider/anthropic/      ← Anthropic 适配器（待实现）
-    ├── provider/openai_responses/  ← OpenAI Responses 适配器（待实现）
-    ├── provider/gemini/         ← Google Gemini 适配器（待实现）
+    ├── provider/openai_chat/      ← OpenAI Chat 适配器 ✅
+    ├── provider/openai_responses/ ← OpenAI Responses 适配器 ✅
+    ├── provider/openai_codex/     ← OpenAI Codex 变体 ✅
+    ├── provider/openai_azure/     ← Azure OpenAI 变体 ✅
+    ├── provider/anthropic/        ← Anthropic Messages 适配器 ✅
+    ├── provider/gemini/           ← Google Gemini 适配器 ✅
+    ├── provider/gemini_vertex/    ← Google Vertex AI 变体 ✅
     │
-    └── wasm/                    ← WASM 导出层（待实现）
+    └── wasm/                      ← WASM 导出层（42 导出函数）✅
 ```
 
 每一层都是纯函数：`String JSON → Result[LucentRequest, Error]`
@@ -65,11 +68,18 @@ prism/
 │   │   ├── chat.mbt             # 6 函数（双向转换 + 流式）
 │   │   └── chat_wbtest.mbt      # 35+ 测试
 │   │
-│   └── ...                      # 其他适配器待实现
+│   ├── anthropic/               # Anthropic Messages 适配器
+│   ├── openai_responses/        # OpenAI Responses 适配器
+│   ├── openai_codex/            # OpenAI Codex 变体
+│   ├── openai_azure/            # Azure OpenAI 变体
+│   ├── gemini/                  # Google Gemini 适配器
+│   └── gemini_vertex/           # Google Vertex AI 变体
+│
+├── sdk/                         # Provider 注册表 + Prism/Context/Event
 │
 ├── wasm/                        # WASM 导出层
-│   ├── moon.pkg                 # 依赖 lux + 各 provider
-│   └── ...
+│   ├── moon.pkg                 # 依赖 sdk + lux
+│   └── wasm.mbt                # 42 导出函数，7 provider + SDK
 │
 ├── schemas/
 │   └── lux-ir-v1.json           # JSON Schema v1（事实标准）

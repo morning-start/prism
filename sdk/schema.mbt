@@ -58,10 +58,30 @@ pub struct ProviderSchema {
 pub fn ProviderSchema::openai() -> ProviderSchema {
   {
     provider_name: "openai",
-    temperature: { min_val: Some(0.0), max_val: Some(2.0), required: false, allowed_values: None },
-    top_p: { min_val: Some(0.0), max_val: Some(1.0), required: false, allowed_values: None },
-    top_k: { min_val: None, max_val: None, required: false, allowed_values: None },
-    max_output_tokens: { min_val: Some(1.0), max_val: None, required: false, allowed_values: None },
+    temperature: {
+      min_val: Some(0.0),
+      max_val: Some(2.0),
+      required: false,
+      allowed_values: None,
+    },
+    top_p: {
+      min_val: Some(0.0),
+      max_val: Some(1.0),
+      required: false,
+      allowed_values: None,
+    },
+    top_k: {
+      min_val: None,
+      max_val: None,
+      required: false,
+      allowed_values: None,
+    },
+    max_output_tokens: {
+      min_val: Some(1.0),
+      max_val: None,
+      required: false,
+      allowed_values: None,
+    },
     resp_min_choices: 1,
     supports_tools: true,
     supports_system_instruction: true,
@@ -75,10 +95,30 @@ pub fn ProviderSchema::openai() -> ProviderSchema {
 pub fn ProviderSchema::anthropic() -> ProviderSchema {
   {
     provider_name: "anthropic",
-    temperature: { min_val: Some(0.0), max_val: Some(1.0), required: false, allowed_values: None },
-    top_p: { min_val: Some(0.0), max_val: Some(1.0), required: false, allowed_values: None },
-    top_k: { min_val: Some(1.0), max_val: None, required: false, allowed_values: None },
-    max_output_tokens: { min_val: Some(1.0), max_val: None, required: false, allowed_values: None },
+    temperature: {
+      min_val: Some(0.0),
+      max_val: Some(1.0),
+      required: false,
+      allowed_values: None,
+    },
+    top_p: {
+      min_val: Some(0.0),
+      max_val: Some(1.0),
+      required: false,
+      allowed_values: None,
+    },
+    top_k: {
+      min_val: Some(1.0),
+      max_val: None,
+      required: false,
+      allowed_values: None,
+    },
+    max_output_tokens: {
+      min_val: Some(1.0),
+      max_val: None,
+      required: false,
+      allowed_values: None,
+    },
     resp_min_choices: 1,
     supports_tools: true,
     supports_system_instruction: true,
@@ -92,10 +132,30 @@ pub fn ProviderSchema::anthropic() -> ProviderSchema {
 pub fn ProviderSchema::gemini() -> ProviderSchema {
   {
     provider_name: "gemini",
-    temperature: { min_val: Some(0.0), max_val: Some(1.0), required: false, allowed_values: None },
-    top_p: { min_val: Some(0.0), max_val: Some(1.0), required: false, allowed_values: None },
-    top_k: { min_val: Some(1.0), max_val: None, required: false, allowed_values: None },
-    max_output_tokens: { min_val: Some(1.0), max_val: None, required: false, allowed_values: None },
+    temperature: {
+      min_val: Some(0.0),
+      max_val: Some(1.0),
+      required: false,
+      allowed_values: None,
+    },
+    top_p: {
+      min_val: Some(0.0),
+      max_val: Some(1.0),
+      required: false,
+      allowed_values: None,
+    },
+    top_k: {
+      min_val: Some(1.0),
+      max_val: None,
+      required: false,
+      allowed_values: None,
+    },
+    max_output_tokens: {
+      min_val: Some(1.0),
+      max_val: None,
+      required: false,
+      allowed_values: None,
+    },
     resp_min_choices: 1,
     supports_tools: true,
     supports_system_instruction: true,
@@ -142,31 +202,56 @@ pub fn ProviderSchema::validate_request(
   match req.options.temperature {
     Some(t) => {
       match self.temperature.min_val {
-        Some(min) => if t < min {
-          errors.push(self.provider_name + " temperature must be >= " + min.to_string() + ", got " + t.to_string())
-        }
+        Some(min) =>
+          if t < min {
+            errors.push(
+              self.provider_name +
+              " temperature must be >= " +
+              min.to_string() +
+              ", got " +
+              t.to_string(),
+            )
+          }
         None => ()
       }
       match self.temperature.max_val {
-        Some(max) => if t > max {
-          errors.push(self.provider_name + " temperature must be <= " + max.to_string() + ", got " + t.to_string())
-        }
+        Some(max) =>
+          if t > max {
+            errors.push(
+              self.provider_name +
+              " temperature must be <= " +
+              max.to_string() +
+              ", got " +
+              t.to_string(),
+            )
+          }
         None => ()
       }
     }
-    None => if self.temperature.required {
-      errors.push(self.provider_name + " temperature is required")
-    }
+    None =>
+      if self.temperature.required {
+        errors.push(self.provider_name + " temperature is required")
+      }
   }
 
   match req.options.top_p {
     Some(p) => {
       match self.top_p.min_val {
-        Some(min) => if p < min { errors.push(self.provider_name + " top_p must be >= " + min.to_string()) }
+        Some(min) =>
+          if p < min {
+            errors.push(
+              self.provider_name + " top_p must be >= " + min.to_string(),
+            )
+          }
         None => ()
       }
       match self.top_p.max_val {
-        Some(max) => if p > max { errors.push(self.provider_name + " top_p must be <= " + max.to_string()) }
+        Some(max) =>
+          if p > max {
+            errors.push(
+              self.provider_name + " top_p must be <= " + max.to_string(),
+            )
+          }
         None => ()
       }
     }
@@ -174,34 +259,43 @@ pub fn ProviderSchema::validate_request(
   }
 
   match req.options.top_k {
-    Some(k) => {
+    Some(k) =>
       match self.top_k.min_val {
-        Some(min) => if k < min.to_int() { errors.push(self.provider_name + " top_k must be >= " + min.to_string()) }
+        Some(min) =>
+          if k < min.to_int() {
+            errors.push(
+              self.provider_name + " top_k must be >= " + min.to_string(),
+            )
+          }
         None => ()
       }
-    }
     None => ()
   }
 
   match req.options.max_output_tokens {
-    Some(m) => {
+    Some(m) =>
       match self.max_output_tokens.min_val {
-        Some(min) => if m < min.to_int() { errors.push(self.provider_name + " max_output_tokens must be >= " + min.to_string()) }
+        Some(min) =>
+          if m < min.to_int() {
+            errors.push(
+              self.provider_name +
+              " max_output_tokens must be >= " +
+              min.to_string(),
+            )
+          }
         None => ()
       }
-    }
     None => ()
   }
 
   // 3. 额外自定义校验
   match self.extra_checks {
-    Some(checks) => {
+    Some(checks) =>
       for check in checks {
         for e in check() {
           errors.push(e)
         }
       }
-    }
     None => ()
   }
 
@@ -225,7 +319,12 @@ pub fn ProviderSchema::validate_response(
 
   // 最少 choices 数
   if resp.choices.length() < self.resp_min_choices {
-    errors.push(self.provider_name + " response must have at least " + self.resp_min_choices.to_string() + " choice(s)")
+    errors.push(
+      self.provider_name +
+      " response must have at least " +
+      self.resp_min_choices.to_string() +
+      " choice(s)",
+    )
   }
 
   errors

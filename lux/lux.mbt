@@ -746,6 +746,7 @@ pub fn LucentOptions::new(
 }
 
 ///|
+
 ///|
 pub fn LucentCapabilities::default() -> LucentCapabilities {
   {
@@ -873,27 +874,31 @@ pub fn LucentRequest::validate(self : LucentRequest) -> ValidateResult {
     errors.push("model is required")
   }
   match self.options.temperature {
-    Some(t) => if t < 0.0 || t > 2.0 {
-      errors.push("temperature must be in [0, 2], got " + t.to_string())
-    }
+    Some(t) =>
+      if t < 0.0 || t > 2.0 {
+        errors.push("temperature must be in [0, 2], got " + t.to_string())
+      }
     None => ()
   }
   match self.options.top_p {
-    Some(p) => if p < 0.0 || p > 1.0 {
-      errors.push("top_p must be in [0, 1], got " + p.to_string())
-    }
+    Some(p) =>
+      if p < 0.0 || p > 1.0 {
+        errors.push("top_p must be in [0, 1], got " + p.to_string())
+      }
     None => ()
   }
   match self.options.top_k {
-    Some(k) => if k < 1 {
-      errors.push("top_k must be >= 1, got " + k.to_string())
-    }
+    Some(k) =>
+      if k < 1 {
+        errors.push("top_k must be >= 1, got " + k.to_string())
+      }
     None => ()
   }
   match self.options.max_output_tokens {
-    Some(m) => if m < 1 {
-      errors.push("max_output_tokens must be >= 1, got " + m.to_string())
-    }
+    Some(m) =>
+      if m < 1 {
+        errors.push("max_output_tokens must be >= 1, got " + m.to_string())
+      }
     None => ()
   }
   { valid: errors.length() == 0, errors, warnings }

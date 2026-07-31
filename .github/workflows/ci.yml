@@ -28,8 +28,16 @@ jobs:
       - name: H2. Type check
         run: moon check --warn-list +73
 
-      - name: H3. Run tests
+      - name: H3. Run tests (native)
         run: moon test --target native
 
-      - name: H5. API surface
-        run: moon info --target native
+      - name: H4. Build WASM (wasm-gc)
+        run: moon build --target wasm-gc
+
+      - name: H5. Run tests (wasm-gc)
+        run: moon test --target wasm-gc
+
+      - name: H6. API surface + interface drift check
+        run: |
+          moon info --target native
+          git diff --exit-code -- '**/pkg.generated.mbti'

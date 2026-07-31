@@ -336,6 +336,7 @@ pub fn LucentRequest::from_json(Json) -> Result[Self, String]
 pub fn LucentRequest::from_messages(String, Array[LucentContent]?, Array[LucentMessage], Array[LucentTool]?, LucentToolChoice?, LucentOptions, LucentCapabilities?, LucentReasoningConfig?, Map[String, String]?, Map[String, Json]?) -> Self
 pub fn LucentRequest::new(String, Array[LucentContent]?, Array[LucentConversationItem], Array[LucentTool]?, LucentToolChoice?, LucentOptions, LucentCapabilities?, LucentReasoningConfig?, Map[String, String]?, Map[String, Json]?) -> Self
 pub fn LucentRequest::to_json(Self) -> Json
+pub fn LucentRequest::validate(Self) -> ValidateResult
 pub fn LucentRequest::with_conversation(Self, Array[LucentConversationItem]) -> Self
 pub fn LucentRequest::with_stream(Self, Bool) -> Self
 
@@ -352,6 +353,7 @@ pub fn LucentResponse::from_json(Json) -> Result[Self, String]
 pub fn LucentResponse::get_text(Self) -> String
 pub fn LucentResponse::new(String, String, Int?, Array[LucentChoice], LucentUsage?, Json?) -> Self
 pub fn LucentResponse::to_json(Self) -> Json
+pub fn LucentResponse::validate(Self) -> ValidateResult
 pub fn LucentResponse::with_provider_payload(Self, Json?) -> Self
 
 pub(all) enum LucentRole {
@@ -490,6 +492,14 @@ pub struct ProviderCapability {
 pub fn ProviderCapability::from_json(Json) -> Result[Self, String]
 pub fn ProviderCapability::new(String, String, LucentCapabilities, Map[String, Json]?) -> Self
 pub fn ProviderCapability::to_json(Self) -> Json
+
+pub struct ValidateResult {
+  valid : Bool
+  errors : Array[String]
+  warnings : Array[String]
+}
+pub fn ValidateResult::error(String) -> Self
+pub fn ValidateResult::ok() -> Self
 
 // Type aliases
 

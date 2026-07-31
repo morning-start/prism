@@ -4,12 +4,12 @@ version = "0.1.0"
 
 readme = "README.mbt.md"
 
-repository = ""
+repository = "https://github.com/morning-start/prism"
 
-license = "Apache-2.0"
+license = "MIT"
 
-keywords = [ ]
+keywords = [ "llm", "wasm", "protocol", "middleware", "adapter" ]
 
 preferred_target = "wasm-gc"
 
-description = ""
+description = "A unified LLM protocol middleware converting between OpenAI, Anthropic, Gemini and other provider formats via the Lucent IR neutral protocol"
