@@ -135,12 +135,26 @@ pub fn wasm_events_to_sse(provider : String, json_str : String) -> String {
 /// === SDK 层 API ===
 
 ///|
-/// 文本 → provider JSON（encode req）
+/// 文本 → provider JSON（encode req），含 schema 校验
 pub fn wasm_sdk_encode_req(provider : String, text : String) -> String {
+  // 先校验 Provider 是否存在
+  match check_provider_schema(provider) {
+    Err(e) => return e
+    _ => ()
+  }
   let prism = @sdk.Prism::new().with_provider(provider)
   match prism.encode_request(text, @sdk.PrismOptions::default()) {
     Ok(v) => v
     Err(e) => to_error(e)
+  }
+}
+
+///|
+/// 校验 Provider 的 schema 约束
+fn check_provider_schema(provider : String) -> Result[Unit, String] {
+  match @sdk.match_provider_name(provider) {
+    Some(_) => Ok(())
+    None => Err(to_error("unknown provider: " + provider))
   }
 }
 
