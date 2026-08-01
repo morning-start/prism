@@ -226,3 +226,64 @@ test "gemini_to_lux_request - duplicate tool names pair correctly" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+/// === 保真度：媒体占位修复 ===
+
+///|
+test "decode - inlineData maps to image multimedia not placeholder" {
+  let json = "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"AA\"}}]}]}"
+  match gemini_to_lux_request(json) {
+    Ok(cr) => {
+      let req = cr.value()
+      // 不得输出文本占位
+      assert_true(!req.to_json().stringify().contains("[inline data]"))
+      // 应精确映射为 Image（LucentMultimedia）
+      match req.conversation[0] {
+        Message(m) =>
+          match m.content[0] {
+            Image(mm) => {
+              assert_eq(mm.media_type, "image/png")
+              match mm.source {
+                Inline(data) => assert_eq(data, "AA")
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+      // 精确映射：无诊断
+      assert_eq(cr.diagnostics().length(), 0)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "decode - fileData maps to image multimedia not placeholder" {
+  let json = "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"fileData\":{\"mimeType\":\"application/pdf\",\"fileUri\":\"gs://bucket/a.pdf\"}}]}]}"
+  match gemini_to_lux_request(json) {
+    Ok(cr) => {
+      let req = cr.value()
+      // 不得输出文本占位
+      assert_true(!req.to_json().stringify().contains("[file data]"))
+      // 应精确映射为 Image（LucentMultimedia, FileUri source）
+      match req.conversation[0] {
+        Message(m) =>
+          match m.content[0] {
+            Image(mm) => {
+              assert_eq(mm.media_type, "application/pdf")
+              match mm.source {
+                FileUri(uri) => assert_eq(uri, "gs://bucket/a.pdf")
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
