@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -12,7 +13,16 @@ from prism_wasm.errors import PrismError
 from prism_wasm.types import FinishReason, TextDeltaEvent, FinishEvent, parse_events
 from prism_wasm.wasm import WasmRuntime, _WASM_EXPORT_MAP
 
-WASM_PATH = Path(__file__).parent.parent / "prism.wasm"
+# Prefer the PRISM_WASM env var (like the TS integration test); fall back to
+# the fresh classic-wasm build under _build so tests always run against the
+# current ABI instead of a possibly stale bundled prism.wasm.
+WASM_PATH = Path(
+    os.environ.get(
+        "PRISM_WASM",
+        Path(__file__).parent.parent.parent.parent
+        / "_build/wasm/debug/build/cmd/main/main.wasm",
+    )
+)
 
 
 @pytest.fixture(scope="module")
