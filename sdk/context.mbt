@@ -12,11 +12,25 @@ pub struct SdkMessage {
 }
 
 ///|
+pub fn SdkMessage::new(role : String, content : String) -> SdkMessage {
+  { role, content }
+}
+
+///|
 /// SdkTool — SDK 层的工具定义
 pub struct SdkTool {
   name : String
   description : String
   parameters_json : String
+}
+
+///|
+pub fn SdkTool::new(
+  name : String,
+  description : String,
+  parameters_json : String,
+) -> SdkTool {
+  { name, description, parameters_json }
 }
 
 ///|
@@ -41,7 +55,7 @@ pub fn Context::add_system(self : Context, prompt : String) -> Context {
 ///|
 /// 添加用户消息
 pub fn Context::add_user(self : Context, text : String) -> Context {
-  let new_msgs = self.messages
+  let new_msgs = self.messages.map(fn(msg) { msg })
   new_msgs.push({ role: "user", content: text })
   { ..self, messages: new_msgs }
 }
@@ -49,7 +63,7 @@ pub fn Context::add_user(self : Context, text : String) -> Context {
 ///|
 /// 添加助手消息
 pub fn Context::add_assistant(self : Context, text : String) -> Context {
-  let new_msgs = self.messages
+  let new_msgs = self.messages.map(fn(msg) { msg })
   new_msgs.push({ role: "assistant", content: text })
   { ..self, messages: new_msgs }
 }

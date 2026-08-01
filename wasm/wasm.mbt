@@ -259,7 +259,7 @@ fn json_escape_sdk(s : String) -> String {
 pub fn wasm_sdk_capability(provider : String) -> String {
   let prism = @sdk.Prism::new().with_provider(provider)
   match prism.capability(provider) {
-    Some(c) => "{\"provider\":\"" + c.provider + "\"}"
+    Some(c) => c.to_json().stringify()
     None => to_error("unknown provider")
   }
 }

@@ -27,12 +27,16 @@ pub struct ConversionDiagnostic {
   detail : String?
 } derive(Eq, @debug.Debug)
 pub fn ConversionDiagnostic::new(String, ConversionStatus, String?) -> Self
+pub fn ConversionDiagnostic::status(Self) -> ConversionStatus
 
 pub struct ConversionResult[T] {
   value : T
   diagnostics : Array[ConversionDiagnostic]
 } derive(Eq, @debug.Debug)
+pub fn[T] ConversionResult::diagnostics(Self[T]) -> Array[ConversionDiagnostic]
 pub fn[T] ConversionResult::new(T) -> Self[T]
+pub fn[T] ConversionResult::value(Self[T]) -> T
+pub fn[T] ConversionResult::with_diagnostic(Self[T], ConversionDiagnostic) -> Self[T]
 
 pub(all) enum ConversionStatus {
   Exact

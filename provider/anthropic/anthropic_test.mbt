@@ -35,8 +35,22 @@ test "round trip - request encode then decode preserves semantics" {
         Ok(round) => {
           assert_eq(round.model, "claude-sonnet-4")
           assert_eq(round.conversation.length(), 1)
+          match round.conversation[0] {
+            Message(m) => {
+              assert_eq(m.role, User)
+              match m.content[0] {
+                Text(t, _) => assert_eq(t, "hi")
+                _ => assert_true(false)
+              }
+            }
+            _ => assert_true(false)
+          }
           match round.instructions {
-            Some(_) => ()
+            Some(instrs) =>
+              match instrs[0] {
+                Text(t, _) => assert_eq(t, "You are helpful")
+                _ => assert_true(false)
+              }
             None => assert_true(false)
           }
         }
