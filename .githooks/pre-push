@@ -9,6 +9,13 @@ case ":$PATH:" in
 esac
 export PATH
 
+# 标签推送跳过检查：推送 tag 时不运行全量测试
+while read -r local_ref local_sha remote_ref remote_sha || [ -n "$local_ref" ]; do
+  if printf '%s' "$local_ref" | grep -q '^refs/tags/'; then
+    exit 0
+  fi
+done
+
 echo "=== [L2] moon test --target native ==="
 moon test --target native
 

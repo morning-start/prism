@@ -9,6 +9,43 @@ case ":$PATH:" in
 esac
 export PATH
 
+# 安全扫描：检测 staged 文件中的密钥/凭证
+extract_added_lines() {
+  git diff-index --cached -p HEAD -- . ':(exclude).githooks/' 2>/dev/null \
+    | grep "^+" | grep -v "^+++" || true
+}
+
+if git diff-index --cached --name-only --diff-filter=ACM HEAD 2>/dev/null \
+   | grep -qv '^\.githooks/'; then
+
+  DIFF_LINES="$(extract_added_lines)"
+  FOUND=0
+  MATCHES=""
+
+  check_pattern() {
+    local pattern="$1"; local label="$2"
+    if printf '%s\n' "$DIFF_LINES" | grep -qE "$pattern" 2>/dev/null; then
+      FOUND=1; MATCHES="${MATCHES}  - ${label}\n"
+    fi
+  }
+
+  check_pattern 'AKIA[0-9A-Z]{16}'                      'AWS Access Key ID'
+  check_pattern '-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----' 'Private Key'
+  check_pattern "(password|passwd|pwd)\s*[:=]\s*['\"][^'\" ]{4,}['\"]" 'Hardcoded password'
+  check_pattern "(secret|api_key|apikey)\s*[:=]\s*['\"][A-Za-z0-9]{15,}['\"]" 'Secret/API key'
+  check_pattern 'gh[pouhs]_[A-Za-z0-9]{30,}'            'GitHub token'
+  check_pattern 'sk_live_|pk_live_'                      'Stripe live key'
+  check_pattern 'AIza[0-9A-Z_-]{35}'                     'Google API key'
+  check_pattern 'xox[baprs]-'                            'Slack token'
+
+  if [ "$FOUND" = "1" ]; then
+    echo "SECURITY: Potential secrets detected!"
+    printf '%s' "$MATCHES"
+    echo "Use --no-verify to bypass if false positive."
+    exit 1
+  fi
+fi
+
 echo "=== [L1] moon fmt --check ==="
 moon fmt --check 2>/dev/null || {
   echo "⚠️  moon fmt --check 失败，尝试直接检查..."
