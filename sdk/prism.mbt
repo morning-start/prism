@@ -105,6 +105,78 @@ pub fn Prism::decode_response(
 }
 
 ///|
+/// 将提供商响应解码为完整 LucentResponse，并返回结构化校验诊断。
+pub fn Prism::decode_response_with_diagnostics(
+  self : Prism,
+  json_str : String,
+) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
+  match self.decode_to_lux(json_str) {
+    Ok(resp) => {
+      let result = @lux.ConversionResult::new(resp)
+      match get_schema(self.provider) {
+        Some(schema) => {
+          let mut checked = result
+          for error in schema.validate_response(resp) {
+            checked = checked.with_diagnostic(
+              @lux.ConversionDiagnostic::new(
+                "response",
+                @lux.Invalid,
+                Some(error),
+              ),
+            )
+          }
+          Ok(checked)
+        }
+        None => Ok(result)
+      }
+    }
+    Err(e) => Err(e)
+  }
+}
+
+///|
+
+///|
+
+///|
+/// 将文本请求编码为提供商 JSON，并返回结构化校验诊断。
+pub fn Prism::encode_request_with_diagnostics(
+  self : Prism,
+  text : String,
+  opts : PrismOptions,
+) -> Result[@lux.ConversionResult[String], String] {
+  let ctx = Context::new()
+  let ctx = ctx.add_user(text)
+  let model = match opts.model {
+    Some(m) => m
+    None => "gpt-4o"
+  }
+  let req = context_to_lux_request(ctx, model, opts)
+  let mut result = @lux.ConversionResult::new(req)
+  match get_schema(self.provider) {
+    Some(schema) =>
+      for error in schema.validate_request(req) {
+        result = result.with_diagnostic(
+          @lux.ConversionDiagnostic::new("request", @lux.Invalid, Some(error)),
+        )
+      }
+    None => ()
+  }
+  match self.encode_lux_request(result.value()) {
+    Ok(json) => {
+      let mut encoded = @lux.ConversionResult::new(json)
+      for diagnostic in result.diagnostics() {
+        encoded = encoded.with_diagnostic(diagnostic)
+      }
+      Ok(encoded)
+    }
+    Err(e) => Err(e)
+  }
+}
+
+///|
+
+///|
 /// 将提供商 JSON 解码为 LucentResponse（基于 ProviderRegistration 注册表）
 fn Prism::decode_to_lux(
   self : Prism,
@@ -208,9 +280,9 @@ fn lucent_events_to_prism(
             is_error: tr.is_error,
           }),
         )
-      BlockStart(_, Thinking) =>
-        result.push(Thinking({ text: "", signature: None, redacted: false }))
-      BlockDelta(_, ThinkingDelta(s)) => result.push(TextDelta(s)) // thinking 文本流式输出
+      BlockStart(_, Thinking) => ()
+      BlockDelta(_, ThinkingDelta(s)) =>
+        result.push(Thinking({ text: s, signature: None, redacted: false }))
       Finish(fr) => {
         let pfr = match fr {
           Stop => Stop

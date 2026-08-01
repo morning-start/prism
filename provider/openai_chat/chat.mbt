@@ -356,15 +356,16 @@ fn tool_choice_to_json(tc : @lux.LucentToolChoice) -> String {
 }
 
 ///|
-/// 单个 content part → JSON 片段（用于 messages[].content 数组形式）
-/// 返回 Some(fragment) 表示需要数组形式；None 表示该 part 不入 content
+/// 单个 content part → 文本片段（用于 messages[].content 字符串拼接）
+/// 返回 Some(fragment) 表示该 part 需入 content；None 表示不入 content
+/// 注意：Text 返回原始文本，由调用方统一 escape_json 转义
 fn content_part_to_json(
   c : @lux.LucentContent,
   out_tool_calls : Array[String],
   out_refusal : Array[String],
 ) -> String? {
   match c {
-    Text(s, _) => Some("\"" + escape_json(s) + "\"")
+    Text(s, _) => Some(s)
     ToolUse(tu) => {
       // 工具调用入 tool_calls 数组，不入 content
       out_tool_calls.push(
@@ -1047,7 +1048,7 @@ pub fn capability() -> @lux.ProviderCapability {
       true,
       true,
       true,
-      [@lux.Text, @lux.Image, @lux.Audio],
+      [@lux.Text, @lux.Image],
       [@lux.Text],
     ),
     None,

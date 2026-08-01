@@ -18,6 +18,8 @@ pub struct ProviderRegistration {
   aliases : Array[String]
   /// 能力声明
   capability : @lux.ProviderCapability
+  /// model pattern（从 capability 提取，用于文本通配符匹配）
+  model_pattern : String
   /// 请求解码：provider JSON → LucentRequest
   request_decode : (String) -> Result[@lux.LucentRequest, String]
   /// 请求编码：LucentRequest → provider JSON
@@ -37,6 +39,7 @@ pub fn ProviderRegistration::new(
   name : String,
   aliases : Array[String],
   capability : @lux.ProviderCapability,
+  model_pattern : String,
   request_decode : (String) -> Result[@lux.LucentRequest, String],
   request_encode : (@lux.LucentRequest) -> Result[String, String],
   response_decode : (String) -> Result[@lux.LucentResponse, String],
@@ -48,6 +51,7 @@ pub fn ProviderRegistration::new(
     name,
     aliases,
     capability,
+    model_pattern,
     request_decode,
     request_encode,
     response_decode,
@@ -69,6 +73,7 @@ pub fn all_providers() -> Array[ProviderRegistration] {
       "openai",
       ["openai-responses", "oai-responses"],
       @openai_responses.capability(),
+      "gpt-*,o*",
       @openai_responses.openai_responses_to_lux_request,
       @openai_responses.lux_request_to_openai_responses,
       @openai_responses.openai_responses_to_lux_response,
@@ -81,6 +86,7 @@ pub fn all_providers() -> Array[ProviderRegistration] {
       "openai-chat",
       ["openai_chat", "oai-chat", "chat"],
       @openai_chat.capability(),
+      "gpt-*,o*",
       @openai_chat.openai_chat_to_lux_request,
       @openai_chat.lux_request_to_openai_chat,
       @openai_chat.openai_chat_to_lux_response,
@@ -93,6 +99,7 @@ pub fn all_providers() -> Array[ProviderRegistration] {
       "anthropic",
       ["claude", "claude-messages"],
       @anthropic.capability(),
+      "claude-*",
       @anthropic.anthropic_to_lux_request,
       @anthropic.lux_request_to_anthropic,
       @anthropic.anthropic_to_lux_response,
@@ -105,6 +112,7 @@ pub fn all_providers() -> Array[ProviderRegistration] {
       "gemini",
       ["google", "google-gemini"],
       @gemini.capability(),
+      "gemini-*",
       @gemini.gemini_to_lux_request,
       @gemini.lux_request_to_gemini,
       @gemini.gemini_to_lux_response,
@@ -117,6 +125,7 @@ pub fn all_providers() -> Array[ProviderRegistration] {
       "google-vertex",
       ["vertex", "gemini-vertex"],
       @gemini_vertex.capability(),
+      "gemini-*",
       @gemini_vertex.vertex_to_lux_request,
       @gemini_vertex.lux_request_to_vertex,
       @gemini_vertex.vertex_to_lux_response,
@@ -129,6 +138,7 @@ pub fn all_providers() -> Array[ProviderRegistration] {
       "azure-openai",
       ["azure", "azure-openai-responses"],
       @openai_azure.capability(),
+      "azure-*",
       @openai_azure.azure_to_lux_request,
       @openai_azure.lux_request_to_azure,
       @openai_azure.azure_to_lux_response,
@@ -141,6 +151,7 @@ pub fn all_providers() -> Array[ProviderRegistration] {
       "openai-codex",
       ["codex", "gpt-codex"],
       @openai_codex.capability(),
+      "gpt-*-codex",
       @openai_codex.codex_to_lux_request,
       @openai_codex.lux_request_to_codex,
       @openai_codex.codex_to_lux_response,
@@ -179,71 +190,159 @@ pub fn match_provider_name(provider_name : String) -> ProviderRegistration? {
     }
     i = i + 1
   }
-  None
+  // 3. 未命中名称时，把输入当作模型名匹配最具体的注册项
+  match_by_model(provider_name)
 }
 
 ///|
 /// 根据 model_name 匹配 Provider（通过 model_pattern 子串匹配）
 ///
-/// 使用朴素子串匹配作为正则的前缀兜底。
-/// 例如 "gpt-4o-codex" 匹配 "gpt-*-codex"（含 `-codex` 子串且 name 含 "gpt"）。
-///
-/// 返回最先匹配（按 ALL_PROVIDERS 顺序）的 ProviderRegistration，或 None。
+/// 返回最具体的匹配（pattern 中 * 越多越优先），或 None。
 pub fn match_by_model(model_name : String) -> ProviderRegistration? {
   let providers = all_providers()
+  let mut best : ProviderRegistration? = None
+  let mut best_score = 0
   let mut i = 0
   while i < providers.length() {
     let reg = providers[i]
-    if model_pattern_matches(reg.capability.model_pattern, model_name) {
-      return Some(reg)
+    let score = pattern_specificity(reg.model_pattern)
+    if score > 0 &&
+      score > best_score &&
+      model_pattern_matches(reg.model_pattern, model_name) {
+      best = Some(reg)
+      best_score = score
     }
     i = i + 1
   }
-  None
+  best
 }
 
 ///|
 /// 朴素 model_pattern 匹配
 ///
-/// 支持的 pattern 格式：
-///   - "claude-*"  → 前缀匹配 "claude-"
-///   - "gpt-*"    → 前缀匹配 "gpt-"
-///   - "o*"       → 前缀匹配 "o"
-///   - "azure-*"  → 前缀匹配 "azure-"
-///   - "gpt-*-codex" → 前后缀匹配（含 "-codex" 后缀且前缀匹配 "gpt-"）
+/// 支持逗号分隔的多 pattern（如 "gpt-*,o*"）。
+/// 单 pattern 格式：
+///   - "claude-*"     → 前缀匹配 "claude-"
+///   - "gpt-*" / "o*" → 前缀匹配
+///   - "gpt-*-codex"  → 前后缀匹配
 ///
 /// 这是最简实现，未来可替换为完整 glob/regex 引擎。
 fn model_pattern_matches(pattern : String, model_name : String) -> Bool {
-  if pattern.contains("*") {
-    // 含通配符：拆分为前后缀
-    let star_pos = find_first_star(pattern)
-    if star_pos == -1 {
-      return pattern == model_name
+  let parts = pattern_parts(pattern)
+  let mut i = 0
+  while i < parts.length() {
+    if single_pattern_matches(parts[i], model_name) {
+      return true
     }
-    let prefix = substring(pattern, 0, star_pos)
-    let suffix = substring(pattern, star_pos + 1, pattern.length())
-    if suffix.contains("*") {
-      // 形如 "gpt-*-codex"：拆出第二段
-      let second_star = find_first_star(suffix)
-      let mid_end = substring(suffix, 0, second_star)
-      let final_suffix = substring(suffix, second_star + 1, suffix.length())
-      if model_name[:prefix.length()] == prefix &&
-        mid_end != "" &&
-        contains_after(model_name, prefix, mid_end) &&
-        model_name[model_name.length() - final_suffix.length():] == final_suffix {
-        true
-      } else {
-        false
-      }
-    } else if model_name[:prefix.length()] == prefix &&
-      model_name[model_name.length() - suffix.length():] == suffix {
-      true
-    } else {
-      false
-    }
-  } else {
-    pattern == model_name
+    i = i + 1
   }
+  false
+}
+
+///|
+/// 单个 pattern 的匹配（含通配符）
+fn single_pattern_matches(pattern : String, model_name : String) -> Bool {
+  if !pattern.contains("*") {
+    return pattern == model_name
+  }
+  let star_pos = find_first_star(pattern)
+  let prefix = pattern[0:star_pos].to_owned()
+  let suffix = pattern[star_pos + 1:pattern.length()].to_owned()
+  if suffix.contains("*") {
+    let second_star = find_first_star(suffix)
+    let mid_end = substring(suffix, 0, second_star)
+    let final_suffix = substring(suffix, second_star + 1, suffix.length())
+    let prefix_ok = prefix.length() <= model_name.length() &&
+      substring(model_name, 0, prefix.length()) == prefix
+    let suffix_ok = final_suffix.length() <= model_name.length() &&
+      substring(
+        model_name,
+        model_name.length() - final_suffix.length(),
+        model_name.length(),
+      ) ==
+      final_suffix
+    prefix_ok &&
+    mid_end != "" &&
+    contains_after(model_name, prefix, mid_end) &&
+    suffix_ok
+  } else if prefix.length() <= model_name.length() &&
+    suffix.length() <= model_name.length() &&
+    substring(model_name, 0, prefix.length()) == prefix &&
+    substring(
+      model_name,
+      model_name.length() - suffix.length(),
+      model_name.length(),
+    ) ==
+    suffix {
+    true
+  } else {
+    false
+  }
+}
+
+///|
+/// 逗号分隔 pattern 拆分为数组（如 "gpt-*,o*" -> ["gpt-*" "o*"]）
+fn pattern_parts(pattern : String) -> Array[String] {
+  let result : Array[String] = []
+  let mut pos = 0
+  while pos < pattern.length() {
+    let comma = find_comma(pattern, pos)
+    if comma == -1 {
+      result.push(pattern[pos:pattern.length()].to_owned())
+      pos = pattern.length()
+    } else {
+      result.push(pattern[pos:comma].to_owned())
+      pos = comma + 1
+    }
+  }
+  result
+}
+
+///|
+fn find_comma(s : String, start : Int) -> Int {
+  let mut i = start
+  while i < s.length() {
+    if s[i] == ',' {
+      return i
+    }
+    i = i + 1
+  }
+  -1
+}
+
+///|
+/// 返回 pattern 的特异性评分
+///
+/// 评分 = stars * 1000 + 长度（无通配符的字符数）
+/// * 数量越多越具体；同 * 数量时，越长越具体
+/// 例如："gpt-*-codex" (1011) > "gpt-*" (1004) > "o*" (1002)
+fn pattern_specificity(pattern : String) -> Int {
+  let parts = pattern_parts(pattern)
+  let mut best = 0
+  let mut i = 0
+  while i < parts.length() {
+    let count = count_star(parts[i])
+    let score = count * 1000 + parts[i].length()
+    if score > best {
+      best = score
+    }
+    i = i + 1
+  }
+  best
+}
+
+///|
+/// 统计字符串中 * 的个数
+fn count_star(s : String) -> Int {
+  let mut total = 0
+  let mut i = 0
+  while i < s.length() {
+    if s[i] == '*' {
+      total = total + 1
+    }
+    i = i + 1
+  }
+  total
 }
 
 ///|
@@ -262,13 +361,10 @@ fn find_first_star(s : String) -> Int {
 ///|
 /// 提取子串
 fn substring(s : String, start : Int, end : Int) -> String {
-  let mut result = ""
-  let mut i = start
-  while i < end {
-    result = result + s[i].to_string()
-    i = i + 1
+  if start < 0 || end > s.length() || start > end {
+    return ""
   }
-  result
+  s[start:end].to_owned()
 }
 
 ///|

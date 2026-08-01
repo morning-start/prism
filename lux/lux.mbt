@@ -357,6 +357,39 @@ pub fn[T] ConversionResult::new(value : T) -> ConversionResult[T] {
 }
 
 ///|
+/// 获取转换结果值。
+pub fn[T] ConversionResult::value(self : ConversionResult[T]) -> T {
+  self.value
+}
+
+///|
+/// 获取转换诊断列表。
+pub fn[T] ConversionResult::diagnostics(
+  self : ConversionResult[T],
+) -> Array[ConversionDiagnostic] {
+  self.diagnostics
+}
+
+///|
+/// 追加一条转换诊断。
+pub fn[T] ConversionResult::with_diagnostic(
+  self : ConversionResult[T],
+  diagnostic : ConversionDiagnostic,
+) -> ConversionResult[T] {
+  let diagnostics = self.diagnostics
+  diagnostics.push(diagnostic)
+  { ..self, diagnostics, }
+}
+
+///|
+/// 获取诊断状态。
+pub fn ConversionDiagnostic::status(
+  self : ConversionDiagnostic,
+) -> ConversionStatus {
+  self.status
+}
+
+///|
 /// LucentDiscovery — 能力发现响应
 /// SDK 接入时第一步调用，获取 Prism 实例的能力清单
 pub struct LucentDiscovery {

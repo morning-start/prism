@@ -262,6 +262,8 @@ test "wasm_sdk_capability - known provider returns JSON" {
   let result = wasm_sdk_capability("openai")
   assert_true(result.contains("provider"))
   assert_true(result.contains("openai"))
+  assert_true(result.contains("model_pattern"))
+  assert_true(result.contains("capabilities"))
 }
 
 ///|
