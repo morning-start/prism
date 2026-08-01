@@ -365,6 +365,7 @@ fn content_part_to_json(
   c : @lux.LucentContent,
   out_tool_calls : Array[String],
   out_refusal : Array[String],
+  diagnostics : Array[@lux.ConversionDiagnostic],
 ) -> String? {
   match c {
     Text(s, _) => Some(s)
@@ -387,13 +388,56 @@ fn content_part_to_json(
       out_refusal.push(s)
       None
     }
-    Image(_) | Audio(_) | Video(_) | Native(_, _) => None // stub
+    Image(_) => {
+      // OpenAI Chat 无媒体载体：不静默丢弃，显式 Unsupported 诊断
+      diagnostics.push(
+        @lux.ConversionDiagnostic::new(
+          "content.image",
+          @lux.Unsupported,
+          Some("image content not supported by openai-chat"),
+        ),
+      )
+      None
+    }
+    Audio(_) => {
+      diagnostics.push(
+        @lux.ConversionDiagnostic::new(
+          "content.audio",
+          @lux.Unsupported,
+          Some("audio content not supported by openai-chat"),
+        ),
+      )
+      None
+    }
+    Video(_) => {
+      diagnostics.push(
+        @lux.ConversionDiagnostic::new(
+          "content.video",
+          @lux.Unsupported,
+          Some("video content not supported by openai-chat"),
+        ),
+      )
+      None
+    }
+    Native(tag, _) => {
+      diagnostics.push(
+        @lux.ConversionDiagnostic::new(
+          "content.native",
+          @lux.Unsupported,
+          Some("native content (" + tag + ") not supported by openai-chat"),
+        ),
+      )
+      None
+    }
   }
 }
 
 ///|
 /// LucentMessage → OpenAI message JSON 片段
-fn message_to_json(msg : @lux.LucentMessage) -> String {
+fn message_to_json(
+  msg : @lux.LucentMessage,
+  diagnostics : Array[@lux.ConversionDiagnostic],
+) -> String {
   let role = role_to_string(msg.role)
   let tool_calls : Array[String] = []
   let refusal_buf : Array[String] = []
@@ -425,7 +469,13 @@ fn message_to_json(msg : @lux.LucentMessage) -> String {
       let content_parts : Array[String] = []
       let mut i = 0
       while i < msg.content.length() {
-        match content_part_to_json(msg.content[i], tool_calls, refusal_buf) {
+        match
+          content_part_to_json(
+            msg.content[i],
+            tool_calls,
+            refusal_buf,
+            diagnostics,
+          ) {
           Some(s) => content_parts.push(s)
           None => ()
         }
@@ -475,7 +525,7 @@ pub fn lux_request_to_openai_chat(
   let diagnostics : Array[@lux.ConversionDiagnostic] = []
   while i < items.length() {
     match items[i] {
-      Message(m) => msgs_json.push(message_to_json(m))
+      Message(m) => msgs_json.push(message_to_json(m, diagnostics))
       ToolCall(tu) =>
         // 独立 tool_call → assistant 消息含 tool_calls
         msgs_json.push(
@@ -720,6 +770,7 @@ pub fn lux_response_to_openai_chat(
   resp : @lux.LucentResponse,
 ) -> Result[@lux.ConversionResult[String], String] {
   let choices_json : Array[String] = []
+  let diagnostics : Array[@lux.ConversionDiagnostic] = []
   let mut i = 0
   while i < resp.choices.length() {
     let c = resp.choices[i]
@@ -731,7 +782,12 @@ pub fn lux_response_to_openai_chat(
     let mut j = 0
     while j < c.message.content.length() {
       match
-        content_part_to_json(c.message.content[j], tool_calls, refusal_buf) {
+        content_part_to_json(
+          c.message.content[j],
+          tool_calls,
+          refusal_buf,
+          diagnostics,
+        ) {
         Some(s) => content_parts.push(s)
         None => ()
       }
@@ -784,7 +840,11 @@ pub fn lux_response_to_openai_chat(
     "]" +
     usage_obj +
     "}"
-  Ok(@lux.ConversionResult::new(body))
+  let mut result = @lux.ConversionResult::new(body)
+  for d in diagnostics {
+    result = result.with_diagnostic(d)
+  }
+  Ok(result)
 }
 
 ///|
