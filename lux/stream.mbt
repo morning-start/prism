@@ -199,11 +199,25 @@ pub fn LucentBlockDelta::native_delta(
 /// - Gemini 风格的 BlockDiscard 会清空该块的已累加内容（仅保留 block 类型信息以备后续 BlockStart）
 /// - ConversationStart 提取 id/model 用于响应
 /// - Usage/Finish/Attachments 最后写入响应
-pub fn lucent_stream_events_to_response(
+
+///|
+/// AccumulatedResponse — 累加器产物：response + 未进入 response 的辅助信息
+pub struct AccumulatedResponse {
+  response : LucentResponse
+  annotations : Array[LucentAnnotation]
+  native_events : Array[LucentStreamEvent]
+  agent_actions : Array[LucentAgentAction]
+  diagnostics : Array[ConversionDiagnostic]
+} derive(Eq, Debug)
+
+///|
+/// 完整累加：把流事件合成为 LucentResponse，同时保留 annotations/native_events/agent_actions
+/// 及对应诊断。原 lucent_stream_events_to_response 是其薄包装（取 .response）。
+pub fn lucent_stream_events_to_accumulated(
   events : Array[LucentStreamEvent],
   fallback_id : String,
   fallback_model : String,
-) -> LucentResponse {
+) -> AccumulatedResponse {
   // 会话元信息（ConversationStart 携带，缺则用 fallback）
   let mut resp_id = fallback_id
   let mut resp_model = fallback_model
@@ -220,6 +234,12 @@ pub fn lucent_stream_events_to_response(
   let block_signatures : Array[String] = []
   let block_tool_ids : Array[String] = []
   let block_tool_names : Array[String] = []
+
+  // 辅助信息侧信道（不进入 response 主体）
+  let annotations : Array[LucentAnnotation] = []
+  let native_events : Array[LucentStreamEvent] = []
+  let agent_actions : Array[LucentAgentAction] = []
+  let diagnostics : Array[ConversionDiagnostic] = []
 
   ///| 块辅助：确保 block_index 在跟踪数组中占位
   fn ensure_block(idx : Int) -> Unit {
@@ -309,7 +329,17 @@ pub fn lucent_stream_events_to_response(
           ToolCall(tu) => content.push(ToolUse(tu))
           ToolResult(tr) => content.push(ToolResult(tr))
           Reasoning(th) => content.push(Thinking(th))
-          AgentAction(_) => () // v1 不展开 AgentAction
+          AgentAction(aa) => {
+            // v1 不展开到 response，保留到侧信道 + 诊断
+            agent_actions.push(aa)
+            diagnostics.push(
+              ConversionDiagnostic::new(
+                "item.agent_action",
+                Unsupported,
+                Some("agent action not expanded in v1 response"),
+              ),
+            )
+          }
         }
       BlockStart(idx, bt) => {
         ensure_block(idx)
@@ -339,13 +369,40 @@ pub fn lucent_stream_events_to_response(
             }
             block_texts[idx] = block_texts[idx] + s
           }
-          NativeDelta(_, _) => () // 厂商私有增量不累加
+          NativeDelta(vendor, raw) => {
+            // 厂商私有增量：保留到侧信道 + 诊断
+            native_events.push(events[i])
+            diagnostics.push(
+              ConversionDiagnostic::new(
+                "delta.native",
+                Unsupported,
+                Some(
+                  "native delta (" +
+                  vendor +
+                  ") not accumulated: " +
+                  raw.stringify(),
+                ),
+              ),
+            )
+          }
         }
       }
       BlockEnd(idx) => flush_block(idx)
       ItemEnd(_) => ()
       BlockDiscard(idx) => discard_block(idx)
-      Annotations(_, _) => () // 标注事件不累加到响应（宿主若需可在外部收集）
+      Annotations(_, anns) => {
+        // 标注事件：保留到侧信道 + 诊断
+        for a in anns {
+          annotations.push(a)
+        }
+        diagnostics.push(
+          ConversionDiagnostic::new(
+            "item.annotations",
+            Unsupported,
+            Some("annotations not merged into v1 response"),
+          ),
+        )
+      }
       Finish(fr) => finish = fr
       Usage(u) => usage = Some(u)
       Error(_) => {
@@ -376,7 +433,30 @@ pub fn lucent_stream_events_to_response(
   }
   let message = LucentMessage::new(Assistant, final_content)
   let choice = LucentChoice::new(0, message, finish, None)
-  LucentResponse::new(resp_id, resp_model, None, [choice], usage, None)
+  {
+    response: LucentResponse::new(
+      resp_id,
+      resp_model,
+      None,
+      [choice],
+      usage,
+      None,
+    ),
+    annotations,
+    native_events,
+    agent_actions,
+    diagnostics,
+  }
+}
+
+///|
+/// 薄包装：取累加结果的 response（既有调用方兼容）
+pub fn lucent_stream_events_to_response(
+  events : Array[LucentStreamEvent],
+  fallback_id : String,
+  fallback_model : String,
+) -> LucentResponse {
+  lucent_stream_events_to_accumulated(events, fallback_id, fallback_model).response
 }
 
 ///|
