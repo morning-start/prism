@@ -162,7 +162,8 @@ match prism.decode_sse(sse_text) {
 | WASM 导出层（11 个通用函数） | ✅（MoonBit 侧） |
 | MoonBit 测试 | ✅ 634 passed |
 | 多语言 wrapper（Go/TS/Python） | ✅ 可用（classic wasm ABI） |
-| Transport Daemon（HTTP/UDS/WS） | 规划中，未实现 |
+| Transport Daemon（HTTP JSON-RPC） | ✅ 最小版本（Go，wazero backend） |
+| Transport Daemon（UDS/WS/流式） | 规划中，未实现 |
 
 当前仓库可验证的是 MoonBit native/wasm-gc 核心，以及基于 classic `wasm` 目标的 Go/TS/Python wrapper（UTF-16 线性内存 ABI，见各 wrapper README）。`transport/` 仅包含设计文档，不要将其当作可直接发布的运行时能力。
 

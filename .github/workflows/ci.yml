@@ -6,52 +6,115 @@ on:
   pull_request:
     branches: [master]
 
-jobs:
-  check:
-    runs-on: ubuntu-latest
+permissions:
+  contents: read
 
+jobs:
+  fmt:
+    name: Format Check
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
 
       - name: Set up MoonBit
-        run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
-          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+        uses: hustcer/setup-moonbit@v1
+
+      - name: Check formatting
+        run: moon fmt --check
+
+  check:
+    name: Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up MoonBit
+        uses: hustcer/setup-moonbit@v1
 
       - name: Update dependencies
         run: moon update
 
-      - name: H1. Check formatting
-        run: moon fmt --check
-
-      - name: H2. Type check
+      - name: Type check
         run: moon check --warn-list +73
 
-      - name: H3. Run tests (native)
+  test-native:
+    name: Tests (native)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up MoonBit
+        uses: hustcer/setup-moonbit@v1
+
+      - name: Update dependencies
+        run: moon update
+
+      - name: Run tests (native)
         run: moon test --target native
 
-      - name: H4. Build WASM (wasm-gc)
+  wasm:
+    name: Build & Test (wasm-gc)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up MoonBit
+        uses: hustcer/setup-moonbit@v1
+
+      - name: Update dependencies
+        run: moon update
+
+      - name: Build WASM (wasm-gc)
         run: moon build --target wasm-gc
 
-      - name: H5. Run tests (wasm-gc)
+      - name: Run tests (wasm-gc)
         run: moon test --target wasm-gc
 
-      - name: H6. API surface + interface drift check
+  api:
+    name: API Surface
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up MoonBit
+        uses: hustcer/setup-moonbit@v1
+
+      - name: Update dependencies
+        run: moon update
+
+      - name: API surface + interface drift check
         run: |
           moon info --target native
           git diff --exit-code -- '**/pkg.generated.mbti'
 
-      - name: H7. Build classic WASM (wrapper ABI)
+  wrappers:
+    name: Wrapper Integration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up MoonBit
+        uses: hustcer/setup-moonbit@v1
+
+      - name: Update dependencies
+        run: moon update
+
+      - name: Build classic WASM (wrapper ABI)
         run: moon build --target wasm
 
-      - name: H8. Go wrapper integration test
+      - name: Go wrapper integration test
         run: |
           cd wrappers/go
           go vet ./...
           go test -v ./...
 
-      - name: H9. TypeScript wrapper integration test
+      - name: TypeScript wrapper integration test
         run: |
           node --experimental-strip-types wrappers/ts/test/integration.test.ts
 
@@ -71,3 +134,9 @@ resp = json.dumps({'id':'1','object':'chat.completion','model':'gpt-4o','choices
 assert client.decode_response('openai-chat', resp) == 'Hi'
 print('python wrapper integration passed')
 EOF
+
+      - name: H11. Transport daemon build + integration test
+        run: |
+          cd transport/daemon
+          go vet ./...
+          go test -v ./...

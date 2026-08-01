@@ -37,7 +37,7 @@ lux/          ← Lucent IR 核心（纯数据结构，无 IO、无厂商绑定�
 | `wasm/` 导出层 | ✅ **MoonBit 侧已实现** | 11 个导出函数；宿主 wrapper ABI 仍在实现 |
 | 跨协议一致性测试 | ✅ | 当前 `moon test` 共 634 个测试通过 |
 
-**当前边界：** `transport/` 仅包含 v1 draft 设计文档；Go / TypeScript / Python wrapper 已实现真实 WASM 字符串 ABI（classic `wasm` 目标，UTF-16 线性内存约定），Transport Daemon 仍在规划。
+**当前边界：** `transport/` 已实现最小 HTTP JSON-RPC Daemon（`transport/daemon/`，Go + wazero）；UDS / WebSocket / 流式 SSE 仍在规划。Go / TypeScript / Python wrapper 已实现真实 WASM 字符串 ABI（classic `wasm` 目标，UTF-16 线性内存约定）。
 
 ## 分包结构
 
