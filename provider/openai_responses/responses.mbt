@@ -13,8 +13,21 @@
 ///|
 
 ///|
+/// 拼接 JSON 对象字段（已有字段加逗号分隔）
+fn append_field(base : String, field : String) -> String {
+  if base == "" {
+    field
+  } else {
+    base + "," + field
+  }
+}
+
+///|
 /// 解析 input Item → LucentConversationItem
-fn parse_input_item(item : Json) -> @lux.LucentConversationItem? {
+fn parse_input_item(
+  item : Json,
+  diagnostics : Array[@lux.ConversionDiagnostic],
+) -> @lux.LucentConversationItem? {
   match @internal.field_str(item, "type") {
     Some("message") => {
       let role_str = @internal.field_str(item, "role").unwrap_or("user")
@@ -35,8 +48,24 @@ fn parse_input_item(item : Json) -> @lux.LucentConversationItem? {
                   Some(t) => result.push(@lux.LucentContent::text(t))
                   None => ()
                 }
-              Some("input_image") => () // stub
-              Some("input_file") => () // stub
+              Some("input_image") =>
+                // 图像输入：当前不支持精确映射，显式 Degraded 诊断
+                diagnostics.push(
+                  @lux.ConversionDiagnostic::new(
+                    "input.image",
+                    @lux.Degraded,
+                    Some("input_image not mapped to multimedia"),
+                  ),
+                )
+              Some("input_file") =>
+                // 文件输入：当前不支持，显式 Degraded 诊断
+                diagnostics.push(
+                  @lux.ConversionDiagnostic::new(
+                    "input.file",
+                    @lux.Degraded,
+                    Some("input_file not mapped to multimedia"),
+                  ),
+                )
               _ => ()
             }
             i = i + 1
@@ -98,13 +127,16 @@ fn parse_input_item(item : Json) -> @lux.LucentConversationItem? {
 
 ///|
 /// 解析 input[] → Array[LucentConversationItem]
-fn parse_input(jv : Json) -> Array[@lux.LucentConversationItem] {
+fn parse_input(
+  jv : Json,
+  diagnostics : Array[@lux.ConversionDiagnostic],
+) -> Array[@lux.LucentConversationItem] {
   let result : Array[@lux.LucentConversationItem] = []
   match @internal.field_arr(jv, "input") {
     Some(items) => {
       let mut i = 0
       while i < items.length() {
-        match parse_input_item(items[i]) {
+        match parse_input_item(items[i], diagnostics) {
           Some(item) => result.push(item)
           None => ()
         }
@@ -143,10 +175,23 @@ fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
 }
 
 ///|
-/// 解析 reasoning 配置
-fn parse_reasoning(jv : Json) -> @lux.LucentReasoningConfig? {
+/// 解析 reasoning 配置（当前为空实现：探测到字段即产生 Unsupported 诊断）
+fn parse_reasoning(
+  jv : Json,
+  diagnostics : Array[@lux.ConversionDiagnostic],
+) -> @lux.LucentReasoningConfig? {
   match @internal.obj_get(jv, "reasoning") {
-    _ => None
+    Some(_) => {
+      diagnostics.push(
+        @lux.ConversionDiagnostic::new(
+          "reasoning.config",
+          @lux.Unsupported,
+          Some("reasoning config not parsed by openai-responses"),
+        ),
+      )
+      None
+    }
+    None => None
   }
 }
 
@@ -180,12 +225,13 @@ pub fn openai_responses_to_lux_request(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentRequest], String] {
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
+  let diagnostics : Array[@lux.ConversionDiagnostic] = []
   let model = @internal.field_str(jv, "model").unwrap_or("")
   let instructions = match @internal.field_str(jv, "instructions") {
     Some(s) => Some([@lux.LucentContent::text(s)])
     None => None
   }
-  let conversation = parse_input(jv)
+  let conversation = parse_input(jv, diagnostics)
   let tools_list = parse_tools(jv)
   let tools = if tools_list.length() > 0 { Some(tools_list) } else { None }
   let tool_choice = match @internal.field_str(jv, "tool_choice") {
@@ -198,7 +244,7 @@ pub fn openai_responses_to_lux_request(
   let top_p = @internal.field_num(jv, "top_p")
   let max_tokens = @internal.field_int(jv, "max_output_tokens")
   let stream = @internal.field_bool(jv, "stream").unwrap_or(false)
-  let reasoning = parse_reasoning(jv)
+  let reasoning = parse_reasoning(jv, diagnostics)
   let structured = parse_text_format(jv)
   let opts = @lux.LucentOptions::new(
     temperature,
@@ -218,22 +264,24 @@ pub fn openai_responses_to_lux_request(
     Some(_id) => None // previous_response_id → metadata, skip extra for now
     None => None
   }
-  Ok(
-    @lux.ConversionResult::new(
-      @lux.LucentRequest::new(
-        model,
-        instructions,
-        conversation,
-        tools,
-        tool_choice,
-        opts,
-        None,
-        reasoning,
-        None,
-        extra,
-      ),
+  let mut result = @lux.ConversionResult::new(
+    @lux.LucentRequest::new(
+      model,
+      instructions,
+      conversation,
+      tools,
+      tool_choice,
+      opts,
+      None,
+      reasoning,
+      None,
+      extra,
     ),
   )
+  for d in diagnostics {
+    result = result.with_diagnostic(d)
+  }
+  Ok(result)
 }
 
 ///|
@@ -391,16 +439,16 @@ pub fn lux_request_to_openai_responses(
       let mut rf = ""
       if rc.enabled {
         match rc.effort {
-          Some(Low) => rf = ",\"effort\":\"low\""
-          Some(Medium) => rf = ",\"effort\":\"medium\""
-          Some(High) => rf = ",\"effort\":\"high\""
-          Some(XHigh) => rf = ",\"effort\":\"xhigh\""
+          Some(Low) => rf = "\"effort\":\"low\""
+          Some(Medium) => rf = "\"effort\":\"medium\""
+          Some(High) => rf = "\"effort\":\"high\""
+          Some(XHigh) => rf = "\"effort\":\"xhigh\""
           None => ()
         }
         match rc.summary {
-          Some(Auto) => rf = rf + ",\"summary\":\"auto\""
-          Some(Concise) => rf = rf + ",\"summary\":\"concise\""
-          Some(Detailed) => rf = rf + ",\"summary\":\"detailed\""
+          Some(Auto) => rf = append_field(rf, "\"summary\":\"auto\"")
+          Some(Concise) => rf = append_field(rf, "\"summary\":\"concise\"")
+          Some(Detailed) => rf = append_field(rf, "\"summary\":\"detailed\"")
           None => ()
         }
       }
@@ -665,6 +713,7 @@ pub fn openai_responses_sse_to_events(
   sse_str : String,
 ) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String] {
   let events : Array[@lux.LucentStreamEvent] = []
+  let diagnostics : Array[@lux.ConversionDiagnostic] = []
   let messages = sse_str.split("\n\n").to_array()
   let mut event_type = ""
   let mut i = 0
@@ -720,6 +769,14 @@ pub fn openai_responses_sse_to_events(
     }
     let jv = @json.parse(data_str) catch {
       _ => {
+        // 非法 JSON data：不吞掉，产生 Invalid 诊断
+        diagnostics.push(
+          @lux.ConversionDiagnostic::new(
+            "sse.data",
+            @lux.Invalid,
+            Some("invalid JSON in SSE data line: " + data_str),
+          ),
+        )
         i = i + 1
         continue
       }
@@ -742,7 +799,7 @@ pub fn openai_responses_sse_to_events(
         let idx = @internal.field_int(jv, "output_index").unwrap_or(0)
         match @internal.obj_get(jv, "item") {
           Some(item) =>
-            match parse_input_item(item) {
+            match parse_input_item(item, diagnostics) {
               Some(ci) => events.push(@lux.ItemStart(idx, ci))
               None => ()
             }
@@ -843,7 +900,11 @@ pub fn openai_responses_sse_to_events(
     }
     i = i + 1
   }
-  Ok(@lux.ConversionResult::new(events))
+  let mut result = @lux.ConversionResult::new(events)
+  for d in diagnostics {
+    result = result.with_diagnostic(d)
+  }
+  Ok(result)
 }
 
 ///|
