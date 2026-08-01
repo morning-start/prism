@@ -27,6 +27,7 @@ fn parse_part(
   part : Json,
   call_seq : Map[String, Int],
   resp_cursor : Map[String, Int],
+  diagnostics : Array[@lux.ConversionDiagnostic],
 ) -> Array[@lux.LucentContent] {
   // text
   match @internal.field_str(part, "text") {
@@ -91,12 +92,54 @@ fn parse_part(
               ]
             }
             None =>
-              // inlineData / fileData → Image stub
+              // inlineData / fileData → 精确映射为 LucentMultimedia（Image）
               match @internal.obj_get(part, "inlineData") {
-                Some(_) => [@lux.LucentContent::text("[inline data]")]
+                Some(id) => {
+                  let media_type = @internal.field_str(id, "mimeType")
+                  match @internal.field_str(id, "data") {
+                    Some(data) =>
+                      [
+                        @lux.LucentContent::image(
+                          media_type.unwrap_or(""),
+                          @lux.LucentMediaSource::Inline(data),
+                        ),
+                      ]
+                    None => {
+                      diagnostics.push(
+                        @lux.ConversionDiagnostic::new(
+                          "part.inline_data",
+                          @lux.Degraded,
+                          Some("inlineData missing data field"),
+                        ),
+                      )
+                      []
+                    }
+                  }
+                }
                 None =>
                   match @internal.obj_get(part, "fileData") {
-                    Some(_) => [@lux.LucentContent::text("[file data]")]
+                    Some(fd) => {
+                      let media_type = @internal.field_str(fd, "mimeType")
+                      match @internal.field_str(fd, "fileUri") {
+                        Some(uri) =>
+                          [
+                            @lux.LucentContent::image(
+                              media_type.unwrap_or(""),
+                              @lux.LucentMediaSource::FileUri(uri),
+                            ),
+                          ]
+                        None => {
+                          diagnostics.push(
+                            @lux.ConversionDiagnostic::new(
+                              "part.file_data",
+                              @lux.Degraded,
+                              Some("fileData missing fileUri field"),
+                            ),
+                          )
+                          []
+                        }
+                      }
+                    }
                     None => [] // thought-only marker, skip
                   }
               }
@@ -111,11 +154,12 @@ fn parse_parts(
   arr : Array[Json],
   call_seq : Map[String, Int],
   resp_cursor : Map[String, Int],
+  diagnostics : Array[@lux.ConversionDiagnostic],
 ) -> Array[@lux.LucentContent] {
   let result : Array[@lux.LucentContent] = []
   let mut i = 0
   while i < arr.length() {
-    let parts = parse_part(arr[i], call_seq, resp_cursor)
+    let parts = parse_part(arr[i], call_seq, resp_cursor, diagnostics)
     for p in parts {
       result.push(p)
     }
@@ -130,6 +174,7 @@ fn parse_contents(
   jv : Json,
   call_seq : Map[String, Int],
   resp_cursor : Map[String, Int],
+  diagnostics : Array[@lux.ConversionDiagnostic],
 ) -> Array[@lux.LucentConversationItem] {
   let result : Array[@lux.LucentConversationItem] = []
   match @internal.field_arr(jv, "contents") {
@@ -203,7 +248,7 @@ fn parse_contents(
           }
         } else {
           let parts = match @internal.field_arr(contents[i], "parts") {
-            Some(arr) => parse_parts(arr, call_seq, resp_cursor)
+            Some(arr) => parse_parts(arr, call_seq, resp_cursor, diagnostics)
             None => []
           }
           let msg = @lux.LucentMessage::new(role, parts)
@@ -357,6 +402,7 @@ pub fn gemini_to_lux_request(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentRequest], String] {
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
+  let diagnostics : Array[@lux.ConversionDiagnostic] = []
   let model = @internal.field_str(jv, "model").unwrap_or("")
   let instructions = parse_system_instruction(jv)
   let instr_opt = if instructions.length() > 0 {
@@ -367,28 +413,30 @@ pub fn gemini_to_lux_request(
   // functionCall 序号生成 + functionResponse 配对游标（按函数名）
   let call_seq : Map[String, Int] = Map([])
   let resp_cursor : Map[String, Int] = Map([])
-  let conversation = parse_contents(jv, call_seq, resp_cursor)
+  let conversation = parse_contents(jv, call_seq, resp_cursor, diagnostics)
   let tools_list = parse_tools(jv)
   let tools = if tools_list.length() > 0 { Some(tools_list) } else { None }
   let tool_choice = parse_tool_config(jv)
   let opts = parse_generation_config(jv)
   let reasoning = parse_thinking_config(jv)
-  Ok(
-    @lux.ConversionResult::new(
-      @lux.LucentRequest::new(
-        model,
-        instr_opt,
-        conversation,
-        tools,
-        tool_choice,
-        opts,
-        None,
-        reasoning,
-        None,
-        None,
-      ),
+  let mut result = @lux.ConversionResult::new(
+    @lux.LucentRequest::new(
+      model,
+      instr_opt,
+      conversation,
+      tools,
+      tool_choice,
+      opts,
+      None,
+      reasoning,
+      None,
+      None,
     ),
   )
+  for d in diagnostics {
+    result = result.with_diagnostic(d)
+  }
+  Ok(result)
 }
 
 ///|
@@ -621,6 +669,7 @@ pub fn gemini_to_lux_response(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
+  let diagnostics : Array[@lux.ConversionDiagnostic] = []
   let id = @internal.field_str(jv, "model").unwrap_or("")
   let model = @internal.field_str(jv, "modelVersion").unwrap_or(id)
   // candidates
@@ -633,7 +682,7 @@ pub fn gemini_to_lux_response(
         match @internal.obj_get(cands[i], "content") {
           Some(content) => {
             let parts = match @internal.field_arr(content, "parts") {
-              Some(arr) => parse_parts(arr, Map([]), Map([]))
+              Some(arr) => parse_parts(arr, Map([]), Map([]), diagnostics)
               None => []
             }
             let msg = @lux.LucentMessage::new(@lux.Assistant, parts)
@@ -687,11 +736,13 @@ pub fn gemini_to_lux_response(
     }
     None => @lux.LucentUsage::new(0, 0, 0)
   }
-  Ok(
-    @lux.ConversionResult::new(
-      @lux.LucentResponse::new(id, model, None, choices, Some(usage), None),
-    ),
+  let mut result = @lux.ConversionResult::new(
+    @lux.LucentResponse::new(id, model, None, choices, Some(usage), None),
   )
+  for d in diagnostics {
+    result = result.with_diagnostic(d)
+  }
+  Ok(result)
 }
 
 ///|
