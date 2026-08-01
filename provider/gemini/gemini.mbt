@@ -22,7 +22,12 @@
 
 ///|
 /// 解析单个 part → 可能产生多个 LucentContent（thought:true 同时发 Text + Thinking）
-fn parse_part(part : Json) -> Array[@lux.LucentContent] {
+/// call_seq 生成 functionCall id；resp_cursor 消费配对序号（按函数名）。
+fn parse_part(
+  part : Json,
+  call_seq : Map[String, Int],
+  resp_cursor : Map[String, Int],
+) -> Array[@lux.LucentContent] {
   // text
   match @internal.field_str(part, "text") {
     Some(t) =>
@@ -48,7 +53,12 @@ fn parse_part(part : Json) -> Array[@lux.LucentContent] {
             Some(a) => a.stringify()
             None => "{}"
           }
-          let id = "fc_" + name
+          let n = match call_seq.get(name) {
+            Some(v) => v
+            None => 0
+          }
+          call_seq[name] = n + 1
+          let id = "fc_" + name + "_" + n.to_string()
           [@lux.LucentContent::tool_use(id, name, args, None)]
         }
         None =>
@@ -67,8 +77,15 @@ fn parse_part(part : Json) -> Array[@lux.LucentContent] {
                 }
                 None => "{}"
               }
+              // 配对：消费该函数名下一个未配对的 functionCall 序号
+              let n = match resp_cursor.get(name) {
+                Some(v) => v
+                None => 0
+              }
+              resp_cursor[name] = n + 1
+              let id = "fc_" + name + "_" + n.to_string()
               [
-                @lux.LucentContent::tool_result(name + "_result", [
+                @lux.LucentContent::tool_result(id, [
                   @lux.LucentContent::text(content_str),
                 ]),
               ]
@@ -90,11 +107,15 @@ fn parse_part(part : Json) -> Array[@lux.LucentContent] {
 
 ///|
 /// 解析 contents[] 中单个 content 的 parts[] → Array[LucentContent]
-fn parse_parts(arr : Array[Json]) -> Array[@lux.LucentContent] {
+fn parse_parts(
+  arr : Array[Json],
+  call_seq : Map[String, Int],
+  resp_cursor : Map[String, Int],
+) -> Array[@lux.LucentContent] {
   let result : Array[@lux.LucentContent] = []
   let mut i = 0
   while i < arr.length() {
-    let parts = parse_part(arr[i])
+    let parts = parse_part(arr[i], call_seq, resp_cursor)
     for p in parts {
       result.push(p)
     }
@@ -105,7 +126,11 @@ fn parse_parts(arr : Array[Json]) -> Array[@lux.LucentContent] {
 
 ///|
 /// 解析 contents[] → Array[LucentConversationItem]
-fn parse_contents(jv : Json) -> Array[@lux.LucentConversationItem] {
+fn parse_contents(
+  jv : Json,
+  call_seq : Map[String, Int],
+  resp_cursor : Map[String, Int],
+) -> Array[@lux.LucentConversationItem] {
   let result : Array[@lux.LucentConversationItem] = []
   match @internal.field_arr(jv, "contents") {
     Some(contents) => {
@@ -120,11 +145,8 @@ fn parse_contents(jv : Json) -> Array[@lux.LucentConversationItem] {
           "tool" => @lux.Tool
           _ => @lux.User
         }
-        let parts = match @internal.field_arr(contents[i], "parts") {
-          Some(arr) => parse_parts(arr)
-          None => []
-        }
-        // 检查是否含 functionResponse → 解码为 Item::ToolResult
+        // 先检查是否含 functionResponse → 解码为 Item::ToolResult
+        // （避免先跑 parse_parts 重复消费配对游标）
         let has_tool_result = {
           let mut found = false
           match @internal.field_arr(contents[i], "parts") {
@@ -160,7 +182,14 @@ fn parse_contents(jv : Json) -> Array[@lux.LucentConversationItem] {
                         }
                       None => "{}"
                     }
-                    let tr = @lux.LucentToolResult::ok(name + "_result", [
+                    // 配对：消费该函数名下一个未配对的 functionCall 序号
+                    let n = match resp_cursor.get(name) {
+                      Some(v) => v
+                      None => 0
+                    }
+                    resp_cursor[name] = n + 1
+                    let id = "fc_" + name + "_" + n.to_string()
+                    let tr = @lux.LucentToolResult::ok(id, [
                       @lux.LucentContent::text(content_str),
                     ])
                     result.push(@lux.LucentConversationItem::tool_result(tr))
@@ -173,6 +202,10 @@ fn parse_contents(jv : Json) -> Array[@lux.LucentConversationItem] {
             None => ()
           }
         } else {
+          let parts = match @internal.field_arr(contents[i], "parts") {
+            Some(arr) => parse_parts(arr, call_seq, resp_cursor)
+            None => []
+          }
           let msg = @lux.LucentMessage::new(role, parts)
           result.push(@lux.LucentConversationItem::message(msg))
         }
@@ -331,7 +364,10 @@ pub fn gemini_to_lux_request(
   } else {
     None
   }
-  let conversation = parse_contents(jv)
+  // functionCall 序号生成 + functionResponse 配对游标（按函数名）
+  let call_seq : Map[String, Int] = Map([])
+  let resp_cursor : Map[String, Int] = Map([])
+  let conversation = parse_contents(jv, call_seq, resp_cursor)
   let tools_list = parse_tools(jv)
   let tools = if tools_list.length() > 0 { Some(tools_list) } else { None }
   let tool_choice = parse_tool_config(jv)
@@ -595,7 +631,7 @@ pub fn gemini_to_lux_response(
         match @internal.obj_get(cands[i], "content") {
           Some(content) => {
             let parts = match @internal.field_arr(content, "parts") {
-              Some(arr) => parse_parts(arr)
+              Some(arr) => parse_parts(arr, Map([]), Map([]))
               None => []
             }
             let msg = @lux.LucentMessage::new(@lux.Assistant, parts)
@@ -834,7 +870,10 @@ pub fn gemini_sse_to_events(
                             @lux.BlockStart(
                               text_block_index,
                               @lux.LucentBlockType::tool_call(
-                                "fc_" + name,
+                                "fc_" +
+                                name +
+                                "_" +
+                                text_block_index.to_string(),
                                 name,
                               ),
                             ),

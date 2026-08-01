@@ -59,7 +59,7 @@ test "gemini_to_lux_request - functionCall and functionResponse" {
     Ok(req) => {
       assert_eq(req.conversation.length(), 2)
       match req.conversation[1] {
-        ToolResult(tr) => assert_eq(tr.tool_use_id, "get_weather_result")
+        ToolResult(tr) => assert_eq(tr.tool_use_id, "fc_get_weather_0")
         _ => assert_true(false)
       }
     }
@@ -183,6 +183,39 @@ test "gemini_sse_to_events - text chunks" {
   let sse = "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello\"}]}}]}\ndata: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" world\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":5,\"totalTokenCount\":15}}\n"
   match gemini_sse_to_events(sse) {
     Ok(events) => assert_true(events.length() >= 3)
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// 同名工具多次调用时，id 必须唯一且 functionResponse 与 functionCall 配对。
+test "gemini_to_lux_request - duplicate tool names pair correctly" {
+  let json = "{\"model\":\"gemini-2.5-pro\",\"contents\":[{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"search\",\"args\":{\"q\":\"a\"}}},{\"functionCall\":{\"name\":\"search\",\"args\":{\"q\":\"b\"}}}]},{\"role\":\"tool\",\"parts\":[{\"functionResponse\":{\"name\":\"search\",\"response\":{\"content\":{\"r\":1}}}},{\"functionResponse\":{\"name\":\"search\",\"response\":{\"content\":{\"r\":2}}}}]}]}"
+  match gemini_to_lux_request(json) {
+    Ok(req) => {
+      assert_eq(req.conversation.length(), 3)
+      let ids : Array[String] = []
+      for item in req.conversation {
+        match item {
+          Message(m) =>
+            for c in m.content {
+              match c {
+                ToolUse(tu) => ids.push(tu.id)
+                _ => ()
+              }
+            }
+          ToolCall(tu) => ids.push(tu.id)
+          ToolResult(tr) => ids.push(tr.tool_use_id)
+          _ => ()
+        }
+      }
+      assert_eq(ids.length(), 4)
+      // 两个 call + 两个 response，两两配对且互不重复
+      assert_eq(ids[0], "fc_search_0")
+      assert_eq(ids[1], "fc_search_1")
+      assert_eq(ids[2], "fc_search_0")
+      assert_eq(ids[3], "fc_search_1")
+    }
     Err(_) => assert_true(false)
   }
 }
