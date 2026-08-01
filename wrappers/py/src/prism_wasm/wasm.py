@@ -7,6 +7,7 @@ the 11 exported functions as Python callables.
 from __future__ import annotations
 
 import json
+import struct
 from pathlib import Path
 from typing import Optional
 
@@ -96,6 +97,11 @@ class WasmRuntime:
             if func is not None:
                 self._exports[py_name] = func
 
+        # Run the runtime initializer before any conversion call.
+        start = self._instance.exports(self._store).get("_start")
+        if start is not None:
+            start(self._store)
+
     @classmethod
     def load(cls, wasm_source: bytes | str | Path) -> "WasmRuntime":
         """Load the WASM module (lazily cached).
@@ -130,6 +136,11 @@ class WasmRuntime:
     def call(self, func_name: str, *args: str) -> str:
         """Call a WASM export function with string arguments.
 
+        Prism string ABI: each String argument is an i32 linear-memory
+        address where `ptr - 4` holds a u32 length (UTF-16 code units) and
+        `ptr` holds the UTF-16LE payload. The i32 result is an address with
+        the same layout. Scratch lives below the MoonBit GC heap.
+
         Args:
             func_name: The Python-friendly function name
                       (e.g. 'wasm_sdk_encode_req').
@@ -142,20 +153,39 @@ class WasmRuntime:
             PrismError: If the WASM function returns an error JSON.
         """
         func = self._get_export(func_name)
-        # In wasmtime-py v47+, call with native Python values.
-        # MoonBit WASM uses GC references for strings (wasm-gc target),
-        # or linear memory pointers (wasm target).
-        # For now, pass string args as-is; proper string marshalling
-        # requires writing to WASM memory and passing (ptr, len) pairs.
-        result = func(self._store, *args)
-        result_str = str(result)
+        memory = self._instance.exports(self._store).get("memory")
+        if memory is None:
+            raise PrismError("WASM module has no memory export")
+
+        ptr = 0x0400
+        stride = 512
+        call_args: list[int] = []
+        for s in args:
+            units = [ord(c) for c in s]
+            # u32 length header at ptr-4 (UTF-16 code unit count).
+            memory.write(self._store, struct.pack("<I", len(units)), ptr - 4)
+            payload = bytearray()
+            for u in units:
+                payload += struct.pack("<H", u)
+            memory.write(self._store, bytes(payload), ptr)
+            call_args.append(ptr)
+            ptr += stride
+
+        result_ptr = func(self._store, *call_args)
+        header = memory.read(self._store, result_ptr - 4, result_ptr)
+        str_len = struct.unpack("<I", header)[0]
+        raw = memory.read(self._store, result_ptr, result_ptr + 2 * str_len)
+        result = "".join(
+            chr(struct.unpack("<H", raw[i : i + 2])[0])
+            for i in range(0, 2 * str_len, 2)
+        )
 
         # Check for error response
-        if result_str.startswith('{"error":'):
-            err_msg = _parse_error(result_str)
+        if result.startswith('{"error":'):
+            err_msg = _parse_error(result)
             raise PrismError(err_msg)
 
-        return result_str
+        return result
 
     def call_json(self, func_name: str, *args: str) -> dict | list:
         """Call a WASM function and parse the result as JSON.

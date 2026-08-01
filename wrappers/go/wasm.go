@@ -8,7 +8,9 @@ import (
 	"context"
 	_ "embed"
 	"encoding/json"
+	"strings"
 	"sync"
+	"unicode/utf16"
 
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
@@ -99,40 +101,70 @@ func (r *Runtime) callWasm(name string, args ...string) (string, error) {
 		return "", ErrWASMNotLoaded
 	}
 
-	// Look up the exported function by name.
-	// Note: MoonBit's current WASM target does not export pub fn as WASM exports.
-	// This code is a scaffold for when MoonBit adds WASM export support.
-	// See: docs/plans/wasm-wrappers-implementation.md §9
 	exp := r.mod.ExportedFunction(name)
 	if exp == nil {
-		return "", newPrismError("WASM export not found: " + name + " (mapped from)")
+		return "", newPrismError("WASM export not found: " + name)
 	}
 
-	// Convert string args to uint64 for wasm call.
-	// In a full implementation, strings need to be written to WASM memory
-	// and passed as pointers. Currently MoonBit's calling convention for
-	// string parameters across the WASM boundary is pending.
+	// Prism string ABI: each String argument is an i32 linear-memory address
+	// where `ptr - 4` holds a u32 length (UTF-16 code units) and `ptr` holds
+	// the UTF-16LE payload. The i32 result is an address with the same layout.
+	// Scratch lives below the MoonBit GC heap (heap starts above ~0x1000).
+	const scratchStart = uint32(0x0400)
+	const scratchStride = uint32(512)
+	mem := r.mod.Memory()
+	if mem == nil {
+		return "", newPrismError("WASM module has no memory")
+	}
+
 	callArgs := make([]uint64, len(args))
+	ptr := scratchStart
 	for i, s := range args {
-		// Simple encoding: use first byte for now.
-		// Proper string marshalling requires allocating in WASM linear memory.
-		if len(s) > 0 {
-			callArgs[i] = uint64(s[0])
+		// UTF-16 code units (not UTF-8 bytes).
+		units := utf16.Encode([]rune(s))
+		// u32 length header at ptr-4
+		if !mem.WriteUint32Le(ptr-4, uint32(len(units))) {
+			return "", newPrismError("write string header")
 		}
+		// UTF-16LE payload at ptr
+		buf := make([]byte, 2*len(units))
+		for j, u := range units {
+			buf[2*j] = byte(u)
+			buf[2*j+1] = byte(u >> 8)
+		}
+		if !mem.Write(ptr, buf) {
+			return "", newPrismError("write string payload")
+		}
+		callArgs[i] = uint64(ptr)
+		ptr += scratchStride
 	}
 
 	results, err := exp.Call(r.ctx, callArgs...)
 	if err != nil {
 		return "", newPrismError("WASM call failed: " + err.Error())
 	}
-
-	result := ""
-	if len(results) > 0 {
-		result = formatResult(results[0])
+	if len(results) == 0 {
+		return "", newPrismError("WASM call returned no value")
 	}
+	resultPtr := uint32(results[0])
 
-	// Check for error response
-	if len(result) > 0 && result[0] == '{' {
+	// Read u32 length at resultPtr-4, then UTF-16LE payload at resultPtr.
+	lenBytes, ok := mem.Read(resultPtr-4, 4)
+	if !ok {
+		return "", newPrismError("read result length")
+	}
+	strLen := uint32(lenBytes[0]) | uint32(lenBytes[1])<<8 | uint32(lenBytes[2])<<16 | uint32(lenBytes[3])<<24
+	payload, ok := mem.Read(resultPtr, uint32(2*strLen))
+	if !ok {
+		return "", newPrismError("read result payload")
+	}
+	units := make([]uint16, strLen)
+	for i := uint32(0); i < strLen; i++ {
+		units[i] = uint16(payload[2*i]) | uint16(payload[2*i+1])<<8
+	}
+	result := string(utf16.Decode(units))
+
+	if strings.HasPrefix(result, `{"error":`) {
 		var errResp struct {
 			Error string `json:"error"`
 		}
@@ -142,10 +174,6 @@ func (r *Runtime) callWasm(name string, args ...string) (string, error) {
 	}
 
 	return result, nil
-}
-
-func formatResult(v uint64) string {
-	return string(rune(v))
 }
 
 // ParseEvents decodes a JSON array of events from a WASM result.

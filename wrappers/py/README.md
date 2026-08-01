@@ -1,7 +1,26 @@
 # Prism WASM — Python Wrapper
 
-> [Prism](https://github.com/morning-start/prism) LLM protocol converter - Python WASM wrapper.
-> **当前状态：scaffold。** WASM 字符串 marshalling 尚未完成，本文示例暂不能作为已验证的端到端用法。
+> [Prism](https://github.com/morning-start/prism) LLM protocol converter - Python WASM wrapper (wasmtime).
+
+## Prism String ABI
+
+The classic `wasm` target exports each conversion as `(i32, ...) -> i32`. Every
+String argument is passed as a linear-memory address:
+
+- `u32 @ (ptr - 4)` = UTF-16 length in code units
+- UTF-16LE payload starting at `ptr`
+- the returned `i32` is an address with the same layout
+
+The wrapper writes arguments into a scratch region below the MoonBit GC heap
+and decodes the returned UTF-16 string.
+
+## Build & Test
+
+```bash
+pip install wasmtime
+moon build --target wasm          # from repo root
+python -c "from prism_wasm import PrismClient; ..."  # PYTHONPATH=src
+```
 
 ## Installation
 
