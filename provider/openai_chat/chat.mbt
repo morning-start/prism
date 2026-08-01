@@ -472,6 +472,7 @@ pub fn lux_request_to_openai_chat(
   // conversation items → messages
   let items = req.conversation
   let mut i = 0
+  let diagnostics : Array[@lux.ConversionDiagnostic] = []
   while i < items.length() {
     match items[i] {
       Message(m) => msgs_json.push(message_to_json(m))
@@ -495,8 +496,24 @@ pub fn lux_request_to_openai_chat(
           escape_json(@lux.lucent_content_to_text(tr.content)) +
           "\"}",
         )
-      Reasoning(_) => () // OpenAI Chat 无原生 reasoning，编码时忽略
-      AgentAction(_) => ()
+      Reasoning(_) =>
+        // OpenAI Chat 无原生 reasoning：不静默忽略，显式 Unsupported 诊断
+        diagnostics.push(
+          @lux.ConversionDiagnostic::new(
+            "conversation.reasoning",
+            @lux.Unsupported,
+            Some("reasoning not supported by openai-chat"),
+          ),
+        )
+      AgentAction(_) =>
+        // OpenAI Chat 无 AgentAction 载体：不静默忽略，显式 Unsupported 诊断
+        diagnostics.push(
+          @lux.ConversionDiagnostic::new(
+            "conversation.agent_action",
+            @lux.Unsupported,
+            Some("agent_action not supported by openai-chat"),
+          ),
+        )
     }
     i = i + 1
   }
@@ -579,7 +596,11 @@ pub fn lux_request_to_openai_chat(
       )
     None => ()
   }
-  Ok(@lux.ConversionResult::new("{" + parts.join(",") + "}"))
+  let mut result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
+  for d in diagnostics {
+    result = result.with_diagnostic(d)
+  }
+  Ok(result)
 }
 
 ///|
