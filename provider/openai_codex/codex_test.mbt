@@ -30,9 +30,10 @@ test "round trip - request encode then decode preserves semantics" {
     None,
   )
   match lux_request_to_codex(original) {
-    Ok(json) =>
-      match codex_to_lux_request(json) {
-        Ok(round) => {
+    Ok(cr) =>
+      match codex_to_lux_request(cr.value()) {
+        Ok(cr2) => {
+          let round = cr2.value()
           assert_eq(round.model, "gpt-4o")
           assert_eq(round.conversation.length(), 1)
           match round.conversation[0] {
@@ -81,9 +82,9 @@ test "round trip - response encode then decode preserves text" {
     None,
   )
   match lux_response_to_codex(resp) {
-    Ok(json) =>
-      match codex_to_lux_response(json) {
-        Ok(round) => assert_eq(round.get_text(), "hi")
+    Ok(cr) =>
+      match codex_to_lux_response(cr.value()) {
+        Ok(cr2) => assert_eq(cr2.value().get_text(), "hi")
         Err(_) => assert_true(false)
       }
     Err(_) => assert_true(false)

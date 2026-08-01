@@ -50,9 +50,10 @@ let base_req : @lux.LucentRequest = @lux.LucentRequest::new(
 /// === 测试：OpenAI Chat 往返 ===
 test "consistency - openai_chat roundtrip" {
   match @openai_chat.lux_request_to_openai_chat(base_req) {
-    Ok(json) =>
-      match @openai_chat.openai_chat_to_lux_request(json) {
-        Ok(req) => {
+    Ok(cr) =>
+      match @openai_chat.openai_chat_to_lux_request(cr.value()) {
+        Ok(cr2) => {
+          let req = cr2.value()
           assert_eq(req.model, base_req.model)
           assert_eq(req.conversation.length(), base_req.conversation.length())
           assert_eq(
@@ -75,9 +76,10 @@ test "consistency - openai_chat roundtrip" {
 /// === 测试：Anthropic 往返 ===
 test "consistency - anthropic roundtrip" {
   match @anthropic.lux_request_to_anthropic(base_req) {
-    Ok(json) =>
-      match @anthropic.anthropic_to_lux_request(json) {
-        Ok(req) => {
+    Ok(cr) =>
+      match @anthropic.anthropic_to_lux_request(cr.value()) {
+        Ok(cr2) => {
+          let req = cr2.value()
           assert_eq(req.model, base_req.model)
           assert_eq(req.conversation.length(), base_req.conversation.length())
           // Anthropic 将 tool_result 嵌入 user message，长度会比标准多
@@ -100,9 +102,10 @@ test "consistency - anthropic roundtrip" {
 /// === 测试：OpenAI Responses 往返 ===
 test "consistency - openai_responses roundtrip" {
   match @openai_responses.lux_request_to_openai_responses(base_req) {
-    Ok(json) =>
-      match @openai_responses.openai_responses_to_lux_request(json) {
-        Ok(req) => {
+    Ok(cr) =>
+      match @openai_responses.openai_responses_to_lux_request(cr.value()) {
+        Ok(cr2) => {
+          let req = cr2.value()
           assert_eq(req.model, base_req.model)
           assert_eq(req.conversation.length(), base_req.conversation.length())
           match req.tools {
@@ -137,9 +140,10 @@ test "consistency - gemini roundtrip" {
     None,
   )
   match @gemini.lux_request_to_gemini(simple_req) {
-    Ok(json) =>
-      match @gemini.gemini_to_lux_request(json) {
-        Ok(req) => {
+    Ok(cr) =>
+      match @gemini.gemini_to_lux_request(cr.value()) {
+        Ok(cr2) => {
+          let req = cr2.value()
           assert_eq(req.model, "test-model")
           assert_eq(req.conversation.length(), 1)
         }
@@ -164,9 +168,9 @@ test "consistency - model preserved across all providers" {
   let mut i = 0
   while i < providers.length() {
     match providers[i] {
-      (name, Ok(json)) =>
-        match decoders[i](json) {
-          Ok(req) => assert_eq(req.model, "test-model")
+      (name, Ok(cr)) =>
+        match decoders[i](cr.value()) {
+          Ok(cr2) => assert_eq(cr2.value().model, "test-model")
           Err(e) => fail(name + " decode: " + e)
         }
       (name, Err(e)) => fail(name + " encode: " + e)
@@ -223,10 +227,10 @@ test "params - openai_chat temperature preserved" {
   let req = req_with_opts(Some(0.7), None, None, None, None)
   let json = @openai_chat.lux_request_to_openai_chat(req)
   match json {
-    Ok(j) =>
-      match @openai_chat.openai_chat_to_lux_request(j) {
-        Ok(d) =>
-          match d.options.temperature {
+    Ok(cr) =>
+      match @openai_chat.openai_chat_to_lux_request(cr.value()) {
+        Ok(cr2) =>
+          match cr2.value().options.temperature {
             Some(t) => assert_true(t > 0.6 && t < 0.8)
             None => assert_true(false)
           }
@@ -241,10 +245,10 @@ test "params - anthropic temperature preserved" {
   let req = req_with_opts(Some(0.7), None, None, None, None)
   let json = @anthropic.lux_request_to_anthropic(req)
   match json {
-    Ok(j) =>
-      match @anthropic.anthropic_to_lux_request(j) {
-        Ok(d) =>
-          match d.options.temperature {
+    Ok(cr) =>
+      match @anthropic.anthropic_to_lux_request(cr.value()) {
+        Ok(cr2) =>
+          match cr2.value().options.temperature {
             Some(t) => assert_true(t > 0.6 && t < 0.8)
             None => assert_true(false)
           }
@@ -259,10 +263,10 @@ test "params - responses temperature preserved" {
   let req = req_with_opts(Some(0.7), None, None, None, None)
   let json = @openai_responses.lux_request_to_openai_responses(req)
   match json {
-    Ok(j) =>
-      match @openai_responses.openai_responses_to_lux_request(j) {
-        Ok(d) =>
-          match d.options.temperature {
+    Ok(cr) =>
+      match @openai_responses.openai_responses_to_lux_request(cr.value()) {
+        Ok(cr2) =>
+          match cr2.value().options.temperature {
             Some(t) => assert_true(t > 0.6 && t < 0.8)
             None => assert_true(false)
           }
@@ -277,9 +281,9 @@ test "params - openai_chat max_tokens preserved" {
   let req = req_with_opts(None, None, None, Some(2048), None)
   let json = @openai_chat.lux_request_to_openai_chat(req)
   match json {
-    Ok(j) =>
-      match @openai_chat.openai_chat_to_lux_request(j) {
-        Ok(d) => assert_eq(d.options.max_output_tokens, Some(2048))
+    Ok(cr) =>
+      match @openai_chat.openai_chat_to_lux_request(cr.value()) {
+        Ok(cr2) => assert_eq(cr2.value().options.max_output_tokens, Some(2048))
         Err(e) => fail("decode: " + e)
       }
     Err(e) => fail("encode: " + e)
@@ -291,9 +295,9 @@ test "params - anthropic max_tokens preserved" {
   let req = req_with_opts(None, None, None, Some(2048), None)
   let json = @anthropic.lux_request_to_anthropic(req)
   match json {
-    Ok(j) =>
-      match @anthropic.anthropic_to_lux_request(j) {
-        Ok(d) => assert_eq(d.options.max_output_tokens, Some(2048))
+    Ok(cr) =>
+      match @anthropic.anthropic_to_lux_request(cr.value()) {
+        Ok(cr2) => assert_eq(cr2.value().options.max_output_tokens, Some(2048))
         Err(e) => fail("decode: " + e)
       }
     Err(e) => fail("encode: " + e)
@@ -336,14 +340,20 @@ fn base_events() -> Array[@lux.LucentStreamEvent] {
 ///|
 /// 验证 SSE 编解码往返，返回 Result（非 test 函数不可用 assert/fail）
 fn check_sse_roundtrip(
-  encode : (Array[@lux.LucentStreamEvent]) -> Result[String, String],
-  decode : (String) -> Result[Array[@lux.LucentStreamEvent], String],
+  encode : (Array[@lux.LucentStreamEvent]) -> Result[
+    @lux.ConversionResult[String],
+    String,
+  ],
+  decode : (String) -> Result[
+    @lux.ConversionResult[Array[@lux.LucentStreamEvent]],
+    String,
+  ],
 ) -> Result[Int, String] {
   let events = base_events()
   match encode(events) {
-    Ok(sse) =>
-      match decode(sse) {
-        Ok(decoded) => Ok(decoded.length())
+    Ok(cr) =>
+      match decode(cr.value()) {
+        Ok(cr2) => Ok(cr2.value().length())
         Err(e) => Err("decode: " + e)
       }
     Err(e) => Err("encode: " + e)
@@ -436,7 +446,7 @@ test "multi - three messages roundtrip" {
       @openai_responses.lux_request_to_openai_responses(multi_req)
     }
     match json {
-      Ok(j) => {
+      Ok(cr) => {
         let decoder = if i == 0 {
           @openai_chat.openai_chat_to_lux_request
         } else if i == 1 {
@@ -444,8 +454,8 @@ test "multi - three messages roundtrip" {
         } else {
           @openai_responses.openai_responses_to_lux_request
         }
-        match decoder(j) {
-          Ok(d) => assert_eq(d.conversation.length(), 3)
+        match decoder(cr.value()) {
+          Ok(cr2) => assert_eq(cr2.value().conversation.length(), 3)
           Err(e) => fail("decode " + i.to_string() + ": " + e)
         }
       }
@@ -484,7 +494,7 @@ test "multi - system instruction preserved" {
       @openai_responses.lux_request_to_openai_responses(sys_req)
     }
     match json {
-      Ok(j) => {
+      Ok(cr) => {
         let decoder = if i == 0 {
           @openai_chat.openai_chat_to_lux_request
         } else if i == 1 {
@@ -492,8 +502,8 @@ test "multi - system instruction preserved" {
         } else {
           @openai_responses.openai_responses_to_lux_request
         }
-        match decoder(j) {
-          Ok(d) => assert_eq(d.instructions is Some(_), true)
+        match decoder(cr.value()) {
+          Ok(cr2) => assert_eq(cr2.value().instructions is Some(_), true)
           Err(e) => fail("decode " + i.to_string() + ": " + e)
         }
       }
@@ -539,7 +549,7 @@ test "multi - two tools preserved" {
       @openai_responses.lux_request_to_openai_responses(tools_req)
     }
     match json {
-      Ok(j) => {
+      Ok(cr) => {
         let decoder = if i == 0 {
           @openai_chat.openai_chat_to_lux_request
         } else if i == 1 {
@@ -547,9 +557,9 @@ test "multi - two tools preserved" {
         } else {
           @openai_responses.openai_responses_to_lux_request
         }
-        match decoder(j) {
-          Ok(d) =>
-            match d.tools {
+        match decoder(cr.value()) {
+          Ok(cr2) =>
+            match cr2.value().tools {
               Some(t) => assert_eq(t.length(), 2)
               None => fail("tools lost idx " + i.to_string())
             }
@@ -674,7 +684,8 @@ test "sub - phase absent defaults to none" {
 test "sub - azure content_filters extraction" {
   let azure_json = "{\"id\":\"resp-1\",\"model\":\"gpt-4o\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hello\",\"annotations\":[]}],\"id\":\"msg_1\"}],\"content_filters\":[{\"filtered\":false}]}"
   match @openai_azure.azure_to_lux_response(azure_json) {
-    Ok(resp) => {
+    Ok(cr) => {
+      let resp = cr.value()
       assert_eq(resp.id, "resp-1")
       match resp.provider_payload {
         Some(_) => () // content_filters 已提取到 provider_payload

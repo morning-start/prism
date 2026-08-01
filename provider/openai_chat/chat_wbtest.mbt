@@ -17,7 +17,8 @@
 test "openai_chat_to_lux_request - simple user message" {
   let json = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}],\"stream\":false}"
   match openai_chat_to_lux_request(json) {
-    Ok(req) => {
+    Ok(cr) => {
+      let req = cr.value()
       assert_eq(req.model, "gpt-4o")
       assert_eq(req.conversation.length(), 1)
       match req.conversation[0] {
@@ -42,7 +43,8 @@ test "openai_chat_to_lux_request - simple user message" {
 test "openai_chat_to_lux_request - system instruction extracted" {
   let json = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"You are helpful\"},{\"role\":\"user\",\"content\":\"hi\"}]}"
   match openai_chat_to_lux_request(json) {
-    Ok(req) => {
+    Ok(cr) => {
+      let req = cr.value()
       // system 抽出为 instructions，不入 conversation
       assert_eq(req.conversation.length(), 1)
       match req.instructions {
@@ -58,7 +60,8 @@ test "openai_chat_to_lux_request - system instruction extracted" {
 test "openai_chat_to_lux_request - assistant with tool_calls" {
   let json = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"weather?\"},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Beijing\\\"}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"{\\\"temp\\\":25}\"}]}"
   match openai_chat_to_lux_request(json) {
-    Ok(req) => {
+    Ok(cr) => {
+      let req = cr.value()
       assert_eq(req.conversation.length(), 3)
       // assistant 消息含 ToolUse content
       match req.conversation[1] {
@@ -90,8 +93,8 @@ test "openai_chat_to_lux_request - assistant with tool_calls" {
 test "openai_chat_to_lux_request - tools parsed" {
   let json = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"f\",\"description\":\"d\",\"parameters\":{\"type\":\"object\"}}}]}"
   match openai_chat_to_lux_request(json) {
-    Ok(req) =>
-      match req.tools {
+    Ok(cr) =>
+      match cr.value().tools {
         Some(tools) => {
           assert_eq(tools.length(), 1)
           assert_eq(tools[0].name, "f")
@@ -106,12 +109,12 @@ test "openai_chat_to_lux_request - tools parsed" {
 test "openai_chat_to_lux_request - tool_choice variants" {
   let json_tc_auto = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"tool_choice\":\"auto\"}"
   match openai_chat_to_lux_request(json_tc_auto) {
-    Ok(req) => assert_eq(req.tool_choice, Some(Auto))
+    Ok(cr) => assert_eq(cr.value().tool_choice, Some(Auto))
     Err(_) => assert_true(false)
   }
   let json_tc_req = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"tool_choice\":{\"type\":\"function\",\"function\":{\"name\":\"f\"}}}"
   match openai_chat_to_lux_request(json_tc_req) {
-    Ok(req) => assert_eq(req.tool_choice, Some(SpecificTool("f")))
+    Ok(cr) => assert_eq(cr.value().tool_choice, Some(SpecificTool("f")))
     Err(_) => assert_true(false)
   }
 }
@@ -120,7 +123,8 @@ test "openai_chat_to_lux_request - tool_choice variants" {
 test "openai_chat_to_lux_request - options mapping" {
   let json = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"temperature\":0.7,\"max_tokens\":1024,\"stream\":true,\"stop\":\"\\n\\n\",\"seed\":42}"
   match openai_chat_to_lux_request(json) {
-    Ok(req) => {
+    Ok(cr) => {
+      let req = cr.value()
       match req.options.temperature {
         Some(t) => assert_true(t > 0.6 && t < 0.8)
         None => assert_true(false)
@@ -141,7 +145,7 @@ test "openai_chat_to_lux_request - options mapping" {
 test "openai_chat_to_lux_request - response_format json_object" {
   let json = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"response_format\":{\"type\":\"json_object\"}}"
   match openai_chat_to_lux_request(json) {
-    Ok(req) => assert_eq(req.options.structured_output, Some(JsonObject))
+    Ok(cr) => assert_eq(cr.value().options.structured_output, Some(JsonObject))
     Err(_) => assert_true(false)
   }
 }
@@ -158,7 +162,7 @@ test "openai_chat_to_lux_request - invalid json returns error" {
 test "openai_chat_to_lux_request - empty messages" {
   let json = "{\"model\":\"gpt-4o\",\"messages\":[]}"
   match openai_chat_to_lux_request(json) {
-    Ok(req) => assert_eq(req.conversation.length(), 0)
+    Ok(cr) => assert_eq(cr.value().conversation.length(), 0)
     Err(_) => assert_true(false)
   }
 }
@@ -181,7 +185,8 @@ test "lux_request_to_openai_chat - simple user message" {
     None,
   )
   match lux_request_to_openai_chat(req) {
-    Ok(s) => {
+    Ok(cr) => {
+      let s = cr.value()
       let jv = @json.parse(s)
       match @internal.obj_get(jv, "model") {
         Some(String("gpt-4o")) => ()
@@ -211,7 +216,8 @@ test "lux_request_to_openai_chat - instructions prepended as system message" {
     None,
   )
   match lux_request_to_openai_chat(req) {
-    Ok(s) => {
+    Ok(cr) => {
+      let s = cr.value()
       let jv = @json.parse(s)
       match @internal.field_arr(jv, "messages") {
         Some(arr) => {
@@ -248,7 +254,8 @@ test "lux_request_to_openai_chat - tool_use encoded as tool_calls" {
     None,
   )
   match lux_request_to_openai_chat(req) {
-    Ok(s) => {
+    Ok(cr) => {
+      let s = cr.value()
       let jv = @json.parse(s)
       match @internal.field_arr(jv, "messages") {
         Some(arr) =>
@@ -284,7 +291,8 @@ test "lux_request_to_openai_chat - tool_result encoded as tool role" {
     None,
   )
   match lux_request_to_openai_chat(req) {
-    Ok(s) => {
+    Ok(cr) => {
+      let s = cr.value()
       let jv = @json.parse(s)
       match @internal.field_arr(jv, "messages") {
         Some(arr) =>
@@ -314,7 +322,8 @@ test "lux_request_to_openai_chat - tools encoded" {
     None,
   )
   match lux_request_to_openai_chat(req) {
-    Ok(s) => {
+    Ok(cr) => {
+      let s = cr.value()
       let jv = @json.parse(s)
       match @internal.field_arr(jv, "tools") {
         Some(arr) => assert_eq(arr.length(), 1)
@@ -332,7 +341,8 @@ test "lux_request_to_openai_chat - tools encoded" {
 test "openai_chat_to_lux_response - text + usage" {
   let json = "{\"id\":\"chatcmpl-1\",\"object\":\"chat.completion\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello!\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5,\"total_tokens\":15}}"
   match openai_chat_to_lux_response(json) {
-    Ok(resp) => {
+    Ok(cr) => {
+      let resp = cr.value()
       assert_eq(resp.id, "chatcmpl-1")
       assert_eq(resp.model, "gpt-4o")
       assert_eq(resp.choices.length(), 1)
@@ -354,7 +364,8 @@ test "openai_chat_to_lux_response - text + usage" {
 test "openai_chat_to_lux_response - assistant with tool_calls" {
   let json = "{\"id\":\"c-1\",\"object\":\"chat.completion\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"c1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},\"finish_reason\":\"tool_calls\"}]}"
   match openai_chat_to_lux_response(json) {
-    Ok(resp) => {
+    Ok(cr) => {
+      let resp = cr.value()
       assert_eq(resp.choices[0].finish_reason, ToolCalls)
       match resp.choices[0].message.content[0] {
         ToolUse(tu) => assert_eq(tu.name, "f")
@@ -369,8 +380,8 @@ test "openai_chat_to_lux_response - assistant with tool_calls" {
 test "ai_chat_to_lux_response - refusal decoded" {
   let json = "{\"id\":\"c-1\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":null,\"refusal\":\"cannot\"},\"finish_reason\":\"stop\"}]}"
   match openai_chat_to_lux_response(json) {
-    Ok(resp) =>
-      match resp.choices[0].message.content[0] {
+    Ok(cr) =>
+      match cr.value().choices[0].message.content[0] {
         Refusal(s) => assert_eq(s, "cannot")
         _ => assert_true(false)
       }
@@ -407,7 +418,8 @@ test "lux_response_to_openai_chat - text response" {
     None,
   )
   match lux_response_to_openai_chat(resp) {
-    Ok(s) => {
+    Ok(cr) => {
+      let s = cr.value()
       let jv = @json.parse(s)
       match @internal.field_str(jv, "object") {
         Some("chat.completion") => ()
@@ -446,7 +458,8 @@ test "lux_response_to_openai_chat - tool_calls encoded" {
     None,
   )
   match lux_response_to_openai_chat(resp) {
-    Ok(s) => {
+    Ok(cr) => {
+      let s = cr.value()
       let jv = @json.parse(s)
       match @internal.field_arr(jv, "choices") {
         Some(arr) =>
@@ -483,7 +496,8 @@ test "lux_response_to_openai_chat - refusal encoded" {
     None,
   )
   match lux_response_to_openai_chat(resp) {
-    Ok(s) => {
+    Ok(cr) => {
+      let s = cr.value()
       let jv = @json.parse(s)
       match @internal.field_arr(jv, "choices") {
         Some(arr) =>
@@ -509,7 +523,8 @@ test "lux_response_to_openai_chat - refusal encoded" {
 test "openai_chat_sse_to_events - text chunks" {
   let sse = "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\" world\"}}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
   match openai_chat_sse_to_events(sse) {
-    Ok(events) => {
+    Ok(cr) => {
+      let events = cr.value()
       // 应有：ConversationStart + BlockStart + BlockDelta×2 + BlockEnd + Finish + Done
       assert_true(events.length() >= 5)
       // ConversationStart 首个事件
@@ -525,7 +540,8 @@ test "openai_chat_sse_to_events - text chunks" {
 test "openai_chat_sse_to_events - tool call stream" {
   let sse = "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{\"}}]}}]}\n\ndata: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\"x\\\":\"}}]}}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\ndata: [DONE]\n\n"
   match openai_chat_sse_to_events(sse) {
-    Ok(events) => {
+    Ok(cr) => {
+      let events = cr.value()
       // 应有 BlockStart(0, ToolCall) + BlockDelta(ToolArgumentsDelta)×2 + BlockEnd + Finish(ToolCalls) + Done
       let has_tool_block_start = {
         let mut found = false
@@ -549,7 +565,8 @@ test "openai_chat_sse_to_events - tool call stream" {
 test "openai_chat_sse_to_events - usage frame" {
   let sse = "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: {\"choices\":[],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":2,\"total_tokens\":12}}\n\ndata: [DONE]\n\n"
   match openai_chat_sse_to_events(sse) {
-    Ok(events) => {
+    Ok(cr) => {
+      let events = cr.value()
       let has_usage = {
         let mut found = false
         for ev in events {
@@ -580,7 +597,8 @@ test "lux_events_to_openai_chat_sse - text sequence" {
     Done,
   ]
   match lux_events_to_openai_chat_sse(events) {
-    Ok(sse) => {
+    Ok(cr) => {
+      let sse = cr.value()
       // 应含 role:assistant、content:Hello、finish_reason:stop、[DONE]
       assert_true(sse.contains("\"role\":\"assistant\""))
       assert_true(sse.contains("\"content\":\"Hello\""))
@@ -600,7 +618,8 @@ test "lux_events_to_openai_chat_sse - tool call sequence" {
     Done,
   ]
   match lux_events_to_openai_chat_sse(events) {
-    Ok(sse) => {
+    Ok(cr) => {
+      let sse = cr.value()
       // 应含 tool_calls 首帧（id + name）和 arguments 增量
       assert_true(sse.contains("\"id\":\"c1\""))
       assert_true(sse.contains("\"name\":\"f\""))
@@ -618,7 +637,7 @@ test "lux_events_to_openai_chat_sse - usage frame" {
     Done,
   ]
   match lux_events_to_openai_chat_sse(events) {
-    Ok(sse) => assert_true(sse.contains("\"total_tokens\":12"))
+    Ok(cr) => assert_true(cr.value().contains("\"total_tokens\":12"))
     Err(_) => assert_true(false)
   }
 }
@@ -641,9 +660,10 @@ test "round trip - request encode then decode preserves semantics" {
     None,
   )
   match lux_request_to_openai_chat(original) {
-    Ok(json) =>
-      match openai_chat_to_lux_request(json) {
-        Ok(round) => {
+    Ok(cr1) =>
+      match openai_chat_to_lux_request(cr1.value()) {
+        Ok(cr2) => {
+          let round = cr2.value()
           assert_eq(round.model, "gpt-4o")
           assert_eq(round.conversation.length(), 1)
           // instructions 应被还原（system 消息抽出）
@@ -662,10 +682,10 @@ test "round trip - request encode then decode preserves semantics" {
 test "round trip - response decode then encode preserves id" {
   let json = "{\"id\":\"c-1\",\"object\":\"chat.completion\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"hi\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1,\"total_tokens\":2}}"
   match openai_chat_to_lux_response(json) {
-    Ok(resp) =>
-      match lux_response_to_openai_chat(resp) {
-        Ok(json2) => {
-          let jv = @json.parse(json2)
+    Ok(cr1) =>
+      match lux_response_to_openai_chat(cr1.value()) {
+        Ok(cr2) => {
+          let jv = @json.parse(cr2.value())
           match @internal.field_str(jv, "id") {
             Some("c-1") => ()
             _ => assert_true(false)

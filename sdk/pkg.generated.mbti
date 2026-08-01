@@ -10,11 +10,11 @@ pub fn all_providers() -> Array[ProviderRegistration]
 
 pub fn context_to_lux_request(Context, String, PrismOptions) -> @lux.LucentRequest
 
-pub fn convert_request(String, String, String) -> Result[String, String]
+pub fn convert_request(String, String, String) -> Result[@lux.ConversionResult[String], String]
 
-pub fn convert_response(String, String, String) -> Result[String, String]
+pub fn convert_response(String, String, String) -> Result[@lux.ConversionResult[String], String]
 
-pub fn convert_stream(String, String, String) -> Result[String, String]
+pub fn convert_stream(String, String, String) -> Result[@lux.ConversionResult[String], String]
 
 pub fn get_schema(String) -> ProviderSchema?
 
@@ -115,14 +115,14 @@ pub struct ProviderRegistration {
   aliases : Array[String]
   capability : @lux.ProviderCapability
   model_pattern : String
-  request_decode : (String) -> Result[@lux.LucentRequest, String]
-  request_encode : (@lux.LucentRequest) -> Result[String, String]
-  response_decode : (String) -> Result[@lux.LucentResponse, String]
-  response_encode : (@lux.LucentResponse) -> Result[String, String]
-  events_decode : (String) -> Result[Array[@lux.LucentStreamEvent], String]
-  events_encode : (Array[@lux.LucentStreamEvent]) -> Result[String, String]
+  request_decode : (String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String]
+  request_encode : (@lux.LucentRequest) -> Result[@lux.ConversionResult[String], String]
+  response_decode : (String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String]
+  response_encode : (@lux.LucentResponse) -> Result[@lux.ConversionResult[String], String]
+  events_decode : (String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String]
+  events_encode : (Array[@lux.LucentStreamEvent]) -> Result[@lux.ConversionResult[String], String]
 }
-pub fn ProviderRegistration::new(String, Array[String], @lux.ProviderCapability, String, (String) -> Result[@lux.LucentRequest, String], (@lux.LucentRequest) -> Result[String, String], (String) -> Result[@lux.LucentResponse, String], (@lux.LucentResponse) -> Result[String, String], (String) -> Result[Array[@lux.LucentStreamEvent], String], (Array[@lux.LucentStreamEvent]) -> Result[String, String]) -> Self
+pub fn ProviderRegistration::new(String, Array[String], @lux.ProviderCapability, String, (String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String], (@lux.LucentRequest) -> Result[@lux.ConversionResult[String], String], (String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String], (@lux.LucentResponse) -> Result[@lux.ConversionResult[String], String], (String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String], (Array[@lux.LucentStreamEvent]) -> Result[@lux.ConversionResult[String], String]) -> Self
 
 pub struct ProviderSchema {
   provider_name : String

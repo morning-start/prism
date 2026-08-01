@@ -8,17 +8,17 @@ import {
 // Values
 pub fn capability() -> @lux.ProviderCapability
 
-pub fn lux_events_to_openai_responses_sse(Array[@lux.LucentStreamEvent]) -> Result[String, String]
+pub fn lux_events_to_openai_responses_sse(Array[@lux.LucentStreamEvent]) -> Result[@lux.ConversionResult[String], String]
 
-pub fn lux_request_to_openai_responses(@lux.LucentRequest) -> Result[String, String]
+pub fn lux_request_to_openai_responses(@lux.LucentRequest) -> Result[@lux.ConversionResult[String], String]
 
-pub fn lux_response_to_openai_responses(@lux.LucentResponse) -> Result[String, String]
+pub fn lux_response_to_openai_responses(@lux.LucentResponse) -> Result[@lux.ConversionResult[String], String]
 
-pub fn openai_responses_sse_to_events(String) -> Result[Array[@lux.LucentStreamEvent], String]
+pub fn openai_responses_sse_to_events(String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String]
 
-pub fn openai_responses_to_lux_request(String) -> Result[@lux.LucentRequest, String]
+pub fn openai_responses_to_lux_request(String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String]
 
-pub fn openai_responses_to_lux_response(String) -> Result[@lux.LucentResponse, String]
+pub fn openai_responses_to_lux_response(String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String]
 
 // Errors
 

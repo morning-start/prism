@@ -253,7 +253,7 @@ fn parse_reasoning(jv : Json) -> @lux.LucentReasoningConfig? {
 /// 1. anthropic_to_lux_request — 请求解码
 pub fn anthropic_to_lux_request(
   json_str : String,
-) -> Result[@lux.LucentRequest, String] {
+) -> Result[@lux.ConversionResult[@lux.LucentRequest], String] {
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
   let model = @internal.field_str(jv, "model").unwrap_or("")
   // system 指令
@@ -335,17 +335,19 @@ pub fn anthropic_to_lux_request(
     None,
   )
   Ok(
-    @lux.LucentRequest::new(
-      model,
-      instr_opt,
-      conversation,
-      tools,
-      tool_choice,
-      opts,
-      None,
-      reasoning,
-      metadata,
-      None,
+    @lux.ConversionResult::new(
+      @lux.LucentRequest::new(
+        model,
+        instr_opt,
+        conversation,
+        tools,
+        tool_choice,
+        opts,
+        None,
+        reasoning,
+        metadata,
+        None,
+      ),
     ),
   )
 }
@@ -460,7 +462,7 @@ fn content_array_to_json(content : Array[@lux.LucentContent]) -> String {
 /// 2. lux_request_to_anthropic — 请求编码
 pub fn lux_request_to_anthropic(
   req : @lux.LucentRequest,
-) -> Result[String, String] {
+) -> Result[@lux.ConversionResult[String], String] {
   let parts : Array[String] = []
   parts.push("\"model\":\"" + json_escape(req.model) + "\"")
   // system 指令（顶层）
@@ -647,14 +649,14 @@ pub fn lux_request_to_anthropic(
     }
     None => ()
   }
-  Ok("{" + parts.join(",") + "}")
+  Ok(@lux.ConversionResult::new("{" + parts.join(",") + "}"))
 }
 
 ///|
 /// 3. anthropic_to_lux_response — 响应解码
 pub fn anthropic_to_lux_response(
   json_str : String,
-) -> Result[@lux.LucentResponse, String] {
+) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
   let id = @internal.field_str(jv, "id").unwrap_or("")
   let model = @internal.field_str(jv, "model").unwrap_or("")
@@ -684,14 +686,18 @@ pub fn anthropic_to_lux_response(
     }
     None => None
   }
-  Ok(@lux.LucentResponse::new(id, model, None, [choice], usage, None))
+  Ok(
+    @lux.ConversionResult::new(
+      @lux.LucentResponse::new(id, model, None, [choice], usage, None),
+    ),
+  )
 }
 
 ///|
 /// 4. lux_response_to_anthropic — 响应编码
 pub fn lux_response_to_anthropic(
   resp : @lux.LucentResponse,
-) -> Result[String, String] {
+) -> Result[@lux.ConversionResult[String], String] {
   if resp.choices.length() == 0 {
     return Err("response has no choices")
   }
@@ -740,7 +746,7 @@ pub fn lux_response_to_anthropic(
     ",\"stop_sequence\":null" +
     usage_json +
     "}"
-  Ok(body)
+  Ok(@lux.ConversionResult::new(body))
 }
 
 ///|
@@ -753,7 +759,7 @@ pub fn lux_response_to_anthropic(
 /// 用 \n\n 分隔 SSE 消息，再逐条解析 event/data 行
 pub fn anthropic_sse_to_events(
   sse_str : String,
-) -> Result[Array[@lux.LucentStreamEvent], String] {
+) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String] {
   let events : Array[@lux.LucentStreamEvent] = []
   let messages = sse_str.split("\n\n").to_array()
   let mut i = 0
@@ -945,7 +951,7 @@ pub fn anthropic_sse_to_events(
     }
     i = i + 1
   }
-  Ok(events)
+  Ok(@lux.ConversionResult::new(events))
 }
 
 ///|
@@ -954,7 +960,7 @@ pub fn anthropic_sse_to_events(
 /// 把 Lux 事件流编码为 Anthropic SSE 格式（同 chromic_sse_to_events 的逆过程）
 pub fn lux_events_to_anthropic_sse(
   events : Array[@lux.LucentStreamEvent],
-) -> Result[String, String] {
+) -> Result[@lux.ConversionResult[String], String] {
   let lines : Array[String] = []
   let mut i = 0
   while i < events.length() {
@@ -1063,7 +1069,7 @@ pub fn lux_events_to_anthropic_sse(
     }
     i = i + 1
   }
-  Ok(lines.join("\n\n") + "\n\n")
+  Ok(@lux.ConversionResult::new(lines.join("\n\n") + "\n\n"))
 }
 
 ///|

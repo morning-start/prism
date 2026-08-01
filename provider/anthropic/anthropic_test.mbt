@@ -30,9 +30,10 @@ test "round trip - request encode then decode preserves semantics" {
     None,
   )
   match lux_request_to_anthropic(original) {
-    Ok(json) =>
-      match anthropic_to_lux_request(json) {
-        Ok(round) => {
+    Ok(cr) =>
+      match anthropic_to_lux_request(cr.value()) {
+        Ok(round_cr) => {
+          let round = round_cr.value()
           assert_eq(round.model, "claude-sonnet-4")
           assert_eq(round.conversation.length(), 1)
           match round.conversation[0] {
@@ -81,9 +82,9 @@ test "round trip - response encode then decode preserves text" {
     None,
   )
   match lux_response_to_anthropic(resp) {
-    Ok(json) =>
-      match anthropic_to_lux_response(json) {
-        Ok(round) => assert_eq(round.get_text(), "hi")
+    Ok(cr) =>
+      match anthropic_to_lux_response(cr.value()) {
+        Ok(round_cr) => assert_eq(round_cr.value().get_text(), "hi")
         Err(_) => assert_true(false)
       }
     Err(_) => assert_true(false)

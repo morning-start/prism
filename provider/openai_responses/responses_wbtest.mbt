@@ -8,7 +8,8 @@
 test "openai_responses_to_lux_request - simple user message" {
   let json = "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"Hello\"}]}]}"
   match openai_responses_to_lux_request(json) {
-    Ok(req) => {
+    Ok(cr) => {
+      let req = cr.value()
       assert_eq(req.model, "gpt-5")
       assert_eq(req.conversation.length(), 1)
       match req.conversation[0] {
@@ -30,8 +31,8 @@ test "openai_responses_to_lux_request - simple user message" {
 test "openai_responses_to_lux_request - instructions extracted" {
   let json = "{\"model\":\"gpt-5\",\"instructions\":\"Be helpful\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hi\"}]}]}"
   match openai_responses_to_lux_request(json) {
-    Ok(req) =>
-      match req.instructions {
+    Ok(cr) =>
+      match cr.value().instructions {
         Some(instrs) => assert_eq(instrs.length(), 1)
         None => assert_true(false)
       }
@@ -43,7 +44,8 @@ test "openai_responses_to_lux_request - instructions extracted" {
 test "openai_responses_to_lux_request - function_call and function_call_output" {
   let json = "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"function_call\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"search\",\"arguments\":\"{\\\"q\\\":\\\"x\\\"}\"},{\"type\":\"function_call_output\",\"call_id\":\"call_1\",\"output\":\"result\"}]}"
   match openai_responses_to_lux_request(json) {
-    Ok(req) => {
+    Ok(cr) => {
+      let req = cr.value()
       assert_eq(req.conversation.length(), 2)
       match req.conversation[0] {
         ToolCall(tu) => {
@@ -65,8 +67,8 @@ test "openai_responses_to_lux_request - function_call and function_call_output" 
 test "openai_responses_to_lux_request - reasoning item" {
   let json = "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"thinking step\"}],\"signature\":\"sig_1\"}]}"
   match openai_responses_to_lux_request(json) {
-    Ok(req) =>
-      match req.conversation[0] {
+    Ok(cr) =>
+      match cr.value().conversation[0] {
         Reasoning(th) => assert_eq(th.signature, Some("sig_1"))
         _ => assert_true(false)
       }
@@ -92,7 +94,8 @@ test "lux_request_to_openai_responses - simple user message" {
     None,
   )
   match lux_request_to_openai_responses(req) {
-    Ok(s) => {
+    Ok(cr) => {
+      let s = cr.value()
       assert_true(s.contains("\"model\":\"gpt-5\""))
       assert_true(s.contains("\"input\":"))
       assert_true(s.contains("\"type\":\"message\""))
@@ -108,7 +111,8 @@ test "lux_request_to_openai_responses - simple user message" {
 test "openai_responses_to_lux_response - text + usage" {
   let json = "{\"id\":\"resp_1\",\"object\":\"response\",\"status\":\"completed\",\"model\":\"gpt-5\",\"created_at\":1700000000,\"output\":[{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hello!\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":10,\"output_tokens\":5,\"total_tokens\":15}}"
   match openai_responses_to_lux_response(json) {
-    Ok(resp) => {
+    Ok(cr) => {
+      let resp = cr.value()
       assert_eq(resp.id, "resp_1")
       assert_eq(resp.model, "gpt-5")
       assert_eq(resp.choices[0].finish_reason, Stop)
@@ -132,8 +136,8 @@ test "openai_responses_to_lux_response - text + usage" {
 test "openai_responses_to_lux_response - function_call output" {
   let json = "{\"id\":\"resp_2\",\"model\":\"gpt-5\",\"output\":[{\"type\":\"function_call\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"search\",\"arguments\":\"{}\",\"status\":\"completed\"}],\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2}}"
   match openai_responses_to_lux_response(json) {
-    Ok(resp) =>
-      match resp.choices[0].message.content[0] {
+    Ok(cr) =>
+      match cr.value().choices[0].message.content[0] {
         ToolUse(tu) => assert_eq(tu.name, "search")
         _ => assert_true(false)
       }
@@ -159,7 +163,8 @@ test "lux_response_to_openai_responses - text response" {
     None,
   )
   match lux_response_to_openai_responses(resp) {
-    Ok(s) => {
+    Ok(cr) => {
+      let s = cr.value()
       assert_true(s.contains("\"id\":\"resp_1\""))
       assert_true(s.contains("\"object\":\"response\""))
       assert_true(s.contains("\"output_tokens\":5"))
@@ -184,7 +189,8 @@ test "lux_response_to_openai_responses - empty choices error" {
 test "openai_responses_sse_to_events - text stream" {
   let sse = "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"r_1\",\"model\":\"gpt-5\"}}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"input_text\",\"text\":\"\"}]}}\n\nevent: response.content_part.added\ndata: {\"type\":\"response.content_part.added\",\"output_index\":0,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\"}}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"content_index\":0,\"delta\":\"Hello\"}\n\nevent: response.output_text.done\ndata: {\"type\":\"response.output_text.done\",\"output_index\":0,\"content_index\":0}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2}}}\n\n"
   match openai_responses_sse_to_events(sse) {
-    Ok(events) => {
+    Ok(cr) => {
+      let events = cr.value()
       assert_true(events.length() >= 5)
       match events[0] {
         ConversationStart(_) => ()
@@ -199,7 +205,8 @@ test "openai_responses_sse_to_events - text stream" {
 test "openai_responses_sse_to_events - function_call stream" {
   let sse = "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"r_2\",\"model\":\"gpt-5\"}}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"function_call\",\"id\":\"fc_1\",\"name\":\"search\"}}\n\nevent: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"output_index\":0,\"delta\":\"{\\\"q\\\":\\\"x\\\"}\"}\n\nevent: response.function_call_arguments.done\ndata: {\"type\":\"response.function_call_arguments.done\",\"output_index\":0}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\"}}\n\n"
   match openai_responses_sse_to_events(sse) {
-    Ok(events) => {
+    Ok(cr) => {
+      let events = cr.value()
       assert_true(events.length() >= 3)
       let has_item_start = {
         let mut found = false
@@ -239,7 +246,8 @@ test "lux_events_to_openai_responses_sse - text sequence" {
     Done,
   ]
   match lux_events_to_openai_responses_sse(events) {
-    Ok(sse) => {
+    Ok(cr) => {
+      let sse = cr.value()
       assert_true(sse.contains("event: response.created"))
       assert_true(sse.contains("event: response.output_item.added"))
       assert_true(sse.contains("event: response.content_part.added"))

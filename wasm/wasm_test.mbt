@@ -144,8 +144,9 @@ test "wasm_lux_response_to_provider - invalid JSON" {
 test "wasm_sse_to_events - openai_chat SSE" {
   let sse = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n\ndata: [DONE]\n"
   let result = wasm_sse_to_events("openai-chat", sse)
-  // 成功时应返回 JSON 数组
-  assert_true(result.has_prefix("["))
+  // 成功时应返回带 value 的信封 JSON
+  assert_true(result.contains("\"value\""))
+  assert_true(result.contains("\"diagnostics\""))
 }
 
 ///|
@@ -309,7 +310,10 @@ fn convert_source_req_json() -> Result[String, String] {
     None,
     None,
   )
-  @openai_chat.lux_request_to_openai_chat(req)
+  match @openai_chat.lux_request_to_openai_chat(req) {
+    Ok(cr) => Ok(cr.value())
+    Err(e) => Err(e)
+  }
 }
 
 ///|
@@ -332,7 +336,10 @@ fn convert_source_resp_json() -> Result[String, String] {
     Some(@lux.LucentUsage::new(10, 5, 15)),
     None,
   )
-  @openai_chat.lux_response_to_openai_chat(resp)
+  match @openai_chat.lux_response_to_openai_chat(resp) {
+    Ok(cr) => Ok(cr.value())
+    Err(e) => Err(e)
+  }
 }
 
 ///|
@@ -346,7 +353,10 @@ fn convert_source_sse() -> Result[String, String] {
     @lux.Finish(@lux.Stop),
     @lux.Done,
   ]
-  @openai_chat.lux_events_to_openai_chat_sse(events)
+  match @openai_chat.lux_events_to_openai_chat_sse(events) {
+    Ok(cr) => Ok(cr.value())
+    Err(e) => Err(e)
+  }
 }
 
 ///|
@@ -354,13 +364,23 @@ test "wasm_convert_request - openai-chat to anthropic" {
   match convert_source_req_json() {
     Ok(json) => {
       let result = wasm_convert_request("openai-chat", json, "anthropic")
-      // 成功时应返回可被 anthropic 解码的目标 JSON
-      match @anthropic.anthropic_to_lux_request(result) {
-        Ok(req) => {
-          assert_eq(req.model, "gpt-4o")
-          assert_eq(req.conversation.length(), 1)
-        }
-        Err(e) => fail("target decode failed: \{e}")
+      // 信封：value 为可被 anthropic 解码的目标 JSON 字符串
+      let jv = @json.parse(result) catch { _ => Json::null() }
+      match jv {
+        Object(map) =>
+          match map.get("value") {
+            Some(String(target_json)) =>
+              match @anthropic.anthropic_to_lux_request(target_json) {
+                Ok(cr) => {
+                  let req = cr.value()
+                  assert_eq(req.model, "gpt-4o")
+                  assert_eq(req.conversation.length(), 1)
+                }
+                Err(e) => fail("target decode failed: \{e}")
+              }
+            _ => fail("expected value string in envelope")
+          }
+        _ => fail("expected object envelope")
       }
     }
     Err(e) => fail("encode source failed: \{e}")
@@ -379,13 +399,23 @@ test "wasm_convert_response - openai-chat to anthropic" {
   match convert_source_resp_json() {
     Ok(json) => {
       let result = wasm_convert_response("openai-chat", json, "anthropic")
-      match @anthropic.anthropic_to_lux_response(result) {
-        Ok(resp) => {
-          assert_eq(resp.id, "resp-1")
-          assert_eq(resp.model, "gpt-4o")
-          assert_eq(resp.choices.length(), 1)
-        }
-        Err(e) => fail("target response decode failed: \{e}")
+      let jv = @json.parse(result) catch { _ => Json::null() }
+      match jv {
+        Object(map) =>
+          match map.get("value") {
+            Some(String(target_json)) =>
+              match @anthropic.anthropic_to_lux_response(target_json) {
+                Ok(cr) => {
+                  let resp = cr.value()
+                  assert_eq(resp.id, "resp-1")
+                  assert_eq(resp.model, "gpt-4o")
+                  assert_eq(resp.choices.length(), 1)
+                }
+                Err(e) => fail("target response decode failed: \{e}")
+              }
+            _ => fail("expected value string in envelope")
+          }
+        _ => fail("expected object envelope")
       }
     }
     Err(e) => fail("encode source failed: \{e}")
@@ -397,10 +427,66 @@ test "wasm_convert_stream - openai-chat to anthropic" {
   match convert_source_sse() {
     Ok(sse) => {
       let result = wasm_convert_stream("openai-chat", sse, "anthropic")
-      match @anthropic.anthropic_sse_to_events(result) {
-        Ok(events) => assert_true(events.length() > 0)
-        Err(e) => fail("target sse decode failed: \{e}")
+      let jv = @json.parse(result) catch { _ => Json::null() }
+      match jv {
+        Object(map) =>
+          match map.get("value") {
+            Some(String(target_sse)) =>
+              match @anthropic.anthropic_sse_to_events(target_sse) {
+                Ok(cr) => assert_true(cr.value().length() > 0)
+                Err(e) => fail("target sse decode failed: \{e}")
+              }
+            _ => fail("expected value string in envelope")
+          }
+        _ => fail("expected object envelope")
       }
+    }
+    Err(e) => fail("encode source failed: \{e}")
+  }
+}
+
+///|
+/// === 信封 JSON（value + diagnostics）===
+
+///|
+test "wasm_to_lux_request - returns envelope with value and diagnostics" {
+  let json_str = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"Hi\"}]}"
+  let result = wasm_to_lux_request("openai-chat", json_str)
+  // 信封：{"value":<payload>,"diagnostics":[...]}
+  assert_true(result.contains("\"value\""))
+  assert_true(result.contains("\"diagnostics\""))
+}
+
+///|
+test "wasm_to_lux_request - invalid json returns error envelope with diagnostics" {
+  let result = wasm_to_lux_request("openai-chat", "{invalid}")
+  assert_true(result.contains("\"error\""))
+  assert_true(result.contains("\"diagnostics\""))
+}
+
+///|
+test "wasm_to_lux_response - returns envelope with value and diagnostics" {
+  let resp_json = "{\"id\":\"chatcmpl-1\",\"object\":\"chat.completion\",\"created\":123,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello!\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":3,\"total_tokens\":8}}"
+  let result = wasm_to_lux_response("openai-chat", resp_json)
+  assert_true(result.contains("\"value\""))
+  assert_true(result.contains("\"diagnostics\""))
+}
+
+///|
+test "wasm_sse_to_events - returns envelope with value and diagnostics" {
+  let sse = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n\ndata: [DONE]\n"
+  let result = wasm_sse_to_events("openai-chat", sse)
+  assert_true(result.contains("\"value\""))
+  assert_true(result.contains("\"diagnostics\""))
+}
+
+///|
+test "wasm_convert_request - returns envelope with value and diagnostics" {
+  match convert_source_req_json() {
+    Ok(json) => {
+      let result = wasm_convert_request("openai-chat", json, "anthropic")
+      assert_true(result.contains("\"value\""))
+      assert_true(result.contains("\"diagnostics\""))
     }
     Err(e) => fail("encode source failed: \{e}")
   }

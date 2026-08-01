@@ -20,18 +20,36 @@ pub struct ProviderRegistration {
   capability : @lux.ProviderCapability
   /// model pattern（从 capability 提取，用于文本通配符匹配）
   model_pattern : String
-  /// 请求解码：provider JSON → LucentRequest
-  request_decode : (String) -> Result[@lux.LucentRequest, String]
-  /// 请求编码：LucentRequest → provider JSON
-  request_encode : (@lux.LucentRequest) -> Result[String, String]
-  /// 响应解码：provider JSON → LucentResponse
-  response_decode : (String) -> Result[@lux.LucentResponse, String]
-  /// 响应编码：LucentResponse → provider JSON
-  response_encode : (@lux.LucentResponse) -> Result[String, String]
-  /// 流式解码：SSE 文本 → StreamEvent 数组
-  events_decode : (String) -> Result[Array[@lux.LucentStreamEvent], String]
-  /// 流式编码：StreamEvent 数组 → SSE 文本
-  events_encode : (Array[@lux.LucentStreamEvent]) -> Result[String, String]
+  /// 请求解码：provider JSON → LucentRequest（带诊断）
+  request_decode : (String) -> Result[
+    @lux.ConversionResult[@lux.LucentRequest],
+    String,
+  ]
+  /// 请求编码：LucentRequest → provider JSON（带诊断）
+  request_encode : (@lux.LucentRequest) -> Result[
+    @lux.ConversionResult[String],
+    String,
+  ]
+  /// 响应解码：provider JSON → LucentResponse（带诊断）
+  response_decode : (String) -> Result[
+    @lux.ConversionResult[@lux.LucentResponse],
+    String,
+  ]
+  /// 响应编码：LucentResponse → provider JSON（带诊断）
+  response_encode : (@lux.LucentResponse) -> Result[
+    @lux.ConversionResult[String],
+    String,
+  ]
+  /// 流式解码：SSE 文本 → StreamEvent 数组（带诊断）
+  events_decode : (String) -> Result[
+    @lux.ConversionResult[Array[@lux.LucentStreamEvent]],
+    String,
+  ]
+  /// 流式编码：StreamEvent 数组 → SSE 文本（带诊断）
+  events_encode : (Array[@lux.LucentStreamEvent]) -> Result[
+    @lux.ConversionResult[String],
+    String,
+  ]
 }
 
 ///|
@@ -40,12 +58,30 @@ pub fn ProviderRegistration::new(
   aliases : Array[String],
   capability : @lux.ProviderCapability,
   model_pattern : String,
-  request_decode : (String) -> Result[@lux.LucentRequest, String],
-  request_encode : (@lux.LucentRequest) -> Result[String, String],
-  response_decode : (String) -> Result[@lux.LucentResponse, String],
-  response_encode : (@lux.LucentResponse) -> Result[String, String],
-  events_decode : (String) -> Result[Array[@lux.LucentStreamEvent], String],
-  events_encode : (Array[@lux.LucentStreamEvent]) -> Result[String, String],
+  request_decode : (String) -> Result[
+    @lux.ConversionResult[@lux.LucentRequest],
+    String,
+  ],
+  request_encode : (@lux.LucentRequest) -> Result[
+    @lux.ConversionResult[String],
+    String,
+  ],
+  response_decode : (String) -> Result[
+    @lux.ConversionResult[@lux.LucentResponse],
+    String,
+  ],
+  response_encode : (@lux.LucentResponse) -> Result[
+    @lux.ConversionResult[String],
+    String,
+  ],
+  events_decode : (String) -> Result[
+    @lux.ConversionResult[Array[@lux.LucentStreamEvent]],
+    String,
+  ],
+  events_encode : (Array[@lux.LucentStreamEvent]) -> Result[
+    @lux.ConversionResult[String],
+    String,
+  ],
 ) -> ProviderRegistration {
   {
     name,

@@ -180,7 +180,11 @@ fn Prism::decode_to_lux(
 ) -> Result[@lux.LucentResponse, String] {
   let provider = self.provider
   match match_provider_name(provider) {
-    Some(reg) => (reg.response_decode)(json_str)
+    Some(reg) =>
+      match (reg.response_decode)(json_str) {
+        Ok(cr) => Ok(cr.value())
+        Err(e) => Err(e)
+      }
     None => Err("unknown provider: " + provider)
   }
 }
@@ -193,7 +197,11 @@ fn Prism::encode_lux_request(
 ) -> Result[String, String] {
   let provider = self.provider
   match match_provider_name(provider) {
-    Some(reg) => (reg.request_encode)(req)
+    Some(reg) =>
+      match (reg.request_encode)(req) {
+        Ok(cr) => Ok(cr.value())
+        Err(e) => Err(e)
+      }
     None => Err("unknown provider: " + provider)
   }
 }
@@ -277,7 +285,11 @@ fn decode_sse_inner(
   sse_str : String,
 ) -> Result[Array[@lux.LucentStreamEvent], String] {
   match match_provider_name(provider) {
-    Some(reg) => (reg.events_decode)(sse_str)
+    Some(reg) =>
+      match (reg.events_decode)(sse_str) {
+        Ok(cr) => Ok(cr.value())
+        Err(e) => Err(e)
+      }
     None => Err("unknown provider: " + provider)
   }
 }

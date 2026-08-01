@@ -8,7 +8,8 @@
 test "anthropic_to_lux_request - simple user message" {
   let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Hello\"}]}]}"
   match anthropic_to_lux_request(json) {
-    Ok(req) => {
+    Ok(cr) => {
+      let req = cr.value()
       assert_eq(req.model, "claude-sonnet-4")
       assert_eq(req.conversation.length(), 1)
       match req.conversation[0] {
@@ -32,8 +33,8 @@ test "anthropic_to_lux_request - simple user message" {
 test "anthropic_to_lux_request - system instruction extracted" {
   let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"system\":\"You are helpful\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}]}"
   match anthropic_to_lux_request(json) {
-    Ok(req) =>
-      match req.instructions {
+    Ok(cr) =>
+      match cr.value().instructions {
         Some(instrs) => assert_eq(instrs.length(), 1)
         None => assert_true(false)
       }
@@ -45,8 +46,8 @@ test "anthropic_to_lux_request - system instruction extracted" {
 test "anthropic_to_lux_request - system array of text blocks" {
   let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"system\":[{\"type\":\"text\",\"text\":\"You are\"},{\"type\":\"text\",\"text\":\"helpful\"}],\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}]}"
   match anthropic_to_lux_request(json) {
-    Ok(req) =>
-      match req.instructions {
+    Ok(cr) =>
+      match cr.value().instructions {
         Some(instrs) => assert_eq(instrs.length(), 2)
         None => assert_true(false)
       }
@@ -58,7 +59,8 @@ test "anthropic_to_lux_request - system array of text blocks" {
 test "anthropic_to_lux_request - assistant with tool_use and thinking" {
   let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"weather?\"}]},{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"Let me check...\",\"signature\":\"sig-1\"},{\"type\":\"text\",\"text\":\"Sure\"},{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"get_weather\",\"input\":{\"city\":\"Beijing\"}}]}]}"
   match anthropic_to_lux_request(json) {
-    Ok(req) => {
+    Ok(cr) => {
+      let req = cr.value()
       assert_eq(req.conversation.length(), 2)
       match req.conversation[1] {
         Message(m) => {
@@ -89,7 +91,8 @@ test "anthropic_to_lux_request - assistant with tool_use and thinking" {
 test "anthropic_to_lux_request - tool_result in user message" {
   let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"toolu_1\",\"content\":[{\"type\":\"text\",\"text\":\"{\\\"temp\\\":25}\"}],\"is_error\":false}]}]}"
   match anthropic_to_lux_request(json) {
-    Ok(req) => {
+    Ok(cr) => {
+      let req = cr.value()
       assert_eq(req.conversation.length(), 1)
       match req.conversation[0] {
         ToolResult(tr) => {
@@ -108,8 +111,8 @@ test "anthropic_to_lux_request - tool_result in user message" {
 test "anthropic_to_lux_request - tools with input_schema" {
   let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}],\"tools\":[{\"name\":\"get_weather\",\"description\":\"Get weather\",\"input_schema\":{\"type\":\"object\",\"properties\":{}}}]}"
   match anthropic_to_lux_request(json) {
-    Ok(req) =>
-      match req.tools {
+    Ok(cr) =>
+      match cr.value().tools {
         Some(tools) => {
           assert_eq(tools.length(), 1)
           assert_eq(tools[0].name, "get_weather")
@@ -124,7 +127,7 @@ test "anthropic_to_lux_request - tools with input_schema" {
 test "anthropic_to_lux_request - tool_choice auto" {
   let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}],\"tool_choice\":{\"type\":\"auto\"}}"
   match anthropic_to_lux_request(json) {
-    Ok(req) => assert_eq(req.tool_choice, Some(Auto))
+    Ok(cr) => assert_eq(cr.value().tool_choice, Some(Auto))
     Err(_) => assert_true(false)
   }
 }
@@ -133,7 +136,8 @@ test "anthropic_to_lux_request - tool_choice auto" {
 test "anthropic_to_lux_request - options mapping" {
   let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}],\"temperature\":0.5,\"top_p\":0.9,\"top_k\":10,\"stop_sequences\":[\"END\"],\"stream\":true}"
   match anthropic_to_lux_request(json) {
-    Ok(req) => {
+    Ok(cr) => {
+      let req = cr.value()
       match req.options.temperature {
         Some(t) => assert_true(t > 0.4 && t < 0.6)
         None => assert_true(false)
@@ -157,8 +161,8 @@ test "anthropic_to_lux_request - options mapping" {
 test "anthropic_to_lux_request - thinking config" {
   let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}],\"thinking\":{\"type\":\"enabled\",\"budget_tokens\":2048}}"
   match anthropic_to_lux_request(json) {
-    Ok(req) =>
-      match req.reasoning {
+    Ok(cr) =>
+      match cr.value().reasoning {
         Some(rc) => {
           assert_eq(rc.enabled, true)
           assert_eq(rc.budget_tokens, Some(2048))
@@ -173,8 +177,8 @@ test "anthropic_to_lux_request - thinking config" {
 test "anthropic_to_lux_request - redacted_thinking" {
   let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"messages\":[{\"role\":\"assistant\",\"content\":[{\"type\":\"redacted_thinking\",\"signature\":\"sig-redacted\"},{\"type\":\"text\",\"text\":\"ok\"}]}]}"
   match anthropic_to_lux_request(json) {
-    Ok(req) =>
-      match req.conversation[0] {
+    Ok(cr) =>
+      match cr.value().conversation[0] {
         Message(m) =>
           match m.content[0] {
             Thinking(th) => {
@@ -201,8 +205,8 @@ test "anthropic_to_lux_request - invalid json" {
 test "anthropic_to_lux_request - metadata" {
   let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}],\"metadata\":{\"user_id\":\"user_123\"}}"
   match anthropic_to_lux_request(json) {
-    Ok(req) =>
-      match req.metadata {
+    Ok(cr) =>
+      match cr.value().metadata {
         Some(m) =>
           match m.get("user_id") {
             Some("user_123") => ()
@@ -244,7 +248,8 @@ test "lux_request_to_anthropic - simple user message" {
     None,
   )
   match lux_request_to_anthropic(req) {
-    Ok(s) => {
+    Ok(cr) => {
+      let s = cr.value()
       assert_true(s.contains("\"model\":\"claude-sonnet-4\""))
       assert_true(s.contains("\"max_tokens\":1024"))
       assert_true(s.contains("\"role\":\"user\""))
@@ -280,7 +285,7 @@ test "lux_request_to_anthropic - instructions as system" {
     None,
   )
   match lux_request_to_anthropic(req) {
-    Ok(s) => assert_true(s.contains("\"system\":\"You are helpful\""))
+    Ok(cr) => assert_true(cr.value().contains("\"system\":\"You are helpful\""))
     Err(_) => assert_true(false)
   }
 }
@@ -322,7 +327,8 @@ test "lux_request_to_anthropic - tool_use encoded" {
     None,
   )
   match lux_request_to_anthropic(req) {
-    Ok(s) => {
+    Ok(cr) => {
+      let s = cr.value()
       assert_true(s.contains("\"type\":\"tool_use\""))
       assert_true(s.contains("\"id\":\"tu_1\""))
     }
@@ -361,7 +367,7 @@ test "lux_request_to_anthropic - tool_result encoded" {
     None,
   )
   match lux_request_to_anthropic(req) {
-    Ok(s) => assert_true(s.contains("\"type\":\"tool_result\""))
+    Ok(cr) => assert_true(cr.value().contains("\"type\":\"tool_result\""))
     Err(_) => assert_true(false)
   }
 }
@@ -397,7 +403,7 @@ test "lux_request_to_anthropic - thinking encoded" {
     None,
   )
   match lux_request_to_anthropic(req) {
-    Ok(s) => assert_true(s.contains("\"type\":\"thinking\""))
+    Ok(cr) => assert_true(cr.value().contains("\"type\":\"thinking\""))
     Err(_) => assert_true(false)
   }
 }
@@ -433,7 +439,7 @@ test "lux_request_to_anthropic - tools with input_schema" {
     None,
   )
   match lux_request_to_anthropic(req) {
-    Ok(s) => assert_true(s.contains("\"input_schema\":"))
+    Ok(cr) => assert_true(cr.value().contains("\"input_schema\":"))
     Err(_) => assert_true(false)
   }
 }
@@ -465,7 +471,7 @@ test "lux_request_to_anthropic - thinking config" {
     None,
   )
   match lux_request_to_anthropic(req) {
-    Ok(s) => assert_true(s.contains("\"budget_tokens\":2048"))
+    Ok(cr) => assert_true(cr.value().contains("\"budget_tokens\":2048"))
     Err(_) => assert_true(false)
   }
 }
@@ -477,7 +483,8 @@ test "lux_request_to_anthropic - thinking config" {
 test "anthropic_to_lux_response - text and thinking" {
   let json = "{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"Let me think\",\"signature\":\"sig-1\"},{\"type\":\"text\",\"text\":\"Hello!\"}],\"stop_reason\":\"end_turn\",\"usage\":{\"input_tokens\":10,\"output_tokens\":20}}"
   match anthropic_to_lux_response(json) {
-    Ok(resp) => {
+    Ok(cr) => {
+      let resp = cr.value()
       assert_eq(resp.id, "msg_1")
       assert_eq(resp.model, "claude-sonnet-4")
       assert_eq(resp.choices.length(), 1)
@@ -512,7 +519,8 @@ test "anthropic_to_lux_response - text and thinking" {
 test "anthropic_to_lux_response - tool_use response" {
   let json = "{\"id\":\"msg_2\",\"model\":\"claude-sonnet-4\",\"content\":[{\"type\":\"tool_use\",\"id\":\"tu_1\",\"name\":\"get_weather\",\"input\":{\"city\":\"Beijing\"}}],\"stop_reason\":\"tool_use\",\"usage\":{\"input_tokens\":5,\"output_tokens\":10}}"
   match anthropic_to_lux_response(json) {
-    Ok(resp) => {
+    Ok(cr) => {
+      let resp = cr.value()
       assert_eq(resp.choices[0].finish_reason, ToolCalls)
       match resp.choices[0].message.content[0] {
         ToolUse(tu) => {
@@ -532,7 +540,7 @@ test "anthropic_to_lux_response - tool_use response" {
 test "anthropic_to_lux_response - max_tokens stop" {
   let json = "{\"id\":\"msg_3\",\"model\":\"claude-sonnet-4\",\"content\":[{\"type\":\"text\",\"text\":\"partial\"}],\"stop_reason\":\"max_tokens\",\"usage\":{\"input_tokens\":5,\"output_tokens\":50}}"
   match anthropic_to_lux_response(json) {
-    Ok(resp) => assert_eq(resp.choices[0].finish_reason, Length)
+    Ok(cr) => assert_eq(cr.value().choices[0].finish_reason, Length)
     Err(_) => assert_true(false)
   }
 }
@@ -562,7 +570,8 @@ test "lux_response_to_anthropic - text response" {
     None,
   )
   match lux_response_to_anthropic(resp) {
-    Ok(s) => {
+    Ok(cr) => {
+      let s = cr.value()
       assert_true(s.contains("\"id\":\"msg_1\""))
       assert_true(s.contains("\"model\":\"claude-sonnet-4\""))
       assert_true(s.contains("\"type\":\"message\""))
@@ -593,7 +602,8 @@ test "lux_response_to_anthropic - with tool_use" {
     None,
   )
   match lux_response_to_anthropic(resp) {
-    Ok(s) => {
+    Ok(cr) => {
+      let s = cr.value()
       assert_true(s.contains("\"stop_reason\":\"tool_use\""))
       assert_true(s.contains("\"type\":\"tool_use\""))
       assert_true(s.contains("\"id\":\"tu_1\""))
@@ -619,7 +629,8 @@ test "lux_response_to_anthropic - empty choices returns error" {
 test "anthropic_sse_to_events - text sequence" {
   let sse = "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"model\":\"claude-sonnet-4\"}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":5}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
   match anthropic_sse_to_events(sse) {
-    Ok(events) => {
+    Ok(cr) => {
+      let events = cr.value()
       assert_true(events.length() >= 4)
       match events[0] {
         ConversationStart(_) => ()
@@ -635,7 +646,8 @@ test "anthropic_sse_to_events - text sequence" {
 test "anthropic_sse_to_events - tool call with thinking" {
   let sse = "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_2\",\"model\":\"claude-sonnet-4\"}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"Let me check\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"signature_delta\",\"signature\":\"sig_abc\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"tu_1\",\"name\":\"get_weather\",\"input\":{}}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"city\\\":\\\"Beijing\\\"}\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":1}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\"}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
   match anthropic_sse_to_events(sse) {
-    Ok(events) => {
+    Ok(cr) => {
+      let events = cr.value()
       assert_true(events.length() >= 10)
       // check thinking block start
       let has_thinking = {
@@ -682,7 +694,10 @@ test "anthropic_sse_to_events - tool call with thinking" {
 test "anthropic_sse_to_events - done event" {
   let sse = "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"m\",\"model\":\"m\"}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
   match anthropic_sse_to_events(sse) {
-    Ok(events) => assert_true(events[events.length() - 1] is Done)
+    Ok(cr) => {
+      let events = cr.value()
+      assert_true(events[events.length() - 1] is Done)
+    }
     Err(_) => assert_true(false)
   }
 }
@@ -707,7 +722,8 @@ test "lux_events_to_anthropic_sse - text sequence" {
     Done,
   ]
   match lux_events_to_anthropic_sse(events) {
-    Ok(sse) => {
+    Ok(cr) => {
+      let sse = cr.value()
       assert_true(sse.contains("event: message_start"))
       assert_true(sse.contains("event: content_block_start"))
       assert_true(sse.contains("event: content_block_delta"))
@@ -745,7 +761,8 @@ test "lux_events_to_anthropic_sse - tool call with thinking" {
     Done,
   ]
   match lux_events_to_anthropic_sse(events) {
-    Ok(sse) => {
+    Ok(cr) => {
+      let sse = cr.value()
       assert_true(sse.contains("thinking_delta"))
       assert_true(sse.contains("signature_delta"))
       assert_true(sse.contains("input_json_delta"))

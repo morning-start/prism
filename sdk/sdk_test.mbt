@@ -406,7 +406,10 @@ fn mock_send_fixed_response(_req_json : String) -> Result[String, String] {
     Some(@lux.LucentUsage::new(10, 5, 15)),
     None,
   )
-  @openai_chat.lux_response_to_openai_chat(resp)
+  match @openai_chat.lux_response_to_openai_chat(resp) {
+    Ok(cr) => Ok(cr.value())
+    Err(e) => Err(e)
+  }
 }
 
 ///|
@@ -420,7 +423,10 @@ fn mock_send_fixed_sse(_req_json : String) -> Result[String, String] {
     @lux.Finish(@lux.Stop),
     @lux.Done,
   ]
-  @openai_chat.lux_events_to_openai_chat_sse(events)
+  match @openai_chat.lux_events_to_openai_chat_sse(events) {
+    Ok(cr) => Ok(cr.value())
+    Err(e) => Err(e)
+  }
 }
 
 ///|
