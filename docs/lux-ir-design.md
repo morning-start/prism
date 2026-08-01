@@ -511,7 +511,7 @@ pub enum LucentFinishReason {
 - String 进出，WASM 导出零摩擦。
 - 6 个函数覆盖双层转换的全路径（业务调用模式 + 协议转发模式）。
 
-**适配器包命名**：`protocol/<vendor>/<api>/`，导出函数前缀 `<vendor>_<api>_`，例如 `openai_chat_to_lux_request` / `anthropic_to_lux_request`。
+**适配器包命名**：`provider/<vendor>/`，导出函数前缀 `<vendor>_<api>_`，例如 `openai_chat_to_lux_request` / `anthropic_to_lux_request`（实际实现注册于 `sdk/provider_capability.mbt` 的 `ProviderRegistration` 注册表）。
 
 ---
 
@@ -580,4 +580,4 @@ breaking changes 集中在「类型化」和「补齐缺失语义」，都是一
 1. **Phase 0 重做**：按此规范重写 `protocol/lux/lux.mbt` + `stream.mbt`，更新白盒测试。foundation，所有适配器依赖。
 2. **适配器重写**：OpenAI Chat → Anthropic → OpenAI Responses → Gemini（按接口复杂度递增，Responses 最扭曲所以放后面验证骨干设计）。
 3. **跨协议一致性测试**：canonical conversation 在四家适配器间 round-trip，验证「同一语义 → 四家 JSON → 同一 IR」。
-4. **WASM 导出**：6 函数 × 4 适配器 = 24 个导出点，纯函数，宿主语言零摩擦。
+4. **WASM 导出**：6 个通用转换函数（经 `sdk/` 注册表按 provider 分发）+ 5 个高层 SDK API，共 11 个导出点，纯函数，宿主语言零摩擦。中转站场景的协议→协议转发通过 `convert_*`（source 解码 + target 编码）组合实现。

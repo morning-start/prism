@@ -353,3 +353,94 @@ test "decode_sse result contains expected event types" {
     Err(e) => fail("sse: " + e)
   }
 }
+
+///|
+/// === Context::add_tool_result（Agent 循环工具结果注入）===
+
+///|
+test "context - add_tool_result appends tool result item" {
+  let ctx = Context::new()
+    .add_user("use weather tool")
+    .add_tool_result("tu_1", "sunny", false)
+  let req = context_to_lux_request(ctx, "gpt-4o", PrismOptions::default())
+  assert_eq(req.conversation.length(), 2)
+  match req.conversation[1] {
+    @lux.ToolResult(tr) => {
+      assert_eq(tr.tool_use_id, "tu_1")
+      assert_eq(tr.is_error, false)
+    }
+    _ => fail("expected ToolResult item")
+  }
+}
+
+///|
+test "context - add_tool_result marks error" {
+  let ctx = Context::new().add_tool_result("tu_2", "boom", true)
+  let req = context_to_lux_request(ctx, "gpt-4o", PrismOptions::default())
+  match req.conversation[0] {
+    @lux.ToolResult(tr) => assert_eq(tr.is_error, true)
+    _ => fail("expected ToolResult item")
+  }
+}
+
+///|
+/// === Prism::complete / Prism::stream（L1/L2，HTTP 由 Host 注入）===
+
+///|
+/// 假 transport：请求 JSON 进，固定响应 JSON 出
+fn mock_send_fixed_response(_req_json : String) -> Result[String, String] {
+  let resp = @lux.LucentResponse::new(
+    "resp-1",
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentChoice::new(
+        0,
+        @lux.LucentMessage::new(@lux.Assistant, [
+          @lux.LucentContent::text("Hello back"),
+        ]),
+        @lux.Stop,
+        None,
+      ),
+    ],
+    Some(@lux.LucentUsage::new(10, 5, 15)),
+    None,
+  )
+  @openai_chat.lux_response_to_openai_chat(resp)
+}
+
+///|
+/// 假 transport：请求 JSON 进，固定 SSE 出
+fn mock_send_fixed_sse(_req_json : String) -> Result[String, String] {
+  let events : Array[@lux.LucentStreamEvent] = [
+    @lux.ConversationStart(@lux.LucentConversationMeta::new(None, None, None)),
+    @lux.BlockStart(0, @lux.Text),
+    @lux.BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
+    @lux.BlockEnd(0),
+    @lux.Finish(@lux.Stop),
+    @lux.Done,
+  ]
+  @openai_chat.lux_events_to_openai_chat_sse(events)
+}
+
+///|
+test "complete - text in text out via mock transport" {
+  let prism = Prism::new().with_provider("openai-chat")
+  match
+    prism.complete("Hi", PrismOptions::default(), mock_send_fixed_response) {
+    Ok(text) => assert_eq(text, "Hello back")
+    Err(e) => fail("complete failed: \{e}")
+  }
+}
+
+///|
+test "stream - returns prism events via mock transport" {
+  let prism = Prism::new().with_provider("openai-chat")
+  let ctx = Context::new().add_user("Hi")
+  match prism.stream(ctx, mock_send_fixed_sse) {
+    Ok(events) =>
+      // TextDelta("Hello") + Finish(Stop)
+      assert_true(events.length() >= 2)
+    Err(e) => fail("stream failed: \{e}")
+  }
+}
