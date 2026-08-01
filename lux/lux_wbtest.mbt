@@ -692,6 +692,95 @@ test "LucentConversationMeta new" {
 /// === 流式累加器：lucent_stream_events_to_response ===
 
 ///|
+test "accumulate - agent actions preserved with diagnostics" {
+  let events = [
+    ItemStart(
+      0,
+      AgentAction({
+        kind: "computer_call",
+        id: "aa1",
+        call_id: None,
+        name: None,
+        arguments_json: None,
+        result: None,
+        provider_payload: None,
+      }),
+    ),
+    Finish(Stop),
+    Done,
+  ]
+  let acc = lucent_stream_events_to_accumulated(events, "r", "m")
+  assert_eq(acc.agent_actions.length(), 1)
+  assert_eq(acc.agent_actions[0].id, "aa1")
+  assert_eq(acc.diagnostics.length(), 1)
+  assert_eq(acc.diagnostics[0].status, Unsupported)
+}
+
+///|
+test "accumulate - annotations preserved with diagnostics" {
+  let events = [
+    Annotations(0, [
+      LucentAnnotation::new(Url, None, Some("https://x.com"), None, None),
+    ]),
+    Finish(Stop),
+    Done,
+  ]
+  let acc = lucent_stream_events_to_accumulated(events, "r", "m")
+  assert_eq(acc.annotations.length(), 1)
+  assert_eq(acc.diagnostics.length(), 1)
+  assert_eq(acc.diagnostics[0].status, Unsupported)
+}
+
+///|
+test "accumulate - native delta preserved with diagnostics" {
+  let events = [
+    BlockStart(0, Text),
+    BlockDelta(0, NativeDelta("vendor-x", "raw")),
+    BlockEnd(0),
+    Finish(Stop),
+    Done,
+  ]
+  let acc = lucent_stream_events_to_accumulated(events, "r", "m")
+  assert_eq(acc.native_events.length(), 1)
+  assert_eq(acc.diagnostics.length(), 1)
+  assert_eq(acc.diagnostics[0].status, Unsupported)
+}
+
+///|
+test "accumulate - response still aggregates text" {
+  let events = [
+    BlockStart(0, Text),
+    BlockDelta(0, LucentBlockDelta::text_delta("Hello")),
+    BlockEnd(0),
+    Finish(Stop),
+    Done,
+  ]
+  let acc = lucent_stream_events_to_accumulated(events, "r", "m")
+  assert_eq(acc.response.choices[0].finish_reason, Stop)
+  let msg = acc.response.choices[0].message
+  assert_eq(msg.content.length(), 1)
+  match msg.content[0] {
+    Text(t, _) => assert_eq(t, "Hello")
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "accumulate - wrapper lucent_stream_events_to_response unchanged" {
+  let events = [
+    ConversationStart(
+      LucentConversationMeta::new(Some("resp-real"), Some("gpt-5"), None),
+    ),
+    Done,
+  ]
+  let resp = lucent_stream_events_to_response(
+    events, "fallback", "fallback-model",
+  )
+  assert_eq(resp.id, "resp-real")
+  assert_eq(resp.model, "gpt-5")
+}
+
+///|
 test "accumulator empty events" {
   let events : Array[LucentStreamEvent] = []
   let resp = lucent_stream_events_to_response(

@@ -14,6 +14,8 @@ pub fn lucent_items_from_messages(Array[LucentMessage]) -> Array[LucentConversat
 
 pub fn lucent_messages_from_items(Array[LucentConversationItem]) -> Array[LucentMessage]
 
+pub fn lucent_stream_events_to_accumulated(Array[LucentStreamEvent], String, String) -> AccumulatedResponse
+
 pub fn lucent_stream_events_to_response(Array[LucentStreamEvent], String, String) -> LucentResponse
 
 pub fn lux_to_json_string(Json) -> String
@@ -21,20 +23,33 @@ pub fn lux_to_json_string(Json) -> String
 // Errors
 
 // Types and methods
+pub struct AccumulatedResponse {
+  response : LucentResponse
+  annotations : Array[LucentAnnotation]
+  native_events : Array[LucentStreamEvent]
+  agent_actions : Array[LucentAgentAction]
+  diagnostics : Array[ConversionDiagnostic]
+} derive(Eq, @debug.Debug)
+
 pub struct ConversionDiagnostic {
   field : String
   status : ConversionStatus
   detail : String?
 } derive(Eq, @debug.Debug)
+pub fn ConversionDiagnostic::from_json(Json) -> Result[Self, String]
 pub fn ConversionDiagnostic::new(String, ConversionStatus, String?) -> Self
 pub fn ConversionDiagnostic::status(Self) -> ConversionStatus
+pub fn ConversionDiagnostic::to_json(Self) -> Json
 
 pub struct ConversionResult[T] {
   value : T
   diagnostics : Array[ConversionDiagnostic]
 } derive(Eq, @debug.Debug)
 pub fn[T] ConversionResult::diagnostics(Self[T]) -> Array[ConversionDiagnostic]
+pub fn[T] ConversionResult::envelope_json(Self[T], Json) -> Json
+pub fn[T] ConversionResult::from_json(Json, (Json) -> Result[T, String]) -> Result[Self[T], String]
 pub fn[T] ConversionResult::new(T) -> Self[T]
+pub fn[T] ConversionResult::to_json(Self[T], (T) -> Json) -> Json
 pub fn[T] ConversionResult::value(Self[T]) -> T
 pub fn[T] ConversionResult::with_diagnostic(Self[T], ConversionDiagnostic) -> Self[T]
 
@@ -44,6 +59,8 @@ pub(all) enum ConversionStatus {
   Unsupported
   Invalid
 } derive(Eq, @debug.Debug)
+pub fn ConversionStatus::from_json(Json) -> Result[Self, String]
+pub fn ConversionStatus::to_json(Self) -> Json
 
 pub struct LucentAgentAction {
   kind : String
