@@ -168,9 +168,9 @@ pub fn all_providers() -> Array[ProviderRegistration] {
 /// 匹配策略：
 ///   1. 精确匹配 name
 ///   2. 匹配 aliases 中的别名
-///   3. 返回 None（由调用方兜底或报错）
+///   3. 均未命中时，把输入当作模型名走 `match_by_model` 回退
 ///
-/// 若需通过 model_name 正则匹配，调用 `match_by_model`。
+/// 若只想按模型名匹配（不做名称/别名命中），直接调用 `match_by_model`。
 pub fn match_provider_name(provider_name : String) -> ProviderRegistration? {
   let providers = all_providers()
   let mut i = 0

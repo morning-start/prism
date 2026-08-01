@@ -172,9 +172,24 @@ pub fn ProviderSchema::azure() -> ProviderSchema {
 }
 
 ///|
-/// 根据 provider 名获取对应 schema（自动匹配）
+/// 根据 provider 名获取对应 schema（自动匹配主名、别名与模型名）
 pub fn get_schema(provider : String) -> ProviderSchema? {
-  match provider {
+  // 1. 直接精确匹配主名
+  match schema_for_provider_name(provider) {
+    Some(schema) => Some(schema)
+    None =>
+      // 2. 别名/模型名：经注册表解析为主名后重查
+      match match_provider_name(provider) {
+        Some(reg) => schema_for_provider_name(reg.name)
+        None => None
+      }
+  }
+}
+
+///|
+/// provider 名（主名/别名）→ schema
+fn schema_for_provider_name(name : String) -> ProviderSchema? {
+  match name {
     "openai" | "openai-chat" | "openai-codex" => Some(ProviderSchema::openai())
     "anthropic" | "claude" => Some(ProviderSchema::anthropic())
     "gemini" | "google" | "google-vertex" => Some(ProviderSchema::gemini())

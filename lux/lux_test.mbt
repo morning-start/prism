@@ -240,3 +240,28 @@ test "lux_to_json_string blackbox - stringifies json" {
   let jv = @json.parse("{\"a\":1}")
   assert_eq(lux_to_json_string(jv), "{\"a\":1}")
 }
+
+///|
+/// === ConversionResult::with_diagnostic 不可变性 ===
+test "with_diagnostic does not mutate source diagnostics" {
+  let base = ConversionResult::new("hello")
+  let derived = base.with_diagnostic(
+    ConversionDiagnostic::new("field", Invalid, Some("detail")),
+  )
+  // 原结果诊断数组必须保持为空
+  assert_eq(base.diagnostics().length(), 0)
+  assert_eq(derived.diagnostics().length(), 1)
+  assert_eq(derived.value(), "hello")
+}
+
+///|
+test "with_diagnostic chains append without aliasing" {
+  let base = ConversionResult::new("hello")
+  let once = base.with_diagnostic(ConversionDiagnostic::new("a", Invalid, None))
+  let twice = once.with_diagnostic(
+    ConversionDiagnostic::new("b", Invalid, None),
+  )
+  assert_eq(base.diagnostics().length(), 0)
+  assert_eq(once.diagnostics().length(), 1)
+  assert_eq(twice.diagnostics().length(), 2)
+}
