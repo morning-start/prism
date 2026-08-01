@@ -52,7 +52,7 @@ test "vertex_to_lux_request - functionCall and functionResponse" {
     Ok(req) => {
       assert_eq(req.conversation.length(), 2)
       match req.conversation[1] {
-        ToolResult(tr) => assert_eq(tr.tool_use_id, "search_result")
+        ToolResult(tr) => assert_eq(tr.tool_use_id, "fc_search_0")
         _ => assert_true(false)
       }
     }

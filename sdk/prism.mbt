@@ -45,7 +45,9 @@ pub fn PrismOptions::new(
 /// Prism — 主实例
 pub struct Prism {
   provider : String
+  /// @deprecated 纯编解码 façade 不消费 API key；认证由 Host/Transport 层负责
   api_key : String?
+  /// @deprecated 纯编解码 façade 不消费自定义端点；由 Host/Transport 层负责
   base_url : String?
 }
 
