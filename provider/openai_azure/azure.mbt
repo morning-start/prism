@@ -9,13 +9,15 @@
 /// 1. 请求解码
 pub fn azure_to_lux_request(
   json_str : String,
-) -> Result[@lux.LucentRequest, String] {
+) -> Result[@lux.ConversionResult[@lux.LucentRequest], String] {
   @openai_responses.openai_responses_to_lux_request(json_str)
 }
 
 ///|
 /// 2. 请求编码
-pub fn lux_request_to_azure(req : @lux.LucentRequest) -> Result[String, String] {
+pub fn lux_request_to_azure(
+  req : @lux.LucentRequest,
+) -> Result[@lux.ConversionResult[String], String] {
   @openai_responses.lux_request_to_openai_responses(req)
 }
 
@@ -23,12 +25,17 @@ pub fn lux_request_to_azure(req : @lux.LucentRequest) -> Result[String, String] 
 /// 3. 响应解码 — 提取 Azure 特有的 content_filters 到 provider_payload
 pub fn azure_to_lux_response(
   json_str : String,
-) -> Result[@lux.LucentResponse, String] {
+) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
   match @openai_responses.openai_responses_to_lux_response(json_str) {
     Ok(base) =>
       match @internal.obj_get(jv, "content_filters") {
-        Some(filters) => Ok(base.with_provider_payload(Some(filters)))
+        Some(filters) =>
+          Ok(
+            @lux.ConversionResult::new(
+              base.value().with_provider_payload(Some(filters)),
+            ),
+          )
         None => Ok(base)
       }
     Err(e) => Err(e)
@@ -39,7 +46,7 @@ pub fn azure_to_lux_response(
 /// 4. 响应编码
 pub fn lux_response_to_azure(
   resp : @lux.LucentResponse,
-) -> Result[String, String] {
+) -> Result[@lux.ConversionResult[String], String] {
   @openai_responses.lux_response_to_openai_responses(resp)
 }
 
@@ -47,7 +54,7 @@ pub fn lux_response_to_azure(
 /// 5. 流解码
 pub fn azure_sse_to_events(
   sse_str : String,
-) -> Result[Array[@lux.LucentStreamEvent], String] {
+) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String] {
   @openai_responses.openai_responses_sse_to_events(sse_str)
 }
 
@@ -55,7 +62,7 @@ pub fn azure_sse_to_events(
 /// 6. 流编码
 pub fn lux_events_to_azure_sse(
   events : Array[@lux.LucentStreamEvent],
-) -> Result[String, String] {
+) -> Result[@lux.ConversionResult[String], String] {
   @openai_responses.lux_events_to_openai_responses_sse(events)
 }
 

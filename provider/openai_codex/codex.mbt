@@ -53,7 +53,7 @@ fn insert_phase_into_json(s : String, phase : String) -> String {
 /// 与主包差异：提取 input[].phase 字段到 LucentMessage.phase
 pub fn codex_to_lux_request(
   json_str : String,
-) -> Result[@lux.LucentRequest, String] {
+) -> Result[@lux.ConversionResult[@lux.LucentRequest], String] {
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
   // 提取 phase 信息：按 input 数组顺序
   let phases : Array[String?] = []
@@ -68,10 +68,11 @@ pub fn codex_to_lux_request(
   // 调用主包（主包不再处理 phase）
   match @openai_responses.openai_responses_to_lux_request(json_str) {
     Ok(base) => {
+      let req = base.value()
       // 后处理：给 Message 项添加 phase
       let new_items : Array[@lux.LucentConversationItem] = []
       let mut msg_idx = 0
-      for item in base.conversation {
+      for item in req.conversation {
         match item {
           Message(m) => {
             if msg_idx < phases.length() {
@@ -89,7 +90,7 @@ pub fn codex_to_lux_request(
           _ => new_items.push(item)
         }
       }
-      Ok(base.with_conversation(new_items))
+      Ok(@lux.ConversionResult::new(req.with_conversation(new_items)))
     }
     Err(e) => Err(e)
   }
@@ -101,7 +102,9 @@ pub fn codex_to_lux_request(
 /// 与主包差异：
 ///   - 输出 input[].phase 字段
 ///   - reasoning.effort 支持 xhigh
-pub fn lux_request_to_codex(req : @lux.LucentRequest) -> Result[String, String] {
+pub fn lux_request_to_codex(
+  req : @lux.LucentRequest,
+) -> Result[@lux.ConversionResult[String], String] {
   // 检查是否需要 Codex 特有处理
   let needs_phase = {
     let mut found = false
@@ -131,7 +134,7 @@ pub fn lux_request_to_codex(req : @lux.LucentRequest) -> Result[String, String] 
   // 获取基础 JSON
   match @openai_responses.lux_request_to_openai_responses(req) {
     Ok(base_json) => {
-      let mut jv = @json.parse(base_json) catch {
+      let mut jv = @json.parse(base_json.value()) catch {
         _ => return Err("json parse error")
       }
       // 处理 phase
@@ -185,7 +188,7 @@ pub fn lux_request_to_codex(req : @lux.LucentRequest) -> Result[String, String] 
           None => ()
         }
       }
-      Ok(jv.stringify())
+      Ok(@lux.ConversionResult::new(jv.stringify()))
     }
     Err(e) => Err(e)
   }
@@ -197,7 +200,7 @@ pub fn lux_request_to_codex(req : @lux.LucentRequest) -> Result[String, String] 
 /// 与主包相同：直接委托
 pub fn codex_to_lux_response(
   json_str : String,
-) -> Result[@lux.LucentResponse, String] {
+) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
   @openai_responses.openai_responses_to_lux_response(json_str)
 }
 
@@ -207,7 +210,7 @@ pub fn codex_to_lux_response(
 /// 与主包差异：输出 output[].phase 字段
 pub fn lux_response_to_codex(
   resp : @lux.LucentResponse,
-) -> Result[String, String] {
+) -> Result[@lux.ConversionResult[String], String] {
   // 检查是否有 phase
   let needs_phase = {
     let mut found = false
@@ -223,7 +226,7 @@ pub fn lux_response_to_codex(
   }
   match @openai_responses.lux_response_to_openai_responses(resp) {
     Ok(base_json) => {
-      let mut jv = @json.parse(base_json) catch {
+      let mut jv = @json.parse(base_json.value()) catch {
         _ => return Err("json parse error")
       }
       match @internal.field_arr(jv, "output") {
@@ -252,7 +255,7 @@ pub fn lux_response_to_codex(
         }
         _ => ()
       }
-      Ok(jv.stringify())
+      Ok(@lux.ConversionResult::new(jv.stringify()))
     }
     Err(e) => Err(e)
   }
@@ -264,7 +267,7 @@ pub fn lux_response_to_codex(
 /// 与主包相同：直接委托
 pub fn codex_sse_to_events(
   sse_str : String,
-) -> Result[Array[@lux.LucentStreamEvent], String] {
+) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String] {
   @openai_responses.openai_responses_sse_to_events(sse_str)
 }
 
@@ -274,7 +277,7 @@ pub fn codex_sse_to_events(
 /// 与主包差异：ItemStart 事件中的 message item 需输出 phase
 pub fn lux_events_to_codex_sse(
   events : Array[@lux.LucentStreamEvent],
-) -> Result[String, String] {
+) -> Result[@lux.ConversionResult[String], String] {
   // 检查是否有 phase
   let needs_phase = {
     let mut found = false
@@ -291,8 +294,9 @@ pub fn lux_events_to_codex_sse(
   }
   match @openai_responses.lux_events_to_openai_responses_sse(events) {
     Ok(base_sse) => {
+      let sse = base_sse.value()
       // 后处理：在 SSE 中为每个带 phase 的 message item 插入 phase
-      let parts = base_sse.split("event: response.output_item.added").to_array()
+      let parts = sse.split("event: response.output_item.added").to_array()
       if parts.length() <= 1 {
         return Ok(base_sse)
       }
@@ -324,7 +328,7 @@ pub fn lux_events_to_codex_sse(
         }
         i = i + 1
       }
-      Ok(result.join(""))
+      Ok(@lux.ConversionResult::new(result.join("")))
     }
     Err(e) => Err(e)
   }

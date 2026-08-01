@@ -355,7 +355,7 @@ fn parse_thinking_config(jv : Json) -> @lux.LucentReasoningConfig? {
 /// 1. gemini_to_lux_request — 请求解码
 pub fn gemini_to_lux_request(
   json_str : String,
-) -> Result[@lux.LucentRequest, String] {
+) -> Result[@lux.ConversionResult[@lux.LucentRequest], String] {
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
   let model = @internal.field_str(jv, "model").unwrap_or("")
   let instructions = parse_system_instruction(jv)
@@ -374,17 +374,19 @@ pub fn gemini_to_lux_request(
   let opts = parse_generation_config(jv)
   let reasoning = parse_thinking_config(jv)
   Ok(
-    @lux.LucentRequest::new(
-      model,
-      instr_opt,
-      conversation,
-      tools,
-      tool_choice,
-      opts,
-      None,
-      reasoning,
-      None,
-      None,
+    @lux.ConversionResult::new(
+      @lux.LucentRequest::new(
+        model,
+        instr_opt,
+        conversation,
+        tools,
+        tool_choice,
+        opts,
+        None,
+        reasoning,
+        None,
+        None,
+      ),
     ),
   )
 }
@@ -393,7 +395,7 @@ pub fn gemini_to_lux_request(
 /// 2. lux_request_to_gemini — 请求编码
 pub fn lux_request_to_gemini(
   req : @lux.LucentRequest,
-) -> Result[String, String] {
+) -> Result[@lux.ConversionResult[String], String] {
   let parts : Array[String] = []
   // model 在 Gemini 中通过端点路径传递，非 JSON 体内，但仍保留以备用
   parts.push("\"model\":\"" + @internal.json_escape(req.model) + "\"")
@@ -610,14 +612,14 @@ pub fn lux_request_to_gemini(
   if gc_parts.length() > 0 {
     parts.push("\"generationConfig\":{" + gc_parts.join(",") + "}")
   }
-  Ok("{" + parts.join(",") + "}")
+  Ok(@lux.ConversionResult::new("{" + parts.join(",") + "}"))
 }
 
 ///|
 /// 3. gemini_to_lux_response — 响应解码
 pub fn gemini_to_lux_response(
   json_str : String,
-) -> Result[@lux.LucentResponse, String] {
+) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
   let id = @internal.field_str(jv, "model").unwrap_or("")
   let model = @internal.field_str(jv, "modelVersion").unwrap_or(id)
@@ -685,14 +687,18 @@ pub fn gemini_to_lux_response(
     }
     None => @lux.LucentUsage::new(0, 0, 0)
   }
-  Ok(@lux.LucentResponse::new(id, model, None, choices, Some(usage), None))
+  Ok(
+    @lux.ConversionResult::new(
+      @lux.LucentResponse::new(id, model, None, choices, Some(usage), None),
+    ),
+  )
 }
 
 ///|
 /// 4. lux_response_to_gemini — 响应编码
 pub fn lux_response_to_gemini(
   resp : @lux.LucentResponse,
-) -> Result[String, String] {
+) -> Result[@lux.ConversionResult[String], String] {
   if resp.choices.length() == 0 {
     return Err("response has no choices")
   }
@@ -772,7 +778,11 @@ pub fn lux_response_to_gemini(
       "}"
     None => ""
   }
-  Ok("{\"candidates\":[" + cands.join(",") + "]" + usage_part + "}")
+  Ok(
+    @lux.ConversionResult::new(
+      "{\"candidates\":[" + cands.join(",") + "]" + usage_part + "}",
+    ),
+  )
 }
 
 ///|
@@ -782,7 +792,7 @@ pub fn lux_response_to_gemini(
 /// 适配层做 diff，发 BlockDiscard 旧帧 + BlockDelta 新内容
 pub fn gemini_sse_to_events(
   sse_str : String,
-) -> Result[Array[@lux.LucentStreamEvent], String] {
+) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String] {
   let events : Array[@lux.LucentStreamEvent] = []
   let lines = sse_str.split("\n").to_array()
   let mut has_text_block = false
@@ -931,14 +941,14 @@ pub fn gemini_sse_to_events(
   if has_text_block {
     events.push(@lux.BlockEnd(text_block_index))
   }
-  Ok(events)
+  Ok(@lux.ConversionResult::new(events))
 }
 
 ///|
 /// 6. lux_events_to_gemini_sse — 流编码
 pub fn lux_events_to_gemini_sse(
   events : Array[@lux.LucentStreamEvent],
-) -> Result[String, String] {
+) -> Result[@lux.ConversionResult[String], String] {
   // Gemini 流式是完整帧格式，块周期事件需要合并为完整 candidates
   // 简化实现：累加文本内容，每帧发送完整文本
   let lines : Array[String] = []
@@ -1008,7 +1018,7 @@ pub fn lux_events_to_gemini_sse(
     }
     i = i + 1
   }
-  Ok(lines.join("\n") + "\n")
+  Ok(@lux.ConversionResult::new(lines.join("\n") + "\n"))
 }
 
 ///|

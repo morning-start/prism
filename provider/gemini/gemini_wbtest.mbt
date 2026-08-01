@@ -8,7 +8,8 @@
 test "gemini_to_lux_request - simple user message" {
   let json = "{\"model\":\"gemini-2.5-pro\",\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"Hello\"}]}]}"
   match gemini_to_lux_request(json) {
-    Ok(req) => {
+    Ok(cr) => {
+      let req = cr.value()
       assert_eq(req.model, "gemini-2.5-pro")
       assert_eq(req.conversation.length(), 1)
       match req.conversation[0] {
@@ -30,8 +31,8 @@ test "gemini_to_lux_request - simple user message" {
 test "gemini_to_lux_request - systemInstruction extracted" {
   let json = "{\"model\":\"gemini-2.5-pro\",\"systemInstruction\":{\"role\":\"system\",\"parts\":[{\"text\":\"Be helpful\"}]},\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}]}"
   match gemini_to_lux_request(json) {
-    Ok(req) =>
-      match req.instructions {
+    Ok(cr) =>
+      match cr.value().instructions {
         Some(instrs) => assert_eq(instrs.length(), 1)
         None => assert_true(false)
       }
@@ -43,8 +44,8 @@ test "gemini_to_lux_request - systemInstruction extracted" {
 test "gemini_to_lux_request - model role mapped to assistant" {
   let json = "{\"model\":\"gemini-2.5-pro\",\"contents\":[{\"role\":\"model\",\"parts\":[{\"text\":\"hello there\"}]}]}"
   match gemini_to_lux_request(json) {
-    Ok(req) =>
-      match req.conversation[0] {
+    Ok(cr) =>
+      match cr.value().conversation[0] {
         Message(m) => assert_eq(m.role, Assistant)
         _ => assert_true(false)
       }
@@ -56,7 +57,8 @@ test "gemini_to_lux_request - model role mapped to assistant" {
 test "gemini_to_lux_request - functionCall and functionResponse" {
   let json = "{\"model\":\"gemini-2.5-pro\",\"contents\":[{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"get_weather\",\"args\":{\"city\":\"Beijing\"}}}]},{\"role\":\"tool\",\"parts\":[{\"functionResponse\":{\"name\":\"get_weather\",\"response\":{\"name\":\"get_weather\",\"content\":{\"temp\":25}}}}]}]}"
   match gemini_to_lux_request(json) {
-    Ok(req) => {
+    Ok(cr) => {
+      let req = cr.value()
       assert_eq(req.conversation.length(), 2)
       match req.conversation[1] {
         ToolResult(tr) => assert_eq(tr.tool_use_id, "fc_get_weather_0")
@@ -71,7 +73,8 @@ test "gemini_to_lux_request - functionCall and functionResponse" {
 test "gemini_to_lux_request - generationConfig parsed" {
   let json = "{\"model\":\"gemini-2.5-pro\",\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"hi\"}]}],\"generationConfig\":{\"temperature\":0.5,\"topP\":0.9,\"maxOutputTokens\":1024,\"candidateCount\":2,\"stopSequences\":[\"END\"]}}"
   match gemini_to_lux_request(json) {
-    Ok(req) => {
+    Ok(cr) => {
+      let req = cr.value()
       match req.options.temperature {
         Some(t) => assert_true(t > 0.4 && t < 0.6)
         None => assert_true(false)
@@ -105,7 +108,8 @@ test "lux_request_to_gemini - simple user message" {
     None,
   )
   match lux_request_to_gemini(req) {
-    Ok(s) => {
+    Ok(cr) => {
+      let s = cr.value()
       assert_true(s.contains("\"contents\":"))
       assert_true(s.contains("\"role\":\"user\""))
     }
@@ -120,7 +124,8 @@ test "lux_request_to_gemini - simple user message" {
 test "gemini_to_lux_response - text response" {
   let json = "{\"candidates\":[{\"index\":0,\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello!\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":5,\"totalTokenCount\":15}}"
   match gemini_to_lux_response(json) {
-    Ok(resp) => {
+    Ok(cr) => {
+      let resp = cr.value()
       assert_eq(resp.choices.length(), 1)
       assert_eq(resp.choices[0].finish_reason, Stop)
       match resp.choices[0].message.content[0] {
@@ -143,7 +148,7 @@ test "gemini_to_lux_response - text response" {
 test "gemini_to_lux_response - multiple candidates" {
   let json = "{\"candidates\":[{\"index\":0,\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"answer1\"}]},\"finishReason\":\"STOP\"},{\"index\":1,\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"answer2\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":10,\"totalTokenCount\":15}}"
   match gemini_to_lux_response(json) {
-    Ok(resp) => assert_eq(resp.choices.length(), 2)
+    Ok(cr) => assert_eq(cr.value().choices.length(), 2)
     Err(_) => assert_true(false)
   }
 }
@@ -166,7 +171,8 @@ test "lux_response_to_gemini - text response" {
     None,
   )
   match lux_response_to_gemini(resp) {
-    Ok(s) => {
+    Ok(cr) => {
+      let s = cr.value()
       assert_true(s.contains("\"candidates\":"))
       assert_true(s.contains("\"finishReason\":\"STOP\""))
       assert_true(s.contains("\"promptTokenCount\":10"))
@@ -182,7 +188,7 @@ test "lux_response_to_gemini - text response" {
 test "gemini_sse_to_events - text chunks" {
   let sse = "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello\"}]}}]}\ndata: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" world\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":5,\"totalTokenCount\":15}}\n"
   match gemini_sse_to_events(sse) {
-    Ok(events) => assert_true(events.length() >= 3)
+    Ok(cr) => assert_true(cr.value().length() >= 3)
     Err(_) => assert_true(false)
   }
 }
@@ -192,7 +198,8 @@ test "gemini_sse_to_events - text chunks" {
 test "gemini_to_lux_request - duplicate tool names pair correctly" {
   let json = "{\"model\":\"gemini-2.5-pro\",\"contents\":[{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"search\",\"args\":{\"q\":\"a\"}}},{\"functionCall\":{\"name\":\"search\",\"args\":{\"q\":\"b\"}}}]},{\"role\":\"tool\",\"parts\":[{\"functionResponse\":{\"name\":\"search\",\"response\":{\"content\":{\"r\":1}}}},{\"functionResponse\":{\"name\":\"search\",\"response\":{\"content\":{\"r\":2}}}}]}]}"
   match gemini_to_lux_request(json) {
-    Ok(req) => {
+    Ok(cr) => {
+      let req = cr.value()
       assert_eq(req.conversation.length(), 3)
       let ids : Array[String] = []
       for item in req.conversation {

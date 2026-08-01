@@ -13,7 +13,8 @@
 test "codex_to_lux_request - simple user message" {
   let json = "{\"model\":\"gpt-5.3-codex\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"Hello\"}]}]}"
   match codex_to_lux_request(json) {
-    Ok(req) => {
+    Ok(cr) => {
+      let req = cr.value()
       assert_eq(req.model, "gpt-5.3-codex")
       assert_eq(req.conversation.length(), 1)
     }
@@ -25,8 +26,8 @@ test "codex_to_lux_request - simple user message" {
 test "codex_to_lux_request - instructions extracted" {
   let json = "{\"model\":\"gpt-5.3-codex\",\"instructions\":\"Be helpful\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hi\"}]}]}"
   match codex_to_lux_request(json) {
-    Ok(req) =>
-      match req.instructions {
+    Ok(cr) =>
+      match cr.value().instructions {
         Some(instrs) => assert_eq(instrs.length(), 1)
         None => assert_true(false)
       }
@@ -38,7 +39,8 @@ test "codex_to_lux_request - instructions extracted" {
 test "codex_to_lux_request - function_call and function_call_output" {
   let json = "{\"model\":\"gpt-5.3-codex\",\"input\":[{\"type\":\"function_call\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"search\",\"arguments\":\"{\\\"q\\\":\\\"x\\\"}\"},{\"type\":\"function_call_output\",\"call_id\":\"call_1\",\"output\":\"result\"}]}"
   match codex_to_lux_request(json) {
-    Ok(req) => {
+    Ok(cr) => {
+      let req = cr.value()
       assert_eq(req.conversation.length(), 2)
       match req.conversation[0] {
         ToolCall(tu) => assert_eq(tu.name, "search")
@@ -53,8 +55,8 @@ test "codex_to_lux_request - function_call and function_call_output" {
 test "codex_to_lux_request - reasoning item" {
   let json = "{\"model\":\"gpt-5.3-codex\",\"input\":[{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"step 1\"}],\"signature\":\"sig_1\"}]}"
   match codex_to_lux_request(json) {
-    Ok(req) =>
-      match req.conversation[0] {
+    Ok(cr) =>
+      match cr.value().conversation[0] {
         Reasoning(th) => assert_eq(th.signature, Some("sig_1"))
         _ => assert_true(false)
       }
@@ -88,7 +90,8 @@ test "lux_request_to_codex - simple user message" {
     None,
   )
   match lux_request_to_codex(req) {
-    Ok(s) => {
+    Ok(cr) => {
+      let s = cr.value()
       assert_true(s.contains("\"model\":\"gpt-5.3-codex\""))
       assert_true(s.contains("\"input\":"))
     }
@@ -103,7 +106,8 @@ test "lux_request_to_codex - simple user message" {
 test "codex_to_lux_response - text + usage" {
   let json = "{\"id\":\"resp_1\",\"object\":\"response\",\"status\":\"completed\",\"model\":\"gpt-5.3-codex\",\"created_at\":1700000000,\"output\":[{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hello!\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":10,\"output_tokens\":5,\"total_tokens\":15}}"
   match codex_to_lux_response(json) {
-    Ok(resp) => {
+    Ok(cr) => {
+      let resp = cr.value()
       assert_eq(resp.id, "resp_1")
       assert_eq(resp.model, "gpt-5.3-codex")
       assert_eq(resp.choices.length(), 1)
@@ -117,8 +121,8 @@ test "codex_to_lux_response - text + usage" {
 test "codex_to_lux_response - function_call output" {
   let json = "{\"id\":\"resp_2\",\"model\":\"gpt-5.3-codex\",\"output\":[{\"type\":\"function_call\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"search\",\"arguments\":\"{}\",\"status\":\"completed\"}],\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2}}"
   match codex_to_lux_response(json) {
-    Ok(resp) =>
-      match resp.choices[0].message.content[0] {
+    Ok(cr) =>
+      match cr.value().choices[0].message.content[0] {
         ToolUse(tu) => assert_eq(tu.name, "search")
         _ => assert_true(false)
       }
@@ -152,7 +156,8 @@ test "lux_response_to_codex - text response" {
     None,
   )
   match lux_response_to_codex(resp) {
-    Ok(s) => {
+    Ok(cr) => {
+      let s = cr.value()
       assert_true(s.contains("\"id\":\"resp_1\""))
       assert_true(s.contains("\"object\":\"response\""))
     }
@@ -167,7 +172,8 @@ test "lux_response_to_codex - text response" {
 test "codex_sse_to_events - text stream" {
   let sse = "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"r_1\",\"model\":\"gpt-5.3-codex\"}}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"input_text\",\"text\":\"\"}]}}\n\nevent: response.content_part.added\ndata: {\"type\":\"response.content_part.added\",\"output_index\":0,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\"}}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"content_index\":0,\"delta\":\"Hello\"}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\"}}\n\n"
   match codex_sse_to_events(sse) {
-    Ok(events) => {
+    Ok(cr) => {
+      let events = cr.value()
       assert_true(events.length() >= 3)
       match events[0] {
         ConversationStart(_) => ()
@@ -182,7 +188,8 @@ test "codex_sse_to_events - text stream" {
 test "codex_sse_to_events - function_call stream" {
   let sse = "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"r_2\",\"model\":\"gpt-5.3-codex\"}}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"function_call\",\"id\":\"fc_1\",\"name\":\"search\"}}\n\nevent: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"output_index\":0,\"delta\":\"{\\\"q\\\":\\\"x\\\"}\"}\n\nevent: response.function_call_arguments.done\ndata: {\"type\":\"response.function_call_arguments.done\",\"output_index\":0}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\"}}\n\n"
   match codex_sse_to_events(sse) {
-    Ok(events) => {
+    Ok(cr) => {
+      let events = cr.value()
       assert_true(events.length() >= 3)
       let has_item_start = {
         let mut found = false
@@ -222,7 +229,8 @@ test "lux_events_to_codex_sse - text sequence" {
     Done,
   ]
   match lux_events_to_codex_sse(events) {
-    Ok(sse) => {
+    Ok(cr) => {
+      let sse = cr.value()
       assert_true(sse.contains("event: response.created"))
       assert_true(sse.contains("event: response.output_text.delta"))
       assert_true(sse.contains("event: response.completed"))
@@ -249,9 +257,10 @@ test "round trip - codex request encode then decode" {
     None,
   )
   match lux_request_to_codex(original) {
-    Ok(json) =>
-      match codex_to_lux_request(json) {
-        Ok(round) => {
+    Ok(cr) =>
+      match codex_to_lux_request(cr.value()) {
+        Ok(cr2) => {
+          let round = cr2.value()
           assert_eq(round.model, "gpt-5.3-codex")
           assert_eq(round.conversation.length(), 1)
         }

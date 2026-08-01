@@ -30,9 +30,10 @@ test "round trip - request encode then decode preserves semantics" {
     None,
   )
   match lux_request_to_gemini(original) {
-    Ok(json) =>
-      match gemini_to_lux_request(json) {
-        Ok(round) => {
+    Ok(cr1) =>
+      match gemini_to_lux_request(cr1.value()) {
+        Ok(cr) => {
+          let round = cr.value()
           assert_eq(round.model, "gemini-1.5-pro")
           assert_eq(round.conversation.length(), 1)
           match round.conversation[0] {
@@ -81,9 +82,9 @@ test "round trip - response encode then decode preserves text" {
     None,
   )
   match lux_response_to_gemini(resp) {
-    Ok(json) =>
-      match gemini_to_lux_response(json) {
-        Ok(round) => assert_eq(round.get_text(), "hi")
+    Ok(cr1) =>
+      match gemini_to_lux_response(cr1.value()) {
+        Ok(cr) => assert_eq(cr.value().get_text(), "hi")
         Err(_) => assert_true(false)
       }
     Err(_) => assert_true(false)

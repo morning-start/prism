@@ -8,17 +8,17 @@ import {
 // Values
 pub fn capability() -> @lux.ProviderCapability
 
-pub fn codex_sse_to_events(String) -> Result[Array[@lux.LucentStreamEvent], String]
+pub fn codex_sse_to_events(String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String]
 
-pub fn codex_to_lux_request(String) -> Result[@lux.LucentRequest, String]
+pub fn codex_to_lux_request(String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String]
 
-pub fn codex_to_lux_response(String) -> Result[@lux.LucentResponse, String]
+pub fn codex_to_lux_response(String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String]
 
-pub fn lux_events_to_codex_sse(Array[@lux.LucentStreamEvent]) -> Result[String, String]
+pub fn lux_events_to_codex_sse(Array[@lux.LucentStreamEvent]) -> Result[@lux.ConversionResult[String], String]
 
-pub fn lux_request_to_codex(@lux.LucentRequest) -> Result[String, String]
+pub fn lux_request_to_codex(@lux.LucentRequest) -> Result[@lux.ConversionResult[String], String]
 
-pub fn lux_response_to_codex(@lux.LucentResponse) -> Result[String, String]
+pub fn lux_response_to_codex(@lux.LucentResponse) -> Result[@lux.ConversionResult[String], String]
 
 // Errors
 

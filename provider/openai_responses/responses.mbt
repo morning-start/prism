@@ -178,7 +178,7 @@ fn parse_text_format(jv : Json) -> @lux.LucentStructuredOutput? {
 /// 1. openai_responses_to_lux_request — 请求解码
 pub fn openai_responses_to_lux_request(
   json_str : String,
-) -> Result[@lux.LucentRequest, String] {
+) -> Result[@lux.ConversionResult[@lux.LucentRequest], String] {
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
   let model = @internal.field_str(jv, "model").unwrap_or("")
   let instructions = match @internal.field_str(jv, "instructions") {
@@ -219,17 +219,19 @@ pub fn openai_responses_to_lux_request(
     None => None
   }
   Ok(
-    @lux.LucentRequest::new(
-      model,
-      instructions,
-      conversation,
-      tools,
-      tool_choice,
-      opts,
-      None,
-      reasoning,
-      None,
-      extra,
+    @lux.ConversionResult::new(
+      @lux.LucentRequest::new(
+        model,
+        instructions,
+        conversation,
+        tools,
+        tool_choice,
+        opts,
+        None,
+        reasoning,
+        None,
+        extra,
+      ),
     ),
   )
 }
@@ -238,7 +240,7 @@ pub fn openai_responses_to_lux_request(
 /// 2. lux_request_to_openai_responses — 请求编码
 pub fn lux_request_to_openai_responses(
   req : @lux.LucentRequest,
-) -> Result[String, String] {
+) -> Result[@lux.ConversionResult[String], String] {
   let parts : Array[String] = []
   parts.push("\"model\":\"" + @internal.json_escape(req.model) + "\"")
   // instructions
@@ -421,7 +423,7 @@ pub fn lux_request_to_openai_responses(
       )
     None => ()
   }
-  Ok("{" + parts.join(",") + "}")
+  Ok(@lux.ConversionResult::new("{" + parts.join(",") + "}"))
 }
 
 ///|
@@ -492,7 +494,7 @@ fn parse_output_content(output_item : Json) -> Array[@lux.LucentContent] {
 /// 3. openai_responses_to_lux_response — 响应解码
 pub fn openai_responses_to_lux_response(
   json_str : String,
-) -> Result[@lux.LucentResponse, String] {
+) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
   let id = @internal.field_str(jv, "id").unwrap_or("")
   let model = @internal.field_str(jv, "model").unwrap_or("")
@@ -531,14 +533,18 @@ pub fn openai_responses_to_lux_response(
     }
     None => @lux.LucentUsage::new(0, 0, 0)
   }
-  Ok(@lux.LucentResponse::new(id, model, created, [choice], Some(usage), None))
+  Ok(
+    @lux.ConversionResult::new(
+      @lux.LucentResponse::new(id, model, created, [choice], Some(usage), None),
+    ),
+  )
 }
 
 ///|
 /// 4. lux_response_to_openai_responses — 响应编码
 pub fn lux_response_to_openai_responses(
   resp : @lux.LucentResponse,
-) -> Result[String, String] {
+) -> Result[@lux.ConversionResult[String], String] {
   if resp.choices.length() == 0 {
     return Err("response has no choices")
   }
@@ -650,14 +656,14 @@ pub fn lux_response_to_openai_responses(
     "]" +
     usage_json +
     "}"
-  Ok(body)
+  Ok(@lux.ConversionResult::new(body))
 }
 
 ///|
 /// 5. openai_responses_sse_to_events — 流解码
 pub fn openai_responses_sse_to_events(
   sse_str : String,
-) -> Result[Array[@lux.LucentStreamEvent], String] {
+) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String] {
   let events : Array[@lux.LucentStreamEvent] = []
   let messages = sse_str.split("\n\n").to_array()
   let mut event_type = ""
@@ -837,14 +843,14 @@ pub fn openai_responses_sse_to_events(
     }
     i = i + 1
   }
-  Ok(events)
+  Ok(@lux.ConversionResult::new(events))
 }
 
 ///|
 /// 6. lux_events_to_openai_responses_sse — 流编码
 pub fn lux_events_to_openai_responses_sse(
   events : Array[@lux.LucentStreamEvent],
-) -> Result[String, String] {
+) -> Result[@lux.ConversionResult[String], String] {
   let lines : Array[String] = []
   let mut i = 0
   while i < events.length() {
@@ -1038,7 +1044,7 @@ pub fn lux_events_to_openai_responses_sse(
     }
     i = i + 1
   }
-  Ok(lines.join("\n\n") + "\n\n")
+  Ok(@lux.ConversionResult::new(lines.join("\n\n") + "\n\n"))
 }
 
 ///|

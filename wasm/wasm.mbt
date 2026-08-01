@@ -16,6 +16,12 @@ fn to_error(e : String) -> String {
 }
 
 ///|
+/// 错误信封：{"error":"...","diagnostics":[]}（与成功信封的诊断字段一致）
+fn wasm_envelope_err(e : String) -> String {
+  "{\"error\":\"" + e + "\",\"diagnostics\":[]}"
+}
+
+///|
 /// 通过 SDK 注册表查找 provider
 fn lookup(provider : String) -> @sdk.ProviderRegistration? {
   @sdk.match_provider_name(provider)
@@ -25,98 +31,100 @@ fn lookup(provider : String) -> @sdk.ProviderRegistration? {
 /// === 6 个通用 IR 转换函数 ===
 
 ///|
-/// provider JSON → LucentRequest JSON（decode request）
+/// provider JSON → LucentRequest JSON（decode request，带诊断信封）
 pub fn wasm_to_lux_request(provider : String, json_str : String) -> String {
   match lookup(provider) {
     Some(reg) =>
       match (reg.request_decode)(json_str) {
-        Ok(req) => @lux.LucentRequest::to_json(req).stringify()
-        Err(e) => to_error(e)
+        Ok(cr) =>
+          cr.envelope_json(@lux.LucentRequest::to_json(cr.value())).stringify()
+        Err(e) => wasm_envelope_err(e)
       }
-    None => to_error("unknown provider: " + provider)
+    None => wasm_envelope_err("unknown provider: " + provider)
   }
 }
 
 ///|
-/// LucentRequest JSON → provider JSON（encode request）
+/// LucentRequest JSON → provider JSON（encode request，带诊断信封）
 pub fn wasm_lux_request_to_provider(
   provider : String,
   json_str : String,
 ) -> String {
   let jv = @json.parse(json_str) catch {
-    _ => return to_error("json parse error")
+    _ => return wasm_envelope_err("json parse error")
   }
   match @lux.LucentRequest::from_json(jv) {
     Ok(req) =>
       match lookup(provider) {
         Some(reg) =>
           match (reg.request_encode)(req) {
-            Ok(v) => v
-            Err(e) => to_error(e)
+            Ok(cr) => cr.envelope_json(Json::string(cr.value())).stringify()
+            Err(e) => wasm_envelope_err(e)
           }
-        None => to_error("unknown provider: " + provider)
+        None => wasm_envelope_err("unknown provider: " + provider)
       }
-    Err(e) => to_error(e)
+    Err(e) => wasm_envelope_err(e)
   }
 }
 
 ///|
-/// provider JSON → LucentResponse JSON（decode response）
+/// provider JSON → LucentResponse JSON（decode response，带诊断信封）
 pub fn wasm_to_lux_response(provider : String, json_str : String) -> String {
   match lookup(provider) {
     Some(reg) =>
       match (reg.response_decode)(json_str) {
-        Ok(resp) => @lux.LucentResponse::to_json(resp).stringify()
-        Err(e) => to_error(e)
+        Ok(cr) =>
+          cr.envelope_json(@lux.LucentResponse::to_json(cr.value())).stringify()
+        Err(e) => wasm_envelope_err(e)
       }
-    None => to_error("unknown provider: " + provider)
+    None => wasm_envelope_err("unknown provider: " + provider)
   }
 }
 
 ///|
-/// LucentResponse JSON → provider JSON（encode response）
+/// LucentResponse JSON → provider JSON（encode response，带诊断信封）
 pub fn wasm_lux_response_to_provider(
   provider : String,
   json_str : String,
 ) -> String {
   let jv = @json.parse(json_str) catch {
-    _ => return to_error("json parse error")
+    _ => return wasm_envelope_err("json parse error")
   }
   match @lux.LucentResponse::from_json(jv) {
     Ok(resp) =>
       match lookup(provider) {
         Some(reg) =>
           match (reg.response_encode)(resp) {
-            Ok(v) => v
-            Err(e) => to_error(e)
+            Ok(cr) => cr.envelope_json(Json::string(cr.value())).stringify()
+            Err(e) => wasm_envelope_err(e)
           }
-        None => to_error("unknown provider: " + provider)
+        None => wasm_envelope_err("unknown provider: " + provider)
       }
-    Err(e) => to_error(e)
+    Err(e) => wasm_envelope_err(e)
   }
 }
 
 ///|
-/// SSE 文本 → StreamEvent JSON 数组（decode SSE）
+/// SSE 文本 → StreamEvent JSON 数组（decode SSE，带诊断信封）
 pub fn wasm_sse_to_events(provider : String, sse_str : String) -> String {
   match lookup(provider) {
     Some(reg) =>
       match (reg.events_decode)(sse_str) {
-        Ok(events) => {
-          let json_arr : Array[Json] = events.map(fn(ev) { ev.to_json() })
-          "[" + json_arr.map(fn(j) { j.stringify() }).join(",") + "]"
+        Ok(cr) => {
+          let json_arr : Array[Json] = cr.value().map(fn(ev) { ev.to_json() })
+          cr.envelope_json(Json::array(json_arr)).stringify()
         }
-        Err(e) => to_error(e)
+        Err(e) => wasm_envelope_err(e)
       }
-    None => to_error("unknown provider: " + provider)
+    None => wasm_envelope_err("unknown provider: " + provider)
   }
 }
 
 ///|
-/// StreamEvent JSON 数组 → SSE 文本（encode SSE）
+/// StreamEvent JSON 数组 → SSE 文本（encode SSE，带诊断信封）
 pub fn wasm_events_to_sse(provider : String, json_str : String) -> String {
   let jv = @json.parse(json_str) catch {
-    _ => return to_error("json parse error")
+    _ => return wasm_envelope_err("json parse error")
   }
   match jv {
     Array(arr) => {
@@ -125,20 +133,21 @@ pub fn wasm_events_to_sse(provider : String, json_str : String) -> String {
       while i < arr.length() {
         match @lux.LucentStreamEvent::from_json(arr[i]) {
           Ok(ev) => events.push(ev)
-          Err(e) => return to_error("event " + i.to_string() + ": " + e)
+          Err(e) =>
+            return wasm_envelope_err("event " + i.to_string() + ": " + e)
         }
         i = i + 1
       }
       match lookup(provider) {
         Some(reg) =>
           match (reg.events_encode)(events) {
-            Ok(v) => v
-            Err(e) => to_error(e)
+            Ok(cr) => cr.envelope_json(Json::string(cr.value())).stringify()
+            Err(e) => wasm_envelope_err(e)
           }
-        None => to_error("unknown provider: " + provider)
+        None => wasm_envelope_err("unknown provider: " + provider)
       }
     }
-    _ => to_error("expected array for stream events")
+    _ => wasm_envelope_err("expected array for stream events")
   }
 }
 
@@ -268,40 +277,40 @@ pub fn wasm_sdk_capability(provider : String) -> String {
 /// === 中转站协议转发（convert_* 组合入口）===
 
 ///|
-/// 请求：source 协议 JSON → target 协议 JSON
+/// 请求：source 协议 JSON → target 协议 JSON（带诊断信封）
 pub fn wasm_convert_request(
   source : String,
   json_str : String,
   target : String,
 ) -> String {
   match @sdk.convert_request(source, json_str, target) {
-    Ok(v) => v
-    Err(e) => to_error(e)
+    Ok(cr) => cr.envelope_json(Json::string(cr.value())).stringify()
+    Err(e) => wasm_envelope_err(e)
   }
 }
 
 ///|
-/// 响应：source 协议 JSON → target 协议 JSON
+/// 响应：source 协议 JSON → target 协议 JSON（带诊断信封）
 pub fn wasm_convert_response(
   source : String,
   json_str : String,
   target : String,
 ) -> String {
   match @sdk.convert_response(source, json_str, target) {
-    Ok(v) => v
-    Err(e) => to_error(e)
+    Ok(cr) => cr.envelope_json(Json::string(cr.value())).stringify()
+    Err(e) => wasm_envelope_err(e)
   }
 }
 
 ///|
-/// 流式：source 协议 SSE → target 协议 SSE
+/// 流式：source 协议 SSE → target 协议 SSE（带诊断信封）
 pub fn wasm_convert_stream(
   source : String,
   sse_str : String,
   target : String,
 ) -> String {
   match @sdk.convert_stream(source, sse_str, target) {
-    Ok(v) => v
-    Err(e) => to_error(e)
+    Ok(cr) => cr.envelope_json(Json::string(cr.value())).stringify()
+    Err(e) => wasm_envelope_err(e)
   }
 }

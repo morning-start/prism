@@ -24,7 +24,10 @@ fn openai_chat_req_json() -> Result[String, String] {
     None,
     None,
   )
-  @openai_chat.lux_request_to_openai_chat(req)
+  match @openai_chat.lux_request_to_openai_chat(req) {
+    Ok(cr) => Ok(cr.value())
+    Err(e) => Err(e)
+  }
 }
 
 ///|
@@ -47,7 +50,10 @@ fn openai_chat_resp_json() -> Result[String, String] {
     Some(@lux.LucentUsage::new(10, 5, 15)),
     None,
   )
-  @openai_chat.lux_response_to_openai_chat(resp)
+  match @openai_chat.lux_response_to_openai_chat(resp) {
+    Ok(cr) => Ok(cr.value())
+    Err(e) => Err(e)
+  }
 }
 
 ///|
@@ -61,7 +67,10 @@ fn openai_chat_sse() -> Result[String, String] {
     @lux.Finish(@lux.Stop),
     @lux.Done,
   ]
-  @openai_chat.lux_events_to_openai_chat_sse(events)
+  match @openai_chat.lux_events_to_openai_chat_sse(events) {
+    Ok(cr) => Ok(cr.value())
+    Err(e) => Err(e)
+  }
 }
 
 ///|
@@ -72,14 +81,17 @@ test "convert_request - openai-chat to anthropic" {
   match openai_chat_req_json() {
     Ok(json) =>
       match convert_request("openai-chat", json, "anthropic") {
-        Ok(target_json) =>
+        Ok(cr) => {
+          let target_json = cr.value()
           match @anthropic.anthropic_to_lux_request(target_json) {
-            Ok(req) => {
+            Ok(cr2) => {
+              let req = cr2.value()
               assert_eq(req.model, "gpt-4o")
               assert_eq(req.conversation.length(), 1)
             }
             Err(e) => fail("target decode failed: \{e}")
           }
+        }
         Err(e) => fail("convert_request failed: \{e}")
       }
     Err(e) => fail("encode source failed: \{e}")
@@ -114,15 +126,18 @@ test "convert_response - openai-chat to anthropic" {
   match openai_chat_resp_json() {
     Ok(json) =>
       match convert_response("openai-chat", json, "anthropic") {
-        Ok(target_json) =>
+        Ok(cr) => {
+          let target_json = cr.value()
           match @anthropic.anthropic_to_lux_response(target_json) {
-            Ok(resp) => {
+            Ok(cr2) => {
+              let resp = cr2.value()
               assert_eq(resp.id, "resp-1")
               assert_eq(resp.model, "gpt-4o")
               assert_eq(resp.choices.length(), 1)
             }
             Err(e) => fail("target response decode failed: \{e}")
           }
+        }
         Err(e) => fail("convert_response failed: \{e}")
       }
     Err(e) => fail("encode response failed: \{e}")
@@ -145,11 +160,13 @@ test "convert_stream - openai-chat to anthropic" {
   match openai_chat_sse() {
     Ok(sse) =>
       match convert_stream("openai-chat", sse, "anthropic") {
-        Ok(target_sse) =>
+        Ok(cr) => {
+          let target_sse = cr.value()
           match @anthropic.anthropic_sse_to_events(target_sse) {
-            Ok(events) => assert_true(events.length() > 0)
+            Ok(cr2) => assert_true(cr2.value().length() > 0)
             Err(e) => fail("target sse decode failed: \{e}")
           }
+        }
         Err(e) => fail("convert_stream failed: \{e}")
       }
     Err(e) => fail("encode sse failed: \{e}")

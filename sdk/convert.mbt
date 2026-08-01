@@ -5,12 +5,12 @@
 /// 实现 = source 解码 + target 编码，零新增转换逻辑，复用 ProviderRegistration 注册表。
 
 ///|
-/// 请求：source 协议 JSON → target 协议 JSON
+/// 请求：source 协议 JSON → target 协议 JSON（带诊断）
 pub fn convert_request(
   source : String,
   json_str : String,
   target : String,
-) -> Result[String, String] {
+) -> Result[@lux.ConversionResult[String], String] {
   match match_provider_name(source) {
     Some(src) =>
       match match_provider_name(target) {
@@ -27,12 +27,12 @@ pub fn convert_request(
 }
 
 ///|
-/// 响应：source 协议 JSON → target 协议 JSON
+/// 响应：source 协议 JSON → target 协议 JSON（带诊断）
 pub fn convert_response(
   source : String,
   json_str : String,
   target : String,
-) -> Result[String, String] {
+) -> Result[@lux.ConversionResult[String], String] {
   match match_provider_name(source) {
     Some(src) =>
       match match_provider_name(target) {
@@ -49,12 +49,12 @@ pub fn convert_response(
 }
 
 ///|
-/// 流式：source 协议 SSE → target 协议 SSE（事件级转换）
+/// 流式：source 协议 SSE → target 协议 SSE（事件级转换，带诊断）
 pub fn convert_stream(
   source : String,
   sse_str : String,
   target : String,
-) -> Result[String, String] {
+) -> Result[@lux.ConversionResult[String], String] {
   match match_provider_name(source) {
     Some(src) =>
       match match_provider_name(target) {
@@ -67,40 +67,77 @@ pub fn convert_stream(
 }
 
 ///|
-/// 通用：source 解码 → target 编码
+/// 通用：source 解码 → target 编码（合并解码+编码诊断，返回带诊断结果）
 fn decode_encode_request(
   json_str : String,
-  decode : (String) -> Result[@lux.LucentRequest, String],
-  encode : (@lux.LucentRequest) -> Result[String, String],
-) -> Result[String, String] {
+  decode : (String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String],
+  encode : (@lux.LucentRequest) -> Result[@lux.ConversionResult[String], String],
+) -> Result[@lux.ConversionResult[String], String] {
   match decode(json_str) {
-    Ok(req) => encode(req)
+    Ok(dcr) =>
+      match encode(dcr.value()) {
+        Ok(ecr) => Ok(merge_diagnostics(ecr, dcr.diagnostics()))
+        Err(e) => Err(e)
+      }
     Err(e) => Err(e)
   }
 }
 
 ///|
-/// 通用：source 解码 → target 编码
+/// 通用：source 解码 → target 编码（合并诊断）
 fn decode_encode_response(
   json_str : String,
-  decode : (String) -> Result[@lux.LucentResponse, String],
-  encode : (@lux.LucentResponse) -> Result[String, String],
-) -> Result[String, String] {
+  decode : (String) -> Result[
+    @lux.ConversionResult[@lux.LucentResponse],
+    String,
+  ],
+  encode : (@lux.LucentResponse) -> Result[
+    @lux.ConversionResult[String],
+    String,
+  ],
+) -> Result[@lux.ConversionResult[String], String] {
   match decode(json_str) {
-    Ok(resp) => encode(resp)
+    Ok(dcr) =>
+      match encode(dcr.value()) {
+        Ok(ecr) => Ok(merge_diagnostics(ecr, dcr.diagnostics()))
+        Err(e) => Err(e)
+      }
     Err(e) => Err(e)
   }
 }
 
 ///|
-/// 通用：source 事件解码 → target 事件编码
+/// 通用：source 事件解码 → target 事件编码（合并诊断）
 fn decode_encode_stream(
   sse_str : String,
-  decode : (String) -> Result[Array[@lux.LucentStreamEvent], String],
-  encode : (Array[@lux.LucentStreamEvent]) -> Result[String, String],
-) -> Result[String, String] {
+  decode : (String) -> Result[
+    @lux.ConversionResult[Array[@lux.LucentStreamEvent]],
+    String,
+  ],
+  encode : (Array[@lux.LucentStreamEvent]) -> Result[
+    @lux.ConversionResult[String],
+    String,
+  ],
+) -> Result[@lux.ConversionResult[String], String] {
   match decode(sse_str) {
-    Ok(events) => encode(events)
+    Ok(dcr) =>
+      match encode(dcr.value()) {
+        Ok(ecr) => Ok(merge_diagnostics(ecr, dcr.diagnostics()))
+        Err(e) => Err(e)
+      }
     Err(e) => Err(e)
   }
+}
+
+///|
+/// 合并两组诊断：以编码结果为主体，把解码诊断并入
+fn merge_diagnostics(
+  main : @lux.ConversionResult[String],
+  other_diags : Array[@lux.ConversionDiagnostic],
+) -> @lux.ConversionResult[String] {
+  let mut merged = main
+  for d in other_diags {
+    merged = merged.with_diagnostic(d)
+  }
+  merged
 }

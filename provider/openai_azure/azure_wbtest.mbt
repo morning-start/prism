@@ -13,7 +13,8 @@
 test "azure_to_lux_request - simple user message" {
   let json = "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"Hello\"}]}]}"
   match azure_to_lux_request(json) {
-    Ok(req) => {
+    Ok(cr) => {
+      let req = cr.value()
       assert_eq(req.model, "gpt-5")
       assert_eq(req.conversation.length(), 1)
     }
@@ -25,8 +26,8 @@ test "azure_to_lux_request - simple user message" {
 test "azure_to_lux_request - instructions extracted" {
   let json = "{\"model\":\"gpt-5\",\"instructions\":\"Be helpful\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hi\"}]}]}"
   match azure_to_lux_request(json) {
-    Ok(req) =>
-      match req.instructions {
+    Ok(cr) =>
+      match cr.value().instructions {
         Some(instrs) => assert_eq(instrs.length(), 1)
         None => assert_true(false)
       }
@@ -38,7 +39,8 @@ test "azure_to_lux_request - instructions extracted" {
 test "azure_to_lux_request - function_call and function_call_output" {
   let json = "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"function_call\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"search\",\"arguments\":\"{\\\"q\\\":\\\"x\\\"}\"},{\"type\":\"function_call_output\",\"call_id\":\"call_1\",\"output\":\"result\"}]}"
   match azure_to_lux_request(json) {
-    Ok(req) => {
+    Ok(cr) => {
+      let req = cr.value()
       assert_eq(req.conversation.length(), 2)
       match req.conversation[0] {
         ToolCall(tu) => assert_eq(tu.name, "search")
@@ -75,7 +77,8 @@ test "lux_request_to_azure - simple user message" {
     None,
   )
   match lux_request_to_azure(req) {
-    Ok(s) => {
+    Ok(cr) => {
+      let s = cr.value()
       assert_true(s.contains("\"model\":\"gpt-5\""))
       assert_true(s.contains("\"input\":"))
     }
@@ -90,7 +93,8 @@ test "lux_request_to_azure - simple user message" {
 test "azure_to_lux_response - text + usage" {
   let json = "{\"id\":\"resp_1\",\"object\":\"response\",\"status\":\"completed\",\"model\":\"gpt-5\",\"created_at\":1700000000,\"output\":[{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hello!\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":10,\"output_tokens\":5,\"total_tokens\":15}}"
   match azure_to_lux_response(json) {
-    Ok(resp) => {
+    Ok(cr) => {
+      let resp = cr.value()
       assert_eq(resp.id, "resp_1")
       assert_eq(resp.model, "gpt-5")
       assert_eq(resp.choices.length(), 1)
@@ -104,9 +108,9 @@ test "azure_to_lux_response - text + usage" {
 test "azure_to_lux_response - content_filters extracted" {
   let json = "{\"id\":\"resp_1\",\"model\":\"gpt-5\",\"output\":[{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hello!\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":10,\"output_tokens\":5,\"total_tokens\":15},\"content_filters\":[{\"severity\":\"safe\",\"category\":\"hate\"}]}"
   match azure_to_lux_response(json) {
-    Ok(resp) =>
+    Ok(cr) =>
       // content_filters 应被提取到 provider_payload
-      match resp.provider_payload {
+      match cr.value().provider_payload {
         Some(Array(arr)) => assert_eq(arr.length(), 1)
         _ => assert_true(false)
       }
@@ -118,9 +122,9 @@ test "azure_to_lux_response - content_filters extracted" {
 test "azure_to_lux_response - no content_filters" {
   let json = "{\"id\":\"resp_1\",\"model\":\"gpt-5\",\"output\":[{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hello!\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":10,\"output_tokens\":5,\"total_tokens\":15}}"
   match azure_to_lux_response(json) {
-    Ok(resp) =>
+    Ok(cr) =>
       // 无 content_filters 时 provider_payload 应为 None
-      assert_eq(resp.provider_payload, None)
+      assert_eq(cr.value().provider_payload, None)
     Err(_) => assert_true(false)
   }
 }
@@ -151,7 +155,8 @@ test "lux_response_to_azure - text response" {
     None,
   )
   match lux_response_to_azure(resp) {
-    Ok(s) => {
+    Ok(cr) => {
+      let s = cr.value()
       assert_true(s.contains("\"id\":\"resp_1\""))
       assert_true(s.contains("\"object\":\"response\""))
     }
@@ -166,7 +171,8 @@ test "lux_response_to_azure - text response" {
 test "azure_sse_to_events - text stream" {
   let sse = "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"r_1\",\"model\":\"gpt-5\"}}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"input_text\",\"text\":\"\"}]}}\n\nevent: response.content_part.added\ndata: {\"type\":\"response.content_part.added\",\"output_index\":0,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\"}}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"content_index\":0,\"delta\":\"Hello\"}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\"}}\n\n"
   match azure_sse_to_events(sse) {
-    Ok(events) => {
+    Ok(cr) => {
+      let events = cr.value()
       assert_true(events.length() >= 3)
       match events[0] {
         ConversationStart(_) => ()
@@ -199,7 +205,8 @@ test "lux_events_to_azure_sse - text sequence" {
     Done,
   ]
   match lux_events_to_azure_sse(events) {
-    Ok(sse) => {
+    Ok(cr) => {
+      let sse = cr.value()
       assert_true(sse.contains("event: response.created"))
       assert_true(sse.contains("event: response.output_text.delta"))
       assert_true(sse.contains("event: response.completed"))
@@ -226,9 +233,10 @@ test "round trip - azure request encode then decode" {
     None,
   )
   match lux_request_to_azure(original) {
-    Ok(json) =>
-      match azure_to_lux_request(json) {
-        Ok(round) => {
+    Ok(cr) =>
+      match azure_to_lux_request(cr.value()) {
+        Ok(cr2) => {
+          let round = cr2.value()
           assert_eq(round.model, "gpt-5")
           assert_eq(round.conversation.length(), 1)
         }
@@ -242,9 +250,9 @@ test "round trip - azure request encode then decode" {
 test "round trip - azure response decode then encode with content_filters" {
   let json = "{\"id\":\"resp_1\",\"model\":\"gpt-5\",\"output\":[{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"hi\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2},\"content_filters\":[{\"severity\":\"safe\"}]}"
   match azure_to_lux_response(json) {
-    Ok(resp) =>
-      match lux_response_to_azure(resp) {
-        Ok(json2) => assert_true(json2.contains("\"id\":\"resp_1\""))
+    Ok(cr) =>
+      match lux_response_to_azure(cr.value()) {
+        Ok(cr2) => assert_true(cr2.value().contains("\"id\":\"resp_1\""))
         Err(_) => assert_true(false)
       }
     Err(_) => assert_true(false)

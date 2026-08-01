@@ -195,7 +195,7 @@ fn parse_tool_choice(jv : Json) -> @lux.LucentToolChoice? {
 /// 1. openai_chat_to_lux_request — 请求解码
 pub fn openai_chat_to_lux_request(
   json_str : String,
-) -> Result[@lux.LucentRequest, String] {
+) -> Result[@lux.ConversionResult[@lux.LucentRequest], String] {
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
   let model = @internal.field_str(jv, "model").unwrap_or("")
   // 系统指令：role=system/developer 的消息抽出为 instructions
@@ -280,29 +280,31 @@ pub fn openai_chat_to_lux_request(
     None => None
   }
   Ok(
-    @lux.LucentRequest::from_messages(
-      model,
-      instr_opt,
-      business_msgs,
-      tools,
-      tool_choice,
-      @lux.LucentOptions::new(
-        temperature,
-        top_p,
+    @lux.ConversionResult::new(
+      @lux.LucentRequest::from_messages(
+        model,
+        instr_opt,
+        business_msgs,
+        tools,
+        tool_choice,
+        @lux.LucentOptions::new(
+          temperature,
+          top_p,
+          None,
+          max_tokens,
+          stop,
+          stream,
+          None,
+          seed,
+          structured,
+          None,
+          None,
+        ),
         None,
-        max_tokens,
-        stop,
-        stream,
         None,
-        seed,
-        structured,
         None,
         None,
       ),
-      None,
-      None,
-      None,
-      None,
     ),
   )
 }
@@ -453,7 +455,7 @@ fn message_to_json(msg : @lux.LucentMessage) -> String {
 /// 2. lux_request_to_openai_chat — 请求编码
 pub fn lux_request_to_openai_chat(
   req : @lux.LucentRequest,
-) -> Result[String, String] {
+) -> Result[@lux.ConversionResult[String], String] {
   let parts : Array[String] = []
   parts.push("\"model\":\"" + escape_json(req.model) + "\"")
   // instructions → system 消息（前置）
@@ -577,7 +579,7 @@ pub fn lux_request_to_openai_chat(
       )
     None => ()
   }
-  Ok("{" + parts.join(",") + "}")
+  Ok(@lux.ConversionResult::new("{" + parts.join(",") + "}"))
 }
 
 ///|
@@ -663,7 +665,7 @@ fn parse_choices(jv : Json) -> Array[@lux.LucentChoice] {
 /// 3. openai_chat_to_lux_response — 响应解码
 pub fn openai_chat_to_lux_response(
   json_str : String,
-) -> Result[@lux.LucentResponse, String] {
+) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
   let id = @internal.field_str(jv, "id").unwrap_or("")
   let model = @internal.field_str(jv, "model").unwrap_or("")
@@ -681,7 +683,11 @@ pub fn openai_chat_to_lux_response(
       )
     None => None
   }
-  Ok(@lux.LucentResponse::new(id, model, created, choices, usage, None))
+  Ok(
+    @lux.ConversionResult::new(
+      @lux.LucentResponse::new(id, model, created, choices, usage, None),
+    ),
+  )
 }
 
 ///|
@@ -691,7 +697,7 @@ pub fn openai_chat_to_lux_response(
 /// 4. lux_response_to_openai_chat — 响应编码
 pub fn lux_response_to_openai_chat(
   resp : @lux.LucentResponse,
-) -> Result[String, String] {
+) -> Result[@lux.ConversionResult[String], String] {
   let choices_json : Array[String] = []
   let mut i = 0
   while i < resp.choices.length() {
@@ -757,7 +763,7 @@ pub fn lux_response_to_openai_chat(
     "]" +
     usage_obj +
     "}"
-  Ok(body)
+  Ok(@lux.ConversionResult::new(body))
 }
 
 ///|
@@ -779,7 +785,7 @@ pub fn lux_response_to_openai_chat(
 /// - [DONE] → Done
 pub fn openai_chat_sse_to_events(
   sse_str : String,
-) -> Result[Array[@lux.LucentStreamEvent], String] {
+) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String] {
   let events : Array[@lux.LucentStreamEvent] = []
   let lines = sse_str.split("\n").to_array()
   let mut text_block_open = false // 是否有未闭合的文本块
@@ -943,7 +949,7 @@ pub fn openai_chat_sse_to_events(
     }
     i = i + 1
   }
-  Ok(events)
+  Ok(@lux.ConversionResult::new(events))
 }
 
 ///|
@@ -962,7 +968,7 @@ pub fn openai_chat_sse_to_events(
 /// - Done → data: [DONE]
 pub fn lux_events_to_openai_chat_sse(
   events : Array[@lux.LucentStreamEvent],
-) -> Result[String, String] {
+) -> Result[@lux.ConversionResult[String], String] {
   let out : Array[String] = []
   let mut i = 0
   while i < events.length() {
@@ -1033,7 +1039,7 @@ pub fn lux_events_to_openai_chat_sse(
     }
     i = i + 1
   }
-  Ok(out.join("\n\n") + "\n\n")
+  Ok(@lux.ConversionResult::new(out.join("\n\n") + "\n\n"))
 }
 
 ///|
