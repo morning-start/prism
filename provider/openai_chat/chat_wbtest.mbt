@@ -696,3 +696,82 @@ test "round trip - response decode then encode preserves id" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+/// === 保真度：Reasoning / AgentAction 编码产生 Unsupported 诊断 ===
+
+///|
+test "encode - Reasoning item yields Unsupported diagnostic" {
+  let req = @lux.LucentRequest::new(
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentConversationItem::reasoning(
+        @lux.LucentThinking::new("think", None, false, None),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai_chat(req) {
+    Ok(cr) => {
+      // 不阻断成功
+      assert_true(cr.value().contains("model"))
+      // 但必须携带诊断
+      let mut has_unsupported = false
+      for d in cr.diagnostics() {
+        if d.status == @lux.Unsupported {
+          has_unsupported = true
+        }
+      }
+      assert_true(has_unsupported)
+    }
+    Err(e) => fail("encode failed: \{e}")
+  }
+}
+
+///|
+test "encode - AgentAction item yields Unsupported diagnostic" {
+  let req = @lux.LucentRequest::new(
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentConversationItem::agent_action(
+        @lux.LucentAgentAction::new(
+          "computer_call",
+          "aa1",
+          None,
+          None,
+          None,
+          None,
+          None,
+        ),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai_chat(req) {
+    Ok(cr) => {
+      assert_true(cr.value().contains("model"))
+      let mut has_unsupported = false
+      for d in cr.diagnostics() {
+        if d.status == @lux.Unsupported {
+          has_unsupported = true
+        }
+      }
+      assert_true(has_unsupported)
+    }
+    Err(e) => fail("encode failed: \{e}")
+  }
+}
