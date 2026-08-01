@@ -371,12 +371,12 @@ pub fn[T] ConversionResult::diagnostics(
 }
 
 ///|
-/// 追加一条转换诊断。
+/// 追加一条转换诊断（返回新结果，不修改原结果的诊断数组）。
 pub fn[T] ConversionResult::with_diagnostic(
   self : ConversionResult[T],
   diagnostic : ConversionDiagnostic,
 ) -> ConversionResult[T] {
-  let diagnostics = self.diagnostics
+  let diagnostics = self.diagnostics.map(fn(d) { d })
   diagnostics.push(diagnostic)
   { ..self, diagnostics, }
 }

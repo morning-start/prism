@@ -67,6 +67,30 @@ test "get_schema - unknown returns None" {
 }
 
 ///|
+test "get_schema - alias names resolve via registry" {
+  // 别名（注册表 aliases）也应能解析到 schema
+  for name in ["oai-responses", "chat", "vertex", "claude-messages"] {
+    match get_schema(name) {
+      Some(_) => ()
+      None => fail("expected Some for alias " + name)
+    }
+  }
+}
+
+///|
+test "get_schema - model name falls back to registry matching" {
+  // 模型名经 match_by_model 回退到 openai-codex，schema 归 openai
+  match get_schema("gpt-5.3-codex") {
+    Some(s) => assert_eq(s.provider_name, "openai")
+    None => fail("expected Some for model name gpt-5.3-codex")
+  }
+  match get_schema("claude-sonnet-4") {
+    Some(s) => assert_eq(s.provider_name, "anthropic")
+    None => fail("expected Some for claude model name")
+  }
+}
+
+///|
 /// === ProviderSchema::validate_request — OpenAI ===
 fn ok_req() -> @lux.LucentRequest {
   @lux.LucentRequest::new(

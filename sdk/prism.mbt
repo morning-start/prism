@@ -137,10 +137,6 @@ pub fn Prism::decode_response_with_diagnostics(
 }
 
 ///|
-
-///|
-
-///|
 /// 将文本请求编码为提供商 JSON，并返回结构化校验诊断。
 pub fn Prism::encode_request_with_diagnostics(
   self : Prism,
@@ -175,8 +171,6 @@ pub fn Prism::encode_request_with_diagnostics(
     Err(e) => Err(e)
   }
 }
-
-///|
 
 ///|
 /// 将提供商 JSON 解码为 LucentResponse（基于 ProviderRegistration 注册表）
