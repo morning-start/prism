@@ -6,7 +6,7 @@
  *   node --experimental-strip-types test/integration.test.ts
  */
 import { strict as assert } from "node:assert";
-import { loadWasm, callWasm, PrismError } from "../src/wasm.ts";
+import { loadWasm, resetWasm, callWasm, PrismError } from "../src/wasm.ts";
 
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,6 +16,10 @@ const WASM_PATH =
   process.env.PRISM_WASM ??
   resolve(TEST_DIR, "../../../_build/wasm/debug/build/cmd/main/main.wasm");
 
+// client.test.ts may have loaded the (stale) bundled prism.wasm into the
+// module-level singleton; force a fresh load of the CI _build artifact so
+// capability/model_pattern assertions run against the current build.
+resetWasm();
 loadWasm(WASM_PATH);
 
 const CHAT_RESPONSE = JSON.stringify({
@@ -60,11 +64,12 @@ const events = JSON.parse(
 assert.equal(events[0].type, "text_delta");
 assert.equal(events[0].text, "Hi");
 
-// 5. Unicode, quotes and newlines survive the UTF-16 marshalling.
+// 5. Unicode, quotes, newlines and astral-plane characters (emoji)
+// survive the UTF-16 marshalling.
 const uni = JSON.parse(
-  callWasm("wasm_sdk_encode_req", "openai", '你好"引号\n换行')
+  callWasm("wasm_sdk_encode_req", "openai", '你好"引号\n换行😀🚀')
 );
-assert.equal(uni.input[0].content[0].text, '你好"引号\n换行');
+assert.equal(uni.input[0].content[0].text, '你好"引号\n换行😀🚀');
 
 // 6. Unknown provider surfaces as a PrismError with a stable prefix.
 assert.throws(

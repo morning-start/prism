@@ -46,6 +46,25 @@ class TestPing:
         assert client.ping() == "pong"
 
 
+class TestUnicodeRoundTrip:
+    """Astral-plane characters (emoji) must survive UTF-16 marshalling.
+
+    Regression: the encode path used `ord(c)` (code points) instead of
+    UTF-16 code units, so any character above U+FFFF crashed with
+    `struct.error: 'H' format requires 0 <= number <= 65535`.
+    """
+
+    def test_emoji_round_trip(self, client: PrismClient):
+        text = "你好😀🚀"
+        req = client.encode_request("openai", text)
+        assert json.loads(req)["input"][0]["content"][0]["text"] == text
+
+    def test_emoji_with_quotes_and_newlines(self, client: PrismClient):
+        text = '你好"引号\n换行😀'
+        req = client.encode_request("openai", text)
+        assert json.loads(req)["input"][0]["content"][0]["text"] == text
+
+
 class TestParseEvents:
     def test_parse_text_delta(self):
         json_str = json.dumps([{"type": "text_delta", "text": "你好"}])

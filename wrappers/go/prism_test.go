@@ -145,12 +145,13 @@ func TestABIIntegration(t *testing.T) {
 		t.Errorf("expected Hi, got %s", text)
 	}
 
-	// 4. Unicode and quotes survive UTF-16 marshalling.
-	uniJSON, err := client.EncodeRequest("openai", "你好\"引号", nil)
+	// 4. Unicode, quotes and astral-plane characters (emoji) survive
+	// UTF-16 marshalling.
+	uniJSON, err := client.EncodeRequest("openai", "你好\"引号😀🚀", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(uniJSON, `你好\"引号`) {
+	if !strings.Contains(uniJSON, `你好\"引号😀🚀`) {
 		t.Errorf("expected unicode round-trip, got %s", uniJSON)
 	}
 

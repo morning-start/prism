@@ -161,13 +161,14 @@ class WasmRuntime:
         stride = 512
         call_args: list[int] = []
         for s in args:
-            units = [ord(c) for c in s]
+            # UTF-16 code units, not code points: the utf-16-le codec
+            # emits surrogate pairs for astral characters (e.g. emoji),
+            # so the length header stays a true UTF-16 unit count.
+            payload = s.encode("utf-16-le")
+            units = len(payload) // 2
             # u32 length header at ptr-4 (UTF-16 code unit count).
-            memory.write(self._store, struct.pack("<I", len(units)), ptr - 4)
-            payload = bytearray()
-            for u in units:
-                payload += struct.pack("<H", u)
-            memory.write(self._store, bytes(payload), ptr)
+            memory.write(self._store, struct.pack("<I", units), ptr - 4)
+            memory.write(self._store, payload, ptr)
             call_args.append(ptr)
             ptr += stride
 
@@ -175,10 +176,7 @@ class WasmRuntime:
         header = memory.read(self._store, result_ptr - 4, result_ptr)
         str_len = struct.unpack("<I", header)[0]
         raw = memory.read(self._store, result_ptr, result_ptr + 2 * str_len)
-        result = "".join(
-            chr(struct.unpack("<H", raw[i : i + 2])[0])
-            for i in range(0, 2 * str_len, 2)
-        )
+        result = raw.decode("utf-16-le")
 
         # Check for error response
         if result.startswith('{"error":'):

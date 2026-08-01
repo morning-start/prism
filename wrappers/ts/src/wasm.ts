@@ -135,6 +135,9 @@ export function callWasm(funcName: string, ...args: string[]): string {
   }
 
   // Write each string arg at a scratch address and pass the addresses.
+  // Reset per call: a long-running host must never let _scratch grow into
+  // the MoonBit GC heap (which starts above ~0x1000).
+  _scratch = SCRATCH_START;
   const ptrs: number[] = [];
   for (const s of args) {
     writeString(_scratch, s);
