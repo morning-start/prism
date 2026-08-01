@@ -3,6 +3,7 @@
 > 多语言传输层设计文档。
 > 定义 Prism 协议转换引擎如何通过通用 IPC 协议服务 Go、Python、Node.js、Rust、Java 等所有语言。
 > 版本：v1 (draft)
+> **实现状态：规划文档。** 当前仓库尚未包含 Daemon、JSON-RPC Router、HTTP/UDS/WebSocket binding 或对应客户端实现；可验证运行时仅为 MoonBit 核心和 WASM 导出层。本文中的组件、方法和阶段均为后续路线，不是当前发布能力。
 
 ---
 

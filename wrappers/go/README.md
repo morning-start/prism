@@ -1,6 +1,7 @@
 # Prism WASM — Go Wrapper
 
 > [Prism](https://github.com/morning-start/prism) LLM protocol converter - Go WASM wrapper using wazero.
+> **当前状态：scaffold。** WASM 字符串 marshalling 尚未完成，本文示例暂不能作为已验证的端到端用法。
 
 ## Installation
 
