@@ -695,3 +695,50 @@ test "sub - azure content_filters extraction" {
     Err(e) => fail("azure decode: " + e)
   }
 }
+
+///|
+/// === 契约矩阵：形状字段静默丢失必须携带诊断 ===
+
+///|
+/// openai_chat 对消息内容中的 Native 媒体静默丢弃（无原生载体）——
+/// 编码不阻断成功，但必须携带 Unsupported 诊断
+test "fidelity - openai_chat native content yields Unsupported diagnostic" {
+  let req = @lux.LucentRequest::new(
+    "test-model",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(@lux.User, [
+          @lux.LucentContent::native(
+            "vendor-x",
+            @json.parse("{\"x\":1}") catch {
+              _ => Json::null()
+            },
+          ),
+        ]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match @openai_chat.lux_request_to_openai_chat(req) {
+    Ok(cr) => {
+      // 不阻断成功
+      assert_true(cr.value().contains("model"))
+      // 但 Native 内容被丢弃——必须携带诊断
+      let mut has_diag = false
+      for d in cr.diagnostics() {
+        if d.status == @lux.Unsupported || d.status == @lux.Degraded {
+          has_diag = true
+        }
+      }
+      assert_true(has_diag)
+    }
+    Err(e) => fail("encode failed: \{e}")
+  }
+}
