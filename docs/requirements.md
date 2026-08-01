@@ -17,33 +17,27 @@ lux/          ← Lucent IR 核心（纯数据结构，无 IO、无厂商绑定�
     ├── provider/gemini/           ← Google Gemini 适配器 ✅
     ├── provider/gemini_vertex/    ← Google Vertex AI 变体 ✅
     │
-    └── wasm/                      ← WASM 导出层（42 导出函数）✅
+    └── wasm/                      ← WASM 导出层（11 个 MoonBit 导出函数）✅
 ```
 
-每一层都是纯函数：`String JSON → Result[LucentRequest, Error]`
+每一层都是纯函数；当前公开转换契约仍为 `String JSON → Result[T, String]`，`ConversionResult` 仅完成类型定义，尚未接入适配器注册表。
 
 ## 当前状态
 
 | 模块 | 状态 | 测试数 |
 |------|------|--------|
 | `lux/` 核心类型定义 | ✅ **已完成** | 34+ 类型，`pub(all) enum` |
-| `lux/` JSON 序列化 (to_json) | ✅ **已完成** | 73 测试 |
-| `lux/` JSON 反序列化 (from_json) | ✅ **已完成** | 31 round-trip 测试 |
-| `lux/` 流式事件 + 累加器 | ✅ **已完成** | 块生命周期模型 |
-| `lux/` 转换诊断类型 | ✅ **已完成** | ConversionStatus / ConversionResult |
+| `lux/` JSON 序列化 (to_json) | ✅ **已完成** | 结构化测试覆盖 |
+| `lux/` JSON 反序列化 (from_json) | ✅ **已完成** | round-trip 测试覆盖 |
+| `lux/` 流式事件 + 累加器 | ✅ **已完成** | 块生命周期模型；部分事件仍需诊断化 |
+| `lux/` 转换诊断类型 | 已定义 | `ConversionStatus / ConversionResult` 尚未接入适配器契约 |
 | `schemas/lux-ir-v1.json` | ✅ **已完成** | JSON Schema v1 |
-| `provider/openai_chat/` 6 函数 | ✅ **已完成** | 35+ 测试 |
-| `provider/anthropic/` | ✅ **已完成** | 35+ 测试 |
-| `provider/openai_responses/` | ✅ **已完成** | 35+ 测试 |
-| `provider/gemini/` | ✅ **已完成** | 35+ 测试 |
-| `provider/openai_codex/` Codex 变体 | ✅ **已完成** | phase + xhigh |
-| `provider/openai_azure/` Azure 变体 | ✅ **已完成** | content_filters |
-| `provider/gemini_vertex/` Vertex 变体 | ✅ **已完成** | 纯转发 |
-| `sdk/` 表层 API | ✅ **已完成** | Prism, Context, PrismEvent |
-| `wasm/` 导出层 | ✅ **已完成** | 42 导出函数，7 provider + SDK |
-| 跨协议一致性测试 | ✅ **已完成** | 301 测试全部通过 |
+| 7 个 Provider 适配器 | ✅ **MoonBit 核心已实现** | 部分媒体/推理/事件边界仍有降级或不支持 |
+| `sdk/` 表层 API | ✅ **纯编解码 façade** | 不负责 HTTP、认证或 Agent Runtime |
+| `wasm/` 导出层 | ✅ **MoonBit 侧已实现** | 11 个导出函数；宿主 wrapper ABI 仍在实现 |
+| 跨协议一致性测试 | ✅ | 当前 `moon test` 共 634 个测试通过 |
 
-**测试总计：301 passed, 0 failed** ✅
+**当前边界：** `transport/` 仅包含 v1 draft 设计文档；`wrappers/` 的 Go、TypeScript、Python WASM 调用仍是 scaffold，不应视为已完成的多语言运行时。
 
 ## 分包结构
 

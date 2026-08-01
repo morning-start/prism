@@ -155,15 +155,19 @@ match prism.decode_sse(sse_text) {
 |------|------|
 | Lucent IR 核心类型 (34+ 类型) | ✅ |
 | JSON 序列化 / 反序列化 | ✅ |
-| 流式事件 + 累加器 | ✅ |
-| 7 个 Provider 适配器（各 6 函数） | ✅ |
+| 流式事件 + 累加器 | ✅（部分事件语义仍需诊断化） |
+| 7 个 Provider 适配器（各 6 函数） | ✅（部分能力仍有降级/不支持边界） |
 | 跨协议往返一致性测试 | ✅ |
-| SDK 表层 API（Prism / Context / Event） | ✅ |
-| WASM 导出层（11 个通用函数） | ✅ |
-| 301 测试，全部通过 | ✅ |
+| SDK 表层 API（Prism / Context / Event） | ✅（纯编解码 façade） |
+| WASM 导出层（11 个通用函数） | ✅（MoonBit 侧） |
+| MoonBit 测试 | ✅ 634 passed |
+| 多语言 wrapper / Transport Daemon | 规划中，当前未完成 |
+
+当前仓库可验证的是 MoonBit native/wasm-gc 核心；`wrappers/` 仍是 WASM 边界 scaffold，`transport/` 仅包含设计文档。不要将它们当作可直接发布的运行时能力。
 
 ---
-
+[README.mbt.md#3D64]
+INS.POST 165:
 ## 开发原则
 
 1. **纯函数** — 无 IO、无状态、无副作用
@@ -176,3 +180,4 @@ match prism.decode_sse(sse_text) {
 ## 开源协议
 
 [MIT License](LICENSE) — 自由商用、二次开发，保留开源声明即可。
+

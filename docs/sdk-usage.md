@@ -193,14 +193,14 @@ let opts = PrismOptions::new(
 fn complete(prompt: String) {
   let prism = Prism::new()
     .with_provider("openai")
-    .with_api_key("sk-xxx")   // 会被注入 HTTP 头
+    .with_api_key("sk-xxx")   // 当前纯编解码 façade 不消费 API key
 
   // 编码请求
   let req = prism.encode_request(prompt, PrismOptions::default())
   match req {
     Ok(json) => {
       // 此时 json 就是 OpenAI 格式的请求体
-      // 开发者需要自己发送 HTTP 请求
+      // Host 负责发送 HTTP 请求和注入认证信息
       let resp_json = send_http_post(
         "https://api.openai.com/v1/responses",
         "Authorization: Bearer sk-xxx",
