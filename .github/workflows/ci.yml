@@ -41,3 +41,33 @@ jobs:
         run: |
           moon info --target native
           git diff --exit-code -- '**/pkg.generated.mbti'
+
+      - name: H7. Build classic WASM (wrapper ABI)
+        run: moon build --target wasm
+
+      - name: H8. Go wrapper integration test
+        run: |
+          cd wrappers/go
+          go vet ./...
+          go test -v ./...
+
+      - name: H9. TypeScript wrapper integration test
+        run: |
+          node --experimental-strip-types wrappers/ts/test/integration.test.ts
+
+      - name: H10. Python wrapper integration test
+        run: |
+          pip install wasmtime
+          cd wrappers/py
+          PYTHONPATH=src python - <<'EOF'
+import json
+from prism_wasm import PrismClient
+client = PrismClient('../../_build/wasm/debug/build/cmd/main/main.wasm')
+cap = client.capability('openai')
+assert cap['provider'] == 'openai' and 'model_pattern' in cap
+req = json.loads(client.encode_request('openai', 'Hello'))
+assert req['input'][0]['content'][0]['text'] == 'Hello'
+resp = json.dumps({'id':'1','object':'chat.completion','model':'gpt-4o','choices':[{'index':0,'message':{'role':'assistant','content':'Hi'},'finish_reason':'stop'}]})
+assert client.decode_response('openai-chat', resp) == 'Hi'
+print('python wrapper integration passed')
+EOF

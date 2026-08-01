@@ -1,9 +1,8 @@
 pkgtype(kind: "executable")
 
 import {
-  "morning-start/prism/lux",
+  "morning-start/prism/wasm",
   "morning-start/prism/sdk",
-  "moonbitlang/core/json",
 }
 
 options(
