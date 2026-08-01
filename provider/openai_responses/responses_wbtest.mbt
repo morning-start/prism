@@ -257,3 +257,80 @@ test "lux_events_to_openai_responses_sse - text sequence" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+/// === 保真度：静默分支诊断 ===
+
+///|
+test "decode - reasoning config yields Unsupported diagnostic" {
+  // 经 IR 构造器编码得到带 reasoning 的 provider JSON，再解码
+  let req = @lux.LucentRequest::new(
+    "o3",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("Hi")]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    Some(@lux.LucentReasoningConfig::new(Some(@lux.Medium), None)),
+    None,
+    None,
+  )
+  match lux_request_to_openai_responses(req) {
+    Ok(cr) => {
+      let json = cr.value()
+      match openai_responses_to_lux_request(json) {
+        Ok(cr2) => {
+          // reasoning 空实现：必须携带 Unsupported 诊断
+          let mut has_unsupported = false
+          for d in cr2.diagnostics() {
+            if d.status == @lux.Unsupported {
+              has_unsupported = true
+            }
+          }
+          assert_true(has_unsupported)
+        }
+        Err(e) => fail("decode failed: \{e}")
+      }
+    }
+    Err(e) => fail("encode failed: \{e}")
+  }
+}
+
+///|
+test "decode - input_image yields Degraded diagnostic" {
+  let json = "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_image\",\"image_url\":\"https://x.com/a.png\"}]}]}"
+  match openai_responses_to_lux_request(json) {
+    Ok(cr) => {
+      let mut has_degraded = false
+      for d in cr.diagnostics() {
+        if d.status == @lux.Degraded {
+          has_degraded = true
+        }
+      }
+      assert_true(has_degraded)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "sse - invalid data yields Invalid diagnostic" {
+  let sse = "data: {not-valid-json}\n\n"
+  match openai_responses_sse_to_events(sse) {
+    Ok(cr) => {
+      let mut has_invalid = false
+      for d in cr.diagnostics() {
+        if d.status == @lux.Invalid {
+          has_invalid = true
+        }
+      }
+      assert_true(has_invalid)
+    }
+    Err(_) => assert_true(false)
+  }
+}
