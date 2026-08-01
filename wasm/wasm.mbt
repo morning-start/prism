@@ -263,3 +263,45 @@ pub fn wasm_sdk_capability(provider : String) -> String {
     None => to_error("unknown provider")
   }
 }
+
+///|
+/// === 中转站协议转发（convert_* 组合入口）===
+
+///|
+/// 请求：source 协议 JSON → target 协议 JSON
+pub fn wasm_convert_request(
+  source : String,
+  json_str : String,
+  target : String,
+) -> String {
+  match @sdk.convert_request(source, json_str, target) {
+    Ok(v) => v
+    Err(e) => to_error(e)
+  }
+}
+
+///|
+/// 响应：source 协议 JSON → target 协议 JSON
+pub fn wasm_convert_response(
+  source : String,
+  json_str : String,
+  target : String,
+) -> String {
+  match @sdk.convert_response(source, json_str, target) {
+    Ok(v) => v
+    Err(e) => to_error(e)
+  }
+}
+
+///|
+/// 流式：source 协议 SSE → target 协议 SSE
+pub fn wasm_convert_stream(
+  source : String,
+  sse_str : String,
+  target : String,
+) -> String {
+  match @sdk.convert_stream(source, sse_str, target) {
+    Ok(v) => v
+    Err(e) => to_error(e)
+  }
+}

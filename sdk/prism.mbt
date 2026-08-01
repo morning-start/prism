@@ -233,6 +233,44 @@ pub fn Prism::decode_sse(
 }
 
 ///|
+/// L1 零配置：文本进、文本出（HTTP 由 Host 注入 send）
+pub fn Prism::complete(
+  self : Prism,
+  text : String,
+  opts : PrismOptions,
+  send : (String) -> Result[String, String],
+) -> Result[String, String] {
+  match self.encode_request(text, opts) {
+    Ok(json) =>
+      match send(json) {
+        Ok(resp_json) => self.decode_response(resp_json)
+        Err(e) => Err(e)
+      }
+    Err(e) => Err(e)
+  }
+}
+
+///|
+/// L2 Agent 循环：流式请求 + 5 事件解码（HTTP 由 Host 注入 send）
+pub fn Prism::stream(
+  self : Prism,
+  ctx : Context,
+  send : (String) -> Result[String, String],
+) -> Result[Array[PrismEvent], String] {
+  let model = "gpt-4o"
+  let mut req = context_to_lux_request(ctx, model, PrismOptions::default())
+  req = @lux.LucentRequest::with_stream(req, true)
+  match self.encode_lux_request(req) {
+    Ok(json) =>
+      match send(json) {
+        Ok(sse) => self.decode_sse(sse)
+        Err(e) => Err(e)
+      }
+    Err(e) => Err(e)
+  }
+}
+
+///|
 /// 将提供商 SSE 解码为原始 LucentStreamEvent（基于注册表）
 fn decode_sse_inner(
   provider : String,

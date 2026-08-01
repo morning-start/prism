@@ -286,3 +286,122 @@ test "empty JSON string for request decode" {
   let result = wasm_to_lux_request("openai-chat", "")
   assert_true(result.contains("error"))
 }
+
+///|
+/// === wasm_convert_*（中转站协议转发）===
+
+///|
+/// 标准请求经 openai_chat 编码得到 source JSON（IR 构造器 → 适配器编码，不手写 JSON）
+fn convert_source_req_json() -> Result[String, String] {
+  let req = @lux.LucentRequest::new(
+    "gpt-4o",
+    Some([@lux.LucentContent::text("You are helpful")]),
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("Hi")]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  @openai_chat.lux_request_to_openai_chat(req)
+}
+
+///|
+/// 标准响应经 openai_chat 编码得到 source JSON
+fn convert_source_resp_json() -> Result[String, String] {
+  let resp = @lux.LucentResponse::new(
+    "resp-1",
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentChoice::new(
+        0,
+        @lux.LucentMessage::new(@lux.Assistant, [
+          @lux.LucentContent::text("Hi back"),
+        ]),
+        @lux.Stop,
+        None,
+      ),
+    ],
+    Some(@lux.LucentUsage::new(10, 5, 15)),
+    None,
+  )
+  @openai_chat.lux_response_to_openai_chat(resp)
+}
+
+///|
+/// 标准事件流经 openai_chat 编码得到 source SSE
+fn convert_source_sse() -> Result[String, String] {
+  let events : Array[@lux.LucentStreamEvent] = [
+    @lux.ConversationStart(@lux.LucentConversationMeta::new(None, None, None)),
+    @lux.BlockStart(0, @lux.Text),
+    @lux.BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
+    @lux.BlockEnd(0),
+    @lux.Finish(@lux.Stop),
+    @lux.Done,
+  ]
+  @openai_chat.lux_events_to_openai_chat_sse(events)
+}
+
+///|
+test "wasm_convert_request - openai-chat to anthropic" {
+  match convert_source_req_json() {
+    Ok(json) => {
+      let result = wasm_convert_request("openai-chat", json, "anthropic")
+      // 成功时应返回可被 anthropic 解码的目标 JSON
+      match @anthropic.anthropic_to_lux_request(result) {
+        Ok(req) => {
+          assert_eq(req.model, "gpt-4o")
+          assert_eq(req.conversation.length(), 1)
+        }
+        Err(e) => fail("target decode failed: \{e}")
+      }
+    }
+    Err(e) => fail("encode source failed: \{e}")
+  }
+}
+
+///|
+test "wasm_convert_request - unknown provider returns error json" {
+  let result = wasm_convert_request("nope", "{}", "anthropic")
+  assert_true(result.contains("error"))
+  assert_true(result.contains("unknown provider"))
+}
+
+///|
+test "wasm_convert_response - openai-chat to anthropic" {
+  match convert_source_resp_json() {
+    Ok(json) => {
+      let result = wasm_convert_response("openai-chat", json, "anthropic")
+      match @anthropic.anthropic_to_lux_response(result) {
+        Ok(resp) => {
+          assert_eq(resp.id, "resp-1")
+          assert_eq(resp.model, "gpt-4o")
+          assert_eq(resp.choices.length(), 1)
+        }
+        Err(e) => fail("target response decode failed: \{e}")
+      }
+    }
+    Err(e) => fail("encode source failed: \{e}")
+  }
+}
+
+///|
+test "wasm_convert_stream - openai-chat to anthropic" {
+  match convert_source_sse() {
+    Ok(sse) => {
+      let result = wasm_convert_stream("openai-chat", sse, "anthropic")
+      match @anthropic.anthropic_sse_to_events(result) {
+        Ok(events) => assert_true(events.length() > 0)
+        Err(e) => fail("target sse decode failed: \{e}")
+      }
+    }
+    Err(e) => fail("encode source failed: \{e}")
+  }
+}

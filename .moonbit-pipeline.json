@@ -1,0 +1,11 @@
+{
+  "pipeline": "development",
+  "phase": "verify",
+  "plan_file": "docs/plans/2026-08-01-dual-scenario-plan.md",
+  "progress": {
+    "total_tasks": 4,
+    "completed_tasks": 4,
+    "current_task": 0
+  },
+  "last_updated": "2026-08-01T00:00:00Z"
+}

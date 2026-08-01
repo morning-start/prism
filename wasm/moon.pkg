@@ -3,3 +3,8 @@ import {
   "morning-start/prism/sdk",
   "moonbitlang/core/json",
 }
+
+import {
+  "morning-start/prism/provider/openai_chat",
+  "morning-start/prism/provider/anthropic",
+} for "test"

@@ -9,11 +9,30 @@
 pub struct SdkMessage {
   role : String
   content : String
+  /// 工具结果专用：关联的 tool_use_id（None 表示普通消息）
+  tool_use_id : String?
+  /// 工具结果专用：是否执行出错（默认 false）
+  is_error : Bool?
 }
 
 ///|
 pub fn SdkMessage::new(role : String, content : String) -> SdkMessage {
-  { role, content }
+  { role, content, tool_use_id: None, is_error: None }
+}
+
+///|
+/// 构造工具结果消息（Agent 循环注入工具执行结果用）
+pub fn SdkMessage::tool_result(
+  tool_use_id : String,
+  content : String,
+  is_error : Bool,
+) -> SdkMessage {
+  {
+    role: "tool",
+    content,
+    tool_use_id: Some(tool_use_id),
+    is_error: Some(is_error),
+  }
 }
 
 ///|
@@ -56,7 +75,7 @@ pub fn Context::add_system(self : Context, prompt : String) -> Context {
 /// 添加用户消息
 pub fn Context::add_user(self : Context, text : String) -> Context {
   let new_msgs = self.messages.map(fn(msg) { msg })
-  new_msgs.push({ role: "user", content: text })
+  new_msgs.push(SdkMessage::new("user", text))
   { ..self, messages: new_msgs }
 }
 
@@ -64,7 +83,7 @@ pub fn Context::add_user(self : Context, text : String) -> Context {
 /// 添加助手消息
 pub fn Context::add_assistant(self : Context, text : String) -> Context {
   let new_msgs = self.messages.map(fn(msg) { msg })
-  new_msgs.push({ role: "assistant", content: text })
+  new_msgs.push(SdkMessage::new("assistant", text))
   { ..self, messages: new_msgs }
 }
 
@@ -72,6 +91,19 @@ pub fn Context::add_assistant(self : Context, text : String) -> Context {
 /// 添加工具
 pub fn Context::add_tools(self : Context, tools : Array[SdkTool]) -> Context {
   { ..self, tools: Some(tools) }
+}
+
+///|
+/// 注入工具执行结果（Agent 循环：执行工具后继续对话）
+pub fn Context::add_tool_result(
+  self : Context,
+  tool_use_id : String,
+  content : String,
+  is_error : Bool,
+) -> Context {
+  let new_msgs = self.messages.map(fn(msg) { msg })
+  new_msgs.push(SdkMessage::tool_result(tool_use_id, content, is_error))
+  { ..self, messages: new_msgs }
 }
 
 ///|
@@ -83,16 +115,36 @@ pub fn context_to_lux_request(
 ) -> @lux.LucentRequest {
   let items : Array[@lux.LucentConversationItem] = []
   for msg in ctx.messages {
-    let role = match msg.role {
-      "system" => @lux.System
-      "user" => User
-      "assistant" => Assistant
-      "tool" => Tool
-      _ => User
+    match msg.tool_use_id {
+      Some(id) => {
+        // 工具结果消息 → Item::ToolResult（Agent 循环注入）
+        let is_err = match msg.is_error {
+          Some(b) => b
+          None => false
+        }
+        items.push(
+          @lux.LucentConversationItem::tool_result(
+            @lux.LucentToolResult::new(
+              id,
+              [@lux.LucentContent::text(msg.content)],
+              is_err,
+            ),
+          ),
+        )
+      }
+      None => {
+        let role = match msg.role {
+          "system" => @lux.System
+          "user" => User
+          "assistant" => Assistant
+          "tool" => Tool
+          _ => User
+        }
+        let content = [@lux.LucentContent::text(msg.content)]
+        let lmsg = @lux.LucentMessage::new(role, content)
+        items.push(@lux.LucentConversationItem::message(lmsg))
+      }
     }
-    let content = [@lux.LucentContent::text(msg.content)]
-    let lmsg = @lux.LucentMessage::new(role, content)
-    items.push(@lux.LucentConversationItem::message(lmsg))
   }
   let tools_arr = match ctx.tools {
     Some(tools) => {

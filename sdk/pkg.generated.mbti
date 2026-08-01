@@ -10,6 +10,12 @@ pub fn all_providers() -> Array[ProviderRegistration]
 
 pub fn context_to_lux_request(Context, String, PrismOptions) -> @lux.LucentRequest
 
+pub fn convert_request(String, String, String) -> Result[String, String]
+
+pub fn convert_response(String, String, String) -> Result[String, String]
+
+pub fn convert_stream(String, String, String) -> Result[String, String]
+
 pub fn get_schema(String) -> ProviderSchema?
 
 pub fn list_provider_names() -> Array[String]
@@ -28,6 +34,7 @@ pub struct Context {
 }
 pub fn Context::add_assistant(Self, String) -> Self
 pub fn Context::add_system(Self, String) -> Self
+pub fn Context::add_tool_result(Self, String, String, Bool) -> Self
 pub fn Context::add_tools(Self, Array[SdkTool]) -> Self
 pub fn Context::add_user(Self, String) -> Self
 pub fn Context::new() -> Self
@@ -46,6 +53,7 @@ pub struct Prism {
   base_url : String?
 }
 pub fn Prism::capability(Self, String) -> @lux.ProviderCapability?
+pub fn Prism::complete(Self, String, PrismOptions, (String) -> Result[String, String]) -> Result[String, String]
 pub fn Prism::decode_response(Self, String) -> Result[String, String]
 pub fn Prism::decode_response_with_diagnostics(Self, String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String]
 pub fn Prism::decode_sse(Self, String) -> Result[Array[PrismEvent], String]
@@ -53,6 +61,7 @@ pub fn Prism::encode_request(Self, String, PrismOptions) -> Result[String, Strin
 pub fn Prism::encode_request_with_diagnostics(Self, String, PrismOptions) -> Result[@lux.ConversionResult[String], String]
 pub fn Prism::encode_stream_request(Self, String, PrismOptions) -> Result[String, String]
 pub fn Prism::new() -> Self
+pub fn Prism::stream(Self, Context, (String) -> Result[String, String]) -> Result[Array[PrismEvent], String]
 pub fn Prism::with_api_key(Self, String) -> Self
 pub fn Prism::with_base_url(Self, String) -> Self
 pub fn Prism::with_provider(Self, String) -> Self
@@ -137,8 +146,11 @@ pub fn ProviderSchema::validate_response(Self, @lux.LucentResponse) -> Array[Str
 pub struct SdkMessage {
   role : String
   content : String
+  tool_use_id : String?
+  is_error : Bool?
 }
 pub fn SdkMessage::new(String, String) -> Self
+pub fn SdkMessage::tool_result(String, String, Bool) -> Self
 
 pub struct SdkTool {
   name : String
