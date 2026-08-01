@@ -380,7 +380,11 @@ fn json_escape(s : String) -> String {
 
 ///|
 /// 单个 LucentContent → Anthropic content block JSON 片段
-fn content_to_block(c : @lux.LucentContent) -> String {
+/// 无法映射的媒体产生 Unsupported 诊断并返回空串（调用方跳过，不输出空块）
+fn content_to_block(
+  c : @lux.LucentContent,
+  diagnostics : Array[@lux.ConversionDiagnostic],
+) -> String {
   match c {
     Text(s, _) => "{\"type\":\"text\",\"text\":\"" + json_escape(s) + "\"}"
     ToolUse(tu) =>
@@ -395,7 +399,7 @@ fn content_to_block(c : @lux.LucentContent) -> String {
       "{\"type\":\"tool_result\",\"tool_use_id\":\"" +
       json_escape(tr.tool_use_id) +
       "\",\"content\":" +
-      content_array_to_json(tr.content) +
+      content_array_to_json(tr.content, diagnostics) +
       ",\"is_error\":" +
       (if tr.is_error { "true" } else { "false" }) +
       "}"
@@ -418,19 +422,74 @@ fn content_to_block(c : @lux.LucentContent) -> String {
         "}"
       }
     Refusal(s) => "{\"type\":\"text\",\"text\":\"" + json_escape(s) + "\"}"
-    Image(_) | Audio(_) | Video(_) => "" // stub
-    Native(_, _) => "" // stub
+    Image(mm) =>
+      // 图片：优先精确映射为 anthropic image block
+      match mm.source {
+        @lux.Url(url) =>
+          "{\"type\":\"image\",\"source\":{\"type\":\"url\",\"url\":\"" +
+          json_escape(url) +
+          "\"}}"
+        @lux.Inline(data) =>
+          "{\"type\":\"image\",\"source\":{\"type\":\"base64\",\"media_type\":\"" +
+          json_escape(mm.media_type) +
+          "\",\"data\":\"" +
+          json_escape(data) +
+          "\"}}"
+        @lux.FileUri(_) => {
+          diagnostics.push(
+            @lux.ConversionDiagnostic::new(
+              "content.image",
+              @lux.Unsupported,
+              Some("file_uri image source not supported by anthropic"),
+            ),
+          )
+          ""
+        }
+      }
+    Audio(_) => {
+      diagnostics.push(
+        @lux.ConversionDiagnostic::new(
+          "content.audio",
+          @lux.Unsupported,
+          Some("audio content not supported by anthropic"),
+        ),
+      )
+      ""
+    }
+    Video(_) => {
+      diagnostics.push(
+        @lux.ConversionDiagnostic::new(
+          "content.video",
+          @lux.Unsupported,
+          Some("video content not supported by anthropic"),
+        ),
+      )
+      ""
+    }
+    Native(tag, _) => {
+      diagnostics.push(
+        @lux.ConversionDiagnostic::new(
+          "content.native",
+          @lux.Unsupported,
+          Some("native content (" + tag + ") not supported by anthropic"),
+        ),
+      )
+      ""
+    }
   }
 }
 
 ///|
 /// LucentMessage → Anthropic message JSON
-fn message_to_json(msg : @lux.LucentMessage) -> String {
+fn message_to_json(
+  msg : @lux.LucentMessage,
+  diagnostics : Array[@lux.ConversionDiagnostic],
+) -> String {
   let role_str = msg.role.to_string()
   let blocks : Array[String] = []
   let mut i = 0
   while i < msg.content.length() {
-    let block = content_to_block(msg.content[i])
+    let block = content_to_block(msg.content[i], diagnostics)
     if block != "" {
       blocks.push(block)
     }
@@ -445,11 +504,14 @@ fn message_to_json(msg : @lux.LucentMessage) -> String {
 
 ///|
 /// 内容块数组 → JSON 字符串（用于 tool_result.content）
-fn content_array_to_json(content : Array[@lux.LucentContent]) -> String {
+fn content_array_to_json(
+  content : Array[@lux.LucentContent],
+  diagnostics : Array[@lux.ConversionDiagnostic],
+) -> String {
   let blocks : Array[String] = []
   let mut i = 0
   while i < content.length() {
-    let block = content_to_block(content[i])
+    let block = content_to_block(content[i], diagnostics)
     if block != "" {
       blocks.push(block)
     }
@@ -464,6 +526,7 @@ pub fn lux_request_to_anthropic(
   req : @lux.LucentRequest,
 ) -> Result[@lux.ConversionResult[String], String] {
   let parts : Array[String] = []
+  let diagnostics : Array[@lux.ConversionDiagnostic] = []
   parts.push("\"model\":\"" + json_escape(req.model) + "\"")
   // system 指令（顶层）
   match req.instructions {
@@ -499,7 +562,7 @@ pub fn lux_request_to_anthropic(
   let mut i = 0
   while i < items.length() {
     match items[i] {
-      Message(m) => msgs_json.push(message_to_json(m))
+      Message(m) => msgs_json.push(message_to_json(m, diagnostics))
       ToolCall(tu) =>
         // 独立 ToolCall → assistant 消息含 tool_use
         msgs_json.push(
@@ -517,7 +580,7 @@ pub fn lux_request_to_anthropic(
           "{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"" +
           json_escape(tr.tool_use_id) +
           "\",\"content\":" +
-          content_array_to_json(tr.content) +
+          content_array_to_json(tr.content, diagnostics) +
           ",\"is_error\":" +
           (if tr.is_error { "true" } else { "false" }) +
           "}]}",
@@ -649,7 +712,11 @@ pub fn lux_request_to_anthropic(
     }
     None => ()
   }
-  Ok(@lux.ConversionResult::new("{" + parts.join(",") + "}"))
+  let mut result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
+  for d in diagnostics {
+    result = result.with_diagnostic(d)
+  }
+  Ok(result)
 }
 
 ///|
@@ -701,12 +768,13 @@ pub fn lux_response_to_anthropic(
   if resp.choices.length() == 0 {
     return Err("response has no choices")
   }
+  let diagnostics : Array[@lux.ConversionDiagnostic] = []
   let choice = resp.choices[0]
   // content blocks
   let content_blocks : Array[String] = []
   let mut i = 0
   while i < choice.message.content.length() {
-    let block = content_to_block(choice.message.content[i])
+    let block = content_to_block(choice.message.content[i], diagnostics)
     if block != "" {
       content_blocks.push(block)
     }
@@ -746,7 +814,11 @@ pub fn lux_response_to_anthropic(
     ",\"stop_sequence\":null" +
     usage_json +
     "}"
-  Ok(@lux.ConversionResult::new(body))
+  let mut result = @lux.ConversionResult::new(body)
+  for d in diagnostics {
+    result = result.with_diagnostic(d)
+  }
+  Ok(result)
 }
 
 ///|

@@ -771,3 +771,81 @@ test "lux_events_to_anthropic_sse - tool call with thinking" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+/// === 保真度：媒体编码诊断 ===
+
+///|
+test "encode - native media yields Unsupported diagnostic not empty string" {
+  let req = @lux.LucentRequest::new(
+    "claude",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(@lux.User, [
+          @lux.LucentContent::native(
+            "vendor-x",
+            @json.parse("\"raw\"") catch {
+              _ => Json::null()
+            },
+          ),
+        ]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_anthropic(req) {
+    Ok(cr) => {
+      // 不得输出空字符串 content 块
+      assert_true(!cr.value().contains("\"type\":\"text\",\"text\":\"\""))
+      // 必须携带诊断
+      let mut has_unsupported = false
+      for d in cr.diagnostics() {
+        if d.status == @lux.Unsupported {
+          has_unsupported = true
+        }
+      }
+      assert_true(has_unsupported)
+    }
+    Err(e) => fail("encode failed: \{e}")
+  }
+}
+
+///|
+test "encode - image url maps to anthropic image block" {
+  let req = @lux.LucentRequest::new(
+    "claude",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(@lux.User, [
+          @lux.LucentContent::image(
+            "image/png",
+            @lux.LucentMediaSource::Url("https://x.com/a.png"),
+          ),
+        ]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_anthropic(req) {
+    Ok(cr) => {
+      // 图片应映射为 anthropic image block
+      assert_true(cr.value().contains("\"type\":\"image\""))
+      assert_true(cr.value().contains("https://x.com/a.png"))
+    }
+    Err(e) => fail("encode failed: \{e}")
+  }
+}
