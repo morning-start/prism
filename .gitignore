@@ -6,6 +6,7 @@ target
 .moonagent/
 .agents/skills/moonbit-skill/
 .claude/skills/moonbit-skill/
+.atomcode/plugins/
 temp/
 **/memory.md
 
