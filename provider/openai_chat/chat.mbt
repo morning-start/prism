@@ -323,29 +323,9 @@ fn role_to_string(role : @lux.LucentRole) -> String {
 }
 
 ///|
-/// JSON 字符串转义 — 用 from_codepoint 转换 UInt16 为字符串
+/// JSON 字符串转义 — 委托共享实现（@internal）
 fn escape_json(s : String) -> String {
-  let mut r = ""
-  let mut i = 0
-  while i < s.length() {
-    let cp = s[i]
-    if cp == '"' {
-      r = r + "\\\""
-    } else if cp == '\\' {
-      r = r + "\\\\"
-    } else if cp == '\n' {
-      r = r + "\\n"
-    } else if cp == '\t' {
-      r = r + "\\t"
-    } else if cp == '\r' {
-      r = r + "\\r"
-    } else {
-      let ch = Int::unsafe_to_char(cp.to_int())
-      r = r + "\{ch}"
-    }
-    i = i + 1
-  }
-  r
+  @internal.json_escape(s)
 }
 
 ///|

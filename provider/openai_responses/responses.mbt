@@ -560,6 +560,16 @@ pub fn openai_responses_to_lux_response(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
+  openai_responses_json_to_lux_response(jv)
+}
+
+///|
+/// 3b. 已解析 Json 的响应解码入口
+///
+/// 供薄封装子协议（如 Azure）复用：调用方已持有 `Json` 时可避免二次解析。
+pub fn openai_responses_json_to_lux_response(
+  jv : Json,
+) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
   let id = @internal.field_str(jv, "id").unwrap_or("")
   let model = @internal.field_str(jv, "model").unwrap_or("")
   let created = @internal.field_int(jv, "created_at")

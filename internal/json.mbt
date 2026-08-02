@@ -77,27 +77,26 @@ pub fn field_int_exact(jv : Json, key : String) -> Int? {
 ///|
 /// JSON 字符串转义（用于 SSE 手动拼接等非标准输出）
 pub fn json_escape(s : String) -> String {
-  let mut r = ""
+  let sb = StringBuilder::new()
   let mut i = 0
   while i < s.length() {
     let cp = s[i]
     if cp == '"' {
-      r = r + "\\\""
+      sb.write_string("\\\"")
     } else if cp == '\\' {
-      r = r + "\\\\"
+      sb.write_string("\\\\")
     } else if cp == '\n' {
-      r = r + "\\n"
+      sb.write_string("\\n")
     } else if cp == '\t' {
-      r = r + "\\t"
+      sb.write_string("\\t")
     } else if cp == '\r' {
-      r = r + "\\r"
+      sb.write_string("\\r")
     } else {
-      let ch = Int::unsafe_to_char(cp.to_int())
-      r = r + "\{ch}"
+      sb.write_char(Int::unsafe_to_char(cp.to_int()))
     }
     i = i + 1
   }
-  r
+  sb.to_string()
 }
 
 ///|

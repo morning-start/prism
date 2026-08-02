@@ -230,9 +230,9 @@ pub fn lucent_stream_events_to_accumulated(
   // 块状态跟踪：block_index -> (类型, 已累加的文本)
   // 用线性数组替代 Map（MoonBit 风格），下标即 block_index
   let block_types : Array[LucentBlockType] = []
-  let block_texts : Array[String] = []
-  let block_thinking : Array[String] = []
-  let block_signatures : Array[String] = []
+  let block_texts : Array[StringBuilder] = []
+  let block_thinking : Array[StringBuilder] = []
+  let block_signatures : Array[StringBuilder] = []
   let block_tool_ids : Array[String] = []
   let block_tool_names : Array[String] = []
 
@@ -246,9 +246,9 @@ pub fn lucent_stream_events_to_accumulated(
   fn ensure_block(idx : Int) -> Unit {
     while block_types.length() <= idx {
       block_types.push(Text) // 占位，真实类型由 BlockStart 覆盖
-      block_texts.push("")
-      block_thinking.push("")
-      block_signatures.push("")
+      block_texts.push(StringBuilder::new())
+      block_thinking.push(StringBuilder::new())
+      block_signatures.push(StringBuilder::new())
       block_tool_ids.push("")
       block_tool_names.push("")
     }
@@ -259,29 +259,29 @@ pub fn lucent_stream_events_to_accumulated(
     ensure_block(idx)
     match block_types[idx] {
       Text => {
-        let s = block_texts[idx]
+        let s = block_texts[idx].to_string()
         if s != "" {
           content.push(LucentContent::text(s))
-          block_texts[idx] = ""
+          block_texts[idx].reset()
         }
       }
       ToolCall(_id, _name) => {
         let id = block_tool_ids[idx]
         let name = block_tool_names[idx]
-        let args = block_texts[idx]
+        let args = block_texts[idx].to_string()
         content.push(LucentContent::tool_use(id, name, args, None))
-        block_texts[idx] = ""
+        block_texts[idx].reset()
       }
       Thinking => {
         // 优先取独立 thinking 缓冲；空则回退 block_texts（兼容旧事件流）
-        let th_text = if block_thinking[idx] != "" {
-          block_thinking[idx]
+        let th_text = if !block_thinking[idx].is_empty() {
+          block_thinking[idx].to_string()
         } else {
-          block_texts[idx]
+          block_texts[idx].to_string()
         }
         let th = LucentThinking::new(
           th_text,
-          match block_signatures[idx] {
+          match block_signatures[idx].to_string() {
             "" => None
             s => Some(s)
           },
@@ -289,15 +289,15 @@ pub fn lucent_stream_events_to_accumulated(
           None,
         )
         content.push(Thinking(th))
-        block_texts[idx] = ""
-        block_thinking[idx] = ""
-        block_signatures[idx] = ""
+        block_texts[idx].reset()
+        block_thinking[idx].reset()
+        block_signatures[idx].reset()
       }
       Refusal => {
-        let s = block_texts[idx]
+        let s = block_texts[idx].to_string()
         if s != "" {
           content.push(Refusal(s))
-          block_texts[idx] = ""
+          block_texts[idx].reset()
         }
       }
       Image | Audio | Video | Native(_) => () // 流中不累加媒体块
@@ -307,9 +307,9 @@ pub fn lucent_stream_events_to_accumulated(
   ///| 块辅助：丢弃该块已累加内容（Gemini 全量帧覆盖语义），保留类型信息
   fn discard_block(idx : Int) -> Unit {
     ensure_block(idx)
-    block_texts[idx] = ""
-    block_thinking[idx] = ""
-    block_signatures[idx] = ""
+    block_texts[idx].reset()
+    block_thinking[idx].reset()
+    block_signatures[idx].reset()
     block_tool_ids[idx] = ""
     block_tool_names[idx] = ""
   }
@@ -354,9 +354,9 @@ pub fn lucent_stream_events_to_accumulated(
       BlockStart(idx, bt) => {
         ensure_block(idx)
         block_types[idx] = bt
-        block_texts[idx] = ""
-        block_thinking[idx] = ""
-        block_signatures[idx] = ""
+        block_texts[idx].reset()
+        block_thinking[idx].reset()
+        block_signatures[idx].reset()
         match bt {
           ToolCall(id, name) => {
             block_tool_ids[idx] = id
@@ -368,10 +368,10 @@ pub fn lucent_stream_events_to_accumulated(
       BlockDelta(idx, delta) => {
         ensure_block(idx)
         match delta {
-          TextDelta(s) => block_texts[idx] = block_texts[idx] + s
+          TextDelta(s) => block_texts[idx].write_string(s)
           ThinkingDelta(s) => {
             // 思考增量独立累加，不污染文本缓冲
-            block_thinking[idx] = block_thinking[idx] + s
+            block_thinking[idx].write_string(s)
             // 块类型非 Thinking 时（如未显式 BlockStart(Thinking)）→ Degraded 诊断
             match block_types[idx] {
               Thinking => ()
@@ -385,15 +385,15 @@ pub fn lucent_stream_events_to_accumulated(
                 )
             }
           }
-          SignatureDelta(s) => block_signatures[idx] = block_signatures[idx] + s
-          ToolArgumentsDelta(s) => block_texts[idx] = block_texts[idx] + s
+          SignatureDelta(s) => block_signatures[idx].write_string(s)
+          ToolArgumentsDelta(s) => block_texts[idx].write_string(s)
           RefusalDelta(s) => {
             // Refusal 块类型若未显式 BlockStart，按 Refusal 处理
             match block_types[idx] {
               Text => block_types[idx] = Refusal
               _ => ()
             }
-            block_texts[idx] = block_texts[idx] + s
+            block_texts[idx].write_string(s)
           }
           NativeDelta(vendor, raw) => {
             // 厂商私有增量：保留到侧信道 + 诊断
@@ -444,9 +444,9 @@ pub fn lucent_stream_events_to_accumulated(
   let mut j = 0
   while j < block_types.length() {
     // 仅 flush 有内容的块（避免空 Text 块污染）
-    if block_texts[j] != "" ||
-      block_signatures[j] != "" ||
-      block_thinking[j] != "" {
+    if !block_texts[j].is_empty() ||
+      !block_signatures[j].is_empty() ||
+      !block_thinking[j].is_empty() {
       flush_block(j)
     }
     j = j + 1

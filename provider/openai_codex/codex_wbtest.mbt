@@ -100,6 +100,92 @@ test "lux_request_to_codex - simple user message" {
 }
 
 ///|
+/// phase 编码路径（Codex 特有后处理，非直接委托）
+test "lux_request_to_codex - phase emitted on input items" {
+  let req = @lux.LucentRequest::from_messages(
+    "gpt-5.3-codex",
+    None,
+    [
+      @lux.LucentMessage::with_phase(
+        @lux.Assistant,
+        [@lux.LucentContent::text("thinking out loud")],
+        Some("commentary"),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_codex(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      assert_true(s.contains("\"phase\":\"commentary\""))
+      // phase 不得破坏同项的其余字段
+      assert_true(s.contains("thinking out loud"))
+      assert_true(s.contains("\"input\":"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// reasoning.effort=xhigh 编码路径（Codex 特有扩展）
+test "lux_request_to_codex - xhigh reasoning with summary" {
+  let req = @lux.LucentRequest::from_messages(
+    "gpt-5.3-codex",
+    None,
+    [@lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")])],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    Some(@lux.LucentReasoningConfig::new(Some(@lux.XHigh), Some(@lux.Concise))),
+    None,
+    None,
+  )
+  match lux_request_to_codex(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      assert_true(s.contains("\"effort\":\"xhigh\""))
+      assert_true(s.contains("\"summary\":\"concise\""))
+      // reasoning 必须是对象，不得被整个请求覆盖
+      assert_true(!s.contains("\"reasoning\":{\"model\""))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// phase 响应编码路径
+test "lux_response_to_codex - phase emitted on output items" {
+  let msg = @lux.LucentMessage::with_phase(
+    @lux.Assistant,
+    [@lux.LucentContent::text("final")],
+    Some("final_answer"),
+  )
+  let resp = @lux.LucentResponse::new(
+    "resp_p1",
+    "gpt-5.3-codex",
+    None,
+    [@lux.LucentChoice::new(0, msg, @lux.Stop, None)],
+    None,
+    None,
+  )
+  match lux_response_to_codex(resp) {
+    Ok(cr) => {
+      let s = cr.value()
+      assert_true(s.contains("\"phase\":\"final_answer\""))
+      assert_true(s.contains("final"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
 /// === 3. 响应解码 ===
 
 ///|

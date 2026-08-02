@@ -14,6 +14,8 @@ pub fn lux_request_to_openai_responses(@lux.LucentRequest) -> Result[@lux.Conver
 
 pub fn lux_response_to_openai_responses(@lux.LucentResponse) -> Result[@lux.ConversionResult[String], String]
 
+pub fn openai_responses_json_to_lux_response(Json) -> Result[@lux.ConversionResult[@lux.LucentResponse], String]
+
 pub fn openai_responses_sse_to_events(String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String]
 
 pub fn openai_responses_to_lux_request(String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String]

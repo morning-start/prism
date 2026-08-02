@@ -376,7 +376,7 @@ pub fn[T] ConversionResult::with_diagnostic(
   self : ConversionResult[T],
   diagnostic : ConversionDiagnostic,
 ) -> ConversionResult[T] {
-  let diagnostics = self.diagnostics.map(fn(d) { d })
+  let diagnostics = self.diagnostics.copy()
   diagnostics.push(diagnostic)
   { ..self, diagnostics, }
 }
