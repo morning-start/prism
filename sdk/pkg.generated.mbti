@@ -49,8 +49,6 @@ pub fn FieldConstraint::new(Double?, Double?, Bool, Array[String]?) -> Self
 
 pub struct Prism {
   provider : String
-  api_key : String?
-  base_url : String?
 }
 pub fn Prism::capability(Self, String) -> @lux.ProviderCapability?
 pub fn Prism::complete(Self, String, PrismOptions, (String) -> Result[String, String]) -> Result[String, String]
@@ -62,8 +60,6 @@ pub fn Prism::encode_request_with_diagnostics(Self, String, PrismOptions) -> Res
 pub fn Prism::encode_stream_request(Self, String, PrismOptions) -> Result[String, String]
 pub fn Prism::new() -> Self
 pub fn Prism::stream(Self, Context, (String) -> Result[String, String]) -> Result[Array[PrismEvent], String]
-pub fn Prism::with_api_key(Self, String) -> Self
-pub fn Prism::with_base_url(Self, String) -> Self
 pub fn Prism::with_provider(Self, String) -> Self
 
 pub(all) enum PrismEvent {

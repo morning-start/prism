@@ -116,7 +116,7 @@ Prism::encode_request("你好", opts)
 
 ```moonbit nocheck
 ///|
-let prism = Prism::new().with_provider("openai").with_api_key("sk-xxx")
+let prism = Prism::new().with_provider("openai")
 
 ///|
 let req = prism.encode_request("写一首诗", PrismOptions::default())

@@ -8,8 +8,6 @@
 test "Prism::new - default provider is openai" {
   let p = Prism::new()
   assert_eq(p.provider, "openai")
-  assert_eq(p.api_key, None)
-  assert_eq(p.base_url, None)
 }
 
 ///|
@@ -19,26 +17,9 @@ test "Prism::with_provider - sets provider name" {
 }
 
 ///|
-test "Prism::with_api_key - sets api key" {
-  let p = Prism::new().with_api_key("sk-test-123")
-  assert_eq(p.api_key, Some("sk-test-123"))
-}
-
-///|
-test "Prism::with_base_url - sets base url" {
-  let p = Prism::new().with_base_url("https://custom.endpoint")
-  assert_eq(p.base_url, Some("https://custom.endpoint"))
-}
-
-///|
 test "Prism::with_provider - chained construction" {
-  let p = Prism::new()
-    .with_provider("gemini")
-    .with_api_key("key-1")
-    .with_base_url("https://gemini.api")
+  let p = Prism::new().with_provider("gemini")
   assert_eq(p.provider, "gemini")
-  assert_eq(p.api_key, Some("key-1"))
-  assert_eq(p.base_url, Some("https://gemini.api"))
 }
 
 ///|
