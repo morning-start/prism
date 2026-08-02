@@ -359,27 +359,7 @@ pub fn anthropic_to_lux_request(
 ///|
 /// JSON 字符串转义（手动构建，因 @json.String 不可跨包构造）
 fn json_escape(s : String) -> String {
-  let mut r = ""
-  let mut i = 0
-  while i < s.length() {
-    let cp = s[i]
-    if cp == '"' {
-      r = r + "\\\""
-    } else if cp == '\\' {
-      r = r + "\\\\"
-    } else if cp == '\n' {
-      r = r + "\\n"
-    } else if cp == '\t' {
-      r = r + "\\t"
-    } else if cp == '\r' {
-      r = r + "\\r"
-    } else {
-      let ch = Int::unsafe_to_char(cp.to_int())
-      r = r + "\{ch}"
-    }
-    i = i + 1
-  }
-  r
+  @internal.json_escape(s)
 }
 
 ///|

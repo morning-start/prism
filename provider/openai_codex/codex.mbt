@@ -148,13 +148,7 @@ pub fn lux_request_to_codex(
                 match req.conversation[conv_idx] {
                   Message(m) =>
                     match m.phase {
-                      Some(p) => {
-                        let s = item.stringify()
-                        let s2 = insert_phase_into_json(s, p)
-                        @json.parse(s2) catch {
-                          _ => item
-                        }
-                      }
+                      Some(p) => json_set(item, "phase", Json::string(p))
                       None => item
                     }
                   _ => item
@@ -174,16 +168,16 @@ pub fn lux_request_to_codex(
       if needs_xhigh {
         match req.reasoning {
           Some(rc) => {
-            let mut rf = "{\"effort\":\"xhigh\""
+            // 直接构造 Json，避免字符串拼接后再解析
+            let rmap : Map[String, Json] = Map([])
+            rmap["effort"] = Json::string("xhigh")
             match rc.summary {
-              Some(Auto) => rf = rf + ",\"summary\":\"auto\""
-              Some(Concise) => rf = rf + ",\"summary\":\"concise\""
-              Some(Detailed) => rf = rf + ",\"summary\":\"detailed\""
+              Some(Auto) => rmap["summary"] = Json::string("auto")
+              Some(Concise) => rmap["summary"] = Json::string("concise")
+              Some(Detailed) => rmap["summary"] = Json::string("detailed")
               None => ()
             }
-            rf = rf + "}"
-            let rjv = @json.parse(rf) catch { _ => jv }
-            jv = json_set(jv, "reasoning", rjv)
+            jv = json_set(jv, "reasoning", Json::object(rmap))
           }
           None => ()
         }
@@ -236,13 +230,7 @@ pub fn lux_response_to_codex(
           for item in items {
             let new_item = if choice_idx < resp.choices.length() {
               match resp.choices[choice_idx].message.phase {
-                Some(p) => {
-                  let s = item.stringify()
-                  let s2 = insert_phase_into_json(s, p)
-                  @json.parse(s2) catch {
-                    _ => item
-                  }
-                }
+                Some(p) => json_set(item, "phase", Json::string(p))
                 None => item
               }
             } else {

@@ -100,9 +100,27 @@ pub fn ProviderRegistration::new(
 ///|
 /// 所有已注册的 Provider
 ///
-/// 新增 Provider 只需在此处追加。
+/// 新增 Provider 只需在 `build_providers` 中追加。
 /// 注意：条目顺序影响匹配优先级（精确匹配优先于正则匹配）。
+///
+/// 每次调用返回独立数组，调用方可安全修改；内部匹配路径改用
+/// `providers_cache` 避免重复构造。
 pub fn all_providers() -> Array[ProviderRegistration] {
+  build_providers()
+}
+
+///|
+/// 注册表缓存 — 构造一次复用
+///
+/// `build_providers` 会为每个条目调用 `capability()`，其中包含数组分配；
+/// 匹配函数（`match_provider_name` / `match_by_model` / `list_provider_names`）
+/// 属于每次 SDK 调用都会经过的热路径，故在模块初始化时构造一次。
+/// 仅供只读使用。
+let providers_cache : Array[ProviderRegistration] = build_providers()
+
+///|
+/// 注册表构造 — 唯一的 Provider 清单来源
+fn build_providers() -> Array[ProviderRegistration] {
   [
     ///| OpenAI Responses（主）
     ProviderRegistration::new(
@@ -208,7 +226,7 @@ pub fn all_providers() -> Array[ProviderRegistration] {
 ///
 /// 若只想按模型名匹配（不做名称/别名命中），直接调用 `match_by_model`。
 pub fn match_provider_name(provider_name : String) -> ProviderRegistration? {
-  let providers = all_providers()
+  let providers = providers_cache
   let mut i = 0
   while i < providers.length() {
     let reg = providers[i]
@@ -235,7 +253,7 @@ pub fn match_provider_name(provider_name : String) -> ProviderRegistration? {
 ///
 /// 返回最具体的匹配（pattern 中 * 越多越优先），或 None。
 pub fn match_by_model(model_name : String) -> ProviderRegistration? {
-  let providers = all_providers()
+  let providers = providers_cache
   let mut best : ProviderRegistration? = None
   let mut best_score = 0
   let mut i = 0
@@ -413,7 +431,7 @@ fn contains_after(s : String, skip_prefix : String, needle : String) -> Bool {
 ///|
 /// 获取所有 Provider 的主名称列表
 pub fn list_provider_names() -> Array[String] {
-  let providers = all_providers()
+  let providers = providers_cache
   let result : Array[String] = []
   let mut i = 0
   while i < providers.length() {

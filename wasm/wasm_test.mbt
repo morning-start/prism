@@ -268,6 +268,43 @@ test "wasm_sdk_decode_sse - returns event JSON array" {
 }
 
 ///|
+/// 事件字段级断言：确认事件对象由结构化字段构成，而非仅信封形状
+test "wasm_sdk_decode_sse - event objects carry typed fields" {
+  let sse = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hi\"},\"finish_reason\":null}]}\n\ndata: [DONE]\n"
+  let result = wasm_sdk_decode_sse("openai-chat", sse)
+  let jv = @json.parse(result) catch { _ => Json::null() }
+  let events = match jv {
+    Object(map) =>
+      match map.get("value") {
+        Some(Array(a)) => a
+        _ => {
+          fail("expected value array in envelope")
+          []
+        }
+      }
+    _ => {
+      fail("expected object envelope")
+      []
+    }
+  }
+  assert_true(events.length() > 0)
+  // 首个事件应为 text_delta，且 text 字段为解码出的文本
+  match events[0] {
+    Object(ev) => {
+      match ev.get("type") {
+        Some(String("text_delta")) => ()
+        _ => fail("expected first event type text_delta")
+      }
+      match ev.get("text") {
+        Some(String("Hi")) => ()
+        _ => fail("expected text field to be \"Hi\"")
+      }
+    }
+    _ => fail("expected event to be a JSON object")
+  }
+}
+
+///|
 test "wasm_sdk_decode_sse - unknown provider returns error" {
   let result = wasm_sdk_decode_sse("bad", "data: {}")
   assert_true(result.contains("error"))

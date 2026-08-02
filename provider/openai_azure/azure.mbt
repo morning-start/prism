@@ -23,11 +23,13 @@ pub fn lux_request_to_azure(
 
 ///|
 /// 3. 响应解码 — 提取 Azure 特有的 content_filters 到 provider_payload
+///
+/// 只解析一次 JSON：解析结果同时用于基础解码与 content_filters 提取。
 pub fn azure_to_lux_response(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
   let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
-  match @openai_responses.openai_responses_to_lux_response(json_str) {
+  match @openai_responses.openai_responses_json_to_lux_response(jv) {
     Ok(base) =>
       match @internal.obj_get(jv, "content_filters") {
         Some(filters) =>

@@ -199,11 +199,7 @@ pub fn wasm_sdk_decode_sse(provider : String, sse_str : String) -> String {
   let prism = @sdk.Prism::new().with_provider(provider)
   match prism.decode_sse(sse_str) {
     Ok(events) => {
-      let json_arr : Array[Json] = events.map(fn(ev) {
-        @json.parse(prism_event_json(ev)) catch {
-          _ => Json::null()
-        }
-      })
+      let json_arr : Array[Json] = events.map(fn(ev) { prism_event_to_json(ev) })
       wasm_envelope(Json::array(json_arr))
     }
     Err(e) => wasm_envelope_err(e)
@@ -211,63 +207,51 @@ pub fn wasm_sdk_decode_sse(provider : String, sse_str : String) -> String {
 }
 
 ///|
-/// PrismEvent → JSON 字符串（WASM 序列化）
-fn prism_event_json(ev : @sdk.PrismEvent) -> String {
+/// PrismEvent → Json（直接构造，避免拼字符串后再解析）
+fn prism_event_to_json(ev : @sdk.PrismEvent) -> Json {
+  let m : Map[String, Json] = Map([])
   match ev {
-    TextDelta(s) =>
-      "{\"type\":\"text_delta\",\"text\":\"" + json_escape_sdk(s) + "\"}"
-    ToolCall(tc) =>
-      "{\"type\":\"tool_call\",\"id\":\"" +
-      json_escape_sdk(tc.id) +
-      "\",\"name\":\"" +
-      json_escape_sdk(tc.name) +
-      "\",\"arguments\":" +
-      tc.arguments_json +
-      "}"
-    ToolResult(tr) =>
-      "{\"type\":\"tool_result\",\"tool_use_id\":\"" +
-      json_escape_sdk(tr.tool_use_id) +
-      "\",\"content\":\"" +
-      json_escape_sdk(tr.content) +
-      "\",\"is_error\":" +
-      (if tr.is_error { "true" } else { "false" }) +
-      "}"
-    Thinking(th) =>
-      "{\"type\":\"thinking\",\"text\":\"" + json_escape_sdk(th.text) + "\"}"
-    Finish(fr) => {
-      let r = match fr {
-        Stop => "stop"
-        Length => "length"
-        ToolCalls => "tool_calls"
-        ContentFilter => "content_filter"
-        Error => "error"
+    TextDelta(s) => {
+      m["type"] = Json::string("text_delta")
+      m["text"] = Json::string(s)
+    }
+    ToolCall(tc) => {
+      m["type"] = Json::string("tool_call")
+      m["id"] = Json::string(tc.id)
+      m["name"] = Json::string(tc.name)
+      // arguments_json 已是 JSON 文本；解析失败则降级为原始字符串
+      m["arguments"] = @json.parse(tc.arguments_json) catch {
+        _ => Json::string(tc.arguments_json)
       }
-      "{\"type\":\"finish\",\"reason\":\"" + r + "\"}"
+    }
+    ToolResult(tr) => {
+      m["type"] = Json::string("tool_result")
+      m["tool_use_id"] = Json::string(tr.tool_use_id)
+      m["content"] = Json::string(tr.content)
+      m["is_error"] = if tr.is_error {
+        Json::boolean(true)
+      } else {
+        Json::boolean(false)
+      }
+    }
+    Thinking(th) => {
+      m["type"] = Json::string("thinking")
+      m["text"] = Json::string(th.text)
+    }
+    Finish(fr) => {
+      m["type"] = Json::string("finish")
+      m["reason"] = Json::string(
+        match fr {
+          Stop => "stop"
+          Length => "length"
+          ToolCalls => "tool_calls"
+          ContentFilter => "content_filter"
+          Error => "error"
+        },
+      )
     }
   }
-}
-
-///|
-/// JSON 字符串转义（WASM 层用）
-fn json_escape_sdk(s : String) -> String {
-  let mut r = ""
-  let mut i = 0
-  while i < s.length() {
-    let cp = s[i]
-    if cp == '"' {
-      r = r + "\\\""
-    } else if cp == '\\' {
-      r = r + "\\\\"
-    } else if cp == '\n' {
-      r = r + "\\n"
-    } else if cp == '\t' {
-      r = r + "\\t"
-    } else {
-      r = r + "\{Int::unsafe_to_char(cp.to_int())}"
-    }
-    i = i + 1
-  }
-  r
+  Json::object(m)
 }
 
 ///|

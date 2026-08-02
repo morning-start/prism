@@ -74,7 +74,7 @@ pub fn Context::add_system(self : Context, prompt : String) -> Context {
 ///|
 /// 添加用户消息
 pub fn Context::add_user(self : Context, text : String) -> Context {
-  let new_msgs = self.messages.map(fn(msg) { msg })
+  let new_msgs = self.messages.copy()
   new_msgs.push(SdkMessage::new("user", text))
   { ..self, messages: new_msgs }
 }
@@ -82,7 +82,7 @@ pub fn Context::add_user(self : Context, text : String) -> Context {
 ///|
 /// 添加助手消息
 pub fn Context::add_assistant(self : Context, text : String) -> Context {
-  let new_msgs = self.messages.map(fn(msg) { msg })
+  let new_msgs = self.messages.copy()
   new_msgs.push(SdkMessage::new("assistant", text))
   { ..self, messages: new_msgs }
 }
@@ -101,7 +101,7 @@ pub fn Context::add_tool_result(
   content : String,
   is_error : Bool,
 ) -> Context {
-  let new_msgs = self.messages.map(fn(msg) { msg })
+  let new_msgs = self.messages.copy()
   new_msgs.push(SdkMessage::tool_result(tool_use_id, content, is_error))
   { ..self, messages: new_msgs }
 }
