@@ -1,12 +1,8 @@
 /** High-level Prism client API. */
 
-import type { PrismOptions, PrismEvent, Envelope } from "./types";
-import {
-  parseEvents,
-  parseEnvelope,
-  envelopeValueString,
-} from "./types";
-import { callWasm, loadWasm, PrismError } from "./wasm";
+import type { PrismOptions, Envelope } from "./types";
+import { parseEnvelope, envelopeValueString } from "./types";
+import { callWasm, loadWasm } from "./wasm";
 import { readFileSync } from "fs";
 
 /**
@@ -52,32 +48,31 @@ export class PrismClient {
   }
 
   // ── High-level SDK API ──
+  // Each returns an Envelope: {"value":…,"diagnostics":[…]}
 
   /** Encode a text request to provider JSON format. */
-  encodeRequest(provider: string, text: string, opts?: PrismOptions): string {
-    return callWasm("wasm_sdk_encode_req", provider, text);
+  encodeRequest(provider: string, text: string, opts?: PrismOptions): Envelope {
+    return parseEnvelope(callWasm("wasm_sdk_encode_req", provider, text));
   }
 
   /** Decode a provider JSON response to plain text. */
-  decodeResponse(provider: string, jsonStr: string): string {
-    return callWasm("wasm_sdk_decode_resp", provider, jsonStr);
+  decodeResponse(provider: string, jsonStr: string): Envelope {
+    return parseEnvelope(callWasm("wasm_sdk_decode_resp", provider, jsonStr));
   }
 
   /** Encode a text request for streaming. */
-  encodeStream(provider: string, text: string, opts?: PrismOptions): string {
-    return callWasm("wasm_sdk_encode_stream", provider, text);
+  encodeStream(provider: string, text: string, opts?: PrismOptions): Envelope {
+    return parseEnvelope(callWasm("wasm_sdk_encode_stream", provider, text));
   }
 
   /** Decode provider SSE text to PrismEvent list. */
-  decodeSSE(provider: string, sseStr: string): PrismEvent[] {
-    const result = callWasm("wasm_sdk_decode_sse", provider, sseStr);
-    return parseEvents(result);
+  decodeSSE(provider: string, sseStr: string): Envelope {
+    return parseEnvelope(callWasm("wasm_sdk_decode_sse", provider, sseStr));
   }
 
   /** Query a provider's capability declaration. */
-  capability(provider: string): Record<string, unknown> {
-    const result = callWasm("wasm_sdk_capability", provider);
-    return JSON.parse(result);
+  capability(provider: string): Envelope {
+    return parseEnvelope(callWasm("wasm_sdk_capability", provider));
   }
 
   /** Cross-provider protocol conversion (Transit Middleware), single call. */

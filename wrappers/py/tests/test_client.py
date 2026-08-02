@@ -66,12 +66,14 @@ class TestUnicodeRoundTrip:
 
     def test_emoji_round_trip(self, client: PrismClient):
         text = "你好😀🚀"
-        req = client.encode_request("openai", text)
+        env = client.encode_request("openai", text)
+        req = env.value_string()
         assert json.loads(req)["input"][0]["content"][0]["text"] == text
 
     def test_emoji_with_quotes_and_newlines(self, client: PrismClient):
         text = '你好"引号\n换行😀'
-        req = client.encode_request("openai", text)
+        env = client.encode_request("openai", text)
+        req = env.value_string()
         assert json.loads(req)["input"][0]["content"][0]["text"] == text
 
 

@@ -1,6 +1,7 @@
 package prism
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -124,9 +125,13 @@ func TestABIIntegration(t *testing.T) {
 	}
 	defer client.Close()
 
-	// 1. Capability returns the full declaration.
-	cap, err := client.Capability("openai")
+	// 1. Capability returns the full declaration (envelope value is an object).
+	capEnv, err := client.Capability("openai")
 	if err != nil {
+		t.Fatal(err)
+	}
+	var cap map[string]any
+	if err := json.Unmarshal(capEnv.Value, &cap); err != nil {
 		t.Fatal(err)
 	}
 	if cap["provider"] != "openai" {
@@ -139,8 +144,12 @@ func TestABIIntegration(t *testing.T) {
 		t.Error("expected capabilities in capability")
 	}
 
-	// 2. Request encoding produces OpenAI Responses JSON.
-	reqJSON, err := client.EncodeRequest("openai", "Hello", nil)
+	// 2. Request encoding produces OpenAI Responses JSON (envelope value string).
+	reqEnv, err := client.EncodeRequest("openai", "Hello", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reqJSON, err := reqEnv.ValueString()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +159,11 @@ func TestABIIntegration(t *testing.T) {
 
 	// 3. Response decoding extracts text.
 	respJSON := `{"id":"1","object":"chat.completion","model":"gpt-4o","choices":[{"index":0,"message":{"role":"assistant","content":"Hi"},"finish_reason":"stop"}]}`
-	text, err := client.DecodeResponse("openai-chat", respJSON)
+	respEnv, err := client.DecodeResponse("openai-chat", respJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text, err := respEnv.ValueString()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +173,11 @@ func TestABIIntegration(t *testing.T) {
 
 	// 4. Unicode, quotes and astral-plane characters (emoji) survive
 	// UTF-16 marshalling.
-	uniJSON, err := client.EncodeRequest("openai", "你好\"引号😀🚀", nil)
+	uniEnv, err := client.EncodeRequest("openai", "你好\"引号😀🚀", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	uniJSON, err := uniEnv.ValueString()
 	if err != nil {
 		t.Fatal(err)
 	}

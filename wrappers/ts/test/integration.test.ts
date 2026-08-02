@@ -7,6 +7,7 @@
  */
 import { strict as assert } from "node:assert";
 import { loadWasm, resetWasm, callWasm, PrismError } from "../src/wasm.ts";
+import { parseEnvelope, envelopeValueString } from "../src/types.ts";
 
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -35,39 +36,46 @@ const CHAT_RESPONSE = JSON.stringify({
   ],
 });
 
-// 1. Capability returns the full declaration, not just the provider name.
-const cap = JSON.parse(callWasm("wasm_sdk_capability", "openai"));
+// 1. Capability returns the full declaration inside an envelope.
+const capEnv = parseEnvelope(callWasm("wasm_sdk_capability", "openai"));
+const cap = capEnv.value as Record<string, unknown>;
 assert.equal(cap.provider, "openai");
 assert.ok("model_pattern" in cap);
 assert.ok("capabilities" in cap);
 
-// 2. Request encoding produces OpenAI Responses JSON.
-const req = JSON.parse(callWasm("wasm_sdk_encode_req", "openai", "Hello"));
+// 2. Request encoding produces OpenAI Responses JSON (envelope value string).
+const req = JSON.parse(
+  envelopeValueString(parseEnvelope(callWasm("wasm_sdk_encode_req", "openai", "Hello")))
+);
 assert.equal(req.model, "gpt-4o");
 assert.equal(req.input[0].type, "message");
 assert.equal(req.input[0].content[0].text, "Hello");
 
 // 3. Response decoding extracts the text.
 assert.equal(
-  callWasm("wasm_sdk_decode_resp", "openai-chat", CHAT_RESPONSE),
+  envelopeValueString(
+    parseEnvelope(callWasm("wasm_sdk_decode_resp", "openai-chat", CHAT_RESPONSE))
+  ),
   "Hi"
 );
 
-// 4. SSE decoding produces an event array.
-const events = JSON.parse(
+// 4. SSE decoding produces an event array (envelope value).
+const events = parseEnvelope(
   callWasm(
     "wasm_sdk_decode_sse",
     "openai-chat",
     'data: {"id":"1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":null}]}\n\ndata: [DONE]\n'
   )
-);
+).value as Record<string, unknown>[];
 assert.equal(events[0].type, "text_delta");
 assert.equal(events[0].text, "Hi");
 
 // 5. Unicode, quotes, newlines and astral-plane characters (emoji)
 // survive the UTF-16 marshalling.
 const uni = JSON.parse(
-  callWasm("wasm_sdk_encode_req", "openai", '你好"引号\n换行😀🚀')
+  envelopeValueString(
+    parseEnvelope(callWasm("wasm_sdk_encode_req", "openai", '你好"引号\n换行😀🚀'))
+  )
 );
 assert.equal(uni.input[0].content[0].text, '你好"引号\n换行😀🚀');
 

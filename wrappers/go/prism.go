@@ -73,43 +73,52 @@ func (c *Client) EventsToSSE(provider, eventsJson string) (*Envelope, error) {
 }
 
 // ── High-level SDK API ──
-// wasm_sdk_* returns raw values here; envelope-ization lands in Task 2.
+// Each returns an Envelope: {"value":…,"diagnostics":[…]} (Task 2, D5).
 
 // EncodeRequest encodes a text request to provider JSON format.
-func (c *Client) EncodeRequest(provider, text string, opts *Options) (string, error) {
-	return c.runtime.Call("wasm_sdk_encode_req", provider, text)
+func (c *Client) EncodeRequest(provider, text string, opts *Options) (*Envelope, error) {
+	result, err := c.runtime.Call("wasm_sdk_encode_req", provider, text)
+	if err != nil {
+		return nil, err
+	}
+	return parseEnvelope(result)
 }
 
 // DecodeResponse decodes a provider JSON response to plain text.
-func (c *Client) DecodeResponse(provider, jsonStr string) (string, error) {
-	return c.runtime.Call("wasm_sdk_decode_resp", provider, jsonStr)
+func (c *Client) DecodeResponse(provider, jsonStr string) (*Envelope, error) {
+	result, err := c.runtime.Call("wasm_sdk_decode_resp", provider, jsonStr)
+	if err != nil {
+		return nil, err
+	}
+	return parseEnvelope(result)
 }
 
 // EncodeStream encodes a text request for streaming.
-func (c *Client) EncodeStream(provider, text string, opts *Options) (string, error) {
-	return c.runtime.Call("wasm_sdk_encode_stream", provider, text)
+func (c *Client) EncodeStream(provider, text string, opts *Options) (*Envelope, error) {
+	result, err := c.runtime.Call("wasm_sdk_encode_stream", provider, text)
+	if err != nil {
+		return nil, err
+	}
+	return parseEnvelope(result)
 }
 
-// DecodeSSE decodes provider SSE text to Event list.
-func (c *Client) DecodeSSE(provider, sseStr string) ([]Event, error) {
+// DecodeSSE decodes provider SSE text into an Envelope whose value is a
+// JSON array of PrismEvents.
+func (c *Client) DecodeSSE(provider, sseStr string) (*Envelope, error) {
 	result, err := c.runtime.Call("wasm_sdk_decode_sse", provider, sseStr)
 	if err != nil {
 		return nil, err
 	}
-	return ParseEvents(result)
+	return parseEnvelope(result)
 }
 
 // Capability queries a provider's capability declaration.
-func (c *Client) Capability(provider string) (map[string]any, error) {
+func (c *Client) Capability(provider string) (*Envelope, error) {
 	result, err := c.runtime.Call("wasm_sdk_capability", provider)
 	if err != nil {
 		return nil, err
 	}
-	var cap map[string]any
-	if err := json.Unmarshal([]byte(result), &cap); err != nil {
-		return nil, newPrismError("parse capability: " + err.Error())
-	}
-	return cap, nil
+	return parseEnvelope(result)
 }
 
 // ── Transit conversion (single WASM call per direction) ──

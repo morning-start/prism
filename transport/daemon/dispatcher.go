@@ -35,6 +35,27 @@ func (p methodParams) strParam(key string) (string, *RPCError) {
 	return s, nil
 }
 
+// envelopeResult parses a backend envelope JSON string into the result
+// payload (D5: every result carries {"value":…,"diagnostics":[…]}).
+func envelopeResult(raw string) (map[string]any, *RPCError) {
+	var m map[string]any
+	if err := json.Unmarshal([]byte(raw), &m); err != nil {
+		return nil, domainError("invalid envelope: " + err.Error())
+	}
+	if _, ok := m["value"]; !ok {
+		return nil, domainError("envelope missing value")
+	}
+	if _, ok := m["diagnostics"]; !ok {
+		return nil, domainError("envelope missing diagnostics")
+	}
+	return m, nil
+}
+
+// wrapEnvelope builds an envelope around a plain value (list_providers, ping).
+func wrapEnvelope(value any) map[string]any {
+	return map[string]any{"value": value, "diagnostics": []any{}}
+}
+
 // ServeRPC dispatches a single JSON-RPC request to the backend.
 func ServeRPC(ctx context.Context, backend Backend, req *Request) *Response {
 	id := req.ID
@@ -53,12 +74,14 @@ func ServeRPC(ctx context.Context, backend Backend, req *Request) *Response {
 		return serveEncodeStream(ctx, backend, id, req.Params)
 	case "convert":
 		return serveConvert(ctx, backend, id, req.Params)
+	case "convert_stream":
+		return serveConvertStream(ctx, backend, id, req.Params)
 	case "list_providers":
-		return rpcResponse(id, backend.ListProviders())
+		return rpcResponse(id, wrapEnvelope(backend.ListProviders()))
 	case "capability":
 		return serveCapability(ctx, backend, id, req.Params)
 	case "ping":
-		return rpcResponse(id, backend.Ping())
+		return rpcResponse(id, wrapEnvelope(backend.Ping()))
 	default:
 		return rpcError(id, ErrMethod)
 	}
@@ -81,7 +104,11 @@ func serveEncodeRequest(ctx context.Context, backend Backend, id json.RawMessage
 	if err != nil {
 		return rpcError(id, domainError(err.Error()))
 	}
-	return rpcResponse(id, result)
+	env, rpcErr := envelopeResult(result)
+	if rpcErr != nil {
+		return rpcError(id, rpcErr)
+	}
+	return rpcResponse(id, env)
 }
 
 func serveDecodeResponse(ctx context.Context, backend Backend, id json.RawMessage, raw json.RawMessage) *Response {
@@ -101,7 +128,11 @@ func serveDecodeResponse(ctx context.Context, backend Backend, id json.RawMessag
 	if err != nil {
 		return rpcError(id, domainError(err.Error()))
 	}
-	return rpcResponse(id, result)
+	env, rpcErr := envelopeResult(result)
+	if rpcErr != nil {
+		return rpcError(id, rpcErr)
+	}
+	return rpcResponse(id, env)
 }
 
 func serveDecodeSSE(ctx context.Context, backend Backend, id json.RawMessage, raw json.RawMessage) *Response {
@@ -121,7 +152,11 @@ func serveDecodeSSE(ctx context.Context, backend Backend, id json.RawMessage, ra
 	if err != nil {
 		return rpcError(id, domainError(err.Error()))
 	}
-	return rpcResponse(id, json.RawMessage(result))
+	env, rpcErr := envelopeResult(result)
+	if rpcErr != nil {
+		return rpcError(id, rpcErr)
+	}
+	return rpcResponse(id, env)
 }
 
 func serveEncodeStream(ctx context.Context, backend Backend, id json.RawMessage, raw json.RawMessage) *Response {
@@ -141,7 +176,11 @@ func serveEncodeStream(ctx context.Context, backend Backend, id json.RawMessage,
 	if err != nil {
 		return rpcError(id, domainError(err.Error()))
 	}
-	return rpcResponse(id, result)
+	env, rpcErr := envelopeResult(result)
+	if rpcErr != nil {
+		return rpcError(id, rpcErr)
+	}
+	return rpcResponse(id, env)
 }
 
 func serveConvert(ctx context.Context, backend Backend, id json.RawMessage, raw json.RawMessage) *Response {
@@ -169,7 +208,39 @@ func serveConvert(ctx context.Context, backend Backend, id json.RawMessage, raw 
 	if err != nil {
 		return rpcError(id, domainError(err.Error()))
 	}
-	return rpcResponse(id, result)
+	env, rpcErr := envelopeResult(result)
+	if rpcErr != nil {
+		return rpcError(id, rpcErr)
+	}
+	return rpcResponse(id, env)
+}
+
+func serveConvertStream(ctx context.Context, backend Backend, id json.RawMessage, raw json.RawMessage) *Response {
+	params, rpcErr := parseParams(raw)
+	if rpcErr != nil {
+		return rpcError(id, rpcErr)
+	}
+	from, rpcErr := params.strParam("from_provider")
+	if rpcErr != nil {
+		return rpcError(id, rpcErr)
+	}
+	to, rpcErr := params.strParam("to_provider")
+	if rpcErr != nil {
+		return rpcError(id, rpcErr)
+	}
+	sse, rpcErr := params.strParam("sse")
+	if rpcErr != nil {
+		return rpcError(id, rpcErr)
+	}
+	result, err := backend.ConvertStream(ctx, from, to, sse)
+	if err != nil {
+		return rpcError(id, domainError(err.Error()))
+	}
+	env, rpcErr := envelopeResult(result)
+	if rpcErr != nil {
+		return rpcError(id, rpcErr)
+	}
+	return rpcResponse(id, env)
 }
 
 func serveCapability(ctx context.Context, backend Backend, id json.RawMessage, raw json.RawMessage) *Response {
@@ -185,5 +256,5 @@ func serveCapability(ctx context.Context, backend Backend, id json.RawMessage, r
 	if err != nil {
 		return rpcError(id, domainError(err.Error()))
 	}
-	return rpcResponse(id, result)
+	return rpcResponse(id, wrapEnvelope(result))
 }

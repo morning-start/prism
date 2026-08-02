@@ -11,11 +11,6 @@
 /// === 辅助 ===
 
 ///|
-fn to_error(e : String) -> String {
-  "{\"error\":\"" + e + "\"}"
-}
-
-///|
 /// 错误信封：{"error":"...","diagnostics":[]}（与成功信封的诊断字段一致）
 fn wasm_envelope_err(e : String) -> String {
   "{\"error\":\"" + e + "\",\"diagnostics\":[]}"
@@ -152,54 +147,66 @@ pub fn wasm_events_to_sse(provider : String, json_str : String) -> String {
 }
 
 ///|
+/// 无诊断信封：{"value":...,"diagnostics":[]}（形状与带诊断信封一致）
+fn wasm_envelope(value : Json) -> String {
+  let fields : Map[String, Json] = {
+    "value": value,
+    "diagnostics": Json::array([]),
+  }
+  Json::object(fields).stringify()
+}
+
+///|
 /// === SDK 层 API ===
 
 ///|
-/// 对文本请求进行编码（provider JSON 出），Host 发送 HTTP
+/// 对文本请求进行编码（provider JSON 出，带诊断信封），Host 发送 HTTP
 pub fn wasm_sdk_encode_request(provider : String, text : String) -> String {
   let prism = @sdk.Prism::new().with_provider(provider)
-  match prism.encode_request(text, @sdk.PrismOptions::default()) {
-    Ok(v) => v
-    Err(e) => to_error(e)
+  match
+    prism.encode_request_with_diagnostics(text, @sdk.PrismOptions::default()) {
+    Ok(cr) => cr.envelope_json(Json::string(cr.value())).stringify()
+    Err(e) => wasm_envelope_err(e)
   }
 }
 
 ///|
-/// 解码提供商响应 JSON → 纯文本
+/// 解码提供商响应 JSON → 纯文本（带诊断信封）
 pub fn wasm_sdk_decode_response(
   provider : String,
   resp_json : String,
 ) -> String {
   let prism = @sdk.Prism::new().with_provider(provider)
-  match prism.decode_response(resp_json) {
-    Ok(v) => v
-    Err(e) => to_error(e)
+  match prism.decode_response_with_diagnostics(resp_json) {
+    Ok(cr) => cr.envelope_json(Json::string(cr.value().get_text())).stringify()
+    Err(e) => wasm_envelope_err(e)
   }
 }
 
 ///|
-/// 对文本请求进行流式编码（provider JSON 出），Host 发送 HTTP
+/// 对文本请求进行流式编码（provider JSON 出，无诊断源 → diagnostics: []）
 pub fn wasm_sdk_encode_stream(provider : String, text : String) -> String {
   let prism = @sdk.Prism::new().with_provider(provider)
   match prism.encode_stream_request(text, @sdk.PrismOptions::default()) {
-    Ok(v) => v
-    Err(e) => to_error(e)
+    Ok(v) => wasm_envelope(Json::string(v))
+    Err(e) => wasm_envelope_err(e)
   }
 }
 
 ///|
-/// 解码提供商 SSE → PrismEvent JSON 数组
+/// 解码提供商 SSE → PrismEvent JSON 数组（无诊断源 → diagnostics: []）
 pub fn wasm_sdk_decode_sse(provider : String, sse_str : String) -> String {
   let prism = @sdk.Prism::new().with_provider(provider)
   match prism.decode_sse(sse_str) {
     Ok(events) => {
-      let parts : Array[String] = []
-      for ev in events {
-        parts.push(prism_event_json(ev))
-      }
-      "[" + parts.join(",") + "]"
+      let json_arr : Array[Json] = events.map(fn(ev) {
+        @json.parse(prism_event_json(ev)) catch {
+          _ => Json::null()
+        }
+      })
+      wasm_envelope(Json::array(json_arr))
     }
-    Err(e) => to_error(e)
+    Err(e) => wasm_envelope_err(e)
   }
 }
 
@@ -264,12 +271,12 @@ fn json_escape_sdk(s : String) -> String {
 }
 
 ///|
-/// 查询 provider 能力声明
+/// 查询 provider 能力声明（无诊断源 → diagnostics: []）
 pub fn wasm_sdk_capability(provider : String) -> String {
   let prism = @sdk.Prism::new().with_provider(provider)
   match prism.capability(provider) {
-    Some(c) => c.to_json().stringify()
-    None => to_error("unknown provider")
+    Some(c) => wasm_envelope(c.to_json())
+    None => wasm_envelope_err("unknown provider")
   }
 }
 

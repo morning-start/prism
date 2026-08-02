@@ -11,14 +11,10 @@ import json
 from pathlib import Path
 from typing import Optional
 
-from prism_wasm.errors import PrismError
 from prism_wasm.types import (
     Envelope,
-    FinishReason,
     PrismOptions,
-    PrismEvent,
     parse_envelope,
-    parse_events,
 )
 from prism_wasm.wasm import WasmRuntime
 
@@ -77,7 +73,7 @@ class PrismClient:
         provider: str,
         text: str,
         opts: Optional[PrismOptions] = None,
-    ) -> str:
+    ) -> Envelope:
         """Encode a text request to provider JSON format.
 
         Args:
@@ -86,14 +82,15 @@ class PrismClient:
             opts: Optional request options (model, temperature, etc.).
 
         Returns:
-            Provider-specific JSON request string.
+            Envelope with value = provider-specific JSON request string and
+            diagnostics from schema validation.
 
         Raises:
             PrismError: If encoding fails.
         """
-        return self._wasm.call("wasm_sdk_encode_req", provider, text)
+        return parse_envelope(self._wasm.call("wasm_sdk_encode_req", provider, text))
 
-    def decode_response(self, provider: str, json_str: str) -> str:
+    def decode_response(self, provider: str, json_str: str) -> Envelope:
         """Decode a provider JSON response to plain text.
 
         Args:
@@ -101,19 +98,21 @@ class PrismClient:
             json_str: Provider-specific JSON response.
 
         Returns:
-            Extracted text content.
+            Envelope with value = extracted text string and diagnostics.
 
         Raises:
             PrismError: If decoding fails.
         """
-        return self._wasm.call("wasm_sdk_decode_resp", provider, json_str)
+        return parse_envelope(
+            self._wasm.call("wasm_sdk_decode_resp", provider, json_str)
+        )
 
     def encode_stream(
         self,
         provider: str,
         text: str,
         opts: Optional[PrismOptions] = None,
-    ) -> str:
+    ) -> Envelope:
         """Encode a text request for streaming.
 
         The result is provider JSON with stream=true.
@@ -124,14 +123,16 @@ class PrismClient:
             opts: Optional request options.
 
         Returns:
-            Provider-specific streaming JSON request.
+            Envelope with value = provider-specific streaming JSON request.
 
         Raises:
             PrismError: If encoding fails.
         """
-        return self._wasm.call("wasm_sdk_encode_stream", provider, text)
+        return parse_envelope(
+            self._wasm.call("wasm_sdk_encode_stream", provider, text)
+        )
 
-    def decode_sse(self, provider: str, sse_str: str) -> list[PrismEvent]:
+    def decode_sse(self, provider: str, sse_str: str) -> Envelope:
         """Decode provider SSE text to PrismEvent list.
 
         Args:
@@ -139,24 +140,25 @@ class PrismClient:
             sse_str: Raw SSE text from the provider.
 
         Returns:
-            List of PrismEvent objects (TextDelta, ToolCall, Finish, etc.).
+            Envelope with value = list of PrismEvent objects
+            (TextDelta, ToolCall, Finish, etc.).
 
         Raises:
             PrismError: If decoding fails.
         """
-        result = self._wasm.call("wasm_sdk_decode_sse", provider, sse_str)
-        return parse_events(result)
+        return parse_envelope(self._wasm.call("wasm_sdk_decode_sse", provider, sse_str))
 
-    def capability(self, provider: str) -> dict:
+    def capability(self, provider: str) -> Envelope:
         """Query a provider's capability declaration.
 
         Args:
             provider: Provider name.
 
         Returns:
-            Capability dict with fields like provider, model_pattern, etc.
+            Envelope with value = capability dict with fields like provider,
+            model_pattern, etc.
         """
-        return self._wasm.call_json("wasm_sdk_capability", provider)
+        return parse_envelope(self._wasm.call("wasm_sdk_capability", provider))
 
     def convert(
         self,
@@ -244,17 +246,17 @@ class AsyncPrismClient:
         provider: str,
         text: str,
         opts: Optional[PrismOptions] = None,
-    ) -> str:
+    ) -> Envelope:
         return await asyncio.to_thread(self._sync_client.encode_request, provider, text, opts)
 
-    async def decode_response(self, provider: str, json_str: str) -> str:
+    async def decode_response(self, provider: str, json_str: str) -> Envelope:
         return await asyncio.to_thread(self._sync_client.decode_response, provider, json_str)
 
-    async def decode_sse(self, provider: str, sse_str: str) -> list[PrismEvent]:
+    async def decode_sse(self, provider: str, sse_str: str) -> Envelope:
         return await asyncio.to_thread(self._sync_client.decode_sse, provider, sse_str)
 
     async def list_providers(self) -> list[str]:
         return await asyncio.to_thread(self._sync_client.list_providers)
 
-    async def capability(self, provider: str) -> dict:
+    async def capability(self, provider: str) -> Envelope:
         return await asyncio.to_thread(self._sync_client.capability, provider)
