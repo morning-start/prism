@@ -35,13 +35,13 @@ fn parse_part(
       // 检查是否为 thought part
       match @internal.obj_get(part, "thought") {
         Some(True) => {
-          // thought:true → 同时发 Text 和 Thinking
+          // thought:true → 仅发 Thinking，不伪装成文本
           let th = @lux.LucentThinking::visible(t, None)
-          [@lux.LucentContent::text(t), @lux.Thinking(th)]
+          [@lux.Thinking(th)]
         }
         Some(String(_)) => {
           let th = @lux.LucentThinking::visible(t, None)
-          [@lux.LucentContent::text(t), @lux.Thinking(th)]
+          [@lux.Thinking(th)]
         }
         _ => [@lux.LucentContent::text(t)]
       }
@@ -325,7 +325,11 @@ fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
 /// 解析 generationConfig → LucentOptions
 fn parse_generation_config(jv : Json) -> @lux.LucentOptions {
   match @internal.obj_get(jv, "generationConfig") {
-    Some(gc) =>
+    Some(gc) => {
+      let extras = @internal.collect_extra_fields(gc, [
+        "temperature", "topP", "topK", "maxOutputTokens", "stopSequences", "candidateCount",
+        "thinkingConfig",
+      ])
       @lux.LucentOptions::new(
         @internal.field_num(gc, "temperature"),
         @internal.field_num(gc, "topP"),
@@ -351,8 +355,9 @@ fn parse_generation_config(jv : Json) -> @lux.LucentOptions {
         None,
         None,
         None,
-        None,
+        extras,
       )
+    }
     None => @lux.LucentOptions::default()
   }
 }
@@ -445,6 +450,7 @@ pub fn lux_request_to_gemini(
   req : @lux.LucentRequest,
 ) -> Result[@lux.ConversionResult[String], String] {
   let parts : Array[String] = []
+  let diagnostics : Array[@lux.ConversionDiagnostic] = []
   // model 在 Gemini 中通过端点路径传递，非 JSON 体内，但仍保留以备用
   parts.push("\"model\":\"" + @internal.json_escape(req.model) + "\"")
   // systemInstruction
@@ -657,10 +663,34 @@ pub fn lux_request_to_gemini(
       }
     None => ()
   }
+  // store：Gemini 无原生 store 字段 → Unsupported 诊断
+  match opts.store {
+    Some(_) =>
+      diagnostics.push(
+        @lux.ConversionDiagnostic::new(
+          "options.store",
+          @lux.Unsupported,
+          Some("gemini has no store field"),
+        ),
+      )
+    None => ()
+  }
+  // extras：合并进 generationConfig
+  match opts.extras {
+    Some(m) =>
+      for k, v in m {
+        gc_parts.push("\"" + @internal.json_escape(k) + "\":" + v.stringify())
+      }
+    None => ()
+  }
   if gc_parts.length() > 0 {
     parts.push("\"generationConfig\":{" + gc_parts.join(",") + "}")
   }
-  Ok(@lux.ConversionResult::new("{" + parts.join(",") + "}"))
+  let mut result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
+  for d in diagnostics {
+    result = result.with_diagnostic(d)
+  }
+  Ok(result)
 }
 
 ///|
@@ -950,8 +980,32 @@ pub fn gemini_sse_to_events(
                         }
                         None => ()
                       }
-                      // thought marker（仅检查是否为 thought，不产生额外事件）
-                      let _thought = @internal.obj_get(parts[j], "thought")
+                      // thought part → 独立 Thinking 块（不静默丢弃，不伪装成 Text）
+                      match @internal.obj_get(parts[j], "thought") {
+                        Some(True) =>
+                          match @internal.field_str(parts[j], "text") {
+                            Some(t) => {
+                              if has_text_block {
+                                events.push(@lux.BlockEnd(text_block_index))
+                                has_text_block = false
+                              }
+                              text_block_index = text_block_index + 1
+                              events.push(
+                                @lux.BlockStart(text_block_index, @lux.Thinking),
+                              )
+                              events.push(
+                                @lux.BlockDelta(
+                                  text_block_index,
+                                  @lux.LucentBlockDelta::thinking_delta(t),
+                                ),
+                              )
+                              events.push(@lux.BlockEnd(text_block_index))
+                              text_block_index = text_block_index + 1
+                            }
+                            None => ()
+                          }
+                        _ => ()
+                      }
                       j = j + 1
                     }
                   }

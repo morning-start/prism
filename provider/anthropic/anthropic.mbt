@@ -321,6 +321,10 @@ pub fn anthropic_to_lux_request(
     _ => None
   }
   let reasoning = parse_reasoning(jv)
+  let extras = @internal.collect_extra_fields(jv, [
+    "model", "system", "messages", "tools", "tool_choice", "temperature", "top_p",
+    "top_k", "max_tokens", "stream", "stop_sequences", "metadata", "thinking",
+  ])
   let opts = @lux.LucentOptions::new(
     temperature,
     top_p,
@@ -332,7 +336,7 @@ pub fn anthropic_to_lux_request(
     None,
     None,
     None,
-    None,
+    extras,
   )
   Ok(
     @lux.ConversionResult::new(
@@ -710,6 +714,26 @@ pub fn lux_request_to_anthropic(
       }
       parts.push("\"metadata\":{" + fields.join(",") + "}")
     }
+    None => ()
+  }
+  // store：Anthropic 无原生 store 字段 → Unsupported 诊断
+  match opts.store {
+    Some(_) =>
+      diagnostics.push(
+        @lux.ConversionDiagnostic::new(
+          "options.store",
+          @lux.Unsupported,
+          Some("anthropic has no store field"),
+        ),
+      )
+    None => ()
+  }
+  // extras：合并进请求 JSON 顶层
+  match opts.extras {
+    Some(m) =>
+      for k, v in m {
+        parts.push("\"" + json_escape(k) + "\":" + v.stringify())
+      }
     None => ()
   }
   let mut result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
