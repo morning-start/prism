@@ -1,14 +1,15 @@
 {
   "pipeline": "development",
-  "phase": "implement",
-  "phase_name": "phase2-sdk-convergence",
-  "plan_file": "docs/tasks/2026-08-02-phase2-sdk-convergence-plan.md",
+  "phase": "plan",
+  "phase_name": "phase3-transport-http",
+  "plan_file": "docs/tasks/2026-08-02-phase3-transport-plan.md",
   "progress": {
     "total_tasks": 4,
-    "completed_tasks": 4,
-    "current_task": 4
+    "completed_tasks": 0,
+    "current_task": 0
   },
-  "last_verification": "2026-08-02T12:00:00Z",
-  "last_updated": "2026-08-02T12:00:00Z",
-  "next": "plan:phase3-transport"
+  "last_verification": "2026-08-02T01:05:41Z",
+  "last_updated": "2026-08-02T01:05:41Z",
+  "next": "implement:task0-export-alignment",
+  "notes": "Phase 3 scoped to Task 0-3 (transport fidelity repair + HTTP SSE). UDS/Named Pipe/WebSocket/client SDKs deferred to phase3b. Known-red baseline: transport/daemon TestServeConvert fails against a fresh `moon build --target wasm` artifact (envelope break, plan gaps A/B) — expected to go green in Task 1."
 }
