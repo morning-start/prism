@@ -15,6 +15,44 @@ export type FinishReason =
   | "content_filter"
   | "error";
 
+/** A conversion diagnostic (lux.ConversionDiagnostic). */
+export interface Diagnostic {
+  field: string;
+  status: string;
+  detail?: string;
+}
+
+/** Conversion result envelope: {"value":…,"diagnostics":[…]}.
+ *
+ * `value` is the raw JSON payload: an object in the IR direction, a JSON
+ * string (quoted) in the provider direction.
+ */
+export interface Envelope {
+  value: unknown;
+  diagnostics: Diagnostic[];
+}
+
+/** Parse a WASM result string into an Envelope. */
+export function parseEnvelope(raw: string): Envelope {
+  const obj = JSON.parse(raw) as Record<string, unknown>;
+  const diags = Array.isArray(obj.diagnostics)
+    ? (obj.diagnostics as Record<string, unknown>[]).map((d) => ({
+        field: String(d.field ?? ""),
+        status: String(d.status ?? ""),
+        ...(d.detail !== undefined ? { detail: String(d.detail) } : {}),
+      }))
+    : [];
+  return { value: obj.value, diagnostics: diags };
+}
+
+/** Unwrap envelope.value when it is a JSON string (provider direction). */
+export function envelopeValueString(env: Envelope): string {
+  if (typeof env.value !== "string") {
+    throw new Error(`envelope value is not a JSON string: ${JSON.stringify(env.value)}`);
+  }
+  return env.value;
+}
+
 /** A text delta event. */
 export interface TextDeltaEvent {
   type: "text_delta";

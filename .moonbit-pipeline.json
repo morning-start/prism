@@ -5,11 +5,11 @@
   "plan_file": "docs/tasks/2026-08-02-phase3-transport-plan.md",
   "progress": {
     "total_tasks": 4,
-    "completed_tasks": 1,
-    "current_task": 1
+    "completed_tasks": 2,
+    "current_task": 2
   },
-  "last_verification": "2026-08-02T02:00:00Z",
-  "last_updated": "2026-08-02T02:00:00Z",
-  "next": "implement:task1-wrapper-envelope",
-  "notes": "Phase 3 scoped to Task 0-3 (transport fidelity repair + HTTP SSE). Task 0 DONE: 15 exports live (wasm_convert_req/resp/stream + wasm_list_providers), freshness gate + export-surface test added, loadBackend skip->fail, wasmExportMap identity layer removed. Known-red baseline: transport/daemon TestServeConvert still fails with '-32000 missing required field schema_version' (envelope break, plan gaps A/B) — Task 1 to fix."
+  "last_verification": "2026-08-02T02:25:00Z",
+  "last_updated": "2026-08-02T02:25:00Z",
+  "next": "implement:task2-jsonrpc-envelope",
+  "notes": "Phase 3 scoped to Task 0-3 (transport fidelity repair + HTTP SSE). Task 1 DONE: wrappers parse Envelope ({value,diagnostics}); Convert/ConvertStream single-call via wasm_convert_*; ListProviders from registry; py/ts synced; bundled prism.wasm refreshed. TestServeConvert green. Known-red cleared."
 }

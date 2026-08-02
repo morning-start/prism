@@ -29,6 +29,10 @@ _WASM_EXPORT_MAP: dict[str, str] = {
     "wasm_sdk_encode_stream": "wasm_sdk_encode_stream",
     "wasm_sdk_decode_sse": "wasm_sdk_decode_sse",
     "wasm_sdk_capability": "wasm_sdk_capability",
+    "wasm_convert_req": "wasm_convert_req",
+    "wasm_convert_resp": "wasm_convert_resp",
+    "wasm_convert_stream": "wasm_convert_stream",
+    "wasm_list_providers": "wasm_list_providers",
 }
 
 

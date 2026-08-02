@@ -52,13 +52,19 @@ func (b *WASMBackend) EncodeStream(ctx context.Context, provider, text string) (
 }
 
 func (b *WASMBackend) Convert(ctx context.Context, from, to, direction, payload string) (string, error) {
-	return b.client.Convert(from, to, direction, payload)
+	env, err := b.client.Convert(from, to, direction, payload)
+	if err != nil {
+		return "", err
+	}
+	return env.ValueString()
 }
 
 func (b *WASMBackend) ListProviders() []string {
-	// ListProviders is currently a static registry mirror in wrappers/go;
-	// it matches the seven registered adapters.
-	return b.client.ListProviders()
+	names, err := b.client.ListProviders()
+	if err != nil {
+		return nil
+	}
+	return names
 }
 
 func (b *WASMBackend) Capability(ctx context.Context, provider string) (map[string]any, error) {

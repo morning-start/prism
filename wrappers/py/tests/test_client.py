@@ -36,11 +36,11 @@ class TestWasmExports:
     """Verify all expected WASM exports are present."""
 
     def test_all_exports_found(self, client: PrismClient):
-        """All 11 wasm_* exports were resolved during loading."""
+        """All 15 wasm_* exports were resolved during loading."""
         runtime = client._wasm
         for py_name, wasm_name in _WASM_EXPORT_MAP.items():
             assert py_name in runtime._exports, f"Missing export: {py_name}"
-        assert len(runtime._exports) == 11
+        assert len(runtime._exports) == 15
 
 
 class TestListProviders:

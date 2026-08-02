@@ -13,9 +13,11 @@ from typing import Optional
 
 from prism_wasm.errors import PrismError
 from prism_wasm.types import (
+    Envelope,
     FinishReason,
     PrismOptions,
     PrismEvent,
+    parse_envelope,
     parse_events,
 )
 from prism_wasm.wasm import WasmRuntime
@@ -24,7 +26,7 @@ from prism_wasm.wasm import WasmRuntime
 class PrismClient:
     """Synchronous Prism client.
 
-    Wraps the 11 WASM exports into a clean Python API.
+    Wraps the 15 WASM exports into a clean Python API.
     """
 
     def __init__(self, wasm_source: bytes | str | Path) -> None:
@@ -36,30 +38,37 @@ class PrismClient:
         self._wasm = WasmRuntime.load(wasm_source)
 
     # ── Low-level IR conversion ──
+    # Each returns an Envelope: {"value":…,"diagnostics":[…]}
 
-    def to_lux_request(self, provider: str, json_str: str) -> str:
+    def to_lux_request(self, provider: str, json_str: str) -> Envelope:
         """Convert provider JSON request to LucentRequest JSON."""
-        return self._wasm.call("wasm_to_lux_req", provider, json_str)
+        return parse_envelope(self._wasm.call("wasm_to_lux_req", provider, json_str))
 
-    def lux_request_to_provider(self, provider: str, lux_json: str) -> str:
+    def lux_request_to_provider(self, provider: str, lux_json: str) -> Envelope:
         """Convert LucentRequest JSON to provider JSON request."""
-        return self._wasm.call("wasm_lux_req_to_provider", provider, lux_json)
+        return parse_envelope(
+            self._wasm.call("wasm_lux_req_to_provider", provider, lux_json)
+        )
 
-    def to_lux_response(self, provider: str, json_str: str) -> str:
+    def to_lux_response(self, provider: str, json_str: str) -> Envelope:
         """Convert provider JSON response to LucentResponse JSON."""
-        return self._wasm.call("wasm_to_lux_resp", provider, json_str)
+        return parse_envelope(self._wasm.call("wasm_to_lux_resp", provider, json_str))
 
-    def lux_response_to_provider(self, provider: str, lux_json: str) -> str:
+    def lux_response_to_provider(self, provider: str, lux_json: str) -> Envelope:
         """Convert LucentResponse JSON to provider JSON response."""
-        return self._wasm.call("wasm_lux_resp_to_provider", provider, lux_json)
+        return parse_envelope(
+            self._wasm.call("wasm_lux_resp_to_provider", provider, lux_json)
+        )
 
-    def sse_to_events(self, provider: str, sse_str: str) -> str:
+    def sse_to_events(self, provider: str, sse_str: str) -> Envelope:
         """Convert provider SSE text to StreamEvent JSON array."""
-        return self._wasm.call("wasm_sse_to_events", provider, sse_str)
+        return parse_envelope(self._wasm.call("wasm_sse_to_events", provider, sse_str))
 
-    def events_to_sse(self, provider: str, events_json: str) -> str:
+    def events_to_sse(self, provider: str, events_json: str) -> Envelope:
         """Convert StreamEvent JSON array to provider SSE text."""
-        return self._wasm.call("wasm_events_to_sse", provider, events_json)
+        return parse_envelope(
+            self._wasm.call("wasm_events_to_sse", provider, events_json)
+        )
 
     # ── High-level SDK API ──
 
@@ -159,9 +168,9 @@ class PrismClient:
         """Cross-provider protocol conversion (Transit Middleware).
 
         Converts a request/response from one provider format to another
-        via the Lucent IR:
+        via the Lucent IR, in a single WASM call:
 
-            from_provider JSON  ──[decode]──►  Lucent IR  ──[encode]──►  to_provider JSON
+            from_provider JSON  ──[wasm_convert_req/resp]──►  to_provider JSON
 
         Args:
             from_provider: Source provider name.
@@ -176,41 +185,40 @@ class PrismClient:
             PrismError: If conversion fails.
         """
         if direction == "request":
-            lux_json = self.to_lux_request(from_provider, payload)
-            # Check if to_lux_request returned an error
-            if lux_json.startswith('{"error":'):
-                raise PrismError(lux_json)
-            result = self.lux_request_to_provider(to_provider, lux_json)
+            result = self._wasm.call("wasm_convert_req", from_provider, payload, to_provider)
         elif direction == "response":
-            lux_json = self.to_lux_response(from_provider, payload)
-            if lux_json.startswith('{"error":'):
-                raise PrismError(lux_json)
-            result = self.lux_response_to_provider(to_provider, lux_json)
+            result = self._wasm.call("wasm_convert_resp", from_provider, payload, to_provider)
         else:
             raise ValueError(f"Invalid direction: {direction!r}, expected 'request' or 'response'")
+        env = parse_envelope(result)
+        return env.value_string()
 
-        if result.startswith('{"error":'):
-            raise PrismError(result)
-        return result
+    def convert_stream(self, from_provider: str, to_provider: str, sse_str: str) -> str:
+        """Convert streamed SSE text from one provider format to another.
+
+        Args:
+            from_provider: Source provider name.
+            to_provider: Target provider name.
+            sse_str: Raw SSE text from the source provider.
+
+        Returns:
+            Target provider SSE text.
+
+        Raises:
+            PrismError: If conversion fails.
+        """
+        env = parse_envelope(
+            self._wasm.call("wasm_convert_stream", from_provider, sse_str, to_provider)
+        )
+        return env.value_string()
 
     def list_providers(self) -> list[str]:
-        """List all registered provider names.
+        """List all registered provider names from the WASM registry.
 
         Returns:
             List of provider name strings.
         """
-        # The wasm_sdk_capability function can be used to check providers.
-        # A more complete list comes from the internal registry.
-        # These are the known providers from the MoonBit codebase:
-        return [
-            "openai",
-            "openai-chat",
-            "anthropic",
-            "gemini",
-            "google-vertex",
-            "azure-openai",
-            "openai-codex",
-        ]
+        return self._wasm.call_json("wasm_list_providers")
 
     def ping(self) -> str:
         """Health check.

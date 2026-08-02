@@ -8,11 +8,27 @@ import (
 
 func loadWasm(t *testing.T) []byte {
 	t.Helper()
-	data, err := os.ReadFile("prism.wasm")
+	// Prefer the fresh classic-wasm build; fall back to the bundled prism.wasm.
+	data, err := os.ReadFile("../../_build/wasm/debug/build/cmd/main/main.wasm")
+	if err == nil {
+		return data
+	}
+	data, err = os.ReadFile("prism.wasm")
 	if err != nil {
-		t.Skip("prism.wasm not found, skipping WASM tests")
+		t.Skipf("prism.wasm not found, skipping WASM tests")
 	}
 	return data
+}
+
+func loadClient(t *testing.T) *Client {
+	t.Helper()
+	data := loadWasm(t)
+	client, err := New(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+	return client
 }
 
 func TestNew(t *testing.T) {
@@ -25,14 +41,11 @@ func TestNew(t *testing.T) {
 }
 
 func TestListProviders(t *testing.T) {
-	data := loadWasm(t)
-	client, err := New(data)
+	client := loadClient(t)
+	providers, err := client.ListProviders()
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer client.Close()
-
-	providers := client.ListProviders()
 	if len(providers) == 0 {
 		t.Fatal("expected at least one provider")
 	}
@@ -158,5 +171,72 @@ func TestABIIntegration(t *testing.T) {
 	// 5. Unknown provider surfaces as an error.
 	if _, err := client.Capability("no-such-provider"); err == nil {
 		t.Error("expected error for unknown provider")
+	}
+}
+
+// buildLuxRequestWithStore 由 IR 构造器经真实解码路径产出含 options.store 的
+// LucentRequest JSON（不手写 JSON，from_json 对字段严格）。
+func buildLuxRequestWithStore(t *testing.T, c *Client) string {
+	t.Helper()
+	// openai-chat 解码带 store:true 的协议 JSON → IR（chat.mbt parse_options 读 store）。
+	env, err := c.ToLuxRequest("openai-chat",
+		`{"model":"gpt-4o","messages":[{"role":"user","content":"Hi"}],"store":true}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// IR 方向：value 是 LucentRequest 对象（非 JSON 字符串），直接取原始 JSON。
+	ir := string(env.Value)
+	if !strings.Contains(ir, `"store"`) {
+		t.Fatalf("expected store in produced IR, got %s", ir)
+	}
+	return ir
+}
+
+// Convert 必须单次 WASM 调用，且返回可直接发给厂商的 JSON（非信封）
+func TestConvertRequestSingleCall(t *testing.T) {
+	c := loadClient(t)
+	payload := `{"model":"gpt-4o","input":[{"type":"message","role":"user",` +
+		`"content":[{"type":"input_text","text":"Hi"}]}]}`
+	env, err := c.Convert("openai", "anthropic", "request", payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := env.ValueString()
+	if err != nil || !strings.Contains(out, `"messages"`) {
+		t.Errorf("expected anthropic request, got %q (%v)", out, err)
+	}
+	if strings.Contains(out, `"diagnostics"`) {
+		t.Error("value must not be an envelope — envelope was double-wrapped")
+	}
+}
+
+// 诊断必须透出到 Go 侧（Phase 1 契约不得止步于 WASM 边界）
+func TestDiagnosticsSurfaced(t *testing.T) {
+	c := loadClient(t)
+	luxReq := buildLuxRequestWithStore(t, c)
+	env, err := c.LuxRequestToProvider("anthropic", luxReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(env.Diagnostics) == 0 {
+		t.Fatal("expected unsupported diagnostic for options.store")
+	}
+	if env.Diagnostics[0].Status != "unsupported" {
+		t.Errorf("status = %q, want unsupported", env.Diagnostics[0].Status)
+	}
+	if env.Diagnostics[0].Field != "options.store" {
+		t.Errorf("field = %q, want options.store", env.Diagnostics[0].Field)
+	}
+}
+
+// 注册表真值，而非硬编码
+func TestListProvidersFromRegistry(t *testing.T) {
+	c := loadClient(t)
+	got, err := c.ListProviders()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) < 7 {
+		t.Errorf("got %d providers, want >= 7 from registry", len(got))
 	}
 }

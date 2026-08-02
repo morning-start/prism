@@ -22,32 +22,58 @@ func (c *Client) Close() error {
 }
 
 // ── Low-level IR conversion ──
+// Each returns an Envelope: {"value":…,"diagnostics":[…]} (Phase 1 contract).
 
-func (c *Client) ToLuxRequest(provider, jsonStr string) (string, error) {
-	return c.runtime.Call("wasm_to_lux_req", provider, jsonStr)
+func (c *Client) ToLuxRequest(provider, jsonStr string) (*Envelope, error) {
+	result, err := c.runtime.Call("wasm_to_lux_req", provider, jsonStr)
+	if err != nil {
+		return nil, err
+	}
+	return parseEnvelope(result)
 }
 
-func (c *Client) LuxRequestToProvider(provider, luxJson string) (string, error) {
-	return c.runtime.Call("wasm_lux_req_to_provider", provider, luxJson)
+func (c *Client) LuxRequestToProvider(provider, luxJson string) (*Envelope, error) {
+	result, err := c.runtime.Call("wasm_lux_req_to_provider", provider, luxJson)
+	if err != nil {
+		return nil, err
+	}
+	return parseEnvelope(result)
 }
 
-func (c *Client) ToLuxResponse(provider, jsonStr string) (string, error) {
-	return c.runtime.Call("wasm_to_lux_resp", provider, jsonStr)
+func (c *Client) ToLuxResponse(provider, jsonStr string) (*Envelope, error) {
+	result, err := c.runtime.Call("wasm_to_lux_resp", provider, jsonStr)
+	if err != nil {
+		return nil, err
+	}
+	return parseEnvelope(result)
 }
 
-func (c *Client) LuxResponseToProvider(provider, luxJson string) (string, error) {
-	return c.runtime.Call("wasm_lux_resp_to_provider", provider, luxJson)
+func (c *Client) LuxResponseToProvider(provider, luxJson string) (*Envelope, error) {
+	result, err := c.runtime.Call("wasm_lux_resp_to_provider", provider, luxJson)
+	if err != nil {
+		return nil, err
+	}
+	return parseEnvelope(result)
 }
 
-func (c *Client) SSEToEvents(provider, sseStr string) (string, error) {
-	return c.runtime.Call("wasm_sse_to_events", provider, sseStr)
+func (c *Client) SSEToEvents(provider, sseStr string) (*Envelope, error) {
+	result, err := c.runtime.Call("wasm_sse_to_events", provider, sseStr)
+	if err != nil {
+		return nil, err
+	}
+	return parseEnvelope(result)
 }
 
-func (c *Client) EventsToSSE(provider, eventsJson string) (string, error) {
-	return c.runtime.Call("wasm_events_to_sse", provider, eventsJson)
+func (c *Client) EventsToSSE(provider, eventsJson string) (*Envelope, error) {
+	result, err := c.runtime.Call("wasm_events_to_sse", provider, eventsJson)
+	if err != nil {
+		return nil, err
+	}
+	return parseEnvelope(result)
 }
 
 // ── High-level SDK API ──
+// wasm_sdk_* returns raw values here; envelope-ization lands in Task 2.
 
 // EncodeRequest encodes a text request to provider JSON format.
 func (c *Client) EncodeRequest(provider, text string, opts *Options) (string, error) {
@@ -86,33 +112,49 @@ func (c *Client) Capability(provider string) (map[string]any, error) {
 	return cap, nil
 }
 
-// Convert performs cross-provider protocol conversion.
-func (c *Client) Convert(from, to, direction, payload string) (string, error) {
-	if direction == "request" {
-		lux, err := c.ToLuxRequest(from, payload)
-		if err != nil {
-			return "", err
-		}
-		return c.LuxRequestToProvider(to, lux)
+// ── Transit conversion (single WASM call per direction) ──
+
+// Convert performs cross-provider protocol conversion in a single WASM
+// call (wasm_convert_req / wasm_convert_resp), returning the target
+// provider JSON inside an Envelope.
+func (c *Client) Convert(from, to, direction, payload string) (*Envelope, error) {
+	var result string
+	var err error
+	switch direction {
+	case "request":
+		result, err = c.runtime.Call("wasm_convert_req", from, payload, to)
+	case "response":
+		result, err = c.runtime.Call("wasm_convert_resp", from, payload, to)
+	default:
+		return nil, newPrismError("unknown direction: " + direction)
 	}
-	lux, err := c.ToLuxResponse(from, payload)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return c.LuxResponseToProvider(to, lux)
+	return parseEnvelope(result)
 }
 
-// ListProviders returns all registered provider names.
-func (c *Client) ListProviders() []string {
-	return []string{
-		"openai",
-		"openai-chat",
-		"anthropic",
-		"gemini",
-		"google-vertex",
-		"azure-openai",
-		"openai-codex",
+// ConvertStream converts streamed SSE text in a single WASM call.
+func (c *Client) ConvertStream(from, to, sse string) (*Envelope, error) {
+	result, err := c.runtime.Call("wasm_convert_stream", from, sse, to)
+	if err != nil {
+		return nil, err
 	}
+	return parseEnvelope(result)
+}
+
+// ListProviders returns all registered provider names from the WASM
+// registry (wasm_list_providers), not a hardcoded list.
+func (c *Client) ListProviders() ([]string, error) {
+	result, err := c.runtime.Call("wasm_list_providers")
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	if err := json.Unmarshal([]byte(result), &names); err != nil {
+		return nil, newPrismError("parse providers: " + err.Error())
+	}
+	return names, nil
 }
 
 // Ping returns "pong" for health check.

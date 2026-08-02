@@ -18,6 +18,53 @@ class FinishReason(str, Enum):
 
 
 @dataclass
+class Diagnostic:
+    """A conversion diagnostic (lux.ConversionDiagnostic).
+
+    status ∈ exact | degraded | unsupported | invalid.
+    """
+
+    field: str
+    status: str
+    detail: Optional[str] = None
+
+
+@dataclass
+class Envelope:
+    """Conversion result envelope: {"value":…,"diagnostics":[…]}.
+
+    value is the raw JSON payload: an object in the IR direction, a JSON
+    string (quoted) in the provider direction.
+    """
+
+    value: object
+    diagnostics: list[Diagnostic] = field(default_factory=list)
+
+    def value_string(self) -> str:
+        """Unwrap value when it is a JSON string (provider direction)."""
+        if not isinstance(self.value, str):
+            raise ValueError(f"envelope value is not a JSON string: {self.value!r}")
+        return self.value
+
+
+def parse_envelope(raw: str) -> Envelope:
+    """Parse a WASM result into an Envelope."""
+    import json
+
+    obj = json.loads(raw)
+    value = obj.get("value")
+    diagnostics = [
+        Diagnostic(
+            field=d.get("field", ""),
+            status=d.get("status", ""),
+            detail=d.get("detail"),
+        )
+        for d in obj.get("diagnostics", [])
+    ]
+    return Envelope(value=value, diagnostics=diagnostics)
+
+
+@dataclass
 class PrismOptions:
     """Options for encoding a request."""
 
