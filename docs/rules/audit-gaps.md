@@ -56,5 +56,13 @@ pub struct LucentOptions {
 | 1 | `seed` 在错误位置 | 低 | ❌ 标记 deprecated 即可 |
 | 2 | `store`/`extras` 未连通 | 低 | ❌ 等 SDK 表层 API 时一起 |
 | 3 | AgentAction 未实现 | 中 | ❌ v2 范围 |
+| 4 | `wasm_sdk_decode_sse` / `wasm_sdk_capability` 无诊断源 | 低 | ❌ 形状已对齐（恒 `diagnostics: []`），待 SDK 补 `*_with_diagnostics` |
 
-**当前 IR 可以冻结。** 三个缺口都不阻塞功能，也不会影响未来 SDK 表面 API 的设计。建议在启动 SDK 表层 API 开发时同步处理。
+**当前 IR 可以冻结。** 前三个缺口都不阻塞功能，也不会影响未来 SDK 表面 API 的设计。建议在启动 SDK 表层 API 开发时同步处理。
+
+> **缺口 4（2026-08-02 Phase 3 收尾记录）：** Task 2 将 5 个 `wasm_sdk_*` 统一为
+> 信封输出。其中 `wasm_sdk_encode_request` / `wasm_sdk_decode_response` 已接入
+> `encode_request_with_diagnostics` / `decode_response_with_diagnostics`
+> （真实 schema 校验诊断）；`wasm_sdk_encode_stream` / `wasm_sdk_decode_sse` /
+> `wasm_sdk_capability` 无诊断源，输出 `diagnostics: []` 保持形状一致。待 SDK
+> 补对应 `*_with_diagnostics` 后接入。

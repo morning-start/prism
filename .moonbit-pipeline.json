@@ -5,11 +5,11 @@
   "plan_file": "docs/tasks/2026-08-02-phase3-transport-plan.md",
   "progress": {
     "total_tasks": 4,
-    "completed_tasks": 3,
-    "current_task": 3
+    "completed_tasks": 4,
+    "current_task": 4
   },
-  "last_verification": "2026-08-02T02:45:00Z",
-  "last_updated": "2026-08-02T02:45:00Z",
-  "next": "implement:task3-http-sse",
-  "notes": "Phase 3 scoped to Task 0-3 (transport fidelity repair + HTTP SSE). Task 2 DONE: JSON-RPC result envelope-ized (D5) — wasm_sdk_* + dispatcher + wrappers (go/py/ts) all emit {value,diagnostics}; convert_stream dispatch added; ARCHITECTURE §4.3/§4.5 examples updated."
+  "last_verification": "2026-08-02T03:00:00Z",
+  "last_updated": "2026-08-02T03:00:00Z",
+  "next": "plan:phase3b-ipc-ws-clients",
+  "notes": "Phase 3 (Task 0-3) COMPLETE: export alignment + freshness gate; wrapper envelope + single-call convert; JSON-RPC result envelope (D5); HTTP SSE streaming (decode_sse/convert_stream, whole-decode-then-stream, frame-by-frame==whole gated by TestFrameByFrameEqualsWholeText). Next: phase3b (UDS/NamedPipe/WebSocket/clients) planning."
 }

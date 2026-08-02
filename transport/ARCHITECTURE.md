@@ -3,7 +3,7 @@
 > 多语言传输层设计文档。
 > 定义 Prism 协议转换引擎如何通过通用 IPC 协议服务 Go、Python、Node.js、Rust、Java 等所有语言。
 > 版本：v1 (draft)
-> **实现状态：部分实现。** `transport/daemon/` 已落地最小 HTTP binding（POST /v1 JSON-RPC + GET /health），方法：encode_request / decode_response / decode_sse / encode_stream（同步）/ convert / list_providers / capability / ping，后端为 wazero WASM。UDS / WebSocket binding、SSE 流式响应和 `decode_sse_stream` 会话式逐块解码仍为规划项。
+> **实现状态：部分实现。** `transport/daemon/` 已落地 HTTP binding（POST /v1 JSON-RPC + GET /health + SSE 流式响应），方法：encode_request / decode_response / decode_sse（同步 + 流式）/ encode_stream（同步）/ convert / convert_stream（同步 + 流式）/ list_providers / capability / ping，后端为 wazero WASM。UDS / WebSocket binding 与 `decode_sse_stream` 会话式逐块解码仍为规划项（phase3b）。
 
 ---
 
@@ -211,10 +211,12 @@
 ┌────────────────────┬────────────────────────────────────────────────────┐
 │ method             │ 功能                                                │
 ├────────────────────┼────────────────────────────────────────────────────┤
-│ encode_stream      │ 文本 → 流式厂商请求 JSON → 逐块返回 SSE             │
-│ decode_sse_stream  │ 逐块传入 SSE → 逐块返回 PrismEvent                  │
+│ encode_stream      │ 文本 → 流式厂商请求 JSON（带 stream:true，非事件流）   │
+│ decode_sse_stream  │ 逐块传入 SSE → 逐块返回 PrismEvent（UDS/WS 阶段交付） │
 └────────────────────┴────────────────────────────────────────────────────┘
 ```
+
+> **语义澄清（缺口 H 修正）：** `encode_stream` 是**同步**方法——文本进，流式请求 JSON（`stream:true`）出，本身不产生事件流。真正的流式通路在**解码方向**：`decode_sse` / `convert_stream` 在 `Accept: text/event-stream` 下按 SSE 帧逐帧写出（见 §4.5）。
 
 流式方法在 HTTP 绑定中使用 **SSE (text/event-stream)** 传输，在 UDS/WS 绑定中使用消息序列传输。
 
@@ -403,7 +405,9 @@ OpenAI JSON  ──[ext_to_lux_request]──►  LucentRequest  ──[lux_requ
 
 ### 4.5 流式绑定（Streaming）
 
-流式方法使用 **notifications + events** 模式，而非传统的 JSON-RPC 通知（因为通知无响应）。
+**HTTP 单请求单响应（本轮实现，D7）：** HTTP 下不做 session。客户端一次 POST 携带完整 SSE 文本，`Accept: text/event-stream` 时 daemon 解码整段后逐事件/逐帧写出，边解边发。适用方法：`decode_sse`、`convert_stream`。
+
+> **跨帧状态说明：** 逐帧独立解码会打断跨帧状态（块索引、工具参数增量拼接），因此 daemon 一律**整段解码后流式写出**（正确性优先于首字节延迟）。逐帧解码与全量解码的等价性由测试 `TestFrameByFrameEqualsWholeText` 钉死。
 
 #### HTTP 绑定下的流式（SSE）
 
@@ -413,7 +417,7 @@ POST /v1 HTTP/1.1
 Content-Type: application/json
 Accept: text/event-stream
 
-{"jsonrpc":"2.0","id":1,"method":"encode_stream","params":{...}}
+{"jsonrpc":"2.0","id":1,"method":"decode_sse","params":{"provider":"anthropic","sse":"..."}}
 
 Response:
 HTTP/1.1 200 OK
@@ -426,13 +430,15 @@ event: data
 data: {"jsonrpc":"2.0","id":1,"result":{"value":{"type":"text_delta","text":"好"},"diagnostics":[]}}
 
 event: done
-data: {"jsonrpc":"2.0","id":1,"result":{"value":{"type":"finish","reason":"stop"},"diagnostics":[]}}
+data: {"jsonrpc":"2.0","id":1,"result":{"value":{"type":"done"},"diagnostics":[]}}
 ```
 
-#### UDS/WS 绑定下的流式（消息序列）
+流中途出错：HTTP 头已发出无法再改状态码，写 `event: error` 帧后收尾。
+
+#### UDS/WS 绑定下的流式（消息序列，未来阶段交付）
 
 ```
-→ {"jsonrpc":"2.0","id":1,"method":"encode_stream","params":{...}}
+→ {"jsonrpc":"2.0","id":1,"method":"decode_sse","params":{...}}
 ← {"jsonrpc":"2.0","id":1,"result":{"value":{"type":"text_delta","text":"你"},"diagnostics":[]}}
 ← {"jsonrpc":"2.0","id":1,"result":{"value":{"type":"text_delta","text":"好"},"diagnostics":[]}}
 ← {"jsonrpc":"2.0","id":1,"result":{"value":{"type":"finish","reason":"stop"},"diagnostics":[]}}
@@ -441,7 +447,9 @@ data: {"jsonrpc":"2.0","id":1,"result":{"value":{"type":"finish","reason":"stop"
 
 流结束标记 `{"type":"done"}` 让客户端明确知道流已完成，不需要依赖超时判断。
 
-#### decode_sse_stream（逐块解码）
+#### decode_sse_stream（逐块解码，UDS/WS 阶段交付，本轮不实现）
+
+> D7：`decode_sse_stream` 的 session + notification 模型依赖全双工，属 UDS/WS 形态；HTTP 单请求单响应下用「一次 POST + SSE 响应」表达流式即可。此方法留待 phase3b 交付。
 
 ```json
 // 请求：开始一个 SSE 解码会话
@@ -452,15 +460,15 @@ data: {"jsonrpc":"2.0","id":1,"result":{"value":{"type":"finish","reason":"stop"
 // 客户端逐块发送 SSE 数据（notification，无 id）
 {"jsonrpc":"2.0","method":"sse_chunk","params":{"session":"sse-001","data":"data: {\"type\":\"content_block_delta\",...}\n\n"}}
 // 服务端逐块返回 PrismEvent
-{"jsonrpc":"2.0","id":1,"result":{"type":"text_delta","text":"你"}}
+{"jsonrpc":"2.0","id":1,"result":{"value":{"type":"text_delta","text":"你"},"diagnostics":[]}}
 
 {"jsonrpc":"2.0","method":"sse_chunk","params":{"session":"sse-001","data":"data: {\"type\":\"content_block_delta\",...}\n\n"}}
-{"jsonrpc":"2.0","id":1,"result":{"type":"text_delta","text":"好"}}
+{"jsonrpc":"2.0","id":1,"result":{"value":{"type":"text_delta","text":"好"},"diagnostics":[]}}
 
 // 结束
 {"jsonrpc":"2.0","method":"sse_chunk","params":{"session":"sse-001","data":"data: [DONE]"}}
-{"jsonrpc":"2.0","id":1,"result":{"type":"finish","reason":"stop"}}
-{"jsonrpc":"2.0","id":1,"result":{"type":"done"}}
+{"jsonrpc":"2.0","id":1,"result":{"value":{"type":"finish","reason":"stop"},"diagnostics":[]}}
+{"jsonrpc":"2.0","id":1,"result":{"value":{"type":"done"},"diagnostics":[]}}
 ```
 
 ---
@@ -585,19 +593,26 @@ gRPC 绑定不替代 JSON-RPC，而是作为补充——微服务团队可以用
 每种语言的 SDK 必须实现同一组接口，保持签名对齐：
 
 ```
-encode_request(provider, text, opts?) → Result<String, Error>
-decode_response(provider, json) → Result<String, Error>
-decode_sse(provider, sse) → Result<Array<Event>, Error>
+encode_request(provider, text, opts?) → Result<Envelope, Error>
+decode_response(provider, json) → Result<Envelope, Error>
+decode_sse(provider, sse) → Result<Envelope, Error>
 
-encode_stream(provider, text, opts?) → EventStream     // 异步/阻塞流
-decode_sse_stream(provider) → SseSession               // 逐块流式
+encode_stream(provider, text, opts?) → Result<Envelope, Error>  // 同步：流式请求 JSON
+decode_sse_stream(provider) → SseSession                        // 逐块流式（UDS/WS 阶段）
 
-convert(from_provider, to_provider, direction, payload) → Result<String, Error>
+convert(from_provider, to_provider, direction, payload) → Result<Envelope, Error>
+convert_stream(from_provider, to_provider, sse) → Result<Envelope, Error>
 
 list_providers() → Result<Array<String>, Error>
-capability(provider) → Result<Capability, Error>
+capability(provider) → Result<Envelope, Error>
 ping() → Result<String, Error>
 ```
+
+> **D5 信封契约：** 所有转换类方法（含 capability）返回 **Envelope** ——
+> `{value, diagnostics}`，value 为厂商 JSON 字符串（provider 方向）或 IR 对象
+> （IR 方向），diagnostics 为 `Exact/Degraded/Unsupported/Invalid` 结构化诊断。
+> 客户端 SDK 统一解析信封：`value_string()` 取 provider 方向裸串，`value`
+> 原样透出 IR 方向对象。
 
 **Event 类型**（跨语言共享）：
 
