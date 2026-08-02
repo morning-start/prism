@@ -287,3 +287,113 @@ test "decode - fileData maps to image multimedia not placeholder" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "gemini store unsupported diagnostic" {
+  let opts = @lux.LucentOptions::default().with_store(Some(true))
+  let req = @lux.LucentRequest::new(
+    "gemini-2.0-flash",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("Hi")]),
+      ),
+    ],
+    None,
+    None,
+    opts,
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_gemini(req) {
+    Ok(cr) => {
+      // 必须携带 Unsupported 诊断
+      assert_true(cr.diagnostics().length() > 0)
+      // 且编码 JSON 不含 "store"
+      assert_false(cr.value().contains("\"store\""))
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+test "gemini extras round-trip" {
+  let opts = @lux.LucentOptions::default().with_extras(
+    Some({ "extra_field": Json::string("v1") }),
+  )
+  let req = @lux.LucentRequest::new(
+    "gemini-2.0-flash",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("Hi")]),
+      ),
+    ],
+    None,
+    None,
+    opts,
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_gemini(req) {
+    Ok(cr) => {
+      assert_true(cr.value().contains("\"extra_field\":\"v1\""))
+      match gemini_to_lux_request(cr.value()) {
+        Ok(cr2) =>
+          match cr2.value().options.extras {
+            Some(m) => assert_true(m.contains("extra_field"))
+            None => fail("extras not decoded")
+          }
+        Err(e) => fail("decode: \{e}")
+      }
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+test "gemini thought part - only Thinking, no text placeholder" {
+  // 用 IR 构造器 + 适配器编码产输入（不手写 JSON）
+  let resp = @lux.LucentResponse::new(
+    "r1",
+    "gemini-2.0-flash",
+    None,
+    [
+      @lux.LucentChoice::new(
+        0,
+        @lux.LucentMessage::new(@lux.Assistant, [
+          @lux.LucentContent::thinking("think...", None),
+        ]),
+        @lux.Stop,
+        None,
+      ),
+    ],
+    None,
+    None,
+  )
+  match lux_response_to_gemini(resp) {
+    Ok(cr) =>
+      match gemini_to_lux_response(cr.value()) {
+        Ok(cr2) => {
+          let content = cr2.value().choices[0].message.content
+          let mut has_thinking = false
+          let mut has_plain_text = false
+          for c in content {
+            match c {
+              Thinking(_) => has_thinking = true
+              Text(_, _) => has_plain_text = true
+              _ => ()
+            }
+          }
+          assert_true(has_thinking)
+          assert_false(has_plain_text) // 不伪装成文本
+        }
+        Err(e) => fail("decode: \{e}")
+      }
+    Err(e) => fail("encode: \{e}")
+  }
+}

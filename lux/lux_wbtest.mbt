@@ -1068,3 +1068,54 @@ test "accumulator unflushed text block flushed at stream end" {
     _ => assert_true(false)
   }
 }
+
+///|
+test "accumulate - thinking delta does not leak into text" {
+  // 先 Text 块收 TextDelta，再 Thinking 块收 ThinkingDelta
+  let events = [
+    BlockStart(0, Text),
+    BlockDelta(0, LucentBlockDelta::text_delta("visible")),
+    BlockStart(1, Thinking),
+    BlockDelta(1, LucentBlockDelta::thinking_delta("hidden")),
+    BlockEnd(1),
+    BlockEnd(0),
+    Finish(Stop),
+    Done,
+  ]
+  let acc = lucent_stream_events_to_accumulated(events, "r1", "m1")
+  let text = lucent_content_to_text(acc.response.choices[0].message.content)
+  assert_true(text.contains("visible"))
+  assert_false(text.contains("hidden")) // 思考内容不得进入文本
+  // Thinking 内容存在于 response 的 Thinking content 中
+  let mut has_thinking = false
+  for c in acc.response.choices[0].message.content {
+    match c {
+      Thinking(_) => has_thinking = true
+      _ => ()
+    }
+  }
+  assert_true(has_thinking)
+}
+
+///|
+test "accumulate - thinking delta on non-thinking block yields Degraded diagnostic" {
+  // ThinkingDelta 到达时块类型为 Text（未显式 BlockStart(Thinking)）→ Degraded 诊断
+  let events = [
+    BlockStart(0, Text),
+    BlockDelta(0, LucentBlockDelta::thinking_delta("stray")),
+    BlockEnd(0),
+    Finish(Stop),
+    Done,
+  ]
+  let acc = lucent_stream_events_to_accumulated(events, "r1", "m1")
+  let mut has_degraded = false
+  for d in acc.diagnostics {
+    if d.status == Degraded {
+      has_degraded = true
+    }
+  }
+  assert_true(has_degraded)
+  // 且思考内容不进入文本
+  let text = lucent_content_to_text(acc.response.choices[0].message.content)
+  assert_false(text.contains("stray"))
+}

@@ -849,3 +849,70 @@ test "encode - image url maps to anthropic image block" {
     Err(e) => fail("encode failed: \{e}")
   }
 }
+
+///|
+test "anthropic store unsupported diagnostic" {
+  let opts = @lux.LucentOptions::default().with_store(Some(true))
+  let req = @lux.LucentRequest::new(
+    "claude-4",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("Hi")]),
+      ),
+    ],
+    None,
+    None,
+    opts,
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_anthropic(req) {
+    Ok(cr) => {
+      // 必须携带 Unsupported 诊断
+      assert_true(cr.diagnostics().length() > 0)
+      // 且编码 JSON 不含 "store"
+      assert_false(cr.value().contains("\"store\""))
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+test "anthropic extras round-trip" {
+  let opts = @lux.LucentOptions::default().with_extras(
+    Some({ "extra_field": Json::string("v1") }),
+  )
+  let req = @lux.LucentRequest::new(
+    "claude-4",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("Hi")]),
+      ),
+    ],
+    None,
+    None,
+    opts,
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_anthropic(req) {
+    Ok(cr) => {
+      assert_true(cr.value().contains("\"extra_field\":\"v1\""))
+      match anthropic_to_lux_request(cr.value()) {
+        Ok(cr2) =>
+          match cr2.value().options.extras {
+            Some(m) => assert_true(m.contains("extra_field"))
+            None => fail("extras not decoded")
+          }
+        Err(e) => fail("decode: \{e}")
+      }
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}

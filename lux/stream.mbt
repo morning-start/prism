@@ -231,6 +231,7 @@ pub fn lucent_stream_events_to_accumulated(
   // 用线性数组替代 Map（MoonBit 风格），下标即 block_index
   let block_types : Array[LucentBlockType] = []
   let block_texts : Array[String] = []
+  let block_thinking : Array[String] = []
   let block_signatures : Array[String] = []
   let block_tool_ids : Array[String] = []
   let block_tool_names : Array[String] = []
@@ -246,6 +247,7 @@ pub fn lucent_stream_events_to_accumulated(
     while block_types.length() <= idx {
       block_types.push(Text) // 占位，真实类型由 BlockStart 覆盖
       block_texts.push("")
+      block_thinking.push("")
       block_signatures.push("")
       block_tool_ids.push("")
       block_tool_names.push("")
@@ -271,8 +273,14 @@ pub fn lucent_stream_events_to_accumulated(
         block_texts[idx] = ""
       }
       Thinking => {
+        // 优先取独立 thinking 缓冲；空则回退 block_texts（兼容旧事件流）
+        let th_text = if block_thinking[idx] != "" {
+          block_thinking[idx]
+        } else {
+          block_texts[idx]
+        }
         let th = LucentThinking::new(
-          block_texts[idx],
+          th_text,
           match block_signatures[idx] {
             "" => None
             s => Some(s)
@@ -282,6 +290,7 @@ pub fn lucent_stream_events_to_accumulated(
         )
         content.push(Thinking(th))
         block_texts[idx] = ""
+        block_thinking[idx] = ""
         block_signatures[idx] = ""
       }
       Refusal => {
@@ -299,6 +308,7 @@ pub fn lucent_stream_events_to_accumulated(
   fn discard_block(idx : Int) -> Unit {
     ensure_block(idx)
     block_texts[idx] = ""
+    block_thinking[idx] = ""
     block_signatures[idx] = ""
     block_tool_ids[idx] = ""
     block_tool_names[idx] = ""
@@ -345,6 +355,7 @@ pub fn lucent_stream_events_to_accumulated(
         ensure_block(idx)
         block_types[idx] = bt
         block_texts[idx] = ""
+        block_thinking[idx] = ""
         block_signatures[idx] = ""
         match bt {
           ToolCall(id, name) => {
@@ -358,7 +369,22 @@ pub fn lucent_stream_events_to_accumulated(
         ensure_block(idx)
         match delta {
           TextDelta(s) => block_texts[idx] = block_texts[idx] + s
-          ThinkingDelta(s) => block_texts[idx] = block_texts[idx] + s
+          ThinkingDelta(s) => {
+            // 思考增量独立累加，不污染文本缓冲
+            block_thinking[idx] = block_thinking[idx] + s
+            // 块类型非 Thinking 时（如未显式 BlockStart(Thinking)）→ Degraded 诊断
+            match block_types[idx] {
+              Thinking => ()
+              _ =>
+                diagnostics.push(
+                  ConversionDiagnostic::new(
+                    "delta.thinking",
+                    Degraded,
+                    Some("thinking delta on non-thinking block"),
+                  ),
+                )
+            }
+          }
           SignatureDelta(s) => block_signatures[idx] = block_signatures[idx] + s
           ToolArgumentsDelta(s) => block_texts[idx] = block_texts[idx] + s
           RefusalDelta(s) => {
@@ -418,7 +444,9 @@ pub fn lucent_stream_events_to_accumulated(
   let mut j = 0
   while j < block_types.length() {
     // 仅 flush 有内容的块（避免空 Text 块污染）
-    if block_texts[j] != "" || block_signatures[j] != "" {
+    if block_texts[j] != "" ||
+      block_signatures[j] != "" ||
+      block_thinking[j] != "" {
       flush_block(j)
     }
     j = j + 1
