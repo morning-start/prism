@@ -57,9 +57,7 @@ let req_json = prism.encode_request("写一首诗", opts)
 
 ```moonbit
 // 改为 Anthropic 只需改一行
-let prism = Prism::new()
-  .with_provider("anthropic")
-  .with_api_key("sk-ant-xxx")
+let prism = Prism::new().with_provider("anthropic")
 
 let req_json = prism.encode_request("写一首诗", opts)
 // req_json 现在是对应 Anthropic 格式的 JSON
@@ -191,9 +189,7 @@ let opts = PrismOptions::new(
 ```moonbit
 /// === L1：完整请求-响应流程 ===
 fn complete(prompt: String) {
-  let prism = Prism::new()
-    .with_provider("openai")
-    .with_api_key("sk-xxx")   // 当前纯编解码 façade 不消费 API key
+  let prism = Prism::new().with_provider("openai")
 
   // 编码请求
   let req = prism.encode_request(prompt, PrismOptions::default())
