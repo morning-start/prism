@@ -45,33 +45,17 @@ pub fn PrismOptions::new(
 /// Prism — 主实例
 pub struct Prism {
   provider : String
-  /// @deprecated 纯编解码 façade 不消费 API key；认证由 Host/Transport 层负责
-  api_key : String?
-  /// @deprecated 纯编解码 façade 不消费自定义端点；由 Host/Transport 层负责
-  base_url : String?
 }
 
 ///|
 pub fn Prism::new() -> Prism {
-  { provider: "openai", api_key: None, base_url: None }
+  { provider: "openai" }
 }
 
 ///|
 /// 设置 provider 名称
-pub fn Prism::with_provider(self : Prism, name : String) -> Prism {
-  { ..self, provider: name }
-}
-
-///|
-/// 设置 API Key
-pub fn Prism::with_api_key(self : Prism, key : String) -> Prism {
-  { ..self, api_key: Some(key) }
-}
-
-///|
-/// 设置自定义端点
-pub fn Prism::with_base_url(self : Prism, url : String) -> Prism {
-  { ..self, base_url: Some(url) }
+pub fn Prism::with_provider(_self : Prism, name : String) -> Prism {
+  { provider: name }
 }
 
 ///|
