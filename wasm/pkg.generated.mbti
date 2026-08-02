@@ -10,6 +10,8 @@ pub fn wasm_convert_stream(String, String, String) -> String
 
 pub fn wasm_events_to_sse(String, String) -> String
 
+pub fn wasm_list_providers() -> String
+
 pub fn wasm_lux_request_to_provider(String, String) -> String
 
 pub fn wasm_lux_response_to_provider(String, String) -> String

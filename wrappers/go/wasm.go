@@ -17,30 +17,8 @@ import (
 )
 
 // MoonBit WASM export names match the function names exactly
-// (exported via options(link: ...) in moon.pkg).
-var wasmExportMap = map[string]string{
-	"wasm_to_lux_req":            "wasm_to_lux_req",
-	"wasm_lux_req_to_provider":   "wasm_lux_req_to_provider",
-	"wasm_to_lux_resp":           "wasm_to_lux_resp",
-	"wasm_lux_resp_to_provider":  "wasm_lux_resp_to_provider",
-	"wasm_sse_to_events":             "wasm_sse_to_events",
-	"wasm_events_to_sse":             "wasm_events_to_sse",
-	"wasm_sdk_encode_req":        "wasm_sdk_encode_req",
-	"wasm_sdk_decode_resp":       "wasm_sdk_decode_resp",
-	"wasm_sdk_encode_stream":         "wasm_sdk_encode_stream",
-	"wasm_sdk_decode_sse":            "wasm_sdk_decode_sse",
-	"wasm_sdk_capability":            "wasm_sdk_capability",
-}
-
-// reversedMap maps WASM export names back to Go-friendly names.
-var reversedMap map[string]string
-
-func init() {
-	reversedMap = make(map[string]string, len(wasmExportMap))
-	for goName, wasmName := range wasmExportMap {
-		reversedMap[wasmName] = goName
-	}
-}
+// (exported via options(link: ...) in moon.pkg), so Call uses the
+// name directly — no Go→WASM renaming layer needed.
 
 // Runtime manages the wazero WASM runtime.
 type Runtime struct {
@@ -84,13 +62,14 @@ func (r *Runtime) Close() error {
 	return nil
 }
 
-// Call invokes a WASM export function by Go-friendly name.
+// Call invokes a WASM export function by name.
 func (r *Runtime) Call(funcName string, args ...string) (string, error) {
-	wasmName, ok := wasmExportMap[funcName]
-	if !ok {
-		return "", newPrismError("unknown function: " + funcName)
-	}
-	return r.callWasm(wasmName, args...)
+	return r.callWasm(funcName, args...)
+}
+
+// HasExport reports whether the loaded WASM module exports the given function.
+func (r *Runtime) HasExport(name string) bool {
+	return r.mod.ExportedFunction(name) != nil
 }
 
 func (r *Runtime) callWasm(name string, args ...string) (string, error) {

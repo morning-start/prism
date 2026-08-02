@@ -2,7 +2,15 @@
 package "morning-start/prism/cmd/main"
 
 // Values
+pub fn wasm_convert_req(String, String, String) -> String
+
+pub fn wasm_convert_resp(String, String, String) -> String
+
+pub fn wasm_convert_stream(String, String, String) -> String
+
 pub fn wasm_events_to_sse(String, String) -> String
+
+pub fn wasm_list_providers() -> String
 
 pub fn wasm_lux_req_to_provider(String, String) -> String
 

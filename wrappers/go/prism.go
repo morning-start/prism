@@ -119,3 +119,8 @@ func (c *Client) ListProviders() []string {
 func (c *Client) Ping() string {
 	return "pong"
 }
+
+// HasExport reports whether the loaded WASM module exports the given function.
+func (c *Client) HasExport(name string) bool {
+	return c.runtime.HasExport(name)
+}
