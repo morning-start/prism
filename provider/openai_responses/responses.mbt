@@ -246,6 +246,11 @@ pub fn openai_responses_to_lux_request(
   let stream = @internal.field_bool(jv, "stream").unwrap_or(false)
   let reasoning = parse_reasoning(jv, diagnostics)
   let structured = parse_text_format(jv)
+  let store = @internal.field_bool(jv, "store")
+  let extras = @internal.collect_extra_fields(jv, [
+    "model", "instructions", "input", "tools", "tool_choice", "temperature", "top_p",
+    "max_output_tokens", "stream", "reasoning", "text", "previous_response_id", "store",
+  ])
   let opts = @lux.LucentOptions::new(
     temperature,
     top_p,
@@ -256,8 +261,8 @@ pub fn openai_responses_to_lux_request(
     None,
     None,
     structured,
-    None,
-    None,
+    store,
+    extras,
   )
   // metadata: previous_response_id → extra
   let extra = match @internal.field_str(jv, "previous_response_id") {
@@ -469,6 +474,17 @@ pub fn lux_request_to_openai_responses(
         schema +
         "}}",
       )
+    None => ()
+  }
+  match opts.store {
+    Some(b) => parts.push("\"store\":" + b.to_string())
+    None => ()
+  }
+  match opts.extras {
+    Some(m) =>
+      for k, v in m {
+        parts.push("\"" + @internal.json_escape(k) + "\":" + v.stringify())
+      }
     None => ()
   }
   Ok(@lux.ConversionResult::new("{" + parts.join(",") + "}"))

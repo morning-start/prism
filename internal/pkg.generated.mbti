@@ -2,6 +2,8 @@
 package "morning-start/prism/internal"
 
 // Values
+pub fn collect_extra_fields(Json, Array[String]) -> Map[String, Json]?
+
 pub fn field_arr(Json, String) -> Array[Json]?
 
 pub fn field_bool(Json, String) -> Bool?

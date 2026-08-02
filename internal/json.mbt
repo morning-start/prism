@@ -135,3 +135,31 @@ pub fn parse_json_opt(s : String) -> Json? {
   let v = @json.parse(s) catch { _ => return None }
   Some(v)
 }
+
+///|
+/// 收集 JSON 对象顶层未被已知字段消费的键值对（extras 透传）
+/// 已知字段集合 = 该协议解码函数实际读取的顶层字段名。
+/// 返回 None 表示无额外字段。
+pub fn collect_extra_fields(
+  jv : Json,
+  known : Array[String],
+) -> Map[String, Json]? {
+  match jv {
+    Object(m) => {
+      let extras : Map[String, Json] = Map([])
+      let mut found = false
+      for k, v in m {
+        if !known.contains(k) {
+          extras[k] = v
+          found = true
+        }
+      }
+      if found {
+        Some(extras)
+      } else {
+        None
+      }
+    }
+    _ => None
+  }
+}

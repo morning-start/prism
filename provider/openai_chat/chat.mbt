@@ -257,6 +257,11 @@ pub fn openai_chat_to_lux_request(
     _ => None
   }
   let seed = @internal.field_int(jv, "seed")
+  let store = @internal.field_bool(jv, "store")
+  let extras = @internal.collect_extra_fields(jv, [
+    "model", "messages", "tools", "tool_choice", "temperature", "top_p", "max_completion_tokens",
+    "max_tokens", "stream", "stop", "seed", "response_format", "store",
+  ])
   // response_format → structured_output
   let structured = match @internal.obj_get(jv, "response_format") {
     Some(rf) =>
@@ -297,8 +302,8 @@ pub fn openai_chat_to_lux_request(
           None,
           seed,
           structured,
-          None,
-          None,
+          store,
+          extras,
         ),
         None,
         None,
@@ -644,6 +649,17 @@ pub fn lux_request_to_openai_chat(
         schema +
         "}}",
       )
+    None => ()
+  }
+  match opts.store {
+    Some(b) => parts.push("\"store\":" + b.to_string())
+    None => ()
+  }
+  match opts.extras {
+    Some(m) =>
+      for k, v in m {
+        parts.push("\"" + @internal.json_escape(k) + "\":" + v.stringify())
+      }
     None => ()
   }
   let mut result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
