@@ -243,7 +243,10 @@
 {
   "jsonrpc": "2.0",
   "id": 1,
-  "result": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"你好，今天天气怎么样？\"}]}"
+  "result": {
+    "value": "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"你好，今天天气怎么样？\"}]}",
+    "diagnostics": []
+  }
 }
 
 // ── Error Response ──
@@ -270,7 +273,7 @@
     "json": "{\"choices\":[{\"message\":{\"content\":\"你好！有什么可以帮你的？\"},\"finish_reason\":\"stop\"}]}"
   }
 }
-→ {"jsonrpc":"2.0","id":2,"result":"你好！有什么可以帮你的？"}
+→ {"jsonrpc":"2.0","id":2,"result":{"value":"你好！有什么可以帮你的？","diagnostics":[]}}
 ```
 
 #### decode_sse
@@ -288,10 +291,13 @@
 → {
   "jsonrpc": "2.0",
   "id": 3,
-  "result": [
-    {"type":"text_delta","text":"你好","index":0},
-    {"type":"finish","reason":"stop"}
-  ]
+  "result": {
+    "value": [
+      {"type":"text_delta","text":"你好","index":0},
+      {"type":"finish","reason":"stop"}
+    ],
+    "diagnostics": []
+  }
 }
 ```
 
@@ -314,7 +320,10 @@
 → {
   "jsonrpc": "2.0",
   "id": 4,
-  "result": "{\"model\":\"claude-sonnet-4-20250514\",\"messages\":[{\"role\":\"user\",\"content\":\"你好\"}]}"
+  "result": {
+    "value": "{\"model\":\"claude-sonnet-4-20250514\",\"messages\":[{\"role\":\"user\",\"content\":\"你好\"}]}",
+    "diagnostics": []
+  }
 }
 ```
 
@@ -337,7 +346,10 @@ OpenAI JSON  ──[ext_to_lux_request]──►  LucentRequest  ──[lux_requ
 → {
   "jsonrpc": "2.0",
   "id": 5,
-  "result": ["openai", "openai-chat", "anthropic", "gemini", "google-vertex", "azure-openai", "openai-codex"]
+  "result": {
+    "value": ["openai", "openai-chat", "anthropic", "gemini", "google-vertex", "azure-openai", "openai-codex"],
+    "diagnostics": []
+  }
 }
 ```
 
@@ -354,11 +366,14 @@ OpenAI JSON  ──[ext_to_lux_request]──►  LucentRequest  ──[lux_requ
   "jsonrpc": "2.0",
   "id": 6,
   "result": {
-    "provider": "openai",
-    "model_pattern": "o*|gpt-*",
-    "supports_streaming": true,
-    "supports_tools": true,
-    "supports_vision": true
+    "value": {
+      "provider": "openai",
+      "model_pattern": "o*|gpt-*",
+      "supports_streaming": true,
+      "supports_tools": true,
+      "supports_vision": true
+    },
+    "diagnostics": []
   }
 }
 ```
@@ -372,7 +387,7 @@ OpenAI JSON  ──[ext_to_lux_request]──►  LucentRequest  ──[lux_requ
   "method": "ping",
   "params": {}
 }
-→ {"jsonrpc":"2.0","id":7,"result":"pong"}
+→ {"jsonrpc":"2.0","id":7,"result":{"value":"pong","diagnostics":[]}}
 ```
 
 ### 4.4 错误码约定
@@ -405,23 +420,23 @@ HTTP/1.1 200 OK
 Content-Type: text/event-stream
 
 event: data
-data: {"jsonrpc":"2.0","id":1,"result":{"type":"text_delta","text":"你"}}
+data: {"jsonrpc":"2.0","id":1,"result":{"value":{"type":"text_delta","text":"你"},"diagnostics":[]}}
 
 event: data
-data: {"jsonrpc":"2.0","id":1,"result":{"type":"text_delta","text":"好"}}
+data: {"jsonrpc":"2.0","id":1,"result":{"value":{"type":"text_delta","text":"好"},"diagnostics":[]}}
 
 event: done
-data: {"jsonrpc":"2.0","id":1,"result":{"type":"finish","reason":"stop"}}
+data: {"jsonrpc":"2.0","id":1,"result":{"value":{"type":"finish","reason":"stop"},"diagnostics":[]}}
 ```
 
 #### UDS/WS 绑定下的流式（消息序列）
 
 ```
 → {"jsonrpc":"2.0","id":1,"method":"encode_stream","params":{...}}
-← {"jsonrpc":"2.0","id":1,"result":{"type":"text_delta","text":"你"}}
-← {"jsonrpc":"2.0","id":1,"result":{"type":"text_delta","text":"好"}}
-← {"jsonrpc":"2.0","id":1,"result":{"type":"finish","reason":"stop"}}
-← {"jsonrpc":"2.0","id":1,"result":{"type":"done"}}          ← 流结束标记
+← {"jsonrpc":"2.0","id":1,"result":{"value":{"type":"text_delta","text":"你"},"diagnostics":[]}}
+← {"jsonrpc":"2.0","id":1,"result":{"value":{"type":"text_delta","text":"好"},"diagnostics":[]}}
+← {"jsonrpc":"2.0","id":1,"result":{"value":{"type":"finish","reason":"stop"},"diagnostics":[]}}
+← {"jsonrpc":"2.0","id":1,"result":{"value":{"type":"done"},"diagnostics":[]}}   ← 流结束标记
 ```
 
 流结束标记 `{"type":"done"}` 让客户端明确知道流已完成，不需要依赖超时判断。
@@ -432,7 +447,7 @@ data: {"jsonrpc":"2.0","id":1,"result":{"type":"finish","reason":"stop"}}
 // 请求：开始一个 SSE 解码会话
 {"jsonrpc":"2.0","id":1,"method":"decode_sse_stream","params":{"provider":"anthropic"}}
 // 响应：session id
-{"jsonrpc":"2.0","id":1,"result":{"session":"sse-001"}}
+{"jsonrpc":"2.0","id":1,"result":{"value":{"session":"sse-001"},"diagnostics":[]}}
 
 // 客户端逐块发送 SSE 数据（notification，无 id）
 {"jsonrpc":"2.0","method":"sse_chunk","params":{"session":"sse-001","data":"data: {\"type\":\"content_block_delta\",...}\n\n"}}

@@ -27,28 +27,46 @@ func (b *WASMBackend) Close() error {
 	return b.client.Close()
 }
 
+// envelopeString serializes a client Envelope back to its JSON string so the
+// dispatcher can parse it into the JSON-RPC result payload (D5 envelope).
+func envelopeString(env *prism.Envelope) (string, error) {
+	raw, err := json.Marshal(env)
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
+}
+
 func (b *WASMBackend) EncodeRequest(ctx context.Context, provider, text string) (string, error) {
-	return b.client.EncodeRequest(provider, text, nil)
+	env, err := b.client.EncodeRequest(provider, text, nil)
+	if err != nil {
+		return "", err
+	}
+	return envelopeString(env)
 }
 
 func (b *WASMBackend) DecodeResponse(ctx context.Context, provider, respJSON string) (string, error) {
-	return b.client.DecodeResponse(provider, respJSON)
+	env, err := b.client.DecodeResponse(provider, respJSON)
+	if err != nil {
+		return "", err
+	}
+	return envelopeString(env)
 }
 
 func (b *WASMBackend) DecodeSSE(ctx context.Context, provider, sseText string) (string, error) {
-	events, err := b.client.DecodeSSE(provider, sseText)
+	env, err := b.client.DecodeSSE(provider, sseText)
 	if err != nil {
 		return "", err
 	}
-	data, err := json.Marshal(events)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
+	return envelopeString(env)
 }
 
 func (b *WASMBackend) EncodeStream(ctx context.Context, provider, text string) (string, error) {
-	return b.client.EncodeStream(provider, text, nil)
+	env, err := b.client.EncodeStream(provider, text, nil)
+	if err != nil {
+		return "", err
+	}
+	return envelopeString(env)
 }
 
 func (b *WASMBackend) Convert(ctx context.Context, from, to, direction, payload string) (string, error) {
@@ -56,7 +74,15 @@ func (b *WASMBackend) Convert(ctx context.Context, from, to, direction, payload 
 	if err != nil {
 		return "", err
 	}
-	return env.ValueString()
+	return envelopeString(env)
+}
+
+func (b *WASMBackend) ConvertStream(ctx context.Context, from, to, sse string) (string, error) {
+	env, err := b.client.ConvertStream(from, to, sse)
+	if err != nil {
+		return "", err
+	}
+	return envelopeString(env)
 }
 
 func (b *WASMBackend) ListProviders() []string {
@@ -68,7 +94,15 @@ func (b *WASMBackend) ListProviders() []string {
 }
 
 func (b *WASMBackend) Capability(ctx context.Context, provider string) (map[string]any, error) {
-	return b.client.Capability(provider)
+	env, err := b.client.Capability(provider)
+	if err != nil {
+		return nil, err
+	}
+	var m map[string]any
+	if err := json.Unmarshal(env.Value, &m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 func (b *WASMBackend) Ping() string {

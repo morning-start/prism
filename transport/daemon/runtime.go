@@ -16,6 +16,8 @@ type Backend interface {
 	EncodeStream(ctx context.Context, provider, text string) (string, error)
 	// Convert translates a provider payload to another provider via Lucent IR.
 	Convert(ctx context.Context, from, to, direction, payload string) (string, error)
+	// ConvertStream translates streamed SSE text between providers via Lucent IR.
+	ConvertStream(ctx context.Context, from, to, sse string) (string, error)
 	// ListProviders returns registered provider names.
 	ListProviders() []string
 	// Capability returns the capability declaration for a provider.

@@ -5,11 +5,11 @@
   "plan_file": "docs/tasks/2026-08-02-phase3-transport-plan.md",
   "progress": {
     "total_tasks": 4,
-    "completed_tasks": 2,
-    "current_task": 2
+    "completed_tasks": 3,
+    "current_task": 3
   },
-  "last_verification": "2026-08-02T02:25:00Z",
-  "last_updated": "2026-08-02T02:25:00Z",
-  "next": "implement:task2-jsonrpc-envelope",
-  "notes": "Phase 3 scoped to Task 0-3 (transport fidelity repair + HTTP SSE). Task 1 DONE: wrappers parse Envelope ({value,diagnostics}); Convert/ConvertStream single-call via wasm_convert_*; ListProviders from registry; py/ts synced; bundled prism.wasm refreshed. TestServeConvert green. Known-red cleared."
+  "last_verification": "2026-08-02T02:45:00Z",
+  "last_updated": "2026-08-02T02:45:00Z",
+  "next": "implement:task3-http-sse",
+  "notes": "Phase 3 scoped to Task 0-3 (transport fidelity repair + HTTP SSE). Task 2 DONE: JSON-RPC result envelope-ized (D5) — wasm_sdk_* + dispatcher + wrappers (go/py/ts) all emit {value,diagnostics}; convert_stream dispatch added; ARCHITECTURE §4.3/§4.5 examples updated."
 }

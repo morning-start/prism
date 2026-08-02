@@ -215,7 +215,16 @@ test "wasm_sdk_encode_request - unknown provider returns error" {
 test "wasm_sdk_decode_response - extracts text" {
   let resp = "{\"id\":\"1\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hi\"},\"finish_reason\":\"stop\"}],\"usage\":null}"
   let result = wasm_sdk_decode_response("openai-chat", resp)
-  assert_eq(result, "Hi")
+  // Task 2: 结果必须是信封，value 为纯文本
+  let jv = @json.parse(result) catch { _ => Json::null() }
+  match jv {
+    Object(map) =>
+      match map.get("value") {
+        Some(String(v)) => assert_eq(v, "Hi")
+        _ => fail("expected value string in envelope")
+      }
+    _ => fail("expected object envelope")
+  }
 }
 
 ///|
@@ -246,7 +255,16 @@ test "wasm_sdk_encode_stream - unknown provider returns error" {
 test "wasm_sdk_decode_sse - returns event JSON array" {
   let sse = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hi\"},\"finish_reason\":null}]}\n\ndata: [DONE]\n"
   let result = wasm_sdk_decode_sse("openai-chat", sse)
-  assert_true(result.has_prefix("["))
+  // Task 2: 结果必须是信封，value 为事件数组
+  let jv = @json.parse(result) catch { _ => Json::null() }
+  match jv {
+    Object(map) =>
+      match map.get("value") {
+        Some(Array(_)) => ()
+        _ => fail("expected value array in envelope")
+      }
+    _ => fail("expected object envelope")
+  }
 }
 
 ///|
@@ -490,4 +508,44 @@ test "wasm_convert_request - returns envelope with value and diagnostics" {
     }
     Err(e) => fail("encode source failed: \{e}")
   }
+}
+
+///|
+/// === Task 2: wasm_sdk_* 信封化 ===
+
+///|
+test "wasm_sdk_encode_request - returns envelope with value and diagnostics" {
+  let result = wasm_sdk_encode_request("openai-chat", "Hello")
+  assert_true(result.contains("\"value\""))
+  assert_true(result.contains("\"diagnostics\""))
+}
+
+///|
+test "wasm_sdk_decode_response - returns envelope with value and diagnostics" {
+  let resp = "{\"id\":\"1\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hi\"},\"finish_reason\":\"stop\"}],\"usage\":null}"
+  let result = wasm_sdk_decode_response("openai-chat", resp)
+  assert_true(result.contains("\"value\""))
+  assert_true(result.contains("\"diagnostics\""))
+}
+
+///|
+test "wasm_sdk_encode_stream - returns envelope with value and diagnostics" {
+  let result = wasm_sdk_encode_stream("openai-chat", "Hi")
+  assert_true(result.contains("\"value\""))
+  assert_true(result.contains("\"diagnostics\""))
+}
+
+///|
+test "wasm_sdk_decode_sse - returns envelope with value and diagnostics" {
+  let sse = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hi\"},\"finish_reason\":null}]}\n\ndata: [DONE]\n"
+  let result = wasm_sdk_decode_sse("openai-chat", sse)
+  assert_true(result.contains("\"value\""))
+  assert_true(result.contains("\"diagnostics\""))
+}
+
+///|
+test "wasm_sdk_capability - returns envelope with value and diagnostics" {
+  let result = wasm_sdk_capability("openai")
+  assert_true(result.contains("\"value\""))
+  assert_true(result.contains("\"diagnostics\""))
 }
