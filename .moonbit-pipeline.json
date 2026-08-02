@@ -1,15 +1,15 @@
 {
   "pipeline": "development",
-  "phase": "plan",
+  "phase": "implement",
   "phase_name": "phase3-transport-http",
   "plan_file": "docs/tasks/2026-08-02-phase3-transport-plan.md",
   "progress": {
     "total_tasks": 4,
-    "completed_tasks": 0,
-    "current_task": 0
+    "completed_tasks": 1,
+    "current_task": 1
   },
-  "last_verification": "2026-08-02T01:05:41Z",
-  "last_updated": "2026-08-02T01:05:41Z",
-  "next": "implement:task0-export-alignment",
-  "notes": "Phase 3 scoped to Task 0-3 (transport fidelity repair + HTTP SSE). UDS/Named Pipe/WebSocket/client SDKs deferred to phase3b. Known-red baseline: transport/daemon TestServeConvert fails against a fresh `moon build --target wasm` artifact (envelope break, plan gaps A/B) — expected to go green in Task 1."
+  "last_verification": "2026-08-02T02:00:00Z",
+  "last_updated": "2026-08-02T02:00:00Z",
+  "next": "implement:task1-wrapper-envelope",
+  "notes": "Phase 3 scoped to Task 0-3 (transport fidelity repair + HTTP SSE). Task 0 DONE: 15 exports live (wasm_convert_req/resp/stream + wasm_list_providers), freshness gate + export-surface test added, loadBackend skip->fail, wasmExportMap identity layer removed. Known-red baseline: transport/daemon TestServeConvert still fails with '-32000 missing required field schema_version' (envelope break, plan gaps A/B) — Task 1 to fix."
 }

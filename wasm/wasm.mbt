@@ -314,3 +314,14 @@ pub fn wasm_convert_stream(
     Err(e) => wasm_envelope_err(e)
   }
 }
+
+///|
+/// === 查询 ===
+
+///|
+/// 全部 provider 主名称的 JSON 数组
+pub fn wasm_list_providers() -> String {
+  let names = @sdk.list_provider_names()
+  let arr : Array[Json] = names.map(fn(n) { Json::string(n) })
+  Json::array(arr).stringify()
+}

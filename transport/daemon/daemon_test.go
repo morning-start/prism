@@ -17,7 +17,7 @@ func loadBackend(t *testing.T) *WASMBackend {
 	t.Helper()
 	data, err := os.ReadFile("../../_build/wasm/debug/build/cmd/main/main.wasm")
 	if err != nil {
-		t.Skipf("classic wasm build not found (%v), run: moon build --target wasm", err)
+		t.Fatalf("classic wasm build not found (%v), run: moon build --target wasm", err)
 	}
 	backend, err := NewWASMBackend(data)
 	if err != nil {

@@ -68,3 +68,9 @@ func (b *WASMBackend) Capability(ctx context.Context, provider string) (map[stri
 func (b *WASMBackend) Ping() string {
 	return b.client.Ping()
 }
+
+// HasExport reports whether the loaded WASM module exports the given function.
+// Used by freshness gates to pin the export surface.
+func (b *WASMBackend) HasExport(name string) bool {
+	return b.client.HasExport(name)
+}

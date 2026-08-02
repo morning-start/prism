@@ -4,7 +4,7 @@
 /// 这是可执行包：`moon build` 只把本包的 `pub fn` 放进 WASM export section。
 /// 实现全部委托给 `wasm/` 库包，避免双份维护导出逻辑。
 ///
-/// 6 个通用 IR 转换 + 5 个高层 SDK API：
+/// 6 个通用 IR 转换 + 3 个中转 + 6 个 SDK/查询：
 /// 每个函数 String 进出，错误以 {"error": "message"} 返回。
 
 ///|
@@ -77,6 +77,48 @@ pub fn wasm_sdk_decode_sse(provider : String, sse_str : String) -> String {
 /// 查询 provider 能力声明
 pub fn wasm_sdk_capability(provider : String) -> String {
   @wasm.wasm_sdk_capability(provider)
+}
+
+///|
+/// === 中转站协议转发 ===
+
+///|
+/// 请求：source 协议 JSON → target 协议 JSON
+pub fn wasm_convert_req(
+  source : String,
+  json_str : String,
+  target : String,
+) -> String {
+  @wasm.wasm_convert_request(source, json_str, target)
+}
+
+///|
+/// 响应：source 协议 JSON → target 协议 JSON
+pub fn wasm_convert_resp(
+  source : String,
+  json_str : String,
+  target : String,
+) -> String {
+  @wasm.wasm_convert_response(source, json_str, target)
+}
+
+///|
+/// 流式：source 协议 SSE → target 协议 SSE
+pub fn wasm_convert_stream(
+  source : String,
+  sse_str : String,
+  target : String,
+) -> String {
+  @wasm.wasm_convert_stream(source, sse_str, target)
+}
+
+///|
+/// === 查询 ===
+
+///|
+/// 全部 provider 主名称的 JSON 数组
+pub fn wasm_list_providers() -> String {
+  @wasm.wasm_list_providers()
 }
 
 ///|
