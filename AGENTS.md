@@ -31,7 +31,10 @@ When starting work on this project, read these in order to restore context:
   any Lucent IR field, enum variant, stream event, capability, or payload.
 
 Progress convention: one feature per commit, commit after each task, pass
-`moon fmt --check` / `moon check` / `moon test` before committing.
+`moon fmt --check` / `moon check` / `moon test` before committing. Once a
+task has passed acceptance verification (its acceptance checklist is fully
+green), the agent may commit to git on its own — no need to ask the user
+first.
 
 
 ## Coding convention
