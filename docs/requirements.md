@@ -29,13 +29,15 @@ lux/          ← Lucent IR 核心（纯数据结构，无 IO、无厂商绑定�
 | `lux/` 核心类型定义 | ✅ **已完成** | 34+ 类型，`pub(all) enum` |
 | `lux/` JSON 序列化 (to_json) | ✅ **已完成** | 结构化测试覆盖 |
 | `lux/` JSON 反序列化 (from_json) | ✅ **已完成** | round-trip 测试覆盖 |
-| `lux/` 流式事件 + 累加器 | ✅ **已完成** | 块生命周期模型；部分事件仍需诊断化 |
-| `lux/` 转换诊断类型 | ✅ **已接入** | `ConversionResult` + `ProviderSchema` 校验已接入 SDK 诊断 API |
+| `lux/` 流式事件 + 累加器 | ✅ **已完成** | 块生命周期模型；AgentAction/Annotations/NativeDelta 经 `AccumulatedResponse` 保留并携带诊断 |
+| `lux/` 转换诊断类型 | ✅ **已完成** | `ConversionResult` + 信封 JSON 编解码（`conversion_json.mbt`）已接入 SDK/WASM 诊断 API |
 | `schemas/lux-ir-v1.json` | ✅ **已完成** | JSON Schema v1 |
-| 7 个 Provider 适配器 | ✅ **MoonBit 核心已实现** | 部分媒体/推理/事件边界仍有降级或不支持 |
+| 7 个 Provider 适配器 | ✅ **已完成** | 六函数契约切换为 `ConversionResult`；媒体/推理/事件边界均显式报告 `Degraded`/`Unsupported` 诊断，无静默语义损失 |
 | `sdk/` 表层 API | ✅ **纯编解码 façade + L1/L2** | `convert_*` 组合入口、`Context::add_tool_result`、`Prism::complete/stream` 已实现；不负责 HTTP、认证或 Agent Runtime |
 | `wasm/` 导出层 | ✅ **已实现** | 14 个导出函数（11 原有 + `wasm_convert_*` 中转 3 个）；Go / TypeScript / Python wrapper ABI 已完成 |
-| 跨协议一致性测试 | ✅ | 当前 `moon test` 共 660 个测试通过 |
+| 跨协议一致性测试 | ✅ | 当前 `moon test` 共 698 个测试通过（含保真度契约矩阵：断言 value **和** diagnostics） |
+| 保真度契约（Exact/Degraded/Unsupported/Invalid） | ✅ **已完成** | Phase 1 收尾：信封 JSON、六函数契约切换、流式累加器信息保留、各适配器诊断、契约测试矩阵全部落地 |
+| SDK 职责收敛（Phase 2） | ✅ **已完成** | 无死字段：`Prism` 移除 `api_key`/`base_url`；`store`/`extras` 接入 4 基础适配器（OpenAI 原生支持，Anthropic/Gemini `Unsupported` 诊断 + extras 往返）；`ThinkingDelta` 独立累加不污染文本，Gemini thought 不再伪装 Text |
 
 **当前边界：** `transport/` 已实现最小 HTTP JSON-RPC Daemon（`transport/daemon/`，Go + wazero）；UDS / WebSocket / 流式 SSE 仍在规划。Go / TypeScript / Python wrapper 已实现真实 WASM 字符串 ABI（classic `wasm` 目标，UTF-16 线性内存约定）。
 
