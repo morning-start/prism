@@ -1,15 +1,15 @@
 {
   "pipeline": "development",
   "phase": "implement",
-  "phase_name": "phase3b-ipc-ws-clients",
-  "plan_file": "docs/tasks/2026-08-03-phase3b-ipc-ws-clients-plan.md",
+  "phase_name": "phase4-quality",
+  "plan_file": "docs/tasks/2026-08-03-phase4-quality-plan.md",
   "progress": {
-    "total_tasks": 6,
-    "completed_tasks": 6,
-    "current_task": 6
+    "total_tasks": 4,
+    "completed_tasks": 4,
+    "current_task": 4
   },
-  "last_verification": "2026-08-03T00:00:00Z",
-  "last_updated": "2026-08-03T00:00:00Z",
-  "next": "plan:phase4-quality | gRPC | sdk-gen | moonbit-native-daemon",
-  "notes": "Phase3b (Task 0-5) COMPLETE: (0) UDS/NamedPipe JSON-lines binding (uds.go, umask 077, --uds/--ws flags), (1) UDS streaming fidelity gate (frame-by-frame == whole for 4 providers), (2) WebSocket binding (coder/websocket), (3) decode_sse_stream session model (session.go, whole-decode-then-diff, D7 delivered, ARCHITECTURE §4.5 updated), (4) clients/go SDK (Transport pluggable: HTTP/UDS/WS, 10-method Client), (5) clients/python SDK (PrismClient + 3 transports, UDS skips on no-AF_UNIX platforms). ARCHITECTURE §9 Phase 1-3 marked complete; method set reconciled (daemon == clients/go == clients/python == §6.1). MoonBit side untouched. Next: Phase 4 quality (roadmap) or gRPC/SDK-gen/MoonBit-native daemon."
+  "last_verification": "2026-08-04T00:00:00Z",
+  "last_updated": "2026-08-04T00:00:00Z",
+  "next": "plan:gRPC-binding | sdk-gen | moonbit-native-daemon",
+  "notes": "Phase4 (Task 1-4) COMPLETE: (1) unnecessary_annotation warnings 506 -> 0 (scripts/apply_warn_fixes.py, prefix-removal only, .mbti unchanged, 715/715 green), (2) export-count script (scripts/export_count.sh, .mbti as source of truth: wasm/cmd-main 15, TOTAL 250) + fixed stale 11/14 export counts in README/requirements/roadmap, (3) audit gate: moon-audit NOT available (moon audit no subcommand, moon install moon-audit invalid) -> CI upgraded to 'moon check --warn-list +73 --deny-warn' (warnings as errors), (4) README/requirements capability boundaries updated (phase3b deliveries, 715 tests, transport status). Full verification: fmt/check 0 errors, 715/715 tests, daemon + clients/go + clients/python all green. Next: gRPC binding (ARCHITECTURE §5.4) / SDK-gen pipeline / MoonBit-native daemon."
 }
