@@ -36,8 +36,8 @@ jobs:
       - name: Update dependencies
         run: moon update
 
-      - name: Type check
-        run: moon check --warn-list +73
+      - name: Type check (warnings as errors)
+        run: moon check --warn-list +73 --deny-warn
 
   test-native:
     name: Tests (native)

@@ -16,7 +16,7 @@
 | SDK 编解码 façade（encode/decode × 4 + capability） | ✅ 完成 | 645+ 测试 |
 | 双场景核心：`convert_*` 组合入口 + `wasm_convert_*` 中转导出 | ✅ 完成（2026-08-01） | 新 13 测试，`.mbti` 核对 |
 | SDK L1/L2：`Prism::complete` / `Prism::stream` / `Context::add_tool_result` | ✅ 完成（2026-08-01） | mock transport 测试 |
-| WASM 导出层 | ✅ 14 个导出函数 | wrapper ABI（Go/Py/TS）已联通 |
+| WASM 导出层 | ✅ 15 个导出函数（以 `.mbti` 为真值，见 `scripts/export_count.sh`） | wrapper ABI（Go/Py/TS）已联通 |
 | `transport/daemon`（Go + wazero，HTTP JSON-RPC） | 🟡 部分实现 | `POST /v1` + `GET /health`，8 个 RPC 方法 |
 | 质量门禁 | ✅ | `moon fmt --check` / `moon check` 0 错误 / `moon test` 660/660 / `--target all` 通过 |
 

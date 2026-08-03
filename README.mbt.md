@@ -159,13 +159,15 @@ match prism.decode_sse(sse_text) {
 | 7 个 Provider 适配器（各 6 函数） | ✅（部分能力仍有降级/不支持边界） |
 | 跨协议往返一致性测试 | ✅ |
 | SDK 表层 API（Prism / Context / Event） | ✅（纯编解码 façade） |
-| WASM 导出层（11 个通用函数） | ✅（MoonBit 侧） |
-| MoonBit 测试 | ✅ 634 passed |
+| WASM 导出层（15 个导出函数，见 scripts/export_count.sh） | ✅（MoonBit 侧） |
+| MoonBit 测试 | ✅ 715 passed |
 | 多语言 wrapper（Go/TS/Python） | ✅ 可用（classic wasm ABI） |
-| Transport Daemon（HTTP JSON-RPC） | ✅ 最小版本（Go，wazero backend） |
-| Transport Daemon（UDS/WS/流式） | 规划中，未实现 |
+| Transport Daemon（HTTP JSON-RPC + SSE 流式） | ✅（Go，wazero backend） |
+| Transport Daemon（UDS/NamedPipe/WebSocket + session 流式） | ✅（phase3b 已交付） |
+| 客户端 SDK（clients/go、clients/python，传输可插拔） | ✅（HTTP/UDS/WS 一行切换） |
+| 质量门禁 | ✅ 警告 506→0（CI `--deny-warn`）、导出数生成式维护（`scripts/export_count.sh`） |
 
-当前仓库可验证的是 MoonBit native/wasm-gc 核心，以及基于 classic `wasm` 目标的 Go/TS/Python wrapper（UTF-16 线性内存 ABI，见各 wrapper README）。`transport/` 仅包含设计文档，不要将其当作可直接发布的运行时能力。
+当前仓库可验证的是 MoonBit native/wasm-gc 核心（715 测试全绿、0 警告），基于 classic `wasm` 目标的 Go/TS/Python wrapper（UTF-16 线性内存 ABI），以及 `transport/daemon` 三传输运行时（HTTP/UDS/WS，Go + wazero）与 `clients/go`、`clients/python` SDK。未实现：gRPC binding、客户端 SDK 生成 pipeline、Daemon MoonBit 原生化（见 `transport/ARCHITECTURE.md` §9 Phase 4-6）。
 
 ---
 [README.mbt.md#3D64]

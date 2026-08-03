@@ -17,7 +17,7 @@ lux/          ← Lucent IR 核心（纯数据结构，无 IO、无厂商绑定�
     ├── provider/gemini/           ← Google Gemini 适配器 ✅
     ├── provider/gemini_vertex/    ← Google Vertex AI 变体 ✅
     │
-    └── wasm/                      ← WASM 导出层（11 个 MoonBit 导出函数）✅
+    └── wasm/                      ← WASM 导出层（15 个导出函数，以 .mbti 为真值）✅
 ```
 
 每一层都是纯函数；公开转换契约通过 `ProviderRegistration` 注册表（6 个纯函数）分发，`ConversionResult` 已接入请求/响应校验（`decode_response_with_diagnostics` / `encode_request_with_diagnostics`）。
@@ -34,12 +34,15 @@ lux/          ← Lucent IR 核心（纯数据结构，无 IO、无厂商绑定�
 | `schemas/lux-ir-v1.json` | ✅ **已完成** | JSON Schema v1 |
 | 7 个 Provider 适配器 | ✅ **已完成** | 六函数契约切换为 `ConversionResult`；媒体/推理/事件边界均显式报告 `Degraded`/`Unsupported` 诊断，无静默语义损失 |
 | `sdk/` 表层 API | ✅ **纯编解码 façade + L1/L2** | `convert_*` 组合入口、`Context::add_tool_result`、`Prism::complete/stream` 已实现；不负责 HTTP、认证或 Agent Runtime |
-| `wasm/` 导出层 | ✅ **已实现** | 14 个导出函数（11 原有 + `wasm_convert_*` 中转 3 个）；Go / TypeScript / Python wrapper ABI 已完成 |
-| 跨协议一致性测试 | ✅ | 当前 `moon test` 共 698 个测试通过（含保真度契约矩阵：断言 value **和** diagnostics） |
+| `wasm/` 导出层 | ✅ **已实现** | 15 个导出函数（见 `scripts/export_count.sh`，以 `.mbti` 为唯一真值）；Go / TypeScript / Python wrapper ABI 已完成 |
+| 跨协议一致性测试 | ✅ | 当前 `moon test` 共 715 个测试通过（含保真度契约矩阵：断言 value **和** diagnostics） |
 | 保真度契约（Exact/Degraded/Unsupported/Invalid） | ✅ **已完成** | Phase 1 收尾：信封 JSON、六函数契约切换、流式累加器信息保留、各适配器诊断、契约测试矩阵全部落地 |
 | SDK 职责收敛（Phase 2） | ✅ **已完成** | 无死字段：`Prism` 移除 `api_key`/`base_url`；`store`/`extras` 接入 4 基础适配器（OpenAI 原生支持，Anthropic/Gemini `Unsupported` 诊断 + extras 往返）；`ThinkingDelta` 独立累加不污染文本，Gemini thought 不再伪装 Text |
+| 来源元信息（Phase 2b，D8） | ✅ **已完成** | `ConversionMeta`/`DecodedResponse` + `Prism::decode_response_with_meta`、`convert_response_with_meta`（`ConvertMetaResult`）：多协议混流时按 `meta.source_provider` 溯源特判；IR 结构体零改动 |
+| Transport 扩展（phase3b） | ✅ **已完成** | UDS/NamedPipe（JSON lines）+ WebSocket binding + `decode_sse_stream` session 模型（D7 交付）；`clients/go`、`clients/python` 客户端 SDK（HTTP/UDS/WS 传输可插拔）；复用 `ServeRPC`/`Backend` 零新增转换逻辑 |
+| 质量收口（Phase 4） | ✅ **已完成** | `unnecessary_annotation` 警告 506 → 0（CI `--deny-warn` 门禁）；导出数清单生成式维护（`scripts/export_count.sh`，以 `.mbti` 为真值）；文档能力边界同步 |
 
-**当前边界：** `transport/` 已实现最小 HTTP JSON-RPC Daemon（`transport/daemon/`，Go + wazero）；UDS / WebSocket / 流式 SSE 仍在规划。Go / TypeScript / Python wrapper 已实现真实 WASM 字符串 ABI（classic `wasm` 目标，UTF-16 线性内存约定）。
+**当前边界：** `transport/` 已实现三传输 daemon（HTTP + UDS/NamedPipe + WebSocket，`transport/daemon/`，Go + wazero），含 HTTP SSE 流式与 `decode_sse_stream` 会话式逐块解码；`clients/go`、`clients/python` SDK 已交付（传输可插拔）。未实现：gRPC binding（ARCHITECTURE §5.4）、客户端 SDK 生成 pipeline（§9 Phase 5）、Daemon MoonBit 原生化（§9 Phase 6）。Go / TypeScript / Python wrapper 已实现真实 WASM 字符串 ABI（classic `wasm` 目标，UTF-16 线性内存约定）。
 
 ## 分包结构
 
@@ -75,7 +78,7 @@ prism/
 │
 ├── wasm/                        # WASM 导出层
 │   ├── moon.pkg                 # 依赖 sdk + lux
-│   └── wasm.mbt                # 11 导出函数，7 provider + SDK（注册表分发）
+│   └── wasm.mbt                # 15 导出函数（以 .mbti 为真值，见 scripts/export_count.sh）
 │
 ├── schemas/
 │   └── lux-ir-v1.json           # JSON Schema v1（事实标准）
