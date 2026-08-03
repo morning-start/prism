@@ -13,7 +13,8 @@ import (
 // opens a WS connection at /ws, sends one JSON-RPC 2.0 message per frame
 // (Text), and receives one JSON-RPC response per frame. Streaming methods
 // (decode_sse / convert_stream) respond with multiple result frames — one
-// per event — ending with a done frame.
+// per event — ending with a done frame. Session methods (decode_sse_stream /
+// sse_chunk / sse_end) implement the ARCHITECTURE.md §4.5 session model.
 //
 // The same ServeRPC dispatcher is reused; no conversion logic lives here.
 func ServeWS(ctx context.Context, backend Backend, w http.ResponseWriter, r *http.Request) {
@@ -24,6 +25,7 @@ func ServeWS(ctx context.Context, backend Backend, w http.ResponseWriter, r *htt
 	}
 	defer conn.Close(websocket.StatusNormalClosure, "done")
 
+	sm := newSessionManager() // sessions are per-connection
 	for {
 		msgType, data, err := conn.Read(ctx)
 		if err != nil {
@@ -40,12 +42,86 @@ func ServeWS(ctx context.Context, backend Backend, w http.ResponseWriter, r *htt
 				json.RawMessage(`null`), ErrParse)))
 			continue
 		}
-		if req.Method == "decode_sse" || req.Method == "convert_stream" {
+		switch req.Method {
+		case "decode_sse_stream":
+			serveWSSessionStart(ctx, conn, &req, backend, sm)
+		case "sse_chunk", "sse_end":
+			serveWSSessionFeed(ctx, conn, &req, backend, sm)
+		case "decode_sse", "convert_stream":
 			serveWSStream(ctx, conn, &req, backend)
-			continue
+		default:
+			resp := ServeRPC(ctx, backend, &req)
+			_ = conn.Write(ctx, websocket.MessageText, mustJSON(resp))
 		}
-		resp := ServeRPC(ctx, backend, &req)
-		_ = conn.Write(ctx, websocket.MessageText, mustJSON(resp))
+	}
+}
+
+// serveWSSessionStart handles decode_sse_stream: create a session and return
+// its id (ARCHITECTURE.md §4.5).
+func serveWSSessionStart(
+	ctx context.Context,
+	conn *websocket.Conn,
+	req *Request,
+	backend Backend,
+	sm *sessionManager,
+) {
+	params, rpcErr := parseParams(req.Params)
+	if rpcErr != nil {
+		_ = conn.Write(ctx, websocket.MessageText, mustJSON(rpcError(req.ID, rpcErr)))
+		return
+	}
+	provider, e := params.strParam("provider")
+	if e != nil {
+		_ = conn.Write(ctx, websocket.MessageText, mustJSON(rpcError(req.ID, e)))
+		return
+	}
+	id := sm.start(provider, req.ID)
+	_ = conn.Write(ctx, websocket.MessageText, []byte(rpcEnvelope(req.ID, map[string]any{"session": id}, []any{})))
+}
+
+// serveWSSessionFeed handles sse_chunk (feed data, emit new events) and
+// sse_end (final feed + done frame + close session).
+func serveWSSessionFeed(
+	ctx context.Context,
+	conn *websocket.Conn,
+	req *Request,
+	backend Backend,
+	sm *sessionManager,
+) {
+	params, rpcErr := parseParams(req.Params)
+	if rpcErr != nil {
+		_ = conn.Write(ctx, websocket.MessageText, mustJSON(rpcError(req.ID, rpcErr)))
+		return
+	}
+	session, e := params.strParam("session")
+	if e != nil {
+		_ = conn.Write(ctx, websocket.MessageText, mustJSON(rpcError(req.ID, e)))
+		return
+	}
+	data, e := params.strParam("data")
+	if e != nil {
+		_ = conn.Write(ctx, websocket.MessageText, mustJSON(rpcError(req.ID, e)))
+		return
+	}
+
+	events, sessID, ok := sm.feed(ctx, backend, session, data)
+	if !ok {
+		_ = conn.Write(ctx, websocket.MessageText, mustJSON(rpcError(req.ID, domainError("unknown session: "+session))))
+		return
+	}
+	// Reuse the original decode_sse_stream request id for event frames.
+	for _, ev := range events {
+		if ctx.Err() != nil {
+			return
+		}
+		_ = conn.Write(ctx, websocket.MessageText, []byte(rpcEnvelope(sessID, ev, []any{})))
+	}
+	if req.Method == "sse_end" {
+		if _, ok := sm.end(session); !ok {
+			_ = conn.Write(ctx, websocket.MessageText, mustJSON(rpcError(req.ID, domainError("unknown session: "+session))))
+			return
+		}
+		_ = conn.Write(ctx, websocket.MessageText, []byte(rpcEnvelope(sessID, map[string]any{"type": "done"}, []any{})))
 	}
 }
 
