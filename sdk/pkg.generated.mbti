@@ -14,6 +14,8 @@ pub fn convert_request(String, String, String) -> Result[@lux.ConversionResult[S
 
 pub fn convert_response(String, String, String) -> Result[@lux.ConversionResult[String], String]
 
+pub fn convert_response_with_meta(String, String, String) -> Result[ConvertMetaResult, String]
+
 pub fn convert_stream(String, String, String) -> Result[@lux.ConversionResult[String], String]
 
 pub fn get_schema(String) -> ProviderSchema?
@@ -39,6 +41,28 @@ pub fn Context::add_tools(Self, Array[SdkTool]) -> Self
 pub fn Context::add_user(Self, String) -> Self
 pub fn Context::new() -> Self
 
+pub struct ConversionMeta {
+  source_provider : String
+  diagnostics : Array[@lux.ConversionDiagnostic]
+  provider_payload : Json?
+  extra_fields : Map[String, Json]?
+}
+pub fn ConversionMeta::new(String, Array[@lux.ConversionDiagnostic], Json?, Map[String, Json]?) -> Self
+
+pub struct ConvertMetaResult {
+  value : String
+  meta : ConversionMeta
+}
+pub fn ConvertMetaResult::meta(Self) -> ConversionMeta
+pub fn ConvertMetaResult::new(String, ConversionMeta) -> Self
+pub fn ConvertMetaResult::value(Self) -> String
+
+pub struct DecodedResponse {
+  text : String
+  meta : ConversionMeta
+}
+pub fn DecodedResponse::new(String, ConversionMeta) -> Self
+
 pub struct FieldConstraint {
   min_val : Double?
   max_val : Double?
@@ -54,6 +78,7 @@ pub fn Prism::capability(Self, String) -> @lux.ProviderCapability?
 pub fn Prism::complete(Self, String, PrismOptions, (String) -> Result[String, String]) -> Result[String, String]
 pub fn Prism::decode_response(Self, String) -> Result[String, String]
 pub fn Prism::decode_response_with_diagnostics(Self, String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String]
+pub fn Prism::decode_response_with_meta(Self, String) -> Result[DecodedResponse, String]
 pub fn Prism::decode_sse(Self, String) -> Result[Array[PrismEvent], String]
 pub fn Prism::encode_request(Self, String, PrismOptions) -> Result[String, String]
 pub fn Prism::encode_request_with_diagnostics(Self, String, PrismOptions) -> Result[@lux.ConversionResult[String], String]

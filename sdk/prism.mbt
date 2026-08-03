@@ -10,6 +10,44 @@
 /// ```
 
 ///|
+/// ConversionMeta — 转换来源元信息（D8）
+///
+/// 回答"这个 LUX 值是从哪个协议解码来的"，并附带转换损失诊断
+/// 与厂商特有字段（provider_payload / extra_fields）。
+/// 开发者可用 `source_provider` 做按需特判（if 分支），主路径代码仍只写一次。
+pub struct ConversionMeta {
+  source_provider : String
+  diagnostics : Array[@lux.ConversionDiagnostic]
+  provider_payload : Json?
+  extra_fields : Map[String, Json]?
+}
+
+///|
+pub fn ConversionMeta::new(
+  source_provider : String,
+  diagnostics : Array[@lux.ConversionDiagnostic],
+  provider_payload : Json?,
+  extra_fields : Map[String, Json]?,
+) -> ConversionMeta {
+  { source_provider, diagnostics, provider_payload, extra_fields }
+}
+
+///|
+/// DecodedResponse — 解码结果：主路径文本 + 溯源元信息
+pub struct DecodedResponse {
+  text : String
+  meta : ConversionMeta
+}
+
+///|
+pub fn DecodedResponse::new(
+  text : String,
+  meta : ConversionMeta,
+) -> DecodedResponse {
+  { text, meta }
+}
+
+///|
 /// PrismOptions — SDK 请求选项
 pub struct PrismOptions {
   model : String?
@@ -86,6 +124,28 @@ pub fn Prism::decode_response(
 ) -> Result[String, String] {
   match self.decode_to_lux(json_str) {
     Ok(resp) => Ok(resp.get_text())
+    Err(e) => Err(e)
+  }
+}
+
+///|
+/// 将提供商 JSON 响应解码为 DecodedResponse（文本 + 来源元信息）。
+///
+/// meta.source_provider 为运行时从注册表解析的规范 provider 名
+/// （精确匹配/别名/模型正则），开发者可据此做按需特判。
+pub fn Prism::decode_response_with_meta(
+  self : Prism,
+  json_str : String,
+) -> Result[DecodedResponse, String] {
+  let source = match match_provider_name(self.provider) {
+    Some(reg) => reg.name
+    None => self.provider
+  }
+  match self.decode_to_lux(json_str) {
+    Ok(resp) => {
+      let meta = ConversionMeta::new(source, [], resp.provider_payload, None)
+      Ok(DecodedResponse::new(resp.get_text(), meta))
+    }
     Err(e) => Err(e)
   }
 }

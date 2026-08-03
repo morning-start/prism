@@ -222,3 +222,36 @@ fn complete(prompt: String) {
 | `"openai-chat"` | OpenAI Chat Completions |
 | `"anthropic"` | Anthropic Messages API |
 | `"gemini"` / `"google"` | Google Gemini API |
+
+---
+
+## 来源元信息（ConversionMeta）
+
+多协议混流场景（中转站/多厂商流程）中，多个 provider 的响应都会被解码为
+LUX 语义，此时需要区分"这个结果是从哪个协议来的"。SDK 提供
+`decode_response_with_meta` / `convert_response_with_meta`，返回
+`DecodedResponse` / `ConvertMetaResult`，附带 `meta.source_provider`。
+
+**主路径代码只写一次，特殊协议按来源特判：**
+
+```moonbit
+match prism.decode_response_with_meta(resp_json) {
+  Ok(decoded) => {
+    let answer = decoded.text              // 99% 代码：只用文本，跨协议一致
+    match decoded.meta.source_provider {   // 1% 情况：按来源特判
+      "openai-responses" => handle_openai_special(decoded.meta.provider_payload)
+      "azure-openai" => handle_azure_special(decoded.meta.provider_payload)
+      "anthropic" => handle_anthropic_special(decoded.meta.extra_fields)
+      _ => ()                              // 其余协议：什么都不用做
+    }
+  }
+  Err(e) => print("解码失败: \{e}")
+}
+```
+
+`meta.source_provider` 为运行时从注册表解析的规范名（精确匹配/别名/模型正则归一），
+切换 provider 后特判分支自动跟随来源，无需硬编码。
+
+**中转站（场景 2）**：`convert_response_with_meta(source, json, target)` 返回
+`ConvertMetaResult { value, meta }`，`meta.source_provider` 为 source 侧规范名，
+`meta.diagnostics` 合并了解码与编码两侧的转换诊断。
