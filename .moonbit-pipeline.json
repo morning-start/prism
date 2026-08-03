@@ -1,15 +1,15 @@
 {
   "pipeline": "development",
   "phase": "implement",
-  "phase_name": "sdk-conversion-meta",
-  "plan_file": "docs/tasks/2026-08-02-sdk-conversion-meta-plan.md",
+  "phase_name": "phase3b-ipc-ws-clients",
+  "plan_file": "docs/tasks/2026-08-03-phase3b-ipc-ws-clients-plan.md",
   "progress": {
-    "total_tasks": 3,
-    "completed_tasks": 3,
-    "current_task": 3
+    "total_tasks": 6,
+    "completed_tasks": 0,
+    "current_task": 0
   },
   "last_verification": "2026-08-03T00:00:00Z",
   "last_updated": "2026-08-03T00:00:00Z",
-  "next": "plan:phase3b-ipc-ws-clients",
-  "notes": "SDK ConversionMeta (D8) COMPLETE: (1) ConversionMeta/DecodedResponse + Prism::decode_response_with_meta (source_provider via registry, provider_payload passthrough), (2) convert_response_with_meta returning ConvertMetaResult (envelope w/ source + merged diagnostics), (3) mixed-flow tests (6 meta tests green) + docs/sdk-usage.md section. .mbti: +5 pub symbols. Full suite 715/715 green, fmt/check 0 errors. IR untouched (D8: source is decode-op metadata, not IR field). Next: phase3b (UDS/NamedPipe/WebSocket/clients) planning."
+  "next": "implement:phase3b-task0-uds",
+  "notes": "SDK ConversionMeta (D8) COMPLETE (715/715 green, committed 9f99b0c). Phase3b PLAN written: docs/tasks/2026-08-03-phase3b-ipc-ws-clients-plan.md — 6 tasks: (0) UDS/NamedPipe JSON-lines binding, (1) UDS streaming fidelity gate, (2) WebSocket binding, (3) decode_sse_stream session model, (4) clients/go SDK, (5) clients/python SDK. Reuses ServeRPC/Backend, zero new conversion logic. NOT in scope: gRPC, SDK-gen pipeline, MoonBit-native daemon. Next: implement Task 0 (UDS binding)."
 }
