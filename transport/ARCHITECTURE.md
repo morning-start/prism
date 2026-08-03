@@ -447,9 +447,13 @@ data: {"jsonrpc":"2.0","id":1,"result":{"value":{"type":"done"},"diagnostics":[]
 
 流结束标记 `{"type":"done"}` 让客户端明确知道流已完成，不需要依赖超时判断。
 
-#### decode_sse_stream（逐块解码，UDS/WS 阶段交付，本轮不实现）
+#### decode_sse_stream（逐块解码，UDS/WS 阶段已交付）
 
-> D7：`decode_sse_stream` 的 session + notification 模型依赖全双工，属 UDS/WS 形态；HTTP 单请求单响应下用「一次 POST + SSE 响应」表达流式即可。此方法留待 phase3b 交付。
+> D7：`decode_sse_stream` 的 session + notification 模型依赖全双工，属 UDS/WS 形态。
+> **实现状态：已交付（phase3b Task 3）**——`transport/daemon/session.go` 实现
+> `sessionManager`（session 生命周期 + 逐块累积 + whole-decode-then-diff），
+> WebSocket binding（`ws.go`）已接入 `decode_sse_stream` / `sse_chunk` / `sse_end`
+> 三方法；门禁：会话逐块事件序列 == 整段解码事件序列（`TestWSSessionDecodeStream`）。
 
 ```json
 // 请求：开始一个 SSE 解码会话
