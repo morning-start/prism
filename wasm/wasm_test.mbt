@@ -33,9 +33,7 @@ test "wasm_to_lux_request - invalid JSON returns error" {
 
 ///|
 test "wasm_lux_request_to_provider - openai_chat encode" {
-  let msg = @lux.LucentMessage::new(@lux.User, [
-    @lux.LucentContent::text("Hello"),
-  ])
+  let msg = @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hello")])
   let req = @lux.LucentRequest::from_messages(
     "gpt-4o",
     None,
@@ -56,7 +54,7 @@ test "wasm_lux_request_to_provider - openai_chat encode" {
 
 ///|
 test "wasm_lux_request_to_provider - unknown provider returns error" {
-  let msg = @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("Hi")])
+  let msg = @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")])
   let req = @lux.LucentRequest::from_messages(
     "test",
     None,
@@ -104,8 +102,8 @@ test "wasm_to_lux_response - unknown provider returns error" {
 ///|
 test "wasm_lux_response_to_provider - openai_chat encode" {
   let content = [@lux.LucentContent::text("Hi")]
-  let msg = @lux.LucentMessage::new(@lux.Assistant, content)
-  let choice = @lux.LucentChoice::new(0, msg, @lux.Stop, None)
+  let msg = @lux.LucentMessage::new(Assistant, content)
+  let choice = @lux.LucentChoice::new(0, msg, Stop, None)
   let resp = @lux.LucentResponse::new(
     "resp-1",
     "gpt-4o",
@@ -122,8 +120,8 @@ test "wasm_lux_response_to_provider - openai_chat encode" {
 ///|
 test "wasm_lux_response_to_provider - unknown provider returns error" {
   let content = [@lux.LucentContent::text("Hi")]
-  let msg = @lux.LucentMessage::new(@lux.Assistant, content)
-  let choice = @lux.LucentChoice::new(0, msg, @lux.Stop, None)
+  let msg = @lux.LucentMessage::new(Assistant, content)
+  let choice = @lux.LucentChoice::new(0, msg, Stop, None)
   let resp = @lux.LucentResponse::new("r", "m", None, [choice], None, None)
   let json_str = resp.to_json().stringify()
   let result = wasm_lux_response_to_provider("nonexistent", json_str)
@@ -164,14 +162,11 @@ test "wasm_events_to_sse - openai_chat SSE encode" {
   let bt = @lux.LucentBlockType::text()
   let events = [
     @lux.LucentStreamEvent::ConversationStart(meta),
-    @lux.LucentStreamEvent::BlockStart(0, bt),
-    @lux.LucentStreamEvent::BlockDelta(
-      0,
-      @lux.LucentBlockDelta::text_delta("Hello"),
-    ),
-    @lux.LucentStreamEvent::BlockEnd(0),
-    @lux.LucentStreamEvent::Finish(@lux.Stop),
-    @lux.LucentStreamEvent::Done,
+    BlockStart(0, bt),
+    BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
+    BlockEnd(0),
+    Finish(Stop),
+    Done,
   ]
   let json_arr = events.map(fn(ev) { ev.to_json() })
   let json_str = "[" + json_arr.map(fn(j) { j.stringify() }).join(",") + "]"
@@ -354,7 +349,7 @@ fn convert_source_req_json() -> Result[String, String] {
     Some([@lux.LucentContent::text("You are helpful")]),
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("Hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
       ),
     ],
     None,
@@ -381,10 +376,8 @@ fn convert_source_resp_json() -> Result[String, String] {
     [
       @lux.LucentChoice::new(
         0,
-        @lux.LucentMessage::new(@lux.Assistant, [
-          @lux.LucentContent::text("Hi back"),
-        ]),
-        @lux.Stop,
+        @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("Hi back")]),
+        Stop,
         None,
       ),
     ],
@@ -401,12 +394,12 @@ fn convert_source_resp_json() -> Result[String, String] {
 /// 标准事件流经 openai_chat 编码得到 source SSE
 fn convert_source_sse() -> Result[String, String] {
   let events : Array[@lux.LucentStreamEvent] = [
-    @lux.ConversationStart(@lux.LucentConversationMeta::new(None, None, None)),
-    @lux.BlockStart(0, @lux.Text),
-    @lux.BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
-    @lux.BlockEnd(0),
-    @lux.Finish(@lux.Stop),
-    @lux.Done,
+    ConversationStart(@lux.LucentConversationMeta::new(None, None, None)),
+    BlockStart(0, Text),
+    BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
+    BlockEnd(0),
+    Finish(Stop),
+    Done,
   ]
   match @openai_chat.lux_events_to_openai_chat_sse(events) {
     Ok(cr) => Ok(cr.value())

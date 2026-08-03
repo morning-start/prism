@@ -334,8 +334,8 @@ pub fn capability() -> @lux.ProviderCapability {
       true,
       true,
       true,
-      [@lux.Text, @lux.Image],
-      [@lux.Text],
+      [Text, Image],
+      [Text],
     ),
     None,
   )

@@ -98,7 +98,7 @@ fn ok_req() -> @lux.LucentRequest {
     None,
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
       ),
     ],
     None,
@@ -138,7 +138,7 @@ test "validate_request - openai rejects temperature below 0" {
     None,
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
       ),
     ],
     None,
@@ -175,7 +175,7 @@ test "validate_request - openai rejects temperature above 2" {
     None,
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
       ),
     ],
     None,
@@ -210,7 +210,7 @@ test "validate_request - openai rejects top_p > 1" {
     None,
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
       ),
     ],
     None,
@@ -245,7 +245,7 @@ test "validate_request - openai accepts top_p at boundary" {
     None,
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
       ),
     ],
     None,
@@ -280,7 +280,7 @@ test "validate_request - openai rejects max_output_tokens < 1" {
     None,
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
       ),
     ],
     None,
@@ -315,7 +315,7 @@ test "validate_request - openai reports multiple errors at once" {
     None,
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
       ),
     ],
     None,
@@ -352,7 +352,7 @@ test "validate_request - anthropic rejects top_k < 1" {
     None,
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
       ),
     ],
     None,
@@ -387,7 +387,7 @@ test "validate_request - anthropic accepts top_k = 1" {
     None,
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
       ),
     ],
     None,
@@ -423,7 +423,7 @@ test "validate_request - gemini accepts temperature 0.5" {
     None,
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
       ),
     ],
     None,
@@ -458,7 +458,7 @@ test "validate_request - gemini rejects temperature 1.5" {
     None,
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
       ),
     ],
     None,
@@ -489,7 +489,7 @@ test "validate_request - includes base validation errors for missing model" {
     None,
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
       ),
     ],
     None,
@@ -509,8 +509,8 @@ test "validate_request - includes base validation errors for missing model" {
 fn ok_resp() -> @lux.LucentResponse {
   let choice = @lux.LucentChoice::new(
     0,
-    @lux.LucentMessage::new(@lux.Assistant, [@lux.LucentContent::text("hi")]),
-    @lux.LucentFinishReason::Stop,
+    @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("hi")]),
+    Stop,
     None,
   )
   @lux.LucentResponse::new("r1", "m", None, [choice], None, None)
@@ -534,8 +534,8 @@ test "validate_response - includes base validation errors" {
   // LucentResponse.validate() 的 base errors 也应被包含
   let choice = @lux.LucentChoice::new(
     0,
-    @lux.LucentMessage::new(@lux.Assistant, [@lux.LucentContent::text("hi")]),
-    @lux.LucentFinishReason::Stop,
+    @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("hi")]),
+    Stop,
     None,
   )
   // 空 schema_version 和空 id 会触发 base validation

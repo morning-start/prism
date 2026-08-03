@@ -56,8 +56,8 @@ pub fn capability() -> @lux.ProviderCapability {
       true,
       true,
       true,
-      [@lux.Text, @lux.Image, @lux.Audio, @lux.Video, @lux.Pdf],
-      [@lux.Text],
+      [Text, Image, Audio, Video, Pdf],
+      [Text],
     ),
     None,
   )

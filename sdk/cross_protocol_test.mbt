@@ -16,10 +16,10 @@ let base_req : @lux.LucentRequest = @lux.LucentRequest::new(
   Some([@lux.LucentContent::text("You are helpful")]),
   [
     @lux.LucentConversationItem::message(
-      @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("Hi")]),
+      @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
     ),
     @lux.LucentConversationItem::message(
-      @lux.LucentMessage::new(@lux.Assistant, [
+      @lux.LucentMessage::new(Assistant, [
         @lux.LucentContent::text("Hello!"),
         @lux.LucentContent::tool_use(
           "tu_1",
@@ -38,7 +38,7 @@ let base_req : @lux.LucentRequest = @lux.LucentRequest::new(
       "get_weather", "Get weather", "{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}}}",
     ),
   ]),
-  Some(@lux.LucentToolChoice::Auto),
+  Some(Auto),
   @lux.LucentOptions::default(),
   None,
   None,
@@ -128,7 +128,7 @@ test "consistency - gemini roundtrip" {
     None,
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("Hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
       ),
     ],
     None,
@@ -209,7 +209,7 @@ fn req_with_opts(
     None,
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
       ),
     ],
     None,
@@ -311,29 +311,23 @@ test "params - anthropic max_tokens preserved" {
 /// 标准流事件序列
 fn base_events() -> Array[@lux.LucentStreamEvent] {
   [
-    @lux.LucentStreamEvent::ConversationStart(
+    ConversationStart(
       @lux.LucentConversationMeta::new(Some("resp-1"), Some("test-model"), None),
     ),
-    @lux.LucentStreamEvent::ItemStart(
+    ItemStart(
       0,
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.Assistant, [@lux.LucentContent::text("")]),
+        @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("")]),
       ),
     ),
-    @lux.LucentStreamEvent::BlockStart(0, @lux.LucentBlockType::text()),
-    @lux.LucentStreamEvent::BlockDelta(
-      0,
-      @lux.LucentBlockDelta::text_delta("Hello"),
-    ),
-    @lux.LucentStreamEvent::BlockDelta(
-      0,
-      @lux.LucentBlockDelta::text_delta(" world"),
-    ),
-    @lux.LucentStreamEvent::BlockEnd(0),
-    @lux.LucentStreamEvent::ItemEnd(0),
-    @lux.LucentStreamEvent::Usage(@lux.LucentUsage::new(10, 20, 30)),
-    @lux.LucentStreamEvent::Finish(@lux.Stop),
-    @lux.LucentStreamEvent::Done,
+    BlockStart(0, @lux.LucentBlockType::text()),
+    BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
+    BlockDelta(0, @lux.LucentBlockDelta::text_delta(" world")),
+    BlockEnd(0),
+    ItemEnd(0),
+    Usage(@lux.LucentUsage::new(10, 20, 30)),
+    Finish(Stop),
+    Done,
   ]
 }
 
@@ -415,17 +409,13 @@ test "multi - three messages roundtrip" {
     Some([@lux.LucentContent::text("You are helpful")]),
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("Hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
       ),
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.Assistant, [
-          @lux.LucentContent::text("Hello!"),
-        ]),
+        @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("Hello!")]),
       ),
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [
-          @lux.LucentContent::text("Weather?"),
-        ]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Weather?")]),
       ),
     ],
     None,
@@ -473,7 +463,7 @@ test "multi - system instruction preserved" {
     Some([@lux.LucentContent::text("You are helpful")]),
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("Hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
       ),
     ],
     None,
@@ -521,7 +511,7 @@ test "multi - two tools preserved" {
     None,
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("Hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
       ),
     ],
     Some([
@@ -590,7 +580,7 @@ fn kind_rt(kind : @lux.LucentToolKind, name : String) -> Result[Bool, String] {
 
 ///|
 test "kind - function" {
-  match kind_rt(@lux.Function, "function") {
+  match kind_rt(Function, "function") {
     Ok(v) => assert_true(v)
     Err(e) => fail(e)
   }
@@ -598,7 +588,7 @@ test "kind - function" {
 
 ///|
 test "kind - file_search" {
-  match kind_rt(@lux.FileSearch, "file_search") {
+  match kind_rt(FileSearch, "file_search") {
     Ok(v) => assert_true(v)
     Err(e) => fail(e)
   }
@@ -606,7 +596,7 @@ test "kind - file_search" {
 
 ///|
 test "kind - web_search" {
-  match kind_rt(@lux.WebSearch, "web_search") {
+  match kind_rt(WebSearch, "web_search") {
     Ok(v) => assert_true(v)
     Err(e) => fail(e)
   }
@@ -614,7 +604,7 @@ test "kind - web_search" {
 
 ///|
 test "kind - code_interpreter" {
-  match kind_rt(@lux.CodeInterpreter, "code_interpreter") {
+  match kind_rt(CodeInterpreter, "code_interpreter") {
     Ok(v) => assert_true(v)
     Err(e) => fail(e)
   }
@@ -622,7 +612,7 @@ test "kind - code_interpreter" {
 
 ///|
 test "kind - computer_use" {
-  match kind_rt(@lux.ComputerUse, "computer_use") {
+  match kind_rt(ComputerUse, "computer_use") {
     Ok(v) => assert_true(v)
     Err(e) => fail(e)
   }
@@ -630,7 +620,7 @@ test "kind - computer_use" {
 
 ///|
 test "kind - code_execution" {
-  match kind_rt(@lux.CodeExecution, "code_execution") {
+  match kind_rt(CodeExecution, "code_execution") {
     Ok(v) => assert_true(v)
     Err(e) => fail(e)
   }
@@ -638,7 +628,7 @@ test "kind - code_execution" {
 
 ///|
 test "kind - shell" {
-  match kind_rt(@lux.Shell, "shell") {
+  match kind_rt(Shell, "shell") {
     Ok(v) => assert_true(v)
     Err(e) => fail(e)
   }
@@ -646,7 +636,7 @@ test "kind - shell" {
 
 ///|
 test "kind - native" {
-  match kind_rt(@lux.Native("custom"), "native") {
+  match kind_rt(Native("custom"), "native") {
     Ok(v) => assert_true(v)
     Err(e) => fail(e)
   }
@@ -659,7 +649,7 @@ test "kind - native" {
 /// Codex phase 字段 round-trip（通过 IR 序列化验证）
 test "sub - phase field roundtrip" {
   let msg = @lux.LucentMessage::with_phase(
-    @lux.Assistant,
+    Assistant,
     [@lux.LucentContent::text("Hello")],
     Some("commentary"),
   )
@@ -673,7 +663,7 @@ test "sub - phase field roundtrip" {
 ///|
 /// Codex phase absent 时缺省为 None
 test "sub - phase absent defaults to none" {
-  let msg = @lux.LucentMessage::new(@lux.Assistant, [
+  let msg = @lux.LucentMessage::new(Assistant, [
     @lux.LucentContent::text("Hello"),
   ])
   assert_eq(msg.phase, None)
@@ -708,7 +698,7 @@ test "fidelity - openai_chat native content yields Unsupported diagnostic" {
     None,
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [
+        @lux.LucentMessage::new(User, [
           @lux.LucentContent::native(
             "vendor-x",
             @json.parse("{\"x\":1}") catch {
@@ -733,7 +723,7 @@ test "fidelity - openai_chat native content yields Unsupported diagnostic" {
       // 但 Native 内容被丢弃——必须携带诊断
       let mut has_diag = false
       for d in cr.diagnostics() {
-        if d.status == @lux.Unsupported || d.status == @lux.Degraded {
+        if d.status == Unsupported || d.status == Degraded {
           has_diag = true
         }
       }

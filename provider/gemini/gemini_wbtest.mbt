@@ -98,7 +98,7 @@ test "lux_request_to_gemini - simple user message" {
   let req = @lux.LucentRequest::from_messages(
     "gemini-2.5-pro",
     None,
-    [@lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")])],
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
     None,
     None,
     @lux.LucentOptions::default(),
@@ -158,10 +158,10 @@ test "gemini_to_lux_response - multiple candidates" {
 
 ///|
 test "lux_response_to_gemini - text response" {
-  let msg = @lux.LucentMessage::new(@lux.Assistant, [
+  let msg = @lux.LucentMessage::new(Assistant, [
     @lux.LucentContent::text("Hello"),
   ])
-  let choice = @lux.LucentChoice::new(0, msg, @lux.Stop, None)
+  let choice = @lux.LucentChoice::new(0, msg, Stop, None)
   let resp = @lux.LucentResponse::new(
     "",
     "gemini-2.5-pro",
@@ -296,7 +296,7 @@ test "gemini store unsupported diagnostic" {
     None,
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("Hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
       ),
     ],
     None,
@@ -328,7 +328,7 @@ test "gemini extras round-trip" {
     None,
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("Hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
       ),
     ],
     None,
@@ -365,10 +365,10 @@ test "gemini thought part - only Thinking, no text placeholder" {
     [
       @lux.LucentChoice::new(
         0,
-        @lux.LucentMessage::new(@lux.Assistant, [
+        @lux.LucentMessage::new(Assistant, [
           @lux.LucentContent::thinking("think...", None),
         ]),
-        @lux.Stop,
+        Stop,
         None,
       ),
     ],

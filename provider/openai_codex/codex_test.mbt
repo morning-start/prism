@@ -20,7 +20,7 @@ test "round trip - request encode then decode preserves semantics" {
   let original = @lux.LucentRequest::from_messages(
     "gpt-4o",
     Some([@lux.LucentContent::text("You are helpful")]),
-    [@lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")])],
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
     None,
     None,
     @lux.LucentOptions::default(),
@@ -73,8 +73,8 @@ test "round trip - response encode then decode preserves text" {
     [
       @lux.LucentChoice::new(
         0,
-        @lux.LucentMessage::new(@lux.Assistant, [@lux.LucentContent::text("hi")]),
-        @lux.Stop,
+        @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("hi")]),
+        Stop,
         None,
       ),
     ],

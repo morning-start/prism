@@ -590,7 +590,7 @@ test "openai_chat_sse_to_events - usage frame" {
 test "lux_events_to_openai_chat_sse - text sequence" {
   let events : Array[@lux.LucentStreamEvent] = [
     ConversationStart(@lux.LucentConversationMeta::new(None, None, None)),
-    BlockStart(0, @lux.Text),
+    BlockStart(0, Text),
     BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
     BlockEnd(0),
     Finish(Stop),
@@ -725,7 +725,7 @@ test "encode - Reasoning item yields Unsupported diagnostic" {
       // 但必须携带诊断
       let mut has_unsupported = false
       for d in cr.diagnostics() {
-        if d.status == @lux.Unsupported {
+        if d.status == Unsupported {
           has_unsupported = true
         }
       }
@@ -766,7 +766,7 @@ test "encode - AgentAction item yields Unsupported diagnostic" {
       assert_true(cr.value().contains("model"))
       let mut has_unsupported = false
       for d in cr.diagnostics() {
-        if d.status == @lux.Unsupported {
+        if d.status == Unsupported {
           has_unsupported = true
         }
       }
@@ -786,7 +786,7 @@ test "chat store/extras round-trip" {
     None,
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("Hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
       ),
     ],
     None,

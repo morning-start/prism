@@ -84,7 +84,7 @@ test "lux_request_to_openai_responses - simple user message" {
   let req = @lux.LucentRequest::from_messages(
     "gpt-5",
     None,
-    [@lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")])],
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
     None,
     None,
     @lux.LucentOptions::default(),
@@ -150,10 +150,10 @@ test "openai_responses_to_lux_response - function_call output" {
 
 ///|
 test "lux_response_to_openai_responses - text response" {
-  let msg = @lux.LucentMessage::new(@lux.Assistant, [
+  let msg = @lux.LucentMessage::new(Assistant, [
     @lux.LucentContent::text("Hello"),
   ])
-  let choice = @lux.LucentChoice::new(0, msg, @lux.Stop, None)
+  let choice = @lux.LucentChoice::new(0, msg, Stop, None)
   let resp = @lux.LucentResponse::new(
     "resp_1",
     "gpt-5",
@@ -236,7 +236,7 @@ test "lux_events_to_openai_responses_sse - text sequence" {
     ItemStart(
       0,
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.Assistant, [@lux.LucentContent::text("")]),
+        @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("")]),
       ),
     ),
     BlockStart(0, Text),
@@ -269,14 +269,14 @@ test "decode - reasoning config yields Unsupported diagnostic" {
     None,
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("Hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
       ),
     ],
     None,
     None,
     @lux.LucentOptions::default(),
     None,
-    Some(@lux.LucentReasoningConfig::new(Some(@lux.Medium), None)),
+    Some(@lux.LucentReasoningConfig::new(Some(Medium), None)),
     None,
     None,
   )
@@ -288,7 +288,7 @@ test "decode - reasoning config yields Unsupported diagnostic" {
           // reasoning 空实现：必须携带 Unsupported 诊断
           let mut has_unsupported = false
           for d in cr2.diagnostics() {
-            if d.status == @lux.Unsupported {
+            if d.status == Unsupported {
               has_unsupported = true
             }
           }
@@ -308,7 +308,7 @@ test "decode - input_image yields Degraded diagnostic" {
     Ok(cr) => {
       let mut has_degraded = false
       for d in cr.diagnostics() {
-        if d.status == @lux.Degraded {
+        if d.status == Degraded {
           has_degraded = true
         }
       }
@@ -325,7 +325,7 @@ test "sse - invalid data yields Invalid diagnostic" {
     Ok(cr) => {
       let mut has_invalid = false
       for d in cr.diagnostics() {
-        if d.status == @lux.Invalid {
+        if d.status == Invalid {
           has_invalid = true
         }
       }
@@ -345,7 +345,7 @@ test "responses store/extras round-trip" {
     None,
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("Hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
       ),
     ],
     None,

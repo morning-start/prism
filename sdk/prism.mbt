@@ -164,11 +164,7 @@ pub fn Prism::decode_response_with_diagnostics(
           let mut checked = result
           for error in schema.validate_response(resp) {
             checked = checked.with_diagnostic(
-              @lux.ConversionDiagnostic::new(
-                "response",
-                @lux.Invalid,
-                Some(error),
-              ),
+              @lux.ConversionDiagnostic::new("response", Invalid, Some(error)),
             )
           }
           Ok(checked)
@@ -199,7 +195,7 @@ pub fn Prism::encode_request_with_diagnostics(
     Some(schema) =>
       for error in schema.validate_request(req) {
         result = result.with_diagnostic(
-          @lux.ConversionDiagnostic::new("request", @lux.Invalid, Some(error)),
+          @lux.ConversionDiagnostic::new("request", Invalid, Some(error)),
         )
       }
     None => ()

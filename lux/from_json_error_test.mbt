@@ -555,7 +555,7 @@ test "LucentModality from_json - empty string falls back to Native" {
   // from_json 对 String 调用 from_string；from_string 返回 None 时 Ok(Native(s))
   // 所以空串是合法的，但应产生 Native("")
   match LucentModality::from_json(@json.parse("\"\"")) {
-    Ok(LucentModality::Native(s)) => assert_eq(s, "")
+    Ok(Native(s)) => assert_eq(s, "")
     _ => fail("expected Native")
   }
 }

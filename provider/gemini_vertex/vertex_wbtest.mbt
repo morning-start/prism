@@ -78,7 +78,7 @@ test "lux_request_to_vertex - simple user message" {
   let req = @lux.LucentRequest::from_messages(
     "gemini-2.5-pro",
     None,
-    [@lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")])],
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
     None,
     None,
     @lux.LucentOptions::default(),
@@ -133,10 +133,10 @@ test "vertex_to_lux_response - invalid json" {
 
 ///|
 test "lux_response_to_vertex - text response" {
-  let msg = @lux.LucentMessage::new(@lux.Assistant, [
+  let msg = @lux.LucentMessage::new(Assistant, [
     @lux.LucentContent::text("Hello"),
   ])
-  let choice = @lux.LucentChoice::new(0, msg, @lux.Stop, None)
+  let choice = @lux.LucentChoice::new(0, msg, Stop, None)
   let resp = @lux.LucentResponse::new(
     "",
     "gemini-2.5-pro",
@@ -196,7 +196,7 @@ test "round trip - vertex request encode then decode" {
   let original = @lux.LucentRequest::from_messages(
     "gemini-2.5-pro",
     Some([@lux.LucentContent::text("Be helpful")]),
-    [@lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")])],
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
     None,
     None,
     @lux.LucentOptions::default(),

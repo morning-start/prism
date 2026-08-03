@@ -226,7 +226,7 @@ test "lux_request_to_anthropic - simple user message" {
   let req = @lux.LucentRequest::from_messages(
     "claude-sonnet-4",
     None,
-    [@lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("Hello")])],
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("Hello")])],
     None,
     None,
     @lux.LucentOptions::new(
@@ -263,7 +263,7 @@ test "lux_request_to_anthropic - instructions as system" {
   let req = @lux.LucentRequest::from_messages(
     "claude-sonnet-4",
     Some([@lux.LucentContent::text("You are helpful")]),
-    [@lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")])],
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
     None,
     None,
     @lux.LucentOptions::new(
@@ -296,8 +296,8 @@ test "lux_request_to_anthropic - tool_use encoded" {
     "claude-sonnet-4",
     None,
     [
-      @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("weather?")]),
-      @lux.LucentMessage::new(@lux.Assistant, [
+      @lux.LucentMessage::new(User, [@lux.LucentContent::text("weather?")]),
+      @lux.LucentMessage::new(Assistant, [
         @lux.LucentContent::tool_use(
           "tu_1",
           "get_weather",
@@ -413,7 +413,7 @@ test "lux_request_to_anthropic - tools with input_schema" {
   let req = @lux.LucentRequest::from_messages(
     "claude-sonnet-4",
     None,
-    [@lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")])],
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
     Some([
       @lux.LucentTool::simple(
         "get_weather", "Get weather", "{\"type\":\"object\"}",
@@ -449,7 +449,7 @@ test "lux_request_to_anthropic - thinking config" {
   let req = @lux.LucentRequest::from_messages(
     "claude-sonnet-4",
     None,
-    [@lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")])],
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
     None,
     None,
     @lux.LucentOptions::new(
@@ -559,8 +559,8 @@ test "anthropic_to_lux_response - invalid json" {
 ///|
 test "lux_response_to_anthropic - text response" {
   let content = @lux.LucentContent::text("Hello!")
-  let msg = @lux.LucentMessage::new(@lux.Assistant, [content])
-  let choice = @lux.LucentChoice::new(0, msg, @lux.Stop, None)
+  let msg = @lux.LucentMessage::new(Assistant, [content])
+  let choice = @lux.LucentChoice::new(0, msg, Stop, None)
   let resp = @lux.LucentResponse::new(
     "msg_1",
     "claude-sonnet-4",
@@ -591,8 +591,8 @@ test "lux_response_to_anthropic - with tool_use" {
     "{\"city\":\"Beijing\"}",
     None,
   )
-  let msg = @lux.LucentMessage::new(@lux.Assistant, [tu])
-  let choice = @lux.LucentChoice::new(0, msg, @lux.ToolCalls, None)
+  let msg = @lux.LucentMessage::new(Assistant, [tu])
+  let choice = @lux.LucentChoice::new(0, msg, ToolCalls, None)
   let resp = @lux.LucentResponse::new(
     "msg_2",
     "claude-sonnet-4",
@@ -782,7 +782,7 @@ test "encode - native media yields Unsupported diagnostic not empty string" {
     None,
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [
+        @lux.LucentMessage::new(User, [
           @lux.LucentContent::native(
             "vendor-x",
             @json.parse("\"raw\"") catch {
@@ -807,7 +807,7 @@ test "encode - native media yields Unsupported diagnostic not empty string" {
       // 必须携带诊断
       let mut has_unsupported = false
       for d in cr.diagnostics() {
-        if d.status == @lux.Unsupported {
+        if d.status == Unsupported {
           has_unsupported = true
         }
       }
@@ -824,11 +824,8 @@ test "encode - image url maps to anthropic image block" {
     None,
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [
-          @lux.LucentContent::image(
-            "image/png",
-            @lux.LucentMediaSource::Url("https://x.com/a.png"),
-          ),
+        @lux.LucentMessage::new(User, [
+          @lux.LucentContent::image("image/png", Url("https://x.com/a.png")),
         ]),
       ),
     ],
@@ -858,7 +855,7 @@ test "anthropic store unsupported diagnostic" {
     None,
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("Hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
       ),
     ],
     None,
@@ -890,7 +887,7 @@ test "anthropic extras round-trip" {
     None,
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("Hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
       ),
     ],
     None,

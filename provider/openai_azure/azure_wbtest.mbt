@@ -67,7 +67,7 @@ test "lux_request_to_azure - simple user message" {
   let req = @lux.LucentRequest::from_messages(
     "gpt-5",
     None,
-    [@lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")])],
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
     None,
     None,
     @lux.LucentOptions::default(),
@@ -142,10 +142,10 @@ test "azure_to_lux_response - invalid json" {
 
 ///|
 test "lux_response_to_azure - text response" {
-  let msg = @lux.LucentMessage::new(@lux.Assistant, [
+  let msg = @lux.LucentMessage::new(Assistant, [
     @lux.LucentContent::text("Hello"),
   ])
-  let choice = @lux.LucentChoice::new(0, msg, @lux.Stop, None)
+  let choice = @lux.LucentChoice::new(0, msg, Stop, None)
   let resp = @lux.LucentResponse::new(
     "resp_1",
     "gpt-5",
@@ -195,7 +195,7 @@ test "lux_events_to_azure_sse - text sequence" {
     ItemStart(
       0,
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.Assistant, [@lux.LucentContent::text("")]),
+        @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("")]),
       ),
     ),
     BlockStart(0, Text),
@@ -223,7 +223,7 @@ test "round trip - azure request encode then decode" {
   let original = @lux.LucentRequest::from_messages(
     "gpt-5",
     Some([@lux.LucentContent::text("Be helpful")]),
-    [@lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")])],
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
     None,
     None,
     @lux.LucentOptions::default(),

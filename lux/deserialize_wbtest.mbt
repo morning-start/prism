@@ -8,12 +8,12 @@
 test "LucentRole round trip - all variants" {
   let values = [
     LucentRole::System,
-    LucentRole::User,
-    LucentRole::Assistant,
-    LucentRole::Tool,
-    LucentRole::Model,
-    LucentRole::Developer,
-    LucentRole::Native("custom"),
+    User,
+    Assistant,
+    Tool,
+    Model,
+    Developer,
+    Native("custom"),
   ]
   for v in values {
     let s = v.to_json().stringify()
@@ -30,11 +30,11 @@ test "LucentRole round trip - all variants" {
 test "LucentModality round trip - all variants" {
   let values = [
     LucentModality::Text,
-    LucentModality::Image,
-    LucentModality::Audio,
-    LucentModality::Video,
-    LucentModality::Pdf,
-    LucentModality::Native("haptic"),
+    Image,
+    Audio,
+    Video,
+    Pdf,
+    Native("haptic"),
   ]
   for v in values {
     let s = v.to_json().stringify()
@@ -50,12 +50,9 @@ test "LucentModality round trip - all variants" {
 /// === LucentMultimedia ===
 test "LucentMultimedia round trip - all sources" {
   let values = [
-    LucentMultimedia::new(
-      "image/jpeg",
-      LucentMediaSource::Url("https://example.com/photo.jpg"),
-    ),
-    LucentMultimedia::new("audio/wav", LucentMediaSource::Inline("base64data")),
-    LucentMultimedia::new("image/png", LucentMediaSource::FileUri("file-abc")),
+    LucentMultimedia::new("image/jpeg", Url("https://example.com/photo.jpg")),
+    LucentMultimedia::new("audio/wav", Inline("base64data")),
+    LucentMultimedia::new("image/png", FileUri("file-abc")),
   ]
   for v in values {
     let s = v.to_json().stringify()
@@ -72,19 +69,13 @@ test "LucentMultimedia round trip - all sources" {
 test "LucentAnnotation round trip - full and minimal" {
   let values = [
     LucentAnnotation::new(
-      LucentAnnotationKind::Url,
+      Url,
       Some("https://source.com"),
       Some("ref-1"),
       Some(0),
       Some(100),
     ),
-    LucentAnnotation::new(
-      LucentAnnotationKind::FileCitation,
-      None,
-      None,
-      None,
-      None,
-    ),
+    LucentAnnotation::new(FileCitation, None, None, None, None),
   ]
   for v in values {
     let s = v.to_json().stringify()
@@ -180,13 +171,7 @@ test "LucentAgentAction round trip - minimal and all fields" {
 ///|
 /// === LucentContent ===
 test "LucentContent round trip - all variants" {
-  let ann = LucentAnnotation::new(
-    LucentAnnotationKind::Url,
-    Some("https://src"),
-    None,
-    None,
-    None,
-  )
+  let ann = LucentAnnotation::new(Url, Some("https://src"), None, None, None)
   let values = [
     LucentContent::text("Hello world"),
     LucentContent::text_with_annotations("cited text", [ann]),
@@ -194,15 +179,9 @@ test "LucentContent round trip - all variants" {
     LucentContent::tool_result("call-1", [LucentContent::text("result")]),
     LucentContent::thinking("hmm...", Some("sig-1")),
     LucentContent::refusal("I cannot answer that"),
-    LucentContent::image(
-      "image/png",
-      LucentMediaSource::Url("https://example.com/img.png"),
-    ),
-    LucentContent::audio("audio/mp3", LucentMediaSource::Inline("base64audio")),
-    LucentContent::video(
-      "video/mp4",
-      LucentMediaSource::Url("https://example.com/vid.mp4"),
-    ),
+    LucentContent::image("image/png", Url("https://example.com/img.png")),
+    LucentContent::audio("audio/mp3", Inline("base64audio")),
+    LucentContent::video("video/mp4", Url("https://example.com/vid.mp4")),
     LucentContent::native("custom_format", @json.parse("{\"key\":\"val\"}")),
   ]
   for v in values {
@@ -218,7 +197,7 @@ test "LucentContent round trip - all variants" {
 ///|
 /// === LucentMessage ===
 test "LucentMessage round trip" {
-  let v = LucentMessage::new(LucentRole::User, [
+  let v = LucentMessage::new(User, [
     LucentContent::text("Hello"),
     LucentContent::text("World"),
   ])
@@ -235,7 +214,7 @@ test "LucentMessage round trip" {
 test "LucentConversationItem round trip - all variants" {
   let values = [
     LucentConversationItem::message(
-      LucentMessage::new(LucentRole::Assistant, [LucentContent::text("ok")]),
+      LucentMessage::new(Assistant, [LucentContent::text("ok")]),
     ),
     LucentConversationItem::tool_call(
       LucentToolUse::new("call-1", "search", "{}", None),
@@ -291,8 +270,8 @@ test "LucentToolChoice round trip - all variants" {
   let values = [
     LucentToolChoice::Auto,
     (None : LucentToolChoice),
-    LucentToolChoice::Required,
-    LucentToolChoice::SpecificTool("search"),
+    Required,
+    SpecificTool("search"),
   ]
   for v in values {
     let s = v.to_json().stringify()
@@ -309,8 +288,8 @@ test "LucentToolChoice round trip - all variants" {
 test "LucentStructuredOutput round trip - all variants" {
   let values = [
     LucentStructuredOutput::JsonObject,
-    LucentStructuredOutput::Text,
-    LucentStructuredOutput::JsonSchema("{\"type\":\"object\"}"),
+    Text,
+    JsonSchema("{\"type\":\"object\"}"),
   ]
   for v in values {
     let s = v.to_json().stringify()
@@ -336,7 +315,7 @@ test "LucentOptions round trip - defaults and all fields" {
       true,
       Some(1),
       Some(42),
-      Some(LucentStructuredOutput::JsonObject),
+      Some(JsonObject),
       None,
       None,
     ),
@@ -390,7 +369,7 @@ test "LucentRequest round trip - minimal and with all fields" {
     LucentRequest::from_messages(
       "gpt-4o",
       None,
-      [LucentMessage::new(LucentRole::User, [LucentContent::text("hi")])],
+      [LucentMessage::new(User, [LucentContent::text("hi")])],
       None,
       None,
       LucentOptions::default(),
@@ -404,11 +383,11 @@ test "LucentRequest round trip - minimal and with all fields" {
       Some([LucentContent::text("You are helpful")]),
       [
         LucentConversationItem::message(
-          LucentMessage::new(LucentRole::User, [LucentContent::text("query")]),
+          LucentMessage::new(User, [LucentContent::text("query")]),
         ),
       ],
       Some([tool]),
-      Some(LucentToolChoice::Auto),
+      Some(Auto),
       LucentOptions::default(),
       Some(LucentCapabilities::default()),
       Some(LucentReasoningConfig::disabled()),
@@ -430,8 +409,8 @@ test "LucentRequest round trip - minimal and with all fields" {
 /// === LucentResponse ===
 test "LucentResponse round trip" {
   let content = LucentContent::text("Hello!")
-  let msg = LucentMessage::new(LucentRole::Assistant, [content])
-  let choice = LucentChoice::new(0, msg, LucentFinishReason::Stop, None)
+  let msg = LucentMessage::new(Assistant, [content])
+  let choice = LucentChoice::new(0, msg, Stop, None)
   let v = LucentResponse::new(
     "resp-1",
     "gpt-4o",
@@ -470,13 +449,13 @@ test "LucentUsage round trip - basic and with reasoning" {
 test "LucentFinishReason round trip" {
   let values = [
     LucentFinishReason::Stop,
-    LucentFinishReason::Length,
-    LucentFinishReason::ToolCalls,
-    LucentFinishReason::Safety,
-    LucentFinishReason::Recitation,
-    LucentFinishReason::MalformedToolCall,
-    LucentFinishReason::Error,
-    LucentFinishReason::Native("custom"),
+    Length,
+    ToolCalls,
+    Safety,
+    Recitation,
+    MalformedToolCall,
+    Error,
+    Native("custom"),
   ]
   for v in values {
     let s = v.to_json().stringify()
@@ -506,14 +485,14 @@ test "LucentChoice round trip - without and with safety_ratings" {
   let values = [
     LucentChoice::new(
       0,
-      LucentMessage::new(LucentRole::Assistant, [LucentContent::text("ok")]),
-      LucentFinishReason::Stop,
+      LucentMessage::new(Assistant, [LucentContent::text("ok")]),
+      Stop,
       None,
     ),
     LucentChoice::new(
       0,
-      LucentMessage::new(LucentRole::Assistant, [LucentContent::text("ok")]),
-      LucentFinishReason::Safety,
+      LucentMessage::new(Assistant, [LucentContent::text("ok")]),
+      Safety,
       Some([LucentSafetyRating::new("HARASSMENT", "NEGLIGIBLE")]),
     ),
   ]
@@ -530,11 +509,7 @@ test "LucentChoice round trip - without and with safety_ratings" {
 ///|
 /// === LucentError + LucentErrorKind ===
 test "LucentError round trip" {
-  let v = LucentError::new(
-    LucentErrorKind::RateLimit,
-    "Too many requests",
-    Some("429"),
-  )
+  let v = LucentError::new(RateLimit, "Too many requests", Some("429"))
   let s = v.to_json().stringify()
   let parsed = @json.parse(s)
   match LucentError::from_json(parsed) {
@@ -547,11 +522,11 @@ test "LucentError round trip" {
 test "LucentErrorKind round trip" {
   let values = [
     LucentErrorKind::RateLimit,
-    LucentErrorKind::InvalidRequest,
-    LucentErrorKind::Authentication,
-    LucentErrorKind::ServerError,
-    LucentErrorKind::ContentFilter,
-    LucentErrorKind::Native("custom"),
+    InvalidRequest,
+    Authentication,
+    ServerError,
+    ContentFilter,
+    Native("custom"),
   ]
   for v in values {
     let s = v.to_json().stringify()
@@ -568,9 +543,9 @@ test "LucentErrorKind round trip" {
 test "LucentBlockType round trip" {
   let values = [
     LucentBlockType::Text,
-    LucentBlockType::Thinking,
-    LucentBlockType::ToolCall("call-1", "search"),
-    LucentBlockType::Native("custom"),
+    Thinking,
+    ToolCall("call-1", "search"),
+    Native("custom"),
   ]
   for v in values {
     let s = v.to_json().stringify()
@@ -610,35 +585,25 @@ test "LucentStreamEvent round trip - all events" {
     Some("gpt-4o"),
     Some(5),
   )
-  let msg = LucentMessage::new(LucentRole::User, [LucentContent::text("hi")])
+  let msg = LucentMessage::new(User, [LucentContent::text("hi")])
   let ci = LucentConversationItem::message(msg)
   let bt = LucentBlockType::ToolCall("call-1", "search")
   let usage = LucentUsage::new(5, 10, 15)
-  let err = LucentError::new(
-    LucentErrorKind::ServerError,
-    "internal error",
-    None,
-  )
-  let ann = LucentAnnotation::new(
-    LucentAnnotationKind::Url,
-    Some("https://src"),
-    None,
-    None,
-    None,
-  )
+  let err = LucentError::new(ServerError, "internal error", None)
+  let ann = LucentAnnotation::new(Url, Some("https://src"), None, None, None)
   let values = [
     LucentStreamEvent::ConversationStart(meta),
-    LucentStreamEvent::ItemStart(0, ci),
-    LucentStreamEvent::ItemEnd(0),
-    LucentStreamEvent::BlockStart(0, bt),
-    LucentStreamEvent::BlockDelta(0, LucentBlockDelta::text_delta("partial")),
-    LucentStreamEvent::BlockEnd(0),
-    LucentStreamEvent::BlockDiscard(0),
-    LucentStreamEvent::Finish(LucentFinishReason::Stop),
-    LucentStreamEvent::Usage(usage),
-    LucentStreamEvent::Error(err),
-    LucentStreamEvent::Done,
-    LucentStreamEvent::Annotations(0, [ann]),
+    ItemStart(0, ci),
+    ItemEnd(0),
+    BlockStart(0, bt),
+    BlockDelta(0, LucentBlockDelta::text_delta("partial")),
+    BlockEnd(0),
+    BlockDiscard(0),
+    Finish(Stop),
+    Usage(usage),
+    Error(err),
+    Done,
+    Annotations(0, [ann]),
   ]
   for v in values {
     let s = v.to_json().stringify()

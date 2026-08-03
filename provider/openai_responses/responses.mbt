@@ -33,9 +33,9 @@ fn parse_input_item(
       let role_str = @internal.field_str(item, "role").unwrap_or("user")
       let role = match role_str {
         "user" => @lux.User
-        "assistant" => @lux.Assistant
-        "developer" => @lux.Developer
-        _ => @lux.User
+        "assistant" => Assistant
+        "developer" => Developer
+        _ => User
       }
       let content = match @internal.field_arr(item, "content") {
         Some(parts) => {
@@ -53,7 +53,7 @@ fn parse_input_item(
                 diagnostics.push(
                   @lux.ConversionDiagnostic::new(
                     "input.image",
-                    @lux.Degraded,
+                    Degraded,
                     Some("input_image not mapped to multimedia"),
                   ),
                 )
@@ -62,7 +62,7 @@ fn parse_input_item(
                 diagnostics.push(
                   @lux.ConversionDiagnostic::new(
                     "input.file",
-                    @lux.Degraded,
+                    Degraded,
                     Some("input_file not mapped to multimedia"),
                   ),
                 )
@@ -163,9 +163,7 @@ fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
           Some(p) => p.stringify()
           None => "{}"
         }
-        result.push(
-          @lux.LucentTool::new(name, desc, params, None, @lux.Function),
-        )
+        result.push(@lux.LucentTool::new(name, desc, params, None, Function))
         i = i + 1
       }
       result
@@ -185,7 +183,7 @@ fn parse_reasoning(
       diagnostics.push(
         @lux.ConversionDiagnostic::new(
           "reasoning.config",
-          @lux.Unsupported,
+          Unsupported,
           Some("reasoning config not parsed by openai-responses"),
         ),
       )
@@ -203,12 +201,11 @@ fn parse_text_format(jv : Json) -> @lux.LucentStructuredOutput? {
       match @internal.obj_get(obj, "format") {
         Some(fmt) =>
           match @internal.field_str(fmt, "type") {
-            Some("text") => Some(@lux.Text)
-            Some("json_object") => Some(@lux.JsonObject)
+            Some("text") => Some(Text)
+            Some("json_object") => Some(JsonObject)
             Some("json_schema") =>
               match @internal.obj_get(fmt, "schema") {
-                Some(s) =>
-                  Some(@lux.LucentStructuredOutput::JsonSchema(s.stringify()))
+                Some(s) => Some(JsonSchema(s.stringify()))
                 None => None
               }
             _ => None
@@ -236,8 +233,8 @@ pub fn openai_responses_to_lux_request(
   let tools = if tools_list.length() > 0 { Some(tools_list) } else { None }
   let tool_choice = match @internal.field_str(jv, "tool_choice") {
     Some("auto") => Some(@lux.LucentToolChoice::Auto)
-    Some("none") => Some(@lux.None)
-    Some("required") => Some(@lux.Required)
+    Some("none") => Some(None)
+    Some("required") => Some(Required)
     _ => None
   }
   let temperature = @internal.field_num(jv, "temperature")
@@ -588,13 +585,13 @@ pub fn openai_responses_json_to_lux_response(
     }
     None => ()
   }
-  let msg = @lux.LucentMessage::new(@lux.Assistant, content)
+  let msg = @lux.LucentMessage::new(Assistant, content)
   let finish = match @internal.field_str(jv, "status") {
     Some("completed") => @lux.Stop
-    Some("incomplete") => @lux.Length
-    Some("failed") => @lux.Error
+    Some("incomplete") => Length
+    Some("failed") => Error
     Some(other) => @lux.LucentFinishReason::from_string(other)
-    None => @lux.Stop
+    None => Stop
   }
   let choice = @lux.LucentChoice::new(0, msg, finish, None)
   // usage
@@ -799,7 +796,7 @@ pub fn openai_responses_sse_to_events(
         diagnostics.push(
           @lux.ConversionDiagnostic::new(
             "sse.data",
-            @lux.Invalid,
+            Invalid,
             Some("invalid JSON in SSE data line: " + data_str),
           ),
         )
@@ -814,7 +811,7 @@ pub fn openai_responses_sse_to_events(
             let rid = @internal.field_str(r, "id")
             let rmodel = @internal.field_str(r, "model")
             events.push(
-              @lux.ConversationStart(
+              ConversationStart(
                 @lux.LucentConversationMeta::new(rid, rmodel, None),
               ),
             )
@@ -826,7 +823,7 @@ pub fn openai_responses_sse_to_events(
         match @internal.obj_get(jv, "item") {
           Some(item) =>
             match parse_input_item(item, diagnostics) {
-              Some(ci) => events.push(@lux.ItemStart(idx, ci))
+              Some(ci) => events.push(ItemStart(idx, ci))
               None => ()
             }
           None => ()
@@ -837,9 +834,8 @@ pub fn openai_responses_sse_to_events(
         match @internal.obj_get(jv, "part") {
           Some(part) =>
             match @internal.field_str(part, "type") {
-              Some("output_text") =>
-                events.push(@lux.BlockStart(idx, @lux.Text))
-              Some("refusal") => events.push(@lux.BlockStart(idx, @lux.Refusal))
+              Some("output_text") => events.push(BlockStart(idx, Text))
+              Some("refusal") => events.push(BlockStart(idx, Refusal))
               _ => ()
             }
           None => ()
@@ -849,55 +845,48 @@ pub fn openai_responses_sse_to_events(
         let idx = @internal.field_int(jv, "content_index").unwrap_or(0)
         match @internal.field_str(jv, "delta") {
           Some(t) =>
-            events.push(
-              @lux.BlockDelta(idx, @lux.LucentBlockDelta::text_delta(t)),
-            )
+            events.push(BlockDelta(idx, @lux.LucentBlockDelta::text_delta(t)))
           None => ()
         }
       }
       "response.output_text.done" => {
         let idx = @internal.field_int(jv, "content_index").unwrap_or(0)
-        events.push(@lux.BlockEnd(idx))
+        events.push(BlockEnd(idx))
       }
       "response.reasoning_summary_text.delta" => {
         let idx = @internal.field_int(jv, "content_index").unwrap_or(0)
         match @internal.field_str(jv, "delta") {
           Some(t) =>
             events.push(
-              @lux.BlockDelta(idx, @lux.LucentBlockDelta::thinking_delta(t)),
+              BlockDelta(idx, @lux.LucentBlockDelta::thinking_delta(t)),
             )
           None => ()
         }
       }
       "response.reasoning_summary_text.done" => {
         let idx = @internal.field_int(jv, "content_index").unwrap_or(0)
-        events.push(@lux.BlockEnd(idx))
+        events.push(BlockEnd(idx))
       }
       "response.function_call_arguments.delta" => {
         let idx = @internal.field_int(jv, "output_index").unwrap_or(0)
         match @internal.field_str(jv, "delta") {
           Some(a) =>
             events.push(
-              @lux.BlockDelta(
-                idx,
-                @lux.LucentBlockDelta::tool_arguments_delta(a),
-              ),
+              BlockDelta(idx, @lux.LucentBlockDelta::tool_arguments_delta(a)),
             )
           None => ()
         }
       }
       "response.function_call_arguments.done" => {
         let idx = @internal.field_int(jv, "output_index").unwrap_or(0)
-        events.push(@lux.BlockEnd(idx))
+        events.push(BlockEnd(idx))
       }
       "response.completed" => {
         match @internal.obj_get(jv, "response") {
           Some(r) => {
             match @internal.field_str(r, "status") {
               Some(s) =>
-                events.push(
-                  @lux.Finish(@lux.LucentFinishReason::from_string(s)),
-                )
+                events.push(Finish(@lux.LucentFinishReason::from_string(s)))
               None => ()
             }
             match @internal.obj_get(r, "usage") {
@@ -907,19 +896,18 @@ pub fn openai_responses_sse_to_events(
                 let tt = @internal.field_int(u, "total_tokens").unwrap_or(
                   pt + ct,
                 )
-                events.push(@lux.Usage(@lux.LucentUsage::new(pt, ct, tt)))
+                events.push(Usage(@lux.LucentUsage::new(pt, ct, tt)))
               }
               None => ()
             }
           }
           None => ()
         }
-        events.push(@lux.Done)
+        events.push(Done)
       }
       "error" =>
         match @internal.field_str(jv, "error") {
-          Some(err_msg) =>
-            events.push(@lux.Error(@lux.LucentError::simple(err_msg)))
+          Some(err_msg) => events.push(Error(@lux.LucentError::simple(err_msg)))
           None => ()
         }
       _ => ()
@@ -1146,8 +1134,8 @@ pub fn capability() -> @lux.ProviderCapability {
       true,
       true,
       true,
-      [@lux.Text, @lux.Image, @lux.Pdf],
-      [@lux.Text],
+      [Text, Image, Pdf],
+      [Text],
     ),
     None,
   )

@@ -54,7 +54,7 @@ test "context_to_lux_request - system prompt included" {
     Some(instr) => {
       assert_eq(instr.length(), 1)
       match instr[0] {
-        @lux.LucentContent::Text(s, _) => assert_eq(s, "You are a bot")
+        Text(s, _) => assert_eq(s, "You are a bot")
         _ => assert_true(false)
       }
     }

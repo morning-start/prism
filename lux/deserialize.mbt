@@ -774,7 +774,7 @@ pub fn LucentToolChoice::from_json(
     String(s) =>
       match s {
         "auto" => Ok(Auto)
-        "none" => Ok(LucentToolChoice::None)
+        "none" => Ok(None)
         "required" => Ok(Required)
         _ => Err("unknown tool_choice")
       }

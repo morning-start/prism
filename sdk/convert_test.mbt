@@ -13,7 +13,7 @@ fn openai_chat_req_json() -> Result[String, String] {
     Some([@lux.LucentContent::text("You are helpful")]),
     [
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("Hi")]),
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
       ),
     ],
     None,
@@ -40,10 +40,8 @@ fn openai_chat_resp_json() -> Result[String, String] {
     [
       @lux.LucentChoice::new(
         0,
-        @lux.LucentMessage::new(@lux.Assistant, [
-          @lux.LucentContent::text("Hi back"),
-        ]),
-        @lux.Stop,
+        @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("Hi back")]),
+        Stop,
         None,
       ),
     ],
@@ -60,12 +58,12 @@ fn openai_chat_resp_json() -> Result[String, String] {
 /// 标准事件流 → openai_chat SSE（source 侧输入）
 fn openai_chat_sse() -> Result[String, String] {
   let events : Array[@lux.LucentStreamEvent] = [
-    @lux.ConversationStart(@lux.LucentConversationMeta::new(None, None, None)),
-    @lux.BlockStart(0, @lux.Text),
-    @lux.BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
-    @lux.BlockEnd(0),
-    @lux.Finish(@lux.Stop),
-    @lux.Done,
+    ConversationStart(@lux.LucentConversationMeta::new(None, None, None)),
+    BlockStart(0, Text),
+    BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
+    BlockEnd(0),
+    Finish(Stop),
+    Done,
   ]
   match @openai_chat.lux_events_to_openai_chat_sse(events) {
     Ok(cr) => Ok(cr.value())

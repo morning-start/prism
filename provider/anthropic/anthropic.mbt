@@ -131,7 +131,7 @@ fn parse_message(msg_jv : Json) -> Result[@lux.LucentConversationItem, String] {
       }
       // 普通 user 消息：解析所有 content blocks
       let parts = parse_content_blocks(content_arr)
-      let msg = @lux.LucentMessage::new(@lux.User, parts)
+      let msg = @lux.LucentMessage::new(User, parts)
       Ok(@lux.LucentConversationItem::message(msg))
     }
     Some("assistant") => {
@@ -140,7 +140,7 @@ fn parse_message(msg_jv : Json) -> Result[@lux.LucentConversationItem, String] {
         None => return Err("assistant message missing content array")
       }
       let parts = parse_content_blocks(content_arr)
-      let msg = @lux.LucentMessage::new(@lux.Assistant, parts)
+      let msg = @lux.LucentMessage::new(Assistant, parts)
       Ok(@lux.LucentConversationItem::message(msg))
     }
     Some(other) => Err("unknown message role: " + other)
@@ -200,9 +200,7 @@ fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
           Some(schema) => schema.stringify()
           None => "{}"
         }
-        result.push(
-          @lux.LucentTool::new(name, desc, params, None, @lux.Function),
-        )
+        result.push(@lux.LucentTool::new(name, desc, params, None, Function))
         i = i + 1
       }
       result
@@ -217,11 +215,11 @@ fn parse_tool_choice(jv : Json) -> @lux.LucentToolChoice? {
   match @internal.obj_get(jv, "tool_choice") {
     Some(Object(m)) =>
       match m.get("type") {
-        Some(String("auto")) => Some(@lux.Auto)
-        Some(String("any")) => Some(@lux.Required)
+        Some(String("auto")) => Some(Auto)
+        Some(String("any")) => Some(Required)
         Some(String("tool")) =>
           match m.get("name") {
-            Some(String(n)) => Some(@lux.LucentToolChoice::SpecificTool(n))
+            Some(String(n)) => Some(SpecificTool(n))
             _ => None
           }
         _ => None
@@ -409,21 +407,21 @@ fn content_to_block(
     Image(mm) =>
       // 图片：优先精确映射为 anthropic image block
       match mm.source {
-        @lux.Url(url) =>
+        Url(url) =>
           "{\"type\":\"image\",\"source\":{\"type\":\"url\",\"url\":\"" +
           json_escape(url) +
           "\"}}"
-        @lux.Inline(data) =>
+        Inline(data) =>
           "{\"type\":\"image\",\"source\":{\"type\":\"base64\",\"media_type\":\"" +
           json_escape(mm.media_type) +
           "\",\"data\":\"" +
           json_escape(data) +
           "\"}}"
-        @lux.FileUri(_) => {
+        FileUri(_) => {
           diagnostics.push(
             @lux.ConversionDiagnostic::new(
               "content.image",
-              @lux.Unsupported,
+              Unsupported,
               Some("file_uri image source not supported by anthropic"),
             ),
           )
@@ -434,7 +432,7 @@ fn content_to_block(
       diagnostics.push(
         @lux.ConversionDiagnostic::new(
           "content.audio",
-          @lux.Unsupported,
+          Unsupported,
           Some("audio content not supported by anthropic"),
         ),
       )
@@ -444,7 +442,7 @@ fn content_to_block(
       diagnostics.push(
         @lux.ConversionDiagnostic::new(
           "content.video",
-          @lux.Unsupported,
+          Unsupported,
           Some("video content not supported by anthropic"),
         ),
       )
@@ -454,7 +452,7 @@ fn content_to_block(
       diagnostics.push(
         @lux.ConversionDiagnostic::new(
           "content.native",
-          @lux.Unsupported,
+          Unsupported,
           Some("native content (" + tag + ") not supported by anthropic"),
         ),
       )
@@ -702,7 +700,7 @@ pub fn lux_request_to_anthropic(
       diagnostics.push(
         @lux.ConversionDiagnostic::new(
           "options.store",
-          @lux.Unsupported,
+          Unsupported,
           Some("anthropic has no store field"),
         ),
       )
@@ -736,15 +734,15 @@ pub fn anthropic_to_lux_response(
     Some(blocks) => parse_content_blocks(blocks)
     None => []
   }
-  let msg = @lux.LucentMessage::new(@lux.Assistant, content)
+  let msg = @lux.LucentMessage::new(Assistant, content)
   // stop_reason → finish_reason
   let finish = match @internal.field_str(jv, "stop_reason") {
     Some("end_turn") => @lux.Stop
-    Some("max_tokens") => @lux.Length
-    Some("tool_use") => @lux.ToolCalls
-    Some("stop_sequence") => @lux.Stop
+    Some("max_tokens") => Length
+    Some("tool_use") => ToolCalls
+    Some("stop_sequence") => Stop
     Some(other) => @lux.LucentFinishReason::from_string(other)
-    None => @lux.Stop
+    None => Stop
   }
   let choice = @lux.LucentChoice::new(0, msg, finish, None)
   // usage（cached_tokens / cache_creation_tokens 可选，暂不传）
@@ -911,7 +909,7 @@ pub fn anthropic_sse_to_events(
               None => None
             }
             events.push(
-              @lux.ConversationStart(
+              ConversationStart(
                 @lux.LucentConversationMeta::new(id, model, usage_input),
               ),
             )
@@ -923,14 +921,13 @@ pub fn anthropic_sse_to_events(
         match @internal.obj_get(jv, "content_block") {
           Some(block) =>
             match @internal.field_str(block, "type") {
-              Some("text") => events.push(@lux.BlockStart(idx, @lux.Text))
-              Some("thinking") =>
-                events.push(@lux.BlockStart(idx, @lux.Thinking))
+              Some("text") => events.push(BlockStart(idx, Text))
+              Some("thinking") => events.push(BlockStart(idx, Thinking))
               Some("tool_use") => {
                 let tc_id = @internal.field_str(block, "id").unwrap_or("")
                 let tc_name = @internal.field_str(block, "name").unwrap_or("")
                 events.push(
-                  @lux.BlockStart(
+                  BlockStart(
                     idx,
                     @lux.LucentBlockType::tool_call(tc_id, tc_name),
                   ),
@@ -950,7 +947,7 @@ pub fn anthropic_sse_to_events(
                 match @internal.field_str(delta, "text") {
                   Some(t) =>
                     events.push(
-                      @lux.BlockDelta(idx, @lux.LucentBlockDelta::text_delta(t)),
+                      BlockDelta(idx, @lux.LucentBlockDelta::text_delta(t)),
                     )
                   None => ()
                 }
@@ -958,10 +955,7 @@ pub fn anthropic_sse_to_events(
                 match @internal.field_str(delta, "thinking") {
                   Some(t) =>
                     events.push(
-                      @lux.BlockDelta(
-                        idx,
-                        @lux.LucentBlockDelta::thinking_delta(t),
-                      ),
+                      BlockDelta(idx, @lux.LucentBlockDelta::thinking_delta(t)),
                     )
                   None => ()
                 }
@@ -969,10 +963,7 @@ pub fn anthropic_sse_to_events(
                 match @internal.field_str(delta, "signature") {
                   Some(s) =>
                     events.push(
-                      @lux.BlockDelta(
-                        idx,
-                        @lux.LucentBlockDelta::signature_delta(s),
-                      ),
+                      BlockDelta(idx, @lux.LucentBlockDelta::signature_delta(s)),
                     )
                   None => ()
                 }
@@ -980,7 +971,7 @@ pub fn anthropic_sse_to_events(
                 match @internal.field_str(delta, "partial_json") {
                   Some(j_str) =>
                     events.push(
-                      @lux.BlockDelta(
+                      BlockDelta(
                         idx,
                         @lux.LucentBlockDelta::tool_arguments_delta(j_str),
                       ),
@@ -994,7 +985,7 @@ pub fn anthropic_sse_to_events(
       }
       "content_block_stop" => {
         let idx = @internal.field_int(jv, "index").unwrap_or(0)
-        events.push(@lux.BlockEnd(idx))
+        events.push(BlockEnd(idx))
       }
       "message_delta" => {
         match @internal.obj_get(jv, "delta") {
@@ -1002,7 +993,7 @@ pub fn anthropic_sse_to_events(
             match @internal.field_str(delta, "stop_reason") {
               Some(reason) =>
                 events.push(
-                  @lux.Finish(@lux.LucentFinishReason::from_string(reason)),
+                  Finish(@lux.LucentFinishReason::from_string(reason)),
                 )
               None => ()
             }
@@ -1011,16 +1002,15 @@ pub fn anthropic_sse_to_events(
         match @internal.obj_get(jv, "usage") {
           Some(u) => {
             let ot = @internal.field_int(u, "output_tokens").unwrap_or(0)
-            events.push(@lux.Usage(@lux.LucentUsage::new(0, ot, ot)))
+            events.push(Usage(@lux.LucentUsage::new(0, ot, ot)))
           }
           None => ()
         }
       }
-      "message_stop" => events.push(@lux.Done)
+      "message_stop" => events.push(Done)
       "error" =>
         match @internal.field_str(jv, "error") {
-          Some(e_msg) =>
-            events.push(@lux.Error(@lux.LucentError::simple(e_msg)))
+          Some(e_msg) => events.push(Error(@lux.LucentError::simple(e_msg)))
           None => ()
         }
       _ => ()
@@ -1160,8 +1150,8 @@ pub fn capability() -> @lux.ProviderCapability {
       true,
       true,
       true,
-      [@lux.Text, @lux.Image],
-      [@lux.Text],
+      [Text, Image],
+      [Text],
     ),
     None,
   )

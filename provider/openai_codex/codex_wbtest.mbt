@@ -80,7 +80,7 @@ test "lux_request_to_codex - simple user message" {
   let req = @lux.LucentRequest::from_messages(
     "gpt-5.3-codex",
     None,
-    [@lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")])],
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
     None,
     None,
     @lux.LucentOptions::default(),
@@ -107,7 +107,7 @@ test "lux_request_to_codex - phase emitted on input items" {
     None,
     [
       @lux.LucentMessage::with_phase(
-        @lux.Assistant,
+        Assistant,
         [@lux.LucentContent::text("thinking out loud")],
         Some("commentary"),
       ),
@@ -138,12 +138,12 @@ test "lux_request_to_codex - xhigh reasoning with summary" {
   let req = @lux.LucentRequest::from_messages(
     "gpt-5.3-codex",
     None,
-    [@lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")])],
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
     None,
     None,
     @lux.LucentOptions::default(),
     None,
-    Some(@lux.LucentReasoningConfig::new(Some(@lux.XHigh), Some(@lux.Concise))),
+    Some(@lux.LucentReasoningConfig::new(Some(XHigh), Some(Concise))),
     None,
     None,
   )
@@ -163,7 +163,7 @@ test "lux_request_to_codex - xhigh reasoning with summary" {
 /// phase 响应编码路径
 test "lux_response_to_codex - phase emitted on output items" {
   let msg = @lux.LucentMessage::with_phase(
-    @lux.Assistant,
+    Assistant,
     [@lux.LucentContent::text("final")],
     Some("final_answer"),
   )
@@ -171,7 +171,7 @@ test "lux_response_to_codex - phase emitted on output items" {
     "resp_p1",
     "gpt-5.3-codex",
     None,
-    [@lux.LucentChoice::new(0, msg, @lux.Stop, None)],
+    [@lux.LucentChoice::new(0, msg, Stop, None)],
     None,
     None,
   )
@@ -229,10 +229,10 @@ test "codex_to_lux_response - invalid json" {
 
 ///|
 test "lux_response_to_codex - text response" {
-  let msg = @lux.LucentMessage::new(@lux.Assistant, [
+  let msg = @lux.LucentMessage::new(Assistant, [
     @lux.LucentContent::text("Hello"),
   ])
-  let choice = @lux.LucentChoice::new(0, msg, @lux.Stop, None)
+  let choice = @lux.LucentChoice::new(0, msg, Stop, None)
   let resp = @lux.LucentResponse::new(
     "resp_1",
     "gpt-5.3-codex",
@@ -305,7 +305,7 @@ test "lux_events_to_codex_sse - text sequence" {
     ItemStart(
       0,
       @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(@lux.Assistant, [@lux.LucentContent::text("")]),
+        @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("")]),
       ),
     ),
     BlockStart(0, Text),
@@ -333,7 +333,7 @@ test "round trip - codex request encode then decode" {
   let original = @lux.LucentRequest::from_messages(
     "gpt-5.3-codex",
     Some([@lux.LucentContent::text("Be helpful")]),
-    [@lux.LucentMessage::new(@lux.User, [@lux.LucentContent::text("hi")])],
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
     None,
     None,
     @lux.LucentOptions::default(),
