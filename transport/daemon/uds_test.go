@@ -238,4 +238,3 @@ func TestUDSStreamConvertStream(t *testing.T) {
 		t.Errorf("no target SSE data frame in uds stream: %v", lines)
 	}
 }
-
