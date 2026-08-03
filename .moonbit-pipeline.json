@@ -5,11 +5,11 @@
   "plan_file": "docs/tasks/2026-08-03-phase3b-ipc-ws-clients-plan.md",
   "progress": {
     "total_tasks": 6,
-    "completed_tasks": 0,
-    "current_task": 0
+    "completed_tasks": 6,
+    "current_task": 6
   },
   "last_verification": "2026-08-03T00:00:00Z",
   "last_updated": "2026-08-03T00:00:00Z",
-  "next": "implement:phase3b-task0-uds",
-  "notes": "SDK ConversionMeta (D8) COMPLETE (715/715 green, committed 9f99b0c). Phase3b PLAN written: docs/tasks/2026-08-03-phase3b-ipc-ws-clients-plan.md — 6 tasks: (0) UDS/NamedPipe JSON-lines binding, (1) UDS streaming fidelity gate, (2) WebSocket binding, (3) decode_sse_stream session model, (4) clients/go SDK, (5) clients/python SDK. Reuses ServeRPC/Backend, zero new conversion logic. NOT in scope: gRPC, SDK-gen pipeline, MoonBit-native daemon. Next: implement Task 0 (UDS binding)."
+  "next": "plan:phase4-quality | gRPC | sdk-gen | moonbit-native-daemon",
+  "notes": "Phase3b (Task 0-5) COMPLETE: (0) UDS/NamedPipe JSON-lines binding (uds.go, umask 077, --uds/--ws flags), (1) UDS streaming fidelity gate (frame-by-frame == whole for 4 providers), (2) WebSocket binding (coder/websocket), (3) decode_sse_stream session model (session.go, whole-decode-then-diff, D7 delivered, ARCHITECTURE §4.5 updated), (4) clients/go SDK (Transport pluggable: HTTP/UDS/WS, 10-method Client), (5) clients/python SDK (PrismClient + 3 transports, UDS skips on no-AF_UNIX platforms). ARCHITECTURE §9 Phase 1-3 marked complete; method set reconciled (daemon == clients/go == clients/python == §6.1). MoonBit side untouched. Next: Phase 4 quality (roadmap) or gRPC/SDK-gen/MoonBit-native daemon."
 }

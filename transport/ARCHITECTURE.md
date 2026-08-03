@@ -941,17 +941,17 @@ prism/
 ```
 Phase 0 (PRD) ─── 本文档定稿，团队评审
     │
-Phase 1 (MVP) ─── Go Daemon + HTTP binding + Go SDK
+Phase 1 (MVP) ─── Go Daemon + HTTP binding + Go SDK        ✅ 已完成
     │              deliverable: daemon 启动，curl 可调用
     │              Go client: prism.New(HTTPTransport)
     │
-Phase 2 ────────── UDS binding + Python SDK
-    │              deliverable: UDS 比 HTTP 快 3x
-    │              Python client: PrismClient(HTTPTransport)
+Phase 2 ────────── UDS binding + Python SDK                ✅ 已完成（phase3b）
+    │              deliverable: UDS JSON-lines binding + clients/python
+    │              Python client: PrismClient(HTTPTransport/UDSTransport)
     │
-Phase 3 ────────── WebSocket binding + 流式完善
-    │              deliverable: 浏览器可用 WS 直连
-    │              decode_sse_stream 逐块解码
+Phase 3 ────────── WebSocket binding + 流式完善            ✅ 已完成（phase3b）
+    │              deliverable: WS binding + decode_sse_stream 逐块解码
+    │              （session 模型见 §4.5，已交付）
     │
 Phase 4 ────────── gRPC binding（可选）
     │              deliverable: protobuf 强类型客户端

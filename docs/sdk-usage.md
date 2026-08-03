@@ -255,3 +255,50 @@ match prism.decode_response_with_meta(resp_json) {
 **中转站（场景 2）**：`convert_response_with_meta(source, json, target)` 返回
 `ConvertMetaResult { value, meta }`，`meta.source_provider` 为 source 侧规范名，
 `meta.diagnostics` 合并了解码与编码两侧的转换诊断。
+
+---
+
+## 传输可插拔（Transport，多语言客户端）
+
+转换核心运行在 Prism daemon 中，客户端 SDK（`clients/go`、`clients/python`）
+只做序列化 + 网络 IO。同一套业务 API 可绑定到 HTTP / UDS / WebSocket，
+**切换传输只需一行配置**：
+
+**Go（`clients/go`）：**
+
+```go
+// HTTP
+client := prism.NewClient(prism.NewHTTPTransport("http://127.0.0.1:8765/v1"))
+// UDS（Linux/macOS）
+client = prism.NewClient(prism.NewUDSTransport("/tmp/prism.sock"))
+// WebSocket
+client = prism.NewClient(prism.NewWSTransport("ws://127.0.0.1:8766/ws"))
+
+env, _ := client.EncodeRequest(ctx, "openai-chat", "Hi")   // 协议转换零改动
+```
+
+**Python（`clients/python`）：**
+
+```python
+from prism.client import PrismClient
+from prism.transport import HTTPTransport, UDSTransport, WSTransport
+
+client = PrismClient(HTTPTransport("http://127.0.0.1:8765/v1"))   # 默认
+client = PrismClient(UDSTransport("/tmp/prism.sock"))             # 切 UDS 一行
+client = PrismClient(WSTransport("ws://127.0.0.1:8766/ws"))       # 切 WS 一行
+
+env = client.encode_request("openai-chat", "Hi")  # 其余代码不变
+```
+
+**传输语义一致性**：三端（HTTP/UDS/WS）共享同一 JSON-RPC 方法集与 D5 信封
+（`{value, diagnostics}`），`clients/go` 与 `clients/python` 的同一套测试
+对三种传输分别运行（可插拔契约测试）；UDS 在无 `socket.AF_UNIX` 的平台
+（Windows 走 Named Pipe）自动跳过。流式方法（`decode_sse` / `convert_stream`）
+在 HTTP 上以 SSE、UDS 上以 JSON lines、WS 上以多帧表达，事件序列语义一致。
+
+**启动 daemon（HTTP + UDS + WS 全开）：**
+
+```bash
+prism-daemon --wasm _build/wasm/debug/build/cmd/main/main.wasm \
+  --listen 127.0.0.1:8765 --uds /tmp/prism.sock --ws 127.0.0.1:8766
+```
