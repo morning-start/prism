@@ -431,3 +431,284 @@ test "stream - returns prism events via mock transport" {
     Err(e) => fail("stream failed: \{e}")
   }
 }
+
+///|
+/// === ConversionMeta（来源元信息，D8）===
+
+///|
+test "meta - decode_response_with_meta carries source_provider" {
+  let prism = Prism::new().with_provider("openai-chat")
+  let resp = @lux.LucentResponse::new(
+    "resp-1",
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentChoice::new(
+        0,
+        @lux.LucentMessage::new(@lux.Assistant, [
+          @lux.LucentContent::text("Hello back"),
+        ]),
+        @lux.Stop,
+        None,
+      ),
+    ],
+    Some(@lux.LucentUsage::new(10, 5, 15)),
+    None,
+  )
+  let json = match @openai_chat.lux_response_to_openai_chat(resp) {
+    Ok(cr) => cr.value()
+    Err(e) => fail("encode failed: \{e}")
+  }
+  match prism.decode_response_with_meta(json) {
+    Ok(decoded) => {
+      assert_eq(decoded.text, "Hello back")
+      assert_eq(decoded.meta.source_provider, "openai-chat")
+    }
+    Err(e) => fail("meta decode failed: \{e}")
+  }
+}
+
+///|
+test "meta - anthropic source tag" {
+  let prism = Prism::new().with_provider("anthropic")
+  let resp = @lux.LucentResponse::new(
+    "msg_1",
+    "claude-sonnet-4",
+    None,
+    [
+      @lux.LucentChoice::new(
+        0,
+        @lux.LucentMessage::new(@lux.Assistant, [
+          @lux.LucentContent::text("Hello!"),
+        ]),
+        @lux.Stop,
+        None,
+      ),
+    ],
+    Some(@lux.LucentUsage::new(10, 20, 30)),
+    None,
+  )
+  let json = match @anthropic.lux_response_to_anthropic(resp) {
+    Ok(cr) => cr.value()
+    Err(e) => fail("encode failed: \{e}")
+  }
+  match prism.decode_response_with_meta(json) {
+    Ok(decoded) => {
+      assert_eq(decoded.text, "Hello!")
+      assert_eq(decoded.meta.source_provider, "anthropic")
+    }
+    Err(e) => fail("meta decode failed: \{e}")
+  }
+}
+
+///|
+test "meta - provider_payload passthrough" {
+  let prism = Prism::new().with_provider("azure-openai")
+  // Azure 响应含 content_filters 扩展 → 适配器解码进 provider_payload
+  let azure_json = "{\"id\":\"resp-1\",\"model\":\"gpt-4o\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hello\",\"annotations\":[]}],\"id\":\"msg_1\"}],\"content_filters\":[{\"filtered\":false}]}"
+  match prism.decode_response_with_meta(azure_json) {
+    Ok(decoded) => {
+      assert_eq(decoded.text, "Hello")
+      assert_eq(decoded.meta.source_provider, "azure-openai")
+      match decoded.meta.provider_payload {
+        Some(_) => ()
+        None => fail("provider_payload should be present")
+      }
+    }
+    Err(e) => fail("meta decode failed: \{e}")
+  }
+}
+
+///|
+test "meta - diagnostics attached" {
+  let prism = Prism::new().with_provider("openai-chat")
+  let resp = @lux.LucentResponse::new(
+    "resp-1",
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentChoice::new(
+        0,
+        @lux.LucentMessage::new(@lux.Assistant, [
+          @lux.LucentContent::text("Hello"),
+        ]),
+        @lux.Stop,
+        None,
+      ),
+    ],
+    Some(@lux.LucentUsage::new(10, 5, 15)),
+    None,
+  )
+  let json = match @openai_chat.lux_response_to_openai_chat(resp) {
+    Ok(cr) => cr.value()
+    Err(e) => fail("encode failed: \{e}")
+  }
+  match prism.decode_response_with_meta(json) {
+    Ok(decoded) => assert_true(decoded.meta.diagnostics.length() >= 0)
+    Err(e) => fail("meta decode failed: \{e}")
+  }
+}
+
+///|
+/// 多协议混流集成测试：同一流程中 decode 多家响应，各自来源可分辨
+
+///|
+/// 构造 openai-chat 响应 JSON（经适配器编码产生）
+fn meta_chat_resp_json() -> Result[String, String] {
+  let resp = @lux.LucentResponse::new(
+    "resp-1",
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentChoice::new(
+        0,
+        @lux.LucentMessage::new(@lux.Assistant, [
+          @lux.LucentContent::text("Hi back"),
+        ]),
+        @lux.Stop,
+        None,
+      ),
+    ],
+    Some(@lux.LucentUsage::new(10, 5, 15)),
+    None,
+  )
+  match @openai_chat.lux_response_to_openai_chat(resp) {
+    Ok(cr) => Ok(cr.value())
+    Err(e) => Err(e)
+  }
+}
+
+///|
+/// 构造 anthropic 响应 JSON（经适配器编码产生）
+fn anthropic_resp_json() -> Result[String, String] {
+  let resp = @lux.LucentResponse::new(
+    "msg-1",
+    "claude-sonnet-4",
+    None,
+    [
+      @lux.LucentChoice::new(
+        0,
+        @lux.LucentMessage::new(@lux.Assistant, [
+          @lux.LucentContent::text("Hello from anthropic"),
+        ]),
+        @lux.Stop,
+        None,
+      ),
+    ],
+    Some(@lux.LucentUsage::new(10, 20, 30)),
+    None,
+  )
+  match @anthropic.lux_response_to_anthropic(resp) {
+    Ok(cr) => Ok(cr.value())
+    Err(e) => Err(e)
+  }
+}
+
+///|
+/// 构造 gemini 响应 JSON（经适配器编码产生）
+fn gemini_resp_json() -> Result[String, String] {
+  let resp = @lux.LucentResponse::new(
+    "gem-1",
+    "gemini-2.0-flash",
+    None,
+    [
+      @lux.LucentChoice::new(
+        0,
+        @lux.LucentMessage::new(@lux.Assistant, [
+          @lux.LucentContent::text("Hi from gemini"),
+        ]),
+        @lux.Stop,
+        None,
+      ),
+    ],
+    None,
+    None,
+  )
+  match @gemini.lux_response_to_gemini(resp) {
+    Ok(cr) => Ok(cr.value())
+    Err(e) => Err(e)
+  }
+}
+
+///|
+test "meta - mixed-flow sources are distinguishable" {
+  // openai-chat 响应
+  let chat_json = match meta_chat_resp_json() {
+    Ok(j) => j
+    Err(e) => fail("openai_chat encode failed: \{e}")
+  }
+  // anthropic 响应
+  let anth_json = match anthropic_resp_json() {
+    Ok(j) => j
+    Err(e) => fail("anthropic encode failed: \{e}")
+  }
+  // gemini 响应
+  let gem_json = match gemini_resp_json() {
+    Ok(j) => j
+    Err(e) => fail("gemini encode failed: \{e}")
+  }
+
+  let chat = match
+    Prism::new()
+    .with_provider("openai-chat")
+    .decode_response_with_meta(chat_json) {
+    Ok(d) => d
+    Err(e) => fail("openai-chat meta decode failed: \{e}")
+  }
+  let anth = match
+    Prism::new().with_provider("anthropic").decode_response_with_meta(anth_json) {
+    Ok(d) => d
+    Err(e) => fail("anthropic meta decode failed: \{e}")
+  }
+  let gem = match
+    Prism::new().with_provider("gemini").decode_response_with_meta(gem_json) {
+    Ok(d) => d
+    Err(e) => fail("gemini meta decode failed: \{e}")
+  }
+
+  // 三家来源各自正确，可 if 分支分辨
+  assert_eq(chat.meta.source_provider, "openai-chat")
+  assert_eq(anth.meta.source_provider, "anthropic")
+  assert_eq(gem.meta.source_provider, "gemini")
+  // 文本各自正确
+  assert_eq(chat.text, "Hi back")
+  assert_eq(anth.text, "Hello from anthropic")
+  assert_eq(gem.text, "Hi from gemini")
+}
+
+///|
+/// 按来源特判 helper（模拟开发者的 if 分支用法）
+fn handle_special_if_any(decoded : DecodedResponse) -> String {
+  match decoded.meta.source_provider {
+    "azure-openai" => "special:azure"
+    "openai-codex" => "special:codex"
+    _ => "normal"
+  }
+}
+
+///|
+test "meta - special field handling via if branch" {
+  // 普通来源 → 分支不触发
+  let chat_json = match meta_chat_resp_json() {
+    Ok(j) => j
+    Err(e) => fail("openai_chat encode failed: \{e}")
+  }
+  let chat = match
+    Prism::new()
+    .with_provider("openai-chat")
+    .decode_response_with_meta(chat_json) {
+    Ok(d) => d
+    Err(e) => fail("meta decode failed: \{e}")
+  }
+  assert_eq(handle_special_if_any(chat), "normal")
+  // Azure 来源（content_filters 扩展）→ 特判分支可达
+  let azure_json = "{\"id\":\"resp-1\",\"model\":\"gpt-4o\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hello\",\"annotations\":[]}],\"id\":\"msg_1\"}],\"content_filters\":[{\"filtered\":false}]}"
+  let azure = match
+    Prism::new()
+    .with_provider("azure-openai")
+    .decode_response_with_meta(azure_json) {
+    Ok(d) => d
+    Err(e) => fail("azure meta decode failed: \{e}")
+  }
+  assert_eq(handle_special_if_any(azure), "special:azure")
+}

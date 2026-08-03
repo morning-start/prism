@@ -180,3 +180,39 @@ test "convert_stream - unknown provider returns error" {
     Ok(_) => fail("expected error")
   }
 }
+
+///|
+/// === convert_response_with_meta（D8 信封透出）===
+
+///|
+test "convert_response_with_meta - carries source" {
+  match openai_chat_resp_json() {
+    Ok(json) =>
+      match convert_response_with_meta("openai-chat", json, "anthropic") {
+        Ok(cr) => {
+          // value 可解析为 target JSON
+          let target_json = cr.value()
+          match @anthropic.anthropic_to_lux_response(target_json) {
+            Ok(cr2) => {
+              let resp = cr2.value()
+              assert_eq(resp.id, "resp-1")
+              assert_eq(resp.model, "gpt-4o")
+            }
+            Err(e) => fail("target response decode failed: \{e}")
+          }
+          // meta 信封含 source_provider
+          assert_eq(cr.meta.source_provider, "openai-chat")
+        }
+        Err(e) => fail("convert_response_with_meta failed: \{e}")
+      }
+    Err(e) => fail("encode response failed: \{e}")
+  }
+}
+
+///|
+test "convert_response_with_meta - unknown provider returns error" {
+  match convert_response_with_meta("nope", "{}", "anthropic") {
+    Err(e) => assert_true(e.contains("unknown provider"))
+    Ok(_) => fail("expected error")
+  }
+}

@@ -1,15 +1,15 @@
 {
   "pipeline": "development",
   "phase": "implement",
-  "phase_name": "phase3-transport-http",
-  "plan_file": "docs/tasks/2026-08-02-phase3-transport-plan.md",
+  "phase_name": "sdk-conversion-meta",
+  "plan_file": "docs/tasks/2026-08-02-sdk-conversion-meta-plan.md",
   "progress": {
-    "total_tasks": 4,
-    "completed_tasks": 4,
-    "current_task": 4
+    "total_tasks": 3,
+    "completed_tasks": 3,
+    "current_task": 3
   },
-  "last_verification": "2026-08-02T03:00:00Z",
-  "last_updated": "2026-08-02T03:00:00Z",
+  "last_verification": "2026-08-03T00:00:00Z",
+  "last_updated": "2026-08-03T00:00:00Z",
   "next": "plan:phase3b-ipc-ws-clients",
-  "notes": "Phase 3 (Task 0-3) COMPLETE: export alignment + freshness gate; wrapper envelope + single-call convert; JSON-RPC result envelope (D5); HTTP SSE streaming (decode_sse/convert_stream, whole-decode-then-stream, frame-by-frame==whole gated by TestFrameByFrameEqualsWholeText). Next: phase3b (UDS/NamedPipe/WebSocket/clients) planning."
+  "notes": "SDK ConversionMeta (D8) COMPLETE: (1) ConversionMeta/DecodedResponse + Prism::decode_response_with_meta (source_provider via registry, provider_payload passthrough), (2) convert_response_with_meta returning ConvertMetaResult (envelope w/ source + merged diagnostics), (3) mixed-flow tests (6 meta tests green) + docs/sdk-usage.md section. .mbti: +5 pub symbols. Full suite 715/715 green, fmt/check 0 errors. IR untouched (D8: source is decode-op metadata, not IR field). Next: phase3b (UDS/NamedPipe/WebSocket/clients) planning."
 }
