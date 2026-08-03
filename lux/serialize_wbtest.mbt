@@ -80,17 +80,17 @@ test "LucentRole::to_json - all variants" {
 test "LucentRole::from_json - round trip" {
   let jv = @json.parse("\"user\"")
   match LucentRole::from_json(jv) {
-    Ok(LucentRole::User) => ()
+    Ok(User) => ()
     _ => fail("expected User")
   }
   let jv2 = @json.parse("\"assistant\"")
   match LucentRole::from_json(jv2) {
-    Ok(LucentRole::Assistant) => ()
+    Ok(Assistant) => ()
     _ => fail("expected Assistant")
   }
   let jv3 = @json.parse("\"custom\"")
   match LucentRole::from_json(jv3) {
-    Ok(LucentRole::Native(s)) => assert_eq(s, "custom")
+    Ok(Native(s)) => assert_eq(s, "custom")
     _ => fail("expected Native(custom)")
   }
 }
@@ -114,7 +114,7 @@ test "LucentModality::to_json - all variants" {
 test "LucentMultimedia::to_json - url source" {
   let mm = LucentMultimedia::new(
     "image/jpeg",
-    LucentMediaSource::Url("https://example.com/photo.jpg"),
+    Url("https://example.com/photo.jpg"),
   )
   let jv = mm.to_json()
   let s = jv.stringify()
@@ -135,10 +135,7 @@ test "LucentMultimedia::to_json - url source" {
 
 ///|
 test "LucentMultimedia::to_json - inline source" {
-  let mm = LucentMultimedia::new(
-    "audio/wav",
-    LucentMediaSource::Inline("base64data"),
-  )
+  let mm = LucentMultimedia::new("audio/wav", Inline("base64data"))
   let jv = mm.to_json()
   match json_get(jv, "source") {
     Some(src) =>
@@ -154,7 +151,7 @@ test "LucentMultimedia::to_json - inline source" {
 /// === LucentAnnotation ===
 test "LucentAnnotation::to_json - all fields" {
   let ann = LucentAnnotation::new(
-    LucentAnnotationKind::Url,
+    Url,
     Some("https://source.com"),
     Some("ref-1"),
     Some(0),
@@ -185,13 +182,7 @@ test "LucentAnnotation::to_json - all fields" {
 
 ///|
 test "LucentAnnotation::to_json - minimal fields" {
-  let ann = LucentAnnotation::new(
-    LucentAnnotationKind::FileCitation,
-    None,
-    None,
-    None,
-    None,
-  )
+  let ann = LucentAnnotation::new(FileCitation, None, None, None, None)
   let jv = ann.to_json()
   match json_str(jv, "kind") {
     Some(v) => assert_eq(v, "file_citation")
@@ -376,13 +367,7 @@ test "LucentContent::to_json - text" {
 
 ///|
 test "LucentContent::to_json - text with annotations" {
-  let ann = LucentAnnotation::new(
-    LucentAnnotationKind::Url,
-    Some("https://src"),
-    None,
-    None,
-    None,
-  )
+  let ann = LucentAnnotation::new(Url, Some("https://src"), None, None, None)
   let c = LucentContent::text_with_annotations("cited text", [ann])
   let jv = c.to_json()
   match json_str(jv, "type") {
@@ -441,10 +426,7 @@ test "LucentContent::to_json - refusal" {
 
 ///|
 test "LucentContent::to_json - image" {
-  let c = LucentContent::image(
-    "image/png",
-    LucentMediaSource::Url("https://example.com/img.png"),
-  )
+  let c = LucentContent::image("image/png", Url("https://example.com/img.png"))
   let jv = c.to_json()
   match json_str(jv, "type") {
     Some(v) => assert_eq(v, "image")
@@ -454,10 +436,7 @@ test "LucentContent::to_json - image" {
 
 ///|
 test "LucentContent::to_json - audio" {
-  let c = LucentContent::audio(
-    "audio/mp3",
-    LucentMediaSource::Inline("base64audio"),
-  )
+  let c = LucentContent::audio("audio/mp3", Inline("base64audio"))
   let jv = c.to_json()
   match json_str(jv, "type") {
     Some(v) => assert_eq(v, "audio")
@@ -467,10 +446,7 @@ test "LucentContent::to_json - audio" {
 
 ///|
 test "LucentContent::to_json - video" {
-  let c = LucentContent::video(
-    "video/mp4",
-    LucentMediaSource::Url("https://example.com/vid.mp4"),
-  )
+  let c = LucentContent::video("video/mp4", Url("https://example.com/vid.mp4"))
   let jv = c.to_json()
   match json_str(jv, "type") {
     Some(v) => assert_eq(v, "video")
@@ -498,7 +474,7 @@ test "LucentContent::to_json - native" {
 ///|
 /// === LucentMessage ===
 test "LucentMessage::to_json" {
-  let msg = LucentMessage::new(LucentRole::User, [
+  let msg = LucentMessage::new(User, [
     LucentContent::text("Hello"),
     LucentContent::text("World"),
   ])
@@ -517,7 +493,7 @@ test "LucentMessage::to_json" {
 /// === LucentConversationItem ===
 test "LucentConversationItem::to_json - message" {
   let ci = LucentConversationItem::message(
-    LucentMessage::new(LucentRole::Assistant, [LucentContent::text("ok")]),
+    LucentMessage::new(Assistant, [LucentContent::text("ok")]),
   )
   let jv = ci.to_json()
   match json_str(jv, "type") {
@@ -669,7 +645,7 @@ test "LucentOptions::to_json - all fields" {
     true,
     Some(1),
     Some(42),
-    Some(LucentStructuredOutput::JsonObject),
+    Some(JsonObject),
     None,
     None,
   )
@@ -758,7 +734,7 @@ test "LucentRequest::to_json - minimal request" {
   let req = LucentRequest::from_messages(
     "gpt-4o",
     None,
-    [LucentMessage::new(LucentRole::User, [LucentContent::text("hi")])],
+    [LucentMessage::new(User, [LucentContent::text("hi")])],
     None,
     None,
     LucentOptions::default(),
@@ -796,11 +772,11 @@ test "LucentRequest::to_json - with all fields" {
     Some([LucentContent::text("You are helpful")]),
     [
       LucentConversationItem::message(
-        LucentMessage::new(LucentRole::User, [LucentContent::text("query")]),
+        LucentMessage::new(User, [LucentContent::text("query")]),
       ),
     ],
     Some([tool]),
-    Some(LucentToolChoice::Auto),
+    Some(Auto),
     LucentOptions::default(),
     Some(LucentCapabilities::default()),
     Some(LucentReasoningConfig::disabled()),
@@ -830,8 +806,8 @@ test "LucentRequest::to_json - with all fields" {
 /// === LucentResponse ===
 test "LucentResponse::to_json" {
   let content = LucentContent::text("Hello!")
-  let msg = LucentMessage::new(LucentRole::Assistant, [content])
-  let choice = LucentChoice::new(0, msg, LucentFinishReason::Stop, None)
+  let msg = LucentMessage::new(Assistant, [content])
+  let choice = LucentChoice::new(0, msg, Stop, None)
   let resp = LucentResponse::new(
     "resp-1",
     "gpt-4o",
@@ -912,11 +888,7 @@ test "LucentSafetyRating::to_json" {
 ///|
 /// === LucentError + LucentErrorKind ===
 test "LucentError::to_json" {
-  let err = LucentError::new(
-    LucentErrorKind::RateLimit,
-    "Too many requests",
-    Some("429"),
-  )
+  let err = LucentError::new(RateLimit, "Too many requests", Some("429"))
   let jv = err.to_json()
   match json_str(jv, "message") {
     Some(v) => assert_eq(v, "Too many requests")
@@ -1035,7 +1007,7 @@ test "LucentStreamEvent::to_json - conversation_start" {
 
 ///|
 test "LucentStreamEvent::to_json - item_start and item_end" {
-  let msg = LucentMessage::new(LucentRole::User, [LucentContent::text("hi")])
+  let msg = LucentMessage::new(User, [LucentContent::text("hi")])
   let ci = LucentConversationItem::message(msg)
   let start = LucentStreamEvent::ItemStart(0, ci)
   let end = LucentStreamEvent::ItemEnd(0)
@@ -1078,7 +1050,7 @@ test "LucentStreamEvent::to_json - block lifecycle" {
 
 ///|
 test "LucentStreamEvent::to_json - finish" {
-  let ev = LucentStreamEvent::Finish(LucentFinishReason::Stop)
+  let ev = LucentStreamEvent::Finish(Stop)
   let jv = ev.to_json()
   match json_str(jv, "event") {
     Some(v) => assert_eq(v, "finish")
@@ -1103,11 +1075,7 @@ test "LucentStreamEvent::to_json - usage event" {
 
 ///|
 test "LucentStreamEvent::to_json - error event" {
-  let err = LucentError::new(
-    LucentErrorKind::ServerError,
-    "internal error",
-    None,
-  )
+  let err = LucentError::new(ServerError, "internal error", None)
   let ev = LucentStreamEvent::Error(err)
   let jv = ev.to_json()
   match json_str(jv, "event") {
@@ -1127,13 +1095,7 @@ test "LucentStreamEvent::to_json - done" {
 
 ///|
 test "LucentStreamEvent::to_json - annotations" {
-  let ann = LucentAnnotation::new(
-    LucentAnnotationKind::Url,
-    Some("https://src"),
-    None,
-    None,
-    None,
-  )
+  let ann = LucentAnnotation::new(Url, Some("https://src"), None, None, None)
   let ev = LucentStreamEvent::Annotations(0, [ann])
   let jv = ev.to_json()
   match json_str(jv, "event") {
@@ -1260,9 +1222,7 @@ test "round trip - simple types" {
 
 ///|
 test "round trip - complex value" {
-  let msg = LucentMessage::new(LucentRole::User, [
-    LucentContent::text("Hello, world!"),
-  ])
+  let msg = LucentMessage::new(User, [LucentContent::text("Hello, world!")])
   let jv = msg.to_json()
   let s = jv.stringify()
   let parsed = @json.parse(s)
@@ -1275,7 +1235,7 @@ test "round trip - complex value" {
 ///|
 /// === Edge cases ===
 test "edge - empty content array" {
-  let msg = LucentMessage::new(LucentRole::Assistant, [])
+  let msg = LucentMessage::new(Assistant, [])
   let jv = msg.to_json()
   match json_arr(jv, "content") {
     Some(arr) => assert_eq(arr.length(), 0)
@@ -1292,7 +1252,7 @@ test "edge - nested tool_use in conversation" {
     None,
     [
       LucentConversationItem::message(
-        LucentMessage::new(LucentRole::User, [LucentContent::text("hi")]),
+        LucentMessage::new(User, [LucentContent::text("hi")]),
       ),
       ci,
     ],
@@ -1325,11 +1285,9 @@ test "edge - string with special characters" {
 ///|
 test "edge - multiple messages" {
   let msgs = [
-    LucentMessage::new(LucentRole::System, [
-      LucentContent::text("You are a bot"),
-    ]),
-    LucentMessage::new(LucentRole::User, [LucentContent::text("Hi")]),
-    LucentMessage::new(LucentRole::Assistant, [LucentContent::text("Hello!")]),
+    LucentMessage::new(System, [LucentContent::text("You are a bot")]),
+    LucentMessage::new(User, [LucentContent::text("Hi")]),
+    LucentMessage::new(Assistant, [LucentContent::text("Hello!")]),
   ]
   let items = lucent_items_from_messages(msgs)
   let req = LucentRequest::new(

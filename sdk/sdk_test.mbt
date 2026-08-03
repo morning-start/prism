@@ -346,7 +346,7 @@ test "context - add_tool_result appends tool result item" {
   let req = context_to_lux_request(ctx, "gpt-4o", PrismOptions::default())
   assert_eq(req.conversation.length(), 2)
   match req.conversation[1] {
-    @lux.ToolResult(tr) => {
+    ToolResult(tr) => {
       assert_eq(tr.tool_use_id, "tu_1")
       assert_eq(tr.is_error, false)
     }
@@ -359,7 +359,7 @@ test "context - add_tool_result marks error" {
   let ctx = Context::new().add_tool_result("tu_2", "boom", true)
   let req = context_to_lux_request(ctx, "gpt-4o", PrismOptions::default())
   match req.conversation[0] {
-    @lux.ToolResult(tr) => assert_eq(tr.is_error, true)
+    ToolResult(tr) => assert_eq(tr.is_error, true)
     _ => fail("expected ToolResult item")
   }
 }
@@ -377,10 +377,10 @@ fn mock_send_fixed_response(_req_json : String) -> Result[String, String] {
     [
       @lux.LucentChoice::new(
         0,
-        @lux.LucentMessage::new(@lux.Assistant, [
+        @lux.LucentMessage::new(Assistant, [
           @lux.LucentContent::text("Hello back"),
         ]),
-        @lux.Stop,
+        Stop,
         None,
       ),
     ],
@@ -397,12 +397,12 @@ fn mock_send_fixed_response(_req_json : String) -> Result[String, String] {
 /// 假 transport：请求 JSON 进，固定 SSE 出
 fn mock_send_fixed_sse(_req_json : String) -> Result[String, String] {
   let events : Array[@lux.LucentStreamEvent] = [
-    @lux.ConversationStart(@lux.LucentConversationMeta::new(None, None, None)),
-    @lux.BlockStart(0, @lux.Text),
-    @lux.BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
-    @lux.BlockEnd(0),
-    @lux.Finish(@lux.Stop),
-    @lux.Done,
+    ConversationStart(@lux.LucentConversationMeta::new(None, None, None)),
+    BlockStart(0, Text),
+    BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
+    BlockEnd(0),
+    Finish(Stop),
+    Done,
   ]
   match @openai_chat.lux_events_to_openai_chat_sse(events) {
     Ok(cr) => Ok(cr.value())
@@ -445,10 +445,10 @@ test "meta - decode_response_with_meta carries source_provider" {
     [
       @lux.LucentChoice::new(
         0,
-        @lux.LucentMessage::new(@lux.Assistant, [
+        @lux.LucentMessage::new(Assistant, [
           @lux.LucentContent::text("Hello back"),
         ]),
-        @lux.Stop,
+        Stop,
         None,
       ),
     ],
@@ -478,10 +478,8 @@ test "meta - anthropic source tag" {
     [
       @lux.LucentChoice::new(
         0,
-        @lux.LucentMessage::new(@lux.Assistant, [
-          @lux.LucentContent::text("Hello!"),
-        ]),
-        @lux.Stop,
+        @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("Hello!")]),
+        Stop,
         None,
       ),
     ],
@@ -529,10 +527,8 @@ test "meta - diagnostics attached" {
     [
       @lux.LucentChoice::new(
         0,
-        @lux.LucentMessage::new(@lux.Assistant, [
-          @lux.LucentContent::text("Hello"),
-        ]),
-        @lux.Stop,
+        @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("Hello")]),
+        Stop,
         None,
       ),
     ],
@@ -562,10 +558,8 @@ fn meta_chat_resp_json() -> Result[String, String] {
     [
       @lux.LucentChoice::new(
         0,
-        @lux.LucentMessage::new(@lux.Assistant, [
-          @lux.LucentContent::text("Hi back"),
-        ]),
-        @lux.Stop,
+        @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("Hi back")]),
+        Stop,
         None,
       ),
     ],
@@ -588,10 +582,10 @@ fn anthropic_resp_json() -> Result[String, String] {
     [
       @lux.LucentChoice::new(
         0,
-        @lux.LucentMessage::new(@lux.Assistant, [
+        @lux.LucentMessage::new(Assistant, [
           @lux.LucentContent::text("Hello from anthropic"),
         ]),
-        @lux.Stop,
+        Stop,
         None,
       ),
     ],
@@ -614,10 +608,10 @@ fn gemini_resp_json() -> Result[String, String] {
     [
       @lux.LucentChoice::new(
         0,
-        @lux.LucentMessage::new(@lux.Assistant, [
+        @lux.LucentMessage::new(Assistant, [
           @lux.LucentContent::text("Hi from gemini"),
         ]),
-        @lux.Stop,
+        Stop,
         None,
       ),
     ],

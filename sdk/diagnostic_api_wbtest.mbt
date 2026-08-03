@@ -21,7 +21,7 @@ test "encode_request_with_diagnostics reports invalid options" {
       assert_true(result.value().contains("Hi"))
       assert_true(result.diagnostics().length() > 0)
       match result.diagnostics()[0].status() {
-        @lux.Invalid => ()
+        Invalid => ()
         _ => fail("expected Invalid diagnostic")
       }
     }

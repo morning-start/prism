@@ -124,20 +124,20 @@ test "LucentStreamEvent blackbox - text block events round trip" {
     LucentStreamEvent::ConversationStart(
       LucentConversationMeta::new(None, Some("gpt-4o"), None),
     ),
-    LucentStreamEvent::ItemStart(
+    ItemStart(
       0,
       LucentConversationItem::message(
         LucentMessage::new(Assistant, [LucentContent::text("")]),
       ),
     ),
-    LucentStreamEvent::BlockStart(0, LucentBlockType::text()),
-    LucentStreamEvent::BlockDelta(0, LucentBlockDelta::text_delta("Hel")),
-    LucentStreamEvent::BlockDelta(0, LucentBlockDelta::text_delta("lo")),
-    LucentStreamEvent::BlockEnd(0),
-    LucentStreamEvent::ItemEnd(0),
-    LucentStreamEvent::Finish(Stop),
-    LucentStreamEvent::Usage(LucentUsage::new(10, 5, 15)),
-    LucentStreamEvent::Done,
+    BlockStart(0, LucentBlockType::text()),
+    BlockDelta(0, LucentBlockDelta::text_delta("Hel")),
+    BlockDelta(0, LucentBlockDelta::text_delta("lo")),
+    BlockEnd(0),
+    ItemEnd(0),
+    Finish(Stop),
+    Usage(LucentUsage::new(10, 5, 15)),
+    Done,
   ]
   for ev in events {
     let s = ev.to_json().stringify()
@@ -163,22 +163,13 @@ test "LucentStreamEvent blackbox - tool call events round trip" {
         ),
       ),
     ),
-    LucentStreamEvent::BlockStart(
-      0,
-      LucentBlockType::tool_call("call_1", "get_weather"),
-    ),
-    LucentStreamEvent::BlockDelta(
-      0,
-      LucentBlockDelta::tool_arguments_delta("{\"city\":\""),
-    ),
-    LucentStreamEvent::BlockDelta(
-      0,
-      LucentBlockDelta::tool_arguments_delta("Beijing\"}"),
-    ),
-    LucentStreamEvent::BlockEnd(0),
-    LucentStreamEvent::ItemEnd(0),
-    LucentStreamEvent::Finish(ToolCalls),
-    LucentStreamEvent::Done,
+    BlockStart(0, LucentBlockType::tool_call("call_1", "get_weather")),
+    BlockDelta(0, LucentBlockDelta::tool_arguments_delta("{\"city\":\"")),
+    BlockDelta(0, LucentBlockDelta::tool_arguments_delta("Beijing\"}")),
+    BlockEnd(0),
+    ItemEnd(0),
+    Finish(ToolCalls),
+    Done,
   ]
   for ev in events {
     let s = ev.to_json().stringify()
@@ -209,19 +200,19 @@ test "lucent_stream_events_to_response blackbox - aggregates stream" {
     LucentStreamEvent::ConversationStart(
       LucentConversationMeta::new(Some("resp-9"), Some("gpt-4o"), None),
     ),
-    LucentStreamEvent::ItemStart(
+    ItemStart(
       0,
       LucentConversationItem::message(
         LucentMessage::new(Assistant, [LucentContent::text("")]),
       ),
     ),
-    LucentStreamEvent::BlockStart(0, LucentBlockType::text()),
-    LucentStreamEvent::BlockDelta(0, LucentBlockDelta::text_delta("Stream")),
-    LucentStreamEvent::BlockEnd(0),
-    LucentStreamEvent::ItemEnd(0),
-    LucentStreamEvent::Finish(Stop),
-    LucentStreamEvent::Usage(LucentUsage::new(3, 6, 9)),
-    LucentStreamEvent::Done,
+    BlockStart(0, LucentBlockType::text()),
+    BlockDelta(0, LucentBlockDelta::text_delta("Stream")),
+    BlockEnd(0),
+    ItemEnd(0),
+    Finish(Stop),
+    Usage(LucentUsage::new(3, 6, 9)),
+    Done,
   ]
   let resp = lucent_stream_events_to_response(
     events, "fallback-id", "fallback-model",

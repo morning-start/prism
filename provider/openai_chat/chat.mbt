@@ -149,7 +149,7 @@ fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
             }
             let strict = @internal.field_bool(fn_obj, "strict")
             result.push(
-              @lux.LucentTool::new(name, desc, params, strict, @lux.Function),
+              @lux.LucentTool::new(name, desc, params, strict, Function),
             )
           }
           _ => ()
@@ -166,9 +166,9 @@ fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
 /// 解析 tool_choice → LucentToolChoice
 fn parse_tool_choice(jv : Json) -> @lux.LucentToolChoice? {
   match @internal.obj_get(jv, "tool_choice") {
-    Some(String("auto")) => Some(@lux.LucentToolChoice::Auto)
-    Some(String("none")) => Some(@lux.LucentToolChoice::None)
-    Some(String("required")) => Some(@lux.LucentToolChoice::Required)
+    Some(String("auto")) => Some(Auto)
+    Some(String("none")) => Some(None)
+    Some(String("required")) => Some(Required)
     Some(Object(_)) =>
       // {"type":"function","function":{"name":"x"}}
       match @internal.obj_get(jv, "tool_choice") {
@@ -178,7 +178,7 @@ fn parse_tool_choice(jv : Json) -> @lux.LucentToolChoice? {
               match @internal.obj_get(tc_obj, "function") {
                 Some(fn_obj) =>
                   match @internal.field_str(fn_obj, "name") {
-                    Some(n) => Some(@lux.LucentToolChoice::SpecificTool(n))
+                    Some(n) => Some(SpecificTool(n))
                     None => None
                   }
                 None => None
@@ -267,15 +267,12 @@ pub fn openai_chat_to_lux_request(
     Some(rf) =>
       match @internal.field_str(rf, "type") {
         Some("json_object") => Some(@lux.LucentStructuredOutput::JsonObject)
-        Some("text") => Some(@lux.LucentStructuredOutput::Text)
+        Some("text") => Some(Text)
         Some("json_schema") =>
           match @internal.obj_get(rf, "json_schema") {
             Some(js_obj) =>
               match @internal.obj_get(js_obj, "schema") {
-                Some(schema) =>
-                  Some(
-                    @lux.LucentStructuredOutput::JsonSchema(schema.stringify()),
-                  )
+                Some(schema) => Some(JsonSchema(schema.stringify()))
                 None => None
               }
             None => None
@@ -378,7 +375,7 @@ fn content_part_to_json(
       diagnostics.push(
         @lux.ConversionDiagnostic::new(
           "content.image",
-          @lux.Unsupported,
+          Unsupported,
           Some("image content not supported by openai-chat"),
         ),
       )
@@ -388,7 +385,7 @@ fn content_part_to_json(
       diagnostics.push(
         @lux.ConversionDiagnostic::new(
           "content.audio",
-          @lux.Unsupported,
+          Unsupported,
           Some("audio content not supported by openai-chat"),
         ),
       )
@@ -398,7 +395,7 @@ fn content_part_to_json(
       diagnostics.push(
         @lux.ConversionDiagnostic::new(
           "content.video",
-          @lux.Unsupported,
+          Unsupported,
           Some("video content not supported by openai-chat"),
         ),
       )
@@ -408,7 +405,7 @@ fn content_part_to_json(
       diagnostics.push(
         @lux.ConversionDiagnostic::new(
           "content.native",
-          @lux.Unsupported,
+          Unsupported,
           Some("native content (" + tag + ") not supported by openai-chat"),
         ),
       )
@@ -536,7 +533,7 @@ pub fn lux_request_to_openai_chat(
         diagnostics.push(
           @lux.ConversionDiagnostic::new(
             "conversation.reasoning",
-            @lux.Unsupported,
+            Unsupported,
             Some("reasoning not supported by openai-chat"),
           ),
         )
@@ -545,7 +542,7 @@ pub fn lux_request_to_openai_chat(
         diagnostics.push(
           @lux.ConversionDiagnostic::new(
             "conversation.agent_action",
-            @lux.Unsupported,
+            Unsupported,
             Some("agent_action not supported by openai-chat"),
           ),
         )
@@ -666,7 +663,7 @@ fn parse_choices(jv : Json) -> Array[@lux.LucentChoice] {
           Some(msg_jv) => {
             let role = match @internal.field_str(msg_jv, "role") {
               Some("assistant") => @lux.Assistant
-              _ => @lux.Assistant
+              _ => Assistant
             }
             let content : Array[@lux.LucentContent] = []
             // content 字符串
@@ -707,7 +704,7 @@ fn parse_choices(jv : Json) -> Array[@lux.LucentChoice] {
             }
             let finish = match @internal.field_str(c, "finish_reason") {
               Some(fr) => @lux.LucentFinishReason::from_string(fr)
-              None => @lux.Stop
+              None => Stop
             }
             result.push(
               @lux.LucentChoice::new(
@@ -894,14 +891,14 @@ pub fn openai_chat_sse_to_events(
       if payload == "[DONE]" {
         // 闭合未关闭的块
         if text_block_open {
-          events.push(@lux.BlockEnd(0))
+          events.push(BlockEnd(0))
           text_block_open = false
         }
         if current_tool_block >= 0 {
-          events.push(@lux.BlockEnd(current_tool_block))
+          events.push(BlockEnd(current_tool_block))
           current_tool_block = -1
         }
-        events.push(@lux.Done)
+        events.push(Done)
         i = i + 1
         continue
       }
@@ -917,7 +914,7 @@ pub fn openai_chat_sse_to_events(
           let pt = @internal.field_int(u, "prompt_tokens").unwrap_or(0)
           let ct = @internal.field_int(u, "completion_tokens").unwrap_or(0)
           let tt = @internal.field_int(u, "total_tokens").unwrap_or(0)
-          events.push(@lux.Usage(@lux.LucentUsage::new(pt, ct, tt)))
+          events.push(Usage(@lux.LucentUsage::new(pt, ct, tt)))
         }
         None => ()
       }
@@ -931,7 +928,7 @@ pub fn openai_chat_sse_to_events(
                 match @internal.field_str(delta, "role") {
                   Some("assistant") =>
                     events.push(
-                      @lux.ConversationStart(
+                      ConversationStart(
                         @lux.LucentConversationMeta::new(None, None, None),
                       ),
                     )
@@ -941,11 +938,11 @@ pub fn openai_chat_sse_to_events(
                 match @internal.field_str(delta, "content") {
                   Some(s) => {
                     if !text_block_open {
-                      events.push(@lux.BlockStart(0, @lux.Text))
+                      events.push(BlockStart(0, Text))
                       text_block_open = true
                     }
                     events.push(
-                      @lux.BlockDelta(0, @lux.LucentBlockDelta::text_delta(s)),
+                      BlockDelta(0, @lux.LucentBlockDelta::text_delta(s)),
                     )
                   }
                   None => ()
@@ -959,7 +956,7 @@ pub fn openai_chat_sse_to_events(
                       let idx = @internal.field_int(tc, "index").unwrap_or(0)
                       // 切换块：若旧块未关闭，先关旧块
                       if current_tool_block >= 0 && current_tool_block != idx {
-                        events.push(@lux.BlockEnd(current_tool_block))
+                        events.push(BlockEnd(current_tool_block))
                       }
                       if current_tool_block != idx {
                         // 新工具调用块开始：id + function.name（首帧）
@@ -970,7 +967,7 @@ pub fn openai_chat_sse_to_events(
                           None => ""
                         }
                         events.push(
-                          @lux.BlockStart(
+                          BlockStart(
                             idx,
                             @lux.LucentBlockType::tool_call(id, name),
                           ),
@@ -983,7 +980,7 @@ pub fn openai_chat_sse_to_events(
                           match @internal.field_str(fn_obj, "arguments") {
                             Some(args) =>
                               events.push(
-                                @lux.BlockDelta(
+                                BlockDelta(
                                   idx,
                                   @lux.LucentBlockDelta::tool_arguments_delta(
                                     args,
@@ -1007,16 +1004,14 @@ pub fn openai_chat_sse_to_events(
               Some(fr) => {
                 // 闭合未关闭的块
                 if text_block_open {
-                  events.push(@lux.BlockEnd(0))
+                  events.push(BlockEnd(0))
                   text_block_open = false
                 }
                 if current_tool_block >= 0 {
-                  events.push(@lux.BlockEnd(current_tool_block))
+                  events.push(BlockEnd(current_tool_block))
                   current_tool_block = -1
                 }
-                events.push(
-                  @lux.Finish(@lux.LucentFinishReason::from_string(fr)),
-                )
+                events.push(Finish(@lux.LucentFinishReason::from_string(fr)))
               }
               None => ()
             }
@@ -1131,8 +1126,8 @@ pub fn capability() -> @lux.ProviderCapability {
       true,
       true,
       true,
-      [@lux.Text, @lux.Image],
-      [@lux.Text],
+      [Text, Image],
+      [Text],
     ),
     None,
   )

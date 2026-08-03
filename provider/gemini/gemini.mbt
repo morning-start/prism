@@ -37,11 +37,11 @@ fn parse_part(
         Some(True) => {
           // thought:true → 仅发 Thinking，不伪装成文本
           let th = @lux.LucentThinking::visible(t, None)
-          [@lux.Thinking(th)]
+          [Thinking(th)]
         }
         Some(String(_)) => {
           let th = @lux.LucentThinking::visible(t, None)
-          [@lux.Thinking(th)]
+          [Thinking(th)]
         }
         _ => [@lux.LucentContent::text(t)]
       }
@@ -101,14 +101,14 @@ fn parse_part(
                       [
                         @lux.LucentContent::image(
                           media_type.unwrap_or(""),
-                          @lux.LucentMediaSource::Inline(data),
+                          Inline(data),
                         ),
                       ]
                     None => {
                       diagnostics.push(
                         @lux.ConversionDiagnostic::new(
                           "part.inline_data",
-                          @lux.Degraded,
+                          Degraded,
                           Some("inlineData missing data field"),
                         ),
                       )
@@ -125,14 +125,14 @@ fn parse_part(
                           [
                             @lux.LucentContent::image(
                               media_type.unwrap_or(""),
-                              @lux.LucentMediaSource::FileUri(uri),
+                              FileUri(uri),
                             ),
                           ]
                         None => {
                           diagnostics.push(
                             @lux.ConversionDiagnostic::new(
                               "part.file_data",
-                              @lux.Degraded,
+                              Degraded,
                               Some("fileData missing fileUri field"),
                             ),
                           )
@@ -186,9 +186,9 @@ fn parse_contents(
         )
         let role = match role_str {
           "user" => @lux.User
-          "model" => @lux.Assistant // Gemini model → IR Assistant
-          "tool" => @lux.Tool
-          _ => @lux.User
+          "model" => Assistant // Gemini model → IR Assistant
+          "tool" => Tool
+          _ => User
         }
         // 先检查是否含 functionResponse → 解码为 Item::ToolResult
         // （避免先跑 parse_parts 重复消费配对游标）
@@ -306,7 +306,7 @@ fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
                 None => "{}"
               }
               result.push(
-                @lux.LucentTool::new(name, desc, params, None, @lux.Function),
+                @lux.LucentTool::new(name, desc, params, None, Function),
               )
               j = j + 1
             }
@@ -370,9 +370,9 @@ fn parse_tool_config(jv : Json) -> @lux.LucentToolChoice? {
       match @internal.obj_get(tc, "functionCallingConfig") {
         Some(fcc) =>
           match @internal.field_str(fcc, "mode") {
-            Some("AUTO") => Some(@lux.LucentToolChoice::Auto)
-            Some("ANY") => Some(@lux.Required)
-            Some("NONE") => Some(@lux.None)
+            Some("AUTO") => Some(Auto)
+            Some("ANY") => Some(Required)
+            Some("NONE") => Some(None)
             _ => None
           }
         None => None
@@ -669,7 +669,7 @@ pub fn lux_request_to_gemini(
       diagnostics.push(
         @lux.ConversionDiagnostic::new(
           "options.store",
-          @lux.Unsupported,
+          Unsupported,
           Some("gemini has no store field"),
         ),
       )
@@ -715,15 +715,15 @@ pub fn gemini_to_lux_response(
               Some(arr) => parse_parts(arr, Map([]), Map([]), diagnostics)
               None => []
             }
-            let msg = @lux.LucentMessage::new(@lux.Assistant, parts)
+            let msg = @lux.LucentMessage::new(Assistant, parts)
             let finish = match @internal.field_str(cands[i], "finishReason") {
               Some("STOP") => @lux.Stop
-              Some("MAX_TOKENS") => @lux.Length
-              Some("SAFETY") => @lux.Safety
-              Some("RECITATION") => @lux.Recitation
-              Some("MALFORMED_FUNCTION_CALL") => @lux.MalformedToolCall
+              Some("MAX_TOKENS") => Length
+              Some("SAFETY") => Safety
+              Some("RECITATION") => Recitation
+              Some("MALFORMED_FUNCTION_CALL") => MalformedToolCall
               Some(other) => @lux.LucentFinishReason::from_string(other)
-              None => @lux.Stop
+              None => Stop
             }
             // safety ratings
             let ratings = match @internal.field_arr(cands[i], "safetyRatings") {
@@ -922,19 +922,17 @@ pub fn gemini_sse_to_events(
                       match @internal.field_str(parts[j], "text") {
                         Some(t) => {
                           if !has_text_block {
-                            events.push(
-                              @lux.BlockStart(text_block_index, @lux.Text),
-                            )
+                            events.push(BlockStart(text_block_index, Text))
                             has_text_block = true
                           }
                           // Gemini 每帧是完整文本，非增量
                           // 简单方式：丢弃旧文本，发新文本
                           if current_text != "" {
-                            events.push(@lux.BlockDiscard(text_block_index))
+                            events.push(BlockDiscard(text_block_index))
                           }
                           current_text = t
                           events.push(
-                            @lux.BlockDelta(
+                            BlockDelta(
                               text_block_index,
                               @lux.LucentBlockDelta::text_delta(t),
                             ),
@@ -953,12 +951,12 @@ pub fn gemini_sse_to_events(
                             None => "{}"
                           }
                           if has_text_block {
-                            events.push(@lux.BlockEnd(text_block_index))
+                            events.push(BlockEnd(text_block_index))
                             has_text_block = false
                           }
                           text_block_index = text_block_index + 1
                           events.push(
-                            @lux.BlockStart(
+                            BlockStart(
                               text_block_index,
                               @lux.LucentBlockType::tool_call(
                                 "fc_" +
@@ -970,12 +968,12 @@ pub fn gemini_sse_to_events(
                             ),
                           )
                           events.push(
-                            @lux.BlockDelta(
+                            BlockDelta(
                               text_block_index,
                               @lux.LucentBlockDelta::tool_arguments_delta(args),
                             ),
                           )
-                          events.push(@lux.BlockEnd(text_block_index))
+                          events.push(BlockEnd(text_block_index))
                           text_block_index = text_block_index + 1
                         }
                         None => ()
@@ -986,20 +984,20 @@ pub fn gemini_sse_to_events(
                           match @internal.field_str(parts[j], "text") {
                             Some(t) => {
                               if has_text_block {
-                                events.push(@lux.BlockEnd(text_block_index))
+                                events.push(BlockEnd(text_block_index))
                                 has_text_block = false
                               }
                               text_block_index = text_block_index + 1
                               events.push(
-                                @lux.BlockStart(text_block_index, @lux.Thinking),
+                                BlockStart(text_block_index, Thinking),
                               )
                               events.push(
-                                @lux.BlockDelta(
+                                BlockDelta(
                                   text_block_index,
                                   @lux.LucentBlockDelta::thinking_delta(t),
                                 ),
                               )
-                              events.push(@lux.BlockEnd(text_block_index))
+                              events.push(BlockEnd(text_block_index))
                               text_block_index = text_block_index + 1
                             }
                             None => ()
@@ -1017,12 +1015,10 @@ pub fn gemini_sse_to_events(
             match @internal.field_str(cands[0], "finishReason") {
               Some(fr) => {
                 if has_text_block {
-                  events.push(@lux.BlockEnd(text_block_index))
+                  events.push(BlockEnd(text_block_index))
                   has_text_block = false
                 }
-                events.push(
-                  @lux.Finish(@lux.LucentFinishReason::from_string(fr)),
-                )
+                events.push(Finish(@lux.LucentFinishReason::from_string(fr)))
               }
               None => ()
             }
@@ -1035,8 +1031,8 @@ pub fn gemini_sse_to_events(
           let pt = @internal.field_int(u, "promptTokenCount").unwrap_or(0)
           let ct = @internal.field_int(u, "candidatesTokenCount").unwrap_or(0)
           let tt = @internal.field_int(u, "totalTokenCount").unwrap_or(pt + ct)
-          events.push(@lux.Usage(@lux.LucentUsage::new(pt, ct, tt)))
-          events.push(@lux.Done)
+          events.push(Usage(@lux.LucentUsage::new(pt, ct, tt)))
+          events.push(Done)
         }
         None => ()
       }
@@ -1044,7 +1040,7 @@ pub fn gemini_sse_to_events(
     i = i + 1
   }
   if has_text_block {
-    events.push(@lux.BlockEnd(text_block_index))
+    events.push(BlockEnd(text_block_index))
   }
   Ok(@lux.ConversionResult::new(events))
 }
@@ -1138,8 +1134,8 @@ pub fn capability() -> @lux.ProviderCapability {
       true,
       true,
       true,
-      [@lux.Text, @lux.Image, @lux.Audio, @lux.Video, @lux.Pdf],
-      [@lux.Text],
+      [Text, Image, Audio, Video, Pdf],
+      [Text],
     ),
     None,
   )

@@ -32,48 +32,22 @@ test "LucentModality from_string" {
 
 ///|
 test "LucentFinishReason from_string variants" {
-  assert_true(
-    LucentFinishReason::from_string("stop") is LucentFinishReason::Stop,
-  )
-  assert_true(
-    LucentFinishReason::from_string("end_turn") is LucentFinishReason::Stop,
-  )
-  assert_true(
-    LucentFinishReason::from_string("STOP") is LucentFinishReason::Stop,
-  )
-  assert_true(
-    LucentFinishReason::from_string("length") is LucentFinishReason::Length,
-  )
-  assert_true(
-    LucentFinishReason::from_string("max_tokens") is LucentFinishReason::Length,
-  )
-  assert_true(
-    LucentFinishReason::from_string("incomplete") is LucentFinishReason::Length,
-  )
-  assert_true(
-    LucentFinishReason::from_string("tool_calls")
-    is LucentFinishReason::ToolCalls,
-  )
-  assert_true(
-    LucentFinishReason::from_string("tool_use") is LucentFinishReason::ToolCalls,
-  )
-  assert_true(
-    LucentFinishReason::from_string("safety") is LucentFinishReason::Safety,
-  )
-  assert_true(
-    LucentFinishReason::from_string("SAFETY") is LucentFinishReason::Safety,
-  )
-  assert_true(
-    LucentFinishReason::from_string("recitation")
-    is LucentFinishReason::Recitation,
-  )
+  assert_true(LucentFinishReason::from_string("stop") is Stop)
+  assert_true(LucentFinishReason::from_string("end_turn") is Stop)
+  assert_true(LucentFinishReason::from_string("STOP") is Stop)
+  assert_true(LucentFinishReason::from_string("length") is Length)
+  assert_true(LucentFinishReason::from_string("max_tokens") is Length)
+  assert_true(LucentFinishReason::from_string("incomplete") is Length)
+  assert_true(LucentFinishReason::from_string("tool_calls") is ToolCalls)
+  assert_true(LucentFinishReason::from_string("tool_use") is ToolCalls)
+  assert_true(LucentFinishReason::from_string("safety") is Safety)
+  assert_true(LucentFinishReason::from_string("SAFETY") is Safety)
+  assert_true(LucentFinishReason::from_string("recitation") is Recitation)
   assert_true(
     LucentFinishReason::from_string("malformed_function_call")
-    is LucentFinishReason::MalformedToolCall,
+    is MalformedToolCall,
   )
-  assert_true(
-    LucentFinishReason::from_string("error") is LucentFinishReason::Error,
-  )
+  assert_true(LucentFinishReason::from_string("error") is Error)
   match LucentFinishReason::from_string("custom_vendor") {
     Native(s) => assert_eq(s, "custom_vendor")
     _ => assert_true(false)
@@ -251,16 +225,16 @@ test "LucentContent image with all source variants" {
   match img_inline {
     Image(m) => {
       assert_eq(m.media_type, "image/png")
-      assert_true(m.source is LucentMediaSource::Inline(_))
+      assert_true(m.source is Inline(_))
     }
     _ => assert_true(false)
   }
   match img_url {
-    Image(m) => assert_true(m.source is LucentMediaSource::Url(_))
+    Image(m) => assert_true(m.source is Url(_))
     _ => assert_true(false)
   }
   match img_file {
-    Image(m) => assert_true(m.source is LucentMediaSource::FileUri(_))
+    Image(m) => assert_true(m.source is FileUri(_))
     _ => assert_true(false)
   }
 }
@@ -374,15 +348,10 @@ test "LucentTool simple" {
 
 ///|
 test "LucentToolChoice variants" {
-  assert_true(LucentToolChoice::Auto != LucentToolChoice::None)
-  assert_true(LucentToolChoice::Required != LucentToolChoice::Auto)
-  assert_eq(
-    LucentToolChoice::SpecificTool("f"),
-    LucentToolChoice::SpecificTool("f"),
-  )
-  assert_true(
-    LucentToolChoice::SpecificTool("f") != LucentToolChoice::SpecificTool("g"),
-  )
+  assert_true(LucentToolChoice::Auto != None)
+  assert_true(LucentToolChoice::Required != Auto)
+  assert_eq(LucentToolChoice::SpecificTool("f"), SpecificTool("f"))
+  assert_true(LucentToolChoice::SpecificTool("f") != SpecificTool("g"))
 }
 
 ///|
@@ -654,23 +623,14 @@ test "LucentStreamEvent variants construct" {
 
 ///|
 test "LucentBlockDelta constructors" {
-  assert_eq(LucentBlockDelta::text_delta("a"), LucentBlockDelta::TextDelta("a"))
-  assert_eq(
-    LucentBlockDelta::thinking_delta("a"),
-    LucentBlockDelta::ThinkingDelta("a"),
-  )
-  assert_eq(
-    LucentBlockDelta::signature_delta("a"),
-    LucentBlockDelta::SignatureDelta("a"),
-  )
+  assert_eq(LucentBlockDelta::text_delta("a"), TextDelta("a"))
+  assert_eq(LucentBlockDelta::thinking_delta("a"), ThinkingDelta("a"))
+  assert_eq(LucentBlockDelta::signature_delta("a"), SignatureDelta("a"))
   assert_eq(
     LucentBlockDelta::tool_arguments_delta("a"),
-    LucentBlockDelta::ToolArgumentsDelta("a"),
+    ToolArgumentsDelta("a"),
   )
-  assert_eq(
-    LucentBlockDelta::refusal_delta("a"),
-    LucentBlockDelta::RefusalDelta("a"),
-  )
+  assert_eq(LucentBlockDelta::refusal_delta("a"), RefusalDelta("a"))
 }
 
 ///|
