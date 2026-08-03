@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -123,3 +124,118 @@ func stringsContains(s, sub string) bool {
 		return false
 	})()
 }
+
+// udsStreamRequest sends one JSON-lines request over a UDS connection and
+// reads back all response lines until the done frame (streaming path).
+func udsStreamRequest(t *testing.T, sockPath, body string) []string {
+	t.Helper()
+	conn, err := net.Dial("unix", sockPath)
+	if err != nil {
+		t.Fatalf("dial uds: %v", err)
+	}
+	defer conn.Close()
+	if _, err := conn.Write([]byte(body + "\n")); err != nil {
+		t.Fatalf("write uds request: %v", err)
+	}
+	reader := bufio.NewReader(conn)
+	var lines []string
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			t.Fatalf("read uds response: %v (got %d lines)", err, len(lines))
+		}
+		lines = append(lines, stringsTrimSuffix(line))
+		if stringsContains(line, `"type":"done"`) {
+			break
+		}
+	}
+	return lines
+}
+
+// udsDecodeFrameByFrame 走 UDS 流式路径，把各帧信封里的 value 重组为事件数组
+// （与 HTTP 路径的 decodeFrameByFrame 语义一致）。
+func udsDecodeFrameByFrame(t *testing.T, sockPath, provider, sse string) []any {
+	t.Helper()
+	lines := udsStreamRequest(t, sockPath, decodeSSEParams(t, provider, sse))
+	var events []any
+	for _, line := range lines {
+		var frame struct {
+			Result map[string]any `json:"result"`
+		}
+		if err := json.Unmarshal([]byte(line), &frame); err != nil {
+			t.Fatalf("parse uds frame: %v (line=%q)", err, line)
+		}
+		ev, ok := frame.Result["value"]
+		if !ok {
+			t.Fatalf("uds frame result missing value: %v", frame.Result)
+		}
+		// 跳过 done 帧（value 为 {"type":"done"}）
+		if m, isObj := ev.(map[string]any); isObj {
+			if t2, _ := m["type"].(string); t2 == "done" {
+				continue
+			}
+		}
+		events = append(events, ev)
+	}
+	return events
+}
+
+func stringsTrimSuffix(s string) string {
+	for len(s) > 0 && (s[len(s)-1] == '\n' || s[len(s)-1] == '\r') {
+		s = s[:len(s)-1]
+	}
+	return s
+}
+
+// 门禁（移植自 HTTP 的 TestFrameByFrameEqualsWholeText）：UDS 流式逐事件
+// 解码 == HTTP 同步整段解码，4 个基础 provider 全覆盖。
+func TestUDSFrameByFrameEqualsWholeText(t *testing.T) {
+	backend := loadBackend(t)
+	sockPath := startUDSListener(t, backend)
+	handler := NewHTTPHandler(backend, "test")
+	for _, p := range []string{"openai", "openai-chat", "anthropic", "gemini"} {
+		t.Run(p, func(t *testing.T) {
+			sse := buildSSEFixture(p)
+			whole := decodeWhole(t, handler, p, sse)
+			framed := udsDecodeFrameByFrame(t, sockPath, p, sse)
+			if !reflect.DeepEqual(whole, framed) {
+				t.Errorf("uds frame-by-frame diverges from whole-text decode:\n whole  = %v\n framed = %v", whole, framed)
+			}
+		})
+	}
+}
+
+// UDS 流式 convert_stream：目标 SSE 帧逐帧写出 + done 帧收尾。
+func TestUDSStreamConvertStream(t *testing.T) {
+	backend := loadBackend(t)
+	sockPath := startUDSListener(t, backend)
+
+	sse := buildSSEFixture("openai-chat")
+	params, err := json.Marshal(map[string]string{
+		"from_provider": "openai-chat",
+		"to_provider":   "anthropic",
+		"sse":           sse,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := `{"jsonrpc":"2.0","id":8,"method":"convert_stream","params":` + string(params) + `}`
+	lines := udsStreamRequest(t, sockPath, body)
+	if len(lines) < 2 {
+		t.Fatalf("expected multiple uds frames, got %d", len(lines))
+	}
+	if !stringsContains(lines[len(lines)-1], `"type":"done"`) {
+		t.Errorf("last uds frame missing done marker: %q", lines[len(lines)-1])
+	}
+	// 至少一帧是目标协议 SSE 片段（帧内 data: 前是换行而非引号）
+	var sawData bool
+	for _, line := range lines {
+		if stringsContains(line, `data: {`) {
+			sawData = true
+		}
+	}
+	if !sawData {
+		t.Errorf("no target SSE data frame in uds stream: %v", lines)
+	}
+}
+
