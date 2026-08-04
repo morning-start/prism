@@ -8,12 +8,15 @@ import (
 	"strings"
 	"testing"
 
+	"google.golang.org/grpc"
+
 	daemon "github.com/morning-start/prism/transport/daemon"
+	dapb "github.com/morning-start/prism/transport/daemon/prismpb"
 )
 
 // startTestDaemon loads the WASM backend and starts HTTP + UDS + WS
 // listeners in-process, returning their addresses.
-func startTestDaemon(t *testing.T) (httpAddr, udsPath, wsAddr string) {
+func startTestDaemon(t *testing.T) (httpAddr, udsPath, wsAddr, grpcAddr string) {
 	t.Helper()
 	data, err := os.ReadFile("../../_build/wasm/debug/build/cmd/main/main.wasm")
 	if err != nil {
@@ -56,16 +59,34 @@ func startTestDaemon(t *testing.T) (httpAddr, udsPath, wsAddr string) {
 	})
 	wsSrv := &http.Server{Handler: mux}
 	go func() { _ = wsSrv.Serve(wsLn) }()
-	return httpAddr, udsPath, wsAddr
+
+	// gRPC listener
+	grpcLn, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = grpcLn.Close() })
+	grpcAddr = grpcLn.Addr().String()
+	grpcSrv := grpc.NewServer()
+	dapb.RegisterPrismServer(grpcSrv, daemon.NewGRPCServer(backend))
+	go func() { _ = grpcSrv.Serve(grpcLn) }()
+	t.Cleanup(grpcSrv.Stop)
+	return httpAddr, udsPath, wsAddr, grpcAddr
 }
 
-// testWithTransports runs fn against all three transports (可插拔契约).
-func testWithTransports(t *testing.T, httpAddr, udsPath, wsAddr string, fn func(t *testing.T, c *Client)) {
+// testWithTransports runs fn against all four transports (可插拔契约).
+func testWithTransports(t *testing.T, httpAddr, udsPath, wsAddr, grpcAddr string, fn func(t *testing.T, c *Client)) {
 	t.Helper()
+	grpcTr, err := NewGRPCTransport(grpcAddr)
+	if err != nil {
+		t.Fatalf("grpc transport: %v", err)
+	}
+	t.Cleanup(func() { _ = grpcTr.Close() })
 	transports := map[string]Transport{
 		"http": NewHTTPTransport("http://" + httpAddr + "/v1"),
 		"uds":  NewUDSTransport(udsPath),
 		"ws":   NewWSTransport("ws://" + wsAddr + "/ws"),
+		"grpc": grpcTr,
 	}
 	for name, tr := range transports {
 		t.Run(name, func(t *testing.T) {
@@ -76,8 +97,8 @@ func testWithTransports(t *testing.T, httpAddr, udsPath, wsAddr string, fn func(
 
 // TestTransportPing runs ping across all three transports.
 func TestTransportPing(t *testing.T) {
-	httpAddr, udsPath, wsAddr := startTestDaemon(t)
-	testWithTransports(t, httpAddr, udsPath, wsAddr, func(t *testing.T, c *Client) {
+	httpAddr, udsPath, wsAddr, grpcAddr := startTestDaemon(t)
+	testWithTransports(t, httpAddr, udsPath, wsAddr, grpcAddr, func(t *testing.T, c *Client) {
 		v, err := c.Ping(context.Background())
 		if err != nil {
 			t.Fatalf("ping: %v", err)
@@ -91,8 +112,8 @@ func TestTransportPing(t *testing.T) {
 // TestTransportEncodeRequest runs encode_request across all transports and
 // checks the envelope value is a valid provider JSON request.
 func TestTransportEncodeRequest(t *testing.T) {
-	httpAddr, udsPath, wsAddr := startTestDaemon(t)
-	testWithTransports(t, httpAddr, udsPath, wsAddr, func(t *testing.T, c *Client) {
+	httpAddr, udsPath, wsAddr, grpcAddr := startTestDaemon(t)
+	testWithTransports(t, httpAddr, udsPath, wsAddr, grpcAddr, func(t *testing.T, c *Client) {
 		env, err := c.EncodeRequest(context.Background(), "openai-chat", "Hi")
 		if err != nil {
 			t.Fatalf("encode_request: %v", err)
@@ -110,8 +131,8 @@ func TestTransportEncodeRequest(t *testing.T) {
 // TestTransportConvert runs convert across all transports and checks the
 // envelope carries a diagnostics array.
 func TestTransportConvert(t *testing.T) {
-	httpAddr, udsPath, wsAddr := startTestDaemon(t)
-	testWithTransports(t, httpAddr, udsPath, wsAddr, func(t *testing.T, c *Client) {
+	httpAddr, udsPath, wsAddr, grpcAddr := startTestDaemon(t)
+	testWithTransports(t, httpAddr, udsPath, wsAddr, grpcAddr, func(t *testing.T, c *Client) {
 		// build a minimal openai-chat request through the same client
 		req, err := c.EncodeRequest(context.Background(), "openai-chat", "Hi")
 		if err != nil {
@@ -122,8 +143,12 @@ func TestTransportConvert(t *testing.T) {
 		if err != nil {
 			t.Fatalf("convert: %v", err)
 		}
-		if env.Diagnostics == nil {
-			t.Error("convert envelope missing diagnostics")
+		// protobuf 空 repeated 字段反序列化为 nil（gRPC 传输）与 HTTP JSON
+		// 空数组不同；无诊断时允许 nil，有诊断时结构必须完整。
+		for _, d := range env.Diagnostics {
+			if d.Field == "" && d.Status == "" {
+				t.Errorf("diagnostic missing field/status: %v", d)
+			}
 		}
 		raw, err := env.ValueString()
 		if err != nil {
@@ -138,8 +163,8 @@ func TestTransportConvert(t *testing.T) {
 // TestTransportStreamDecodeSSE streams decode_sse over each transport and
 // asserts multiple events plus a done marker.
 func TestTransportStreamDecodeSSE(t *testing.T) {
-	httpAddr, udsPath, wsAddr := startTestDaemon(t)
-	testWithTransports(t, httpAddr, udsPath, wsAddr, func(t *testing.T, c *Client) {
+	httpAddr, udsPath, wsAddr, grpcAddr := startTestDaemon(t)
+	testWithTransports(t, httpAddr, udsPath, wsAddr, grpcAddr, func(t *testing.T, c *Client) {
 		sse := "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}}]}\n\ndata: [DONE]\n"
 		events, err := c.StreamDecodeSSE(context.Background(), "openai-chat", sse)
 		if err != nil {
@@ -162,8 +187,8 @@ func TestTransportStreamDecodeSSE(t *testing.T) {
 
 // TestTransportUnknownMethod returns a JSON-RPC error on all transports.
 func TestTransportUnknownMethod(t *testing.T) {
-	httpAddr, udsPath, wsAddr := startTestDaemon(t)
-	testWithTransports(t, httpAddr, udsPath, wsAddr, func(t *testing.T, c *Client) {
+	httpAddr, udsPath, wsAddr, grpcAddr := startTestDaemon(t)
+	testWithTransports(t, httpAddr, udsPath, wsAddr, grpcAddr, func(t *testing.T, c *Client) {
 		_, err := c.CallRaw(context.Background(), "nope", map[string]any{})
 		if err == nil {
 			t.Fatal("expected error for unknown method")
