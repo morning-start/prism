@@ -565,9 +565,10 @@ Server → Client: {"jsonrpc":"2.0","id":2,"result":{"type":"text_delta","text":
 Server → Client: {"jsonrpc":"2.0","id":2,"result":{"type":"done"}}
 ```
 
-### 5.4 gRPC（未来）
+### 5.4 gRPC（已交付）
 
-gRPC 是未来可选绑定，用于强类型场景（如微服务架构）。
+gRPC binding 用于强类型场景（如微服务架构），与 HTTP/UDS/WS 共享同一
+`Backend` 接口与 D5 信封，零新增转换逻辑。
 
 ```protobuf
 syntax = "proto3";
@@ -575,16 +576,25 @@ syntax = "proto3";
 package prism.transport.v1;
 
 service Prism {
-  rpc EncodeRequest(EncodeRequestReq) returns (EncodeRequestResp);
-  rpc DecodeResponse(DecodeResponseReq) returns (DecodeResponseResp);
-  rpc DecodeSSE(DecodeSSEReq) returns (DecodeSSEResp);
-  rpc EncodeStream(EncodeStreamReq) returns (stream StreamEvent);
-  rpc Convert(ConvertReq) returns (ConvertResp);
+  rpc EncodeRequest(EncodeRequestReq) returns (Envelope);
+  rpc DecodeResponse(DecodeResponseReq) returns (Envelope);
+  rpc DecodeSSE(DecodeSSEReq) returns (Envelope);
+  rpc DecodeSSEStream(DecodeSSEReq) returns (stream Envelope);
+  rpc EncodeStream(EncodeStreamReq) returns (Envelope);
+  rpc Convert(ConvertReq) returns (Envelope);
+  rpc ConvertStream(ConvertStreamReq) returns (Envelope);
   rpc ListProviders(Empty) returns (ProviderList);
-  rpc Capability(CapabilityReq) returns (CapabilityResp);
+  rpc Capability(CapabilityReq) returns (Envelope);
   rpc Ping(Empty) returns (Pong);
 }
 ```
+
+**实现状态：已交付（2026-08-04）**——`transport/daemon/proto/prism.proto` +
+`transport/daemon/prismpb/`（生成代码）+ `transport/daemon/grpc.go`
+（`GRPCServer` 实现，同步 RPC 解析 D5 信封，`DecodeSSEStream` 服务端流式逐事件
++ done 帧）。`clients/go` 增加 `GRPCTransport`（传输可插拔契约第四种实现）。
+语义说明：`EncodeStream`/`ConvertStream` 为**同步**方法（返回流式请求 JSON /
+目标 SSE 文本）；真正的流式由 `DecodeSSEStream` 表达（对齐 Phase 3 术语澄清）。
 
 gRPC 绑定不替代 JSON-RPC，而是作为补充——微服务团队可以用 protobuf 获得类型安全和代码生成，而通用客户端仍走 JSON-RPC。
 
@@ -953,9 +963,9 @@ Phase 3 ────────── WebSocket binding + 流式完善         
     │              deliverable: WS binding + decode_sse_stream 逐块解码
     │              （session 模型见 §4.5，已交付）
     │
-Phase 4 ────────── gRPC binding（可选）
-    │              deliverable: protobuf 强类型客户端
-    │              适合微服务架构团队
+Phase 4 ────────── gRPC binding（可选）                    ✅ 已完成（2026-08-04）
+    │              deliverable: protobuf 强类型客户端（§5.4）
+    │              微服务架构团队可选；clients/go 增 GRPCTransport
     │
 Phase 5 ────────── 客户端 SDK 生成 pipeline
     │              deliverable: 从 api.json 半自动生成新语言 SDK
