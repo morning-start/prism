@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+package prism.transport.v1;
+
+option go_package = "github.com/morning-start/prism/transport/daemon/prismpb;prismpb";
+
+// Prism is the gRPC binding of the protocol-conversion gateway daemon
+// (transport/ARCHITECTURE.md §5.4). Every RPC maps 1:1 to the daemon
+// method set and returns the D5 envelope {value, diagnostics}; streaming
+// RPCs (EncodeStream / ConvertStream) send one envelope per event.
+service Prism {
+  // EncodeRequest converts text to a provider JSON request body.
+  rpc EncodeRequest(EncodeRequestReq) returns (Envelope);
+  // DecodeResponse extracts plain text from a provider JSON response.
+  rpc DecodeResponse(DecodeResponseReq) returns (Envelope);
+  // DecodeSSE decodes provider SSE text into a JSON array of events (sync).
+  rpc DecodeSSE(DecodeSSEReq) returns (Envelope);
+  // DecodeSSEStream decodes provider SSE text and streams one envelope per
+  // event (server-streaming; mirrors the HTTP SSE / UDS / WS streaming path).
+  rpc DecodeSSEStream(DecodeSSEReq) returns (stream Envelope);
+  // EncodeStream converts text to a streaming (stream:true) provider request
+  // (sync: returns the request JSON, not an event stream).
+  rpc EncodeStream(EncodeStreamReq) returns (Envelope);
+  // Convert translates a provider payload to another provider via Lucent IR.
+  rpc Convert(ConvertReq) returns (Envelope);
+  // ConvertStream translates streamed SSE text between providers (sync:
+  // returns the target SSE text).
+  rpc ConvertStream(ConvertStreamReq) returns (Envelope);
+  // ListProviders returns registered provider names.
+  rpc ListProviders(Empty) returns (ProviderList);
+  // Capability returns the capability declaration for a provider.
+  rpc Capability(CapabilityReq) returns (Envelope);
+  // Ping is a health probe.
+  rpc Ping(Empty) returns (Pong);
+}
+
+// Envelope is the D5 result shape: {"value":…,"diagnostics":[…]}.
+message Envelope {
+  string value = 1;
+  repeated Diagnostic diagnostics = 2;
+}
+
+// Diagnostic corresponds to lux.ConversionDiagnostic.
+message Diagnostic {
+  string field = 1;
+  string status = 2;
+  string detail = 3;
+}
+
+// --- Request messages (mirror ARCHITECTURE.md §6.1 client contract) ---
+
+message EncodeRequestReq {
+  string provider = 1;
+  string text = 2;
+}
+
+message DecodeResponseReq {
+  string provider = 1;
+  string json = 2;
+}
+
+message DecodeSSEReq {
+  string provider = 1;
+  string sse = 2;
+}
+
+message EncodeStreamReq {
+  string provider = 1;
+  string text = 2;
+}
+
+message ConvertReq {
+  string from_provider = 1;
+  string to_provider = 2;
+  string direction = 3;
+  string payload = 4;
+}
+
+message ConvertStreamReq {
+  string from_provider = 1;
+  string to_provider = 2;
+  string sse = 3;
+}
+
+message CapabilityReq {
+  string provider = 1;
+}
+
+// --- Response messages ---
+
+message Empty {}
+
+message ProviderList {
+  repeated string providers = 1;
+}
+
+message Pong {
+  string message = 1;
+}
