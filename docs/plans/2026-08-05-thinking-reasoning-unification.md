@@ -2,7 +2,7 @@
 
 > 日期：2026-08-05
 > 关联：ADR-008（thinking/reasoning 架构统一，提案）、
-> `docs/analysis/thinking-ideal-architecture-2026-08-04.md`（理想架构，未采用其删除方案）、
+> `docs/report/thinking-ideal-architecture-2026-08-04.md`（理想架构，未采用其删除方案）、
 > `docs/requirements.md`（双场景 source of truth）
 > 治理：涉及 IR 演进，需遵循 `docs/rules/lucent-ir-evolution.md`
 
