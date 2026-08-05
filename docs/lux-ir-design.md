@@ -52,6 +52,8 @@ pub enum LucentConversationItem {
 pub struct LucentMessage {
   role : LucentRole
   content : Array[LucentContent]
+  phase : String?                // Codex 的 phase（commentary/final_answer）
+  reasoning : LucentThinking?    // 消息级 reasoning（vLLM/DeepSeek/Fireworks）
 }
 
 pub enum LucentRole {
@@ -493,6 +495,52 @@ pub enum LucentFinishReason {
 - Gemini `finishReason: STOP/MAX_TOKENS/SAFETY/RECITATION` → 对应变体（`"safety"` → `Safety`，`"content_filter"` → `ContentFilter`，二者不同义）
 - OpenAI Responses `status: completed/incomplete/failed` → `Stop/Length/Error`
 - `provider_payload` 承载 `previous_response_id` / `system_fingerprint` / `safetyRatings` 等
+
+---
+
+## 9.1 消息级 reasoning 承载与跨协议映射
+
+### 三载体职责分工（不互相取代）
+
+消息/会话级推理过程在 IR 中有三类载体，语义不同，必须按职责使用：
+
+| 载体 | 表达 | 主要服务 | 示例 |
+|------|------|---------|------|
+| `LucentContent::Thinking`（块内） | thinking 在正文中的**交错位置** | 中转站结构保真 | Anthropic `thinking` block 夹在 text 中；Mistral/Cohere thinking chunk |
+| `LucentConversationItem::Reasoning`（平级项） | 独立 Item 级思考 | 中转站（Requests / 历史回传） | OpenAI Responses `input[]`/`output[]` 的 `reasoning` item |
+| `LucentMessage.reasoning`（消息级，**v1 新增**） | 消息级 reasoning 字段 | SDK + 中转站 | vLLM `message.reasoning` / DeepSeek/Fireworks `message.reasoning_content` |
+
+- `content` 数组只含**可见内容**（Text/ToolUse/ToolResult/Refusal/Image/Audio/Video）；`Thinking` 仅是 Anthropic 风格交错位置的保真载体。
+- `LucentMessage.reasoning` 是消息级 reasoning 的**首选读取入口**（SDK `c.message.reasoning`）。
+- `LucentConversationItem::Reasoning` 用于请求/历史侧回传。
+
+### 各厂商推理映射表
+
+| 厂商 / API | 入站承载 | 出站展开 | 流式事件 | 保真度诊断 |
+|-----------|---------|---------|---------|-----------|
+| Anthropic Messages | `content[]` `Thinking` block（含 signature / redacted_thinking） | 展开为 `thinking` + `redacted_thinking` block | `block_start(thinking)` / `thinking_delta` / `signature_delta` | `signature` 保留 |
+| OpenAI Chat（o-series） | `message.reasoning`（vLLM）/ `reasoning_content`（DeepSeek/Fireworks）→ `LucentMessage.reasoning` | `message.reasoning`（默认 vLLM 字段名） | `delta.reasoning` / `delta.reasoning_content` → `Thinking` 块 | 出站签名/redacted/summary 丢失 → `Degraded`；字段名按 `reasoning_field` 扩展切换 |
+| OpenAI Responses | `output[]` `reasoning` item（summary/signature）→ `Item::Reasoning` / 非流式折叠为 content Thinking | `Item::Reasoning` → `{"type":"reasoning", summary, signature}` | `reasoning` item + `response.reasoning_summary_text.delta/done` | `summary`/`signature` 保留 |
+| Gemini generateContent / Vertex | `part.thought:true` → 同时发 Text + `Thinking`（redacted=false） | `thought: true` 打在 part 上 | `BlockStart(Thinking) + BlockDelta(ThinkingDelta)`（与 Text 平行） | `thought` 布尔标记保留 |
+| Gemini Interactions | `steps[]` `thought` 步 | 展开为 `thought` 步 | 逐步 `thought` 增量 | `thought_summary` ↔ `LucentThinking.summary`（融合待定 → `Degraded`） |
+| Mistral | `content[]` thinking chunk | thinking chunk | `thinking` chunk delta | — |
+| Cohere | `content[]` thinking chunk | thinking chunk | `thinking` chunk delta | — |
+| Azure / Codex（responses 薄封装） | 随 openai_responses（Item 级） | 随 openai_responses（Item 级） | 随 openai_responses | 随 openai_responses；codex 请求侧 `effort` 支持 xhigh |
+
+> 注意：`openai_azure`、`openai_codex` 的 `moon.pkg` import **`openai_responses`**（非 openai-chat），
+> reasoning 经 `LucentConversationItem::Reasoning` / `LucentThinking` Item 模型流动，不由消息级字段承载。
+
+### 未决问题收敛
+
+(a) **出站字段名分歧**：默认 `reasoning`（vLLM 形态）；经 `extra`/`ProviderCapability` 显式声明
+`reasoning_field: "reasoning_content"` 时切换；无声明且确需 DeepSeek 形态时产生 `Unsupported` 诊断，不静默。
+
+(b) **双载体出站优先级**：`LucentMessage.reasoning` 优先；回退 `content` 的 Thinking block；
+两者同时存在时视为 `Degraded`（不静默，提示消费者处理重复表达）。
+
+(c) **流式/非流式归位**：流式 `Thinking` 块在累加器（`lucent_stream_events_to_accumulated`）中
+归位到 `LucentMessage.reasoning`，`content[]` 不含 Thinking；非流式入站直接填 `message.reasoning`。
+两条路径最终一致，SDK 统一从 `c.message.reasoning` 读取。
 
 ---
 
