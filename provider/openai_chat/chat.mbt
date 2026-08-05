@@ -767,12 +767,98 @@ pub fn openai_chat_to_lux_response(
 /// === 响应编码：LucentResponse → OpenAI Chat JSON ===
 
 ///|
+/// 双载体回退：从 content 数组中提取首个 Thinking block（无则 None）。
+/// openai-chat 出站时 content Thinking 作为 message.reasoning 的回退载体。
+fn find_content_thinking(
+  content : Array[@lux.LucentContent],
+) -> @lux.LucentThinking? {
+  let mut result : @lux.LucentThinking? = None
+  let mut i = 0
+  while i < content.length() {
+    match content[i] {
+      Thinking(th) => {
+        result = Some(th)
+        break
+      }
+      _ => ()
+    }
+    i = i + 1
+  }
+  result
+}
+
+///|
+/// 单个 reasoning 载体 → 出站字段 JSON 片段。
+/// 保真度：openai-chat 的 reasoning 字符串无法承载 signature/redacted/summary → Degraded。
+fn emit_reasoning_field(
+  r : @lux.LucentThinking,
+  field_name : String,
+  diagnostics : Array[@lux.ConversionDiagnostic],
+) -> String {
+  match r.signature {
+    Some(_) =>
+      diagnostics.push(
+        @lux.ConversionDiagnostic::new(
+          "reasoning.signature",
+          Degraded,
+          Some("signature lost: openai-chat reasoning is a plain string"),
+        ),
+      )
+    None => ()
+  }
+  if r.redacted {
+    diagnostics.push(
+      @lux.ConversionDiagnostic::new(
+        "reasoning.redacted",
+        Degraded,
+        Some("redacted flag lost: openai-chat reasoning is a plain string"),
+      ),
+    )
+  }
+  match r.summary {
+    Some(_) =>
+      diagnostics.push(
+        @lux.ConversionDiagnostic::new(
+          "reasoning.summary",
+          Degraded,
+          Some("summary lost: openai-chat reasoning is a plain string"),
+        ),
+      )
+    None => ()
+  }
+  ",\"" + field_name + "\":\"" + escape_json(r.text) + "\""
+}
+
+///|
 /// 4. lux_response_to_openai_chat — 响应编码
 pub fn lux_response_to_openai_chat(
   resp : @lux.LucentResponse,
 ) -> Result[@lux.ConversionResult[String], String] {
   let choices_json : Array[String] = []
   let diagnostics : Array[@lux.ConversionDiagnostic] = []
+  // (a) 出站字段名：默认 reasoning（vLLM 形态）；经 provider_payload.reasoning_field
+  // 显式声明 "reasoning_content"（DeepSeek/Fireworks 形态）时切换；声明不支持的值
+  // 时产生 Unsupported 诊断，不静默回退。
+  let mut reasoning_field_name = "reasoning"
+  match resp.provider_payload {
+    Some(Object(m)) =>
+      match m.get("reasoning_field") {
+        Some(String(s)) =>
+          if s == "reasoning" || s == "reasoning_content" {
+            reasoning_field_name = s
+          } else {
+            diagnostics.push(
+              @lux.ConversionDiagnostic::new(
+                "reasoning.reasoning_field",
+                Unsupported,
+                Some("unsupported reasoning_field value: " + s),
+              ),
+            )
+          }
+        _ => ()
+      }
+    _ => ()
+  }
   let mut i = 0
   while i < resp.choices.length() {
     let c = resp.choices[i]
@@ -796,46 +882,28 @@ pub fn lux_response_to_openai_chat(
       j = j + 1
     }
     let content_str = content_parts.join("")
-    // 消息级 reasoning 出站（默认字段名 reasoning，vLLM 形态）
-    let reasoning_field = match c.message.reasoning {
-      Some(r) => {
-        // 保真度：openai-chat 的 reasoning 字符串无法承载 signature/redacted/summary → Degraded
-        match r.signature {
-          Some(_) =>
-            diagnostics.push(
-              @lux.ConversionDiagnostic::new(
-                "reasoning.signature",
-                Degraded,
-                Some("signature lost: openai-chat reasoning is a plain string"),
-              ),
-            )
-          None => ()
-        }
-        if r.redacted {
-          diagnostics.push(
-            @lux.ConversionDiagnostic::new(
-              "reasoning.redacted",
-              Degraded,
-              Some(
-                "redacted flag lost: openai-chat reasoning is a plain string",
-              ),
+    // (b) 双载体出站：LucentMessage.reasoning 优先；回退 content 中的 Thinking block；
+    // 两者同时存在 → Degraded（不静默，提示消费者处理重复表达）。
+    // 出站字段名由 (a) 的 reasoning_field_name 决定（默认 reasoning，vLLM 形态）。
+    let reasoning_field = match
+      (c.message.reasoning, find_content_thinking(c.message.content)) {
+      (Some(r), Some(_)) => {
+        diagnostics.push(
+          @lux.ConversionDiagnostic::new(
+            "reasoning.dual_carrier",
+            Degraded,
+            Some(
+              "both message.reasoning and content Thinking present; using message.reasoning",
             ),
-          )
-        }
-        match r.summary {
-          Some(_) =>
-            diagnostics.push(
-              @lux.ConversionDiagnostic::new(
-                "reasoning.summary",
-                Degraded,
-                Some("summary lost: openai-chat reasoning is a plain string"),
-              ),
-            )
-          None => ()
-        }
-        ",\"reasoning\":\"" + escape_json(r.text) + "\""
+          ),
+        )
+        emit_reasoning_field(r, reasoning_field_name, diagnostics)
       }
-      None => ""
+      (Some(r), None) =>
+        emit_reasoning_field(r, reasoning_field_name, diagnostics)
+      (None, Some(t)) =>
+        emit_reasoning_field(t, reasoning_field_name, diagnostics)
+      (None, None) => ""
     }
     let mut msg_obj = "\"index\":" +
       c.index.to_string() +

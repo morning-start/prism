@@ -937,7 +937,7 @@ test "C1 openai_chat_sse_to_events - captures delta.reasoning_content" {
         let mut found = false
         for ev in events {
           match ev {
-            BlockDelta(1, @lux.LucentBlockDelta::ThinkingDelta(s)) =>
+            BlockDelta(1, ThinkingDelta(s)) =>
               if s == "think hard" {
                 found = true
               }
@@ -1007,11 +1007,136 @@ test "C4 lux_response_to_openai_chat - signature loss yields Degraded diagnostic
     Ok(cr) => {
       let mut has_degraded = false
       for d in cr.diagnostics() {
-        if d.status == @lux.Degraded {
+        if d.status == Degraded {
           has_degraded = true
         }
       }
       assert_true(has_degraded)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// (a) reasoning_field 切换：provider_payload.reasoning_field = "reasoning_content"
+/// 时出站字段名切换为 reasoning_content（DeepSeek/Fireworks 形态）。
+test "(a) lux_response_to_openai_chat - reasoning_field switches to reasoning_content" {
+  let th = @lux.LucentThinking::visible("thought", None)
+  let msg = @lux.LucentMessage::with_reasoning(
+    Assistant,
+    [@lux.LucentContent::text("answer")],
+    Some(th),
+  )
+  let resp = @lux.LucentResponse::new(
+    "r-1",
+    "model",
+    None,
+    [@lux.LucentChoice::new(0, msg, Stop, None)],
+    None,
+    Some({ "reasoning_field": @json.parse("\"reasoning_content\"") }),
+  )
+  match lux_response_to_openai_chat(resp) {
+    Ok(cr) => {
+      let s = cr.value()
+      assert_true(s.contains("\"reasoning_content\":\"thought\""))
+      assert_false(s.contains("\"reasoning\":\"thought\""))
+      // 字段名合法，不产生诊断
+      assert_eq(cr.diagnostics().length(), 0)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// (a) reasoning_field 非法值 → Unsupported 诊断，不静默回退。
+test "(a) lux_response_to_openai_chat - unsupported reasoning_field yields Unsupported" {
+  let th = @lux.LucentThinking::visible("thought", None)
+  let msg = @lux.LucentMessage::with_reasoning(
+    Assistant,
+    [@lux.LucentContent::text("answer")],
+    Some(th),
+  )
+  let resp = @lux.LucentResponse::new(
+    "r-1",
+    "model",
+    None,
+    [@lux.LucentChoice::new(0, msg, Stop, None)],
+    None,
+    Some({ "reasoning_field": @json.parse("\"thought\"") }),
+  )
+  match lux_response_to_openai_chat(resp) {
+    Ok(cr) => {
+      let mut has_unsupported = false
+      for d in cr.diagnostics() {
+        if d.field == "reasoning.reasoning_field" && d.status == Unsupported {
+          has_unsupported = true
+        }
+      }
+      assert_true(has_unsupported)
+      // 仍输出默认字段名 reasoning（不静默丢弃内容）
+      assert_true(cr.value().contains("\"reasoning\":\"thought\""))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// (b) 双载体回退：content 中的 Thinking block 作为 message.reasoning 的回退载体。
+test "(b) lux_response_to_openai_chat - content Thinking falls back to reasoning" {
+  let msg = @lux.LucentMessage::new(Assistant, [
+    @lux.LucentContent::text("answer"),
+    @lux.LucentContent::thinking("thought in block", None),
+  ])
+  let resp = @lux.LucentResponse::new(
+    "r-1",
+    "model",
+    None,
+    [@lux.LucentChoice::new(0, msg, Stop, None)],
+    None,
+    None,
+  )
+  match lux_response_to_openai_chat(resp) {
+    Ok(cr) => {
+      let s = cr.value()
+      // content Thinking 回退为 reasoning 字段
+      assert_true(s.contains("\"reasoning\":\"thought in block\""))
+      // content 字符串不含 thinking 文本（Thinking 不入 content）
+      assert_true(s.contains("\"content\":\"answer\""))
+      assert_false(s.contains("\"content\":\"answerthought in block\""))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// (b) 双载体并存：message.reasoning 与 content Thinking 同时存在 → Degraded 诊断，
+/// 且以 message.reasoning 为准。
+test "(b) lux_response_to_openai_chat - dual carrier yields Degraded" {
+  let th = @lux.LucentThinking::visible("msg reasoning", None)
+  let msg = @lux.LucentMessage::with_reasoning(
+    Assistant,
+    [@lux.LucentContent::thinking("block reasoning", None)],
+    Some(th),
+  )
+  let resp = @lux.LucentResponse::new(
+    "r-1",
+    "model",
+    None,
+    [@lux.LucentChoice::new(0, msg, Stop, None)],
+    None,
+    None,
+  )
+  match lux_response_to_openai_chat(resp) {
+    Ok(cr) => {
+      let mut has_dual = false
+      for d in cr.diagnostics() {
+        if d.field == "reasoning.dual_carrier" && d.status == Degraded {
+          has_dual = true
+        }
+      }
+      assert_true(has_dual)
+      // message.reasoning 优先
+      assert_true(cr.value().contains("\"reasoning\":\"msg reasoning\""))
     }
     Err(_) => assert_true(false)
   }
