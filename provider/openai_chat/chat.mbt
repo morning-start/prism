@@ -702,6 +702,15 @@ fn parse_choices(jv : Json) -> Array[@lux.LucentChoice] {
               Some(r) => content.push(@lux.LucentContent::refusal(r))
               None => ()
             }
+            // 消息级 reasoning（vLLM: message.reasoning；DeepSeek/Fireworks: message.reasoning_content）
+            let reasoning = match @internal.field_str(msg_jv, "reasoning") {
+              Some(text) => Some(@lux.LucentThinking::visible(text, None))
+              None =>
+                match @internal.field_str(msg_jv, "reasoning_content") {
+                  Some(text) => Some(@lux.LucentThinking::visible(text, None))
+                  None => None
+                }
+            }
             let finish = match @internal.field_str(c, "finish_reason") {
               Some(fr) => @lux.LucentFinishReason::from_string(fr)
               None => Stop
@@ -709,7 +718,7 @@ fn parse_choices(jv : Json) -> Array[@lux.LucentChoice] {
             result.push(
               @lux.LucentChoice::new(
                 idx,
-                @lux.LucentMessage::new(role, content),
+                @lux.LucentMessage::with_reasoning(role, content, reasoning),
                 finish,
                 None,
               ),
@@ -787,13 +796,19 @@ pub fn lux_response_to_openai_chat(
       j = j + 1
     }
     let content_str = content_parts.join("")
+    // 消息级 reasoning 出站（默认字段名 reasoning，vLLM 形态）
+    let reasoning_field = match c.message.reasoning {
+      Some(r) => ",\"reasoning\":\"" + escape_json(r.text) + "\""
+      None => ""
+    }
     let mut msg_obj = "\"index\":" +
       c.index.to_string() +
       ",\"message\":{\"role\":\"" +
       escape_json(role) +
       "\",\"content\":\"" +
       escape_json(content_str) +
-      "\""
+      "\"" +
+      reasoning_field
     if tool_calls.length() > 0 {
       msg_obj = msg_obj + ",\"tool_calls\":[" + tool_calls.join(",") + "]"
     }

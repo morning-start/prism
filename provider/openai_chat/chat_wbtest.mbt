@@ -815,3 +815,100 @@ test "chat store/extras round-trip" {
     Err(e) => fail("encode: \{e}")
   }
 }
+
+///|
+/// === Reasoning 契约测试 ===
+
+///|
+test "openai_chat_to_lux_response - vLLM message.reasoning captured" {
+  let json = "{\"id\":\"c-1\",\"model\":\"qwen\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Final answer\",\"reasoning\":\"step by step\"},\"finish_reason\":\"stop\"}]}"
+  match openai_chat_to_lux_response(json) {
+    Ok(cr) =>
+      match cr.value().choices[0].message.reasoning {
+        Some(r) => assert_eq(r.text, "step by step")
+        None => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "openai_chat_to_lux_response - DeepSeek reasoning_content captured" {
+  let json = "{\"id\":\"c-1\",\"model\":\"deepseek\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Final answer\",\"reasoning_content\":\"chain of thought\"},\"finish_reason\":\"stop\"}]}"
+  match openai_chat_to_lux_response(json) {
+    Ok(cr) =>
+      match cr.value().choices[0].message.reasoning {
+        Some(r) => assert_eq(r.text, "chain of thought")
+        None => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "lux_response_to_openai_chat - reasoning encoded as reasoning field" {
+  let resp = @lux.LucentResponse::new(
+    "r-1",
+    "qwen",
+    None,
+    [
+      @lux.LucentChoice::new(
+        0,
+        @lux.LucentMessage::with_reasoning(
+          Assistant,
+          [@lux.LucentContent::text("Final answer")],
+          Some(@lux.LucentThinking::visible("step by step", None)),
+        ),
+        Stop,
+        None,
+      ),
+    ],
+    None,
+    None,
+  )
+  match lux_response_to_openai_chat(resp) {
+    Ok(cr) => {
+      let jv = @json.parse(cr.value())
+      match @internal.field_arr(jv, "choices") {
+        Some(arr) =>
+          match @internal.obj_get(arr[0], "message") {
+            Some(msg) =>
+              match @internal.field_str(msg, "reasoning") {
+                Some(r) => assert_eq(r, "step by step")
+                None => assert_true(false)
+              }
+            None => assert_true(false)
+          }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "openai-chat reasoning round-trip - vLLM format" {
+  let inbound = "{\"id\":\"c-1\",\"model\":\"qwen\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Final\",\"reasoning\":\"thought\"},\"finish_reason\":\"stop\"}]}"
+  match openai_chat_to_lux_response(inbound) {
+    Ok(cr) =>
+      match lux_response_to_openai_chat(cr.value()) {
+        Ok(enc) => {
+          let jv = @json.parse(enc.value())
+          match @internal.field_arr(jv, "choices") {
+            Some(arr) =>
+              match @internal.obj_get(arr[0], "message") {
+                Some(msg) =>
+                  match @internal.field_str(msg, "reasoning") {
+                    Some(r) => assert_eq(r, "thought")
+                    None => assert_true(false)
+                  }
+                None => assert_true(false)
+              }
+            None => assert_true(false)
+          }
+        }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
