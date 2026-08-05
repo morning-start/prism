@@ -912,3 +912,107 @@ test "openai-chat reasoning round-trip - vLLM format" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+/// === C1/C2/C4：流式 reasoning + 保真度诊断 ===
+
+///|
+test "C1 openai_chat_sse_to_events - captures delta.reasoning_content" {
+  let sse = "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\"think hard\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\"answer\"}}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
+  match openai_chat_sse_to_events(sse) {
+    Ok(cr) => {
+      let events = cr.value()
+      let has_thinking_block = {
+        let mut found = false
+        for ev in events {
+          match ev {
+            BlockStart(1, Thinking) => found = true
+            _ => ()
+          }
+        }
+        found
+      }
+      assert_true(has_thinking_block)
+      let has_thinking_delta = {
+        let mut found = false
+        for ev in events {
+          match ev {
+            BlockDelta(1, @lux.LucentBlockDelta::ThinkingDelta(s)) =>
+              if s == "think hard" {
+                found = true
+              }
+            _ => ()
+          }
+        }
+        found
+      }
+      assert_true(has_thinking_delta)
+      // Reasoning 块在 finish_reason 被闭合
+      let has_block_end_1 = {
+        let mut found = false
+        for ev in events {
+          match ev {
+            BlockEnd(1) => found = true
+            _ => ()
+          }
+        }
+        found
+      }
+      assert_true(has_block_end_1)
+    }
+    Err(e) => fail("sse decode error: \{e}")
+  }
+}
+
+///|
+test "C2 lux_events_to_openai_chat_sse - encodes delta.reasoning" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(@lux.LucentConversationMeta::new(None, None, None)),
+    BlockStart(1, @lux.LucentBlockType::thinking()),
+    BlockDelta(1, @lux.LucentBlockDelta::thinking_delta("reasoning text")),
+    BlockEnd(1),
+    BlockStart(0, Text),
+    BlockDelta(0, @lux.LucentBlockDelta::text_delta("answer")),
+    BlockEnd(0),
+    Finish(Stop),
+    Done,
+  ]
+  match lux_events_to_openai_chat_sse(events) {
+    Ok(cr) => {
+      let sse = cr.value()
+      assert_true(sse.contains("\"reasoning\":\"reasoning text\""))
+      assert_true(sse.contains("\"content\":\"answer\""))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "C4 lux_response_to_openai_chat - signature loss yields Degraded diagnostic" {
+  let th = @lux.LucentThinking::visible("thought", Some("sig-abc"))
+  let msg = @lux.LucentMessage::with_reasoning(
+    Assistant,
+    [@lux.LucentContent::text("answer")],
+    Some(th),
+  )
+  let resp = @lux.LucentResponse::new(
+    "r-1",
+    "model",
+    None,
+    [@lux.LucentChoice::new(0, msg, Stop, None)],
+    None,
+    None,
+  )
+  match lux_response_to_openai_chat(resp) {
+    Ok(cr) => {
+      let mut has_degraded = false
+      for d in cr.diagnostics() {
+        if d.status == @lux.Degraded {
+          has_degraded = true
+        }
+      }
+      assert_true(has_degraded)
+    }
+    Err(_) => assert_true(false)
+  }
+}
