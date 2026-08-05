@@ -1,15 +1,15 @@
 {
   "pipeline": "development",
-  "phase": "implement",
-  "phase_name": "grpc-binding",
-  "plan_file": "docs/tasks/2026-08-04-grpc-binding-plan.md",
+  "phase": "completed",
+  "phase_name": "thinking-reasoning",
+  "plan_file": "docs/tasks/2026-08-05-thinking-reasoning-tasks.md",
   "progress": {
     "total_tasks": 4,
     "completed_tasks": 4,
     "current_task": 4
   },
-  "last_verification": "2026-08-04T00:00:00Z",
-  "last_updated": "2026-08-04T00:00:00Z",
+  "last_verification": "2026-08-05T00:00:00Z",
+  "last_updated": "2026-08-05T00:00:00Z",
   "next": "plan:sdk-gen-pipeline | moonbit-native-daemon",
-  "notes": "gRPC binding COMPLETE: (0) proto definition (transport/daemon/proto/prism.proto, D5 Envelope/Diagnostic messages, sync EncodeStream/ConvertStream + server-streaming DecodeSSEStream per Phase 3 term clarification) + generated code (prismpb/), (1) GRPCServer implementing prismpb.PrismServer over Backend (parseBackendEnvelope for D5), (2) DecodeSSEStream server-streaming (whole-decode-then-stream, one envelope per event + done), (3) clients/go GRPCTransport (4th pluggable transport; Call JSON-encodes value for ValueString parity, Stream via DecodeSSEStream; reuses daemon/prismpb to avoid double proto registration). 7 daemon gRPC tests + 4-transport clients/go contract tests green; ARCHITECTURE §5.4/§9 Phase 4 marked delivered. MoonBit side untouched. Next: SDK-gen pipeline (§9 Phase 5) / MoonBit-native daemon (§9 Phase 6)."
+  "notes": "Thinking/Reasoning 统一 4 batch (A-D) 全部完成并合入 master：A IR 承载 (LucentMessage.reasoning + serialize/deserialize + LucentResponse::reasoning())；B openai-chat 非流式捕获/输出；C 流式捕获/输出 + 累加器归位 + Degraded 诊断；D 跨厂商映射表 (lux-ir-design.md §9.1)。727 测试全绿。此前 grpc-binding (phase4b) 计划文件已随历史任务文档归档，不再引用。"
 }

@@ -1,5 +1,11 @@
 # 如果推到重来：Thinking/Reasoning 架构理想设计
 
+> **归档状态**：本文档是 2026-08-04 对「完全推到重来」架构的探索性设计（删除式重构，
+> reasoning 与 content 平级）。**未采用**。正式采用的方案是 ADR-008 的**方案 B**（在
+> `LucentResponse` 增消息级 `reasoning` 字段、保留 `LucentContent::Thinking` 作为块内
+> 交错载体），落实现状见 `docs/lux-ir-design.md` §9.1。本文作为设计权衡记录保留，
+> 不反映当前实现。
+
 ## 核心设计哲学
 
 **thinking/reasoning 不是 `content` 的子类型，而是与 `content` 平级的消息组成部分。**

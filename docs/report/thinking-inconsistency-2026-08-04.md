@@ -1,5 +1,10 @@
 # Thinking/Reasoning 协议不一致问题 — 全面调研报告
 
+> **归档状态**：本文档是 2026-08-04 的一次性行业调研产物。其结论（4 种结构类型、
+> 跨协议映射）已被正式吸收至 `docs/adr/ADR-008-thinking-reasoning-unification.md`
+> 与 `docs/lux-ir-design.md` §9.1（消息级 reasoning 承载与跨协议映射表）。此后以
+> 规范文档为准，本文作为历史溯源保留。
+
 > 调研日期：2026-08-04
 > 方法：按 litellm providers 分类，逐厂商调研 API 文档 + 响应格式
 > 范围：11 个主流厂商/API 形态，含 4 种结构类型
