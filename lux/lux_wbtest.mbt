@@ -1079,3 +1079,95 @@ test "accumulate - thinking delta on non-thinking block yields Degraded diagnost
   let text = lucent_content_to_text(acc.response.choices[0].message.content)
   assert_false(text.contains("stray"))
 }
+
+///|
+test "LucentMessage reasoning field - default None via new" {
+  let m = LucentMessage::new(User, [LucentContent::text("hi")])
+  assert_eq(m.role, User)
+  assert_eq(m.reasoning, None)
+}
+
+///|
+test "LucentMessage reasoning - record literal carries value" {
+  let th = LucentThinking::visible("chain of thought", None)
+  let m : LucentMessage = {
+    role: Assistant,
+    content: [LucentContent::text("answer")],
+    phase: None,
+    reasoning: Some(th),
+  }
+  match m.reasoning {
+    Some(r) => assert_eq(r.text, "chain of thought")
+    None => assert_true(false)
+  }
+}
+
+///|
+test "LucentMessage reasoning - to_json/from_json round trip" {
+  let th = LucentThinking::visible("intermediate steps", Some("sig-1"))
+  let m : LucentMessage = {
+    role: Assistant,
+    content: [LucentContent::text("final")],
+    phase: None,
+    reasoning: Some(th),
+  }
+  let jv = m.to_json()
+  let back = LucentMessage::from_json(jv)
+  match back {
+    Ok(m2) =>
+      match m2.reasoning {
+        Some(r) => {
+          assert_eq(r.text, "intermediate steps")
+          assert_eq(r.signature, Some("sig-1"))
+        }
+        None => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "LucentResponse reasoning accessor - empty & no reasoning" {
+  let empty = LucentResponse::new("r0", "model", None, [], None, None)
+  assert_eq(empty.reasoning(), None)
+
+  let no_thinking = LucentResponse::new(
+    "r1",
+    "model",
+    None,
+    [
+      LucentChoice::new(
+        0,
+        LucentMessage::new(Assistant, [LucentContent::text("plain")]),
+        Stop,
+        None,
+      ),
+    ],
+    None,
+    None,
+  )
+  assert_eq(no_thinking.reasoning(), None)
+}
+
+///|
+test "LucentResponse reasoning accessor - with reasoning" {
+  let th = LucentThinking::visible("thought", None)
+  let msg : LucentMessage = {
+    role: Assistant,
+    content: [LucentContent::text("answer")],
+    phase: None,
+    reasoning: Some(th),
+  }
+  let resp = LucentResponse::new(
+    "r2",
+    "model",
+    None,
+    [LucentChoice::new(0, msg, Stop, None)],
+    None,
+    None,
+  )
+  match resp.reasoning() {
+    Some(r) => assert_eq(r.text, "thought")
+    None => assert_true(false)
+  }
+}
