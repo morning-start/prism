@@ -660,6 +660,16 @@ pub fn LucentMessage::with_phase(
 }
 
 ///|
+/// 构造带消息级 reasoning 的 message（openai-chat 等适配器入站使用）
+pub fn LucentMessage::with_reasoning(
+  role : LucentRole,
+  content : Array[LucentContent],
+  reasoning : LucentThinking?,
+) -> LucentMessage {
+  { role, content, phase: None, reasoning }
+}
+
+///|
 pub fn LucentConversationItem::message(
   msg : LucentMessage,
 ) -> LucentConversationItem {
