@@ -846,14 +846,16 @@ test "accumulator thinking block with signature" {
     Done,
   ]
   let resp = lucent_stream_events_to_response(events, "r", "m")
-  match resp.choices[0].message.content[0] {
-    Thinking(th) => {
+  // C3：thinking 归位到 message.reasoning，不再进入 content
+  match resp.choices[0].message.reasoning {
+    Some(th) => {
       assert_eq(th.text, "I need to...")
       assert_eq(th.signature, Some("EqwB"))
       assert_eq(th.redacted, false)
     }
-    _ => assert_true(false)
+    None => assert_true(false)
   }
+  assert_eq(resp.choices[0].message.content.length(), 0)
 }
 
 ///|
@@ -1046,15 +1048,19 @@ test "accumulate - thinking delta does not leak into text" {
   let text = lucent_content_to_text(acc.response.choices[0].message.content)
   assert_true(text.contains("visible"))
   assert_false(text.contains("hidden")) // 思考内容不得进入文本
-  // Thinking 内容存在于 response 的 Thinking content 中
-  let mut has_thinking = false
+  // C3：thinking 归位到 message.reasoning，content 不含 Thinking
+  match acc.response.choices[0].message.reasoning {
+    Some(r) => assert_eq(r.text, "hidden")
+    None => assert_true(false)
+  }
+  let mut has_thinking_in_content = false
   for c in acc.response.choices[0].message.content {
     match c {
-      Thinking(_) => has_thinking = true
+      Thinking(_) => has_thinking_in_content = true
       _ => ()
     }
   }
-  assert_true(has_thinking)
+  assert_false(has_thinking_in_content)
 }
 
 ///|

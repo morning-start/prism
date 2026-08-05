@@ -227,6 +227,8 @@ pub fn lucent_stream_events_to_accumulated(
 
   // 累加内容：单一 assistant 消息（流式语义：一个响应对应一个 assistant 回复）
   let content : Array[LucentContent] = []
+  // 消息级 reasoning（vLLM/DeepSeek/Fireworks 流式累加，非流式一致）
+  let mut reasoning : LucentThinking? = None
   // 块状态跟踪：block_index -> (类型, 已累加的文本)
   // 用线性数组替代 Map（MoonBit 风格），下标即 block_index
   let block_types : Array[LucentBlockType] = []
@@ -252,6 +254,27 @@ pub fn lucent_stream_events_to_accumulated(
       block_tool_ids.push("")
       block_tool_names.push("")
     }
+  }
+
+  ///| 块辅助：把一段 thinking 累加进消息级 reasoning（文本拼接，签名取最后，redacted 取 OR）
+  fn merge_reasoning(th : LucentThinking) -> Unit {
+    let new_text = match reasoning {
+      Some(acc) => acc.text + th.text
+      None => th.text
+    }
+    let new_sig = match th.signature {
+      Some(s) => Some(s)
+      None =>
+        match reasoning {
+          Some(acc) => acc.signature
+          None => None
+        }
+    }
+    let new_redacted = match reasoning {
+      Some(acc) => acc.redacted || th.redacted
+      None => th.redacted
+    }
+    reasoning = Some(LucentThinking::new(new_text, new_sig, new_redacted, None))
   }
 
   ///| 块辅助：按类型把已累加内容刷入 content 数组
@@ -288,7 +311,7 @@ pub fn lucent_stream_events_to_accumulated(
           false,
           None,
         )
-        content.push(Thinking(th))
+        merge_reasoning(th)
         block_texts[idx].reset()
         block_thinking[idx].reset()
         block_signatures[idx].reset()
@@ -338,7 +361,7 @@ pub fn lucent_stream_events_to_accumulated(
             }
           ToolCall(tu) => content.push(ToolUse(tu))
           ToolResult(tr) => content.push(ToolResult(tr))
-          Reasoning(th) => content.push(Thinking(th))
+          Reasoning(th) => merge_reasoning(th)
           AgentAction(aa) => {
             // v1 不展开到 response，保留到侧信道 + 诊断
             agent_actions.push(aa)
@@ -459,7 +482,12 @@ pub fn lucent_stream_events_to_accumulated(
   } else {
     content
   }
-  let message = LucentMessage::new(Assistant, final_content)
+  let message : LucentMessage = {
+    role: Assistant,
+    content: final_content,
+    phase: None,
+    reasoning,
+  }
   let choice = LucentChoice::new(0, message, finish, None)
   {
     response: LucentResponse::new(
