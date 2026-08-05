@@ -229,6 +229,10 @@ pub fn LucentMessage::to_json(self : LucentMessage) -> Json {
     Some(p) => fields["phase"] = Json::string(p)
     None => ()
   }
+  match self.reasoning {
+    Some(r) => fields["reasoning"] = r.to_json()
+    None => ()
+  }
   Json::object(fields)
 }
 

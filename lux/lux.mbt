@@ -120,6 +120,8 @@ pub struct LucentMessage {
   role : LucentRole
   content : Array[LucentContent]
   phase : String?
+  /// 消息级 reasoning（vLLM/DeepSeek/Fireworks 的 message.reasoning / reasoning_content）
+  reasoning : LucentThinking?
 } derive(Eq, Debug)
 
 ///|
@@ -645,7 +647,7 @@ pub fn LucentMessage::new(
   role : LucentRole,
   content : Array[LucentContent],
 ) -> LucentMessage {
-  { role, content, phase: None }
+  { role, content, phase: None, reasoning: None }
 }
 
 ///|
@@ -654,7 +656,7 @@ pub fn LucentMessage::with_phase(
   content : Array[LucentContent],
   phase : String?,
 ) -> LucentMessage {
-  { role, content, phase }
+  { role, content, phase, reasoning: None }
 }
 
 ///|
@@ -1087,6 +1089,16 @@ pub fn LucentResponse::get_text(self : LucentResponse) -> String {
     lucent_content_to_text(self.choices[0].message.content)
   } else {
     ""
+  }
+}
+
+///|
+/// 便捷访问：首个 choice 的消息级 reasoning（SDK 取用入口）
+pub fn LucentResponse::reasoning(self : LucentResponse) -> LucentThinking? {
+  if self.choices.length() > 0 {
+    self.choices[0].message.reasoning
+  } else {
+    None
   }
 }
 

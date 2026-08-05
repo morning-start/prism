@@ -651,7 +651,15 @@ pub fn LucentMessage::from_json(jv : Json) -> Result[LucentMessage, String] {
         Ok(v) => v
         Err(e) => return Err(e)
       }
-      Ok({ role, content, phase: get_str_opt(m, "phase") })
+      let reasoning = match m.get("reasoning") {
+        Some(r) =>
+          match LucentThinking::from_json(r) {
+            Ok(v) => Some(v)
+            Err(e) => return Err(e)
+          }
+        None => None
+      }
+      Ok({ role, content, phase: get_str_opt(m, "phase"), reasoning })
     }
     _ => Err("expected object for LucentMessage")
   }
