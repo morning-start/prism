@@ -267,11 +267,13 @@ pub struct LucentMessage {
   role : LucentRole
   content : Array[LucentContent]
   phase : String?
+  reasoning : LucentThinking?
 } derive(Eq, @debug.Debug)
 pub fn LucentMessage::from_json(Json) -> Result[Self, String]
 pub fn LucentMessage::new(LucentRole, Array[LucentContent]) -> Self
 pub fn LucentMessage::to_json(Self) -> Json
 pub fn LucentMessage::with_phase(LucentRole, Array[LucentContent], String?) -> Self
+pub fn LucentMessage::with_reasoning(LucentRole, Array[LucentContent], LucentThinking?) -> Self
 
 pub(all) enum LucentModality {
   Text
@@ -373,6 +375,7 @@ pub struct LucentResponse {
 pub fn LucentResponse::from_json(Json) -> Result[Self, String]
 pub fn LucentResponse::get_text(Self) -> String
 pub fn LucentResponse::new(String, String, Int?, Array[LucentChoice], LucentUsage?, Json?) -> Self
+pub fn LucentResponse::reasoning(Self) -> LucentThinking?
 pub fn LucentResponse::to_json(Self) -> Json
 pub fn LucentResponse::validate(Self) -> ValidateResult
 pub fn LucentResponse::with_provider_payload(Self, Json?) -> Self
