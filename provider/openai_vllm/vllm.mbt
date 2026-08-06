@@ -26,11 +26,45 @@ pub fn vllm_to_lux_request(
 }
 
 ///|
-/// 2. 请求编码 — 与标准 openai-chat 完全一致
+/// 2. 请求编码 — openai-chat 核心 + vLLM 特有 thinking 配置
+///
+/// 差异：vLLM 用 `extra_body.chat_template_kwargs.enable_thinking` 控制思考
+/// （Qwen3 等模型）；标准 OpenAI Chat 用 `reasoning_effort`（openai-chat
+/// 已发射）。本子协议在 openai-chat 结果上后处理插入 enable_thinking。
 pub fn lux_request_to_vllm(
   req : @lux.LucentRequest,
 ) -> Result[@lux.ConversionResult[String], String] {
-  @openai_chat.lux_request_to_openai_chat(req)
+  let base = @openai_chat.lux_request_to_openai_chat(req)
+  match base {
+    Ok(cr) =>
+      match req.reasoning {
+        Some(rc) => {
+          // 在顶层插入 extra_body.chat_template_kwargs.enable_thinking
+          let jv = @json.parse(cr.value()) catch { _ => return Ok(cr) }
+          let kwargs = match @internal.obj_get(jv, "extra_body") {
+            Some(Object(m)) =>
+              match m.get("chat_template_kwargs") {
+                Some(existing) => existing
+                _ => Json::object(Map([]))
+              }
+            _ => Json::object(Map([]))
+          }
+          let kwargs2 = json_set(
+            kwargs,
+            "enable_thinking",
+            Json::boolean(rc.enabled),
+          )
+          let extra = match @internal.obj_get(jv, "extra_body") {
+            Some(e) => json_set(e, "chat_template_kwargs", kwargs2)
+            None => Json::object({ "chat_template_kwargs": kwargs2 })
+          }
+          let root = json_set(jv, "extra_body", extra)
+          Ok(@lux.ConversionResult::new(root.stringify()))
+        }
+        None => Ok(cr)
+      }
+    Err(e) => Err(e)
+  }
 }
 
 ///|

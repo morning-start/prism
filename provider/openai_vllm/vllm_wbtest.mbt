@@ -184,6 +184,84 @@ test "vllm request decode forwards to openai-chat" {
 }
 
 ///|
+/// 请求侧 reasoning 配置：enabled → extra_body.chat_template_kwargs.enable_thinking=true
+test "lux_request_to_vllm - reasoning config emits enable_thinking" {
+  let req = @lux.LucentRequest::new(
+    "qwen3",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hello")]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    Some(@lux.LucentReasoningConfig::new(None, None)),
+    None,
+    None,
+  )
+  match lux_request_to_vllm(req) {
+    Ok(cr) => {
+      let jv = @json.parse(cr.value())
+      match @internal.obj_get(jv, "extra_body") {
+        Some(Object(m)) =>
+          match m.get("chat_template_kwargs") {
+            Some(kwargs) =>
+              match @internal.obj_get(kwargs, "enable_thinking") {
+                Some(True) => ()
+                _ => assert_true(false)
+              }
+            None => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// 请求侧 reasoning 配置：disabled → enable_thinking=false
+test "lux_request_to_vllm - disabled reasoning emits enable_thinking=false" {
+  let req = @lux.LucentRequest::new(
+    "qwen3",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hello")]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    Some(@lux.LucentReasoningConfig::disabled()),
+    None,
+    None,
+  )
+  match lux_request_to_vllm(req) {
+    Ok(cr) => {
+      let jv = @json.parse(cr.value())
+      match @internal.obj_get(jv, "extra_body") {
+        Some(Object(m)) =>
+          match m.get("chat_template_kwargs") {
+            Some(kwargs) =>
+              match @internal.obj_get(kwargs, "enable_thinking") {
+                Some(False) => ()
+                _ => assert_true(false)
+              }
+            None => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
 /// capability 声明 provider 名
 test "vllm capability declares provider" {
   let cap = capability()

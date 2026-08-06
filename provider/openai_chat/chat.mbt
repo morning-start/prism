@@ -320,6 +320,17 @@ fn role_to_string(role : @lux.LucentRole) -> String {
 }
 
 ///|
+/// LucentReasoningEffort → OpenAI reasoning_effort 字符串
+fn reasoning_effort_to_string(e : @lux.LucentReasoningEffort) -> String {
+  match e {
+    Low => "low"
+    Medium => "medium"
+    High => "high"
+    XHigh => "xhigh"
+  }
+}
+
+///|
 /// JSON 字符串转义 — 委托共享实现（@internal）
 fn escape_json(s : String) -> String {
   @internal.json_escape(s)
@@ -611,6 +622,24 @@ pub fn lux_request_to_openai_chat(
   }
   if opts.stream {
     parts.push("\"stream\":true")
+  }
+  // reasoning config → reasoning_effort（o-series 标准参数）
+  match req.reasoning {
+    Some(rc) =>
+      if rc.enabled {
+        match rc.effort {
+          Some(e) =>
+            parts.push(
+              "\"reasoning_effort\":\"" + reasoning_effort_to_string(e) + "\"",
+            )
+          None => () // enabled 无 effort：省略（模型默认）
+        }
+      } else {
+        // disabled：OpenAI o-series 无 reasoning_effort 禁用值；gpt-5.1+ 支持
+        // "none"，此处保守省略（模型默认行为）
+        ()
+      }
+    None => ()
   }
   match opts.seed {
     Some(n) => parts.push("\"seed\":" + n.to_string())
