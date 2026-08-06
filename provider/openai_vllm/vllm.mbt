@@ -187,20 +187,291 @@ fn reasoning_field_name(resp : @lux.LucentResponse) -> String {
 }
 
 ///|
-/// 5. 流解码 — openai-chat 核心 + delta.reasoning 后处理
+/// 5. 流解码 — vLLM SSE → Lux 事件（含 delta.reasoning 捕获）
+///
+/// 与标准 openai-chat 的差异：vLLM 在 delta 中携带 `reasoning` /
+/// `reasoning_content` 字段（标准 Chat API 无）。本子协议自行解析，
+/// 捕获 reasoning 增量 → 独立 Thinking 块（块索引 1，content 用 0）。
 pub fn vllm_sse_to_events(
   sse_str : String,
 ) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String] {
-  @openai_chat.openai_chat_sse_to_events(sse_str)
+  let events : Array[@lux.LucentStreamEvent] = []
+  let lines = sse_str.split("\n").to_array()
+  let mut text_block_open = false // 是否有未闭合的文本块
+  let mut thinking_block_open = false // 是否有未闭合的 reasoning 块
+  let mut current_tool_block = -1 // 当前工具调用块索引（-1 表示无）
+  let mut i = 0
+  while i < lines.length() {
+    let line = lines[i]
+    let line_str = line.to_owned()
+    // 检查是否为 data: 行（逐字符比较，因为 MoonBit String 无 startsWith 方法）
+    let is_data = if line_str.length() >= 5 {
+      line_str[0] == 'd' &&
+      line_str[1] == 'a' &&
+      line_str[2] == 't' &&
+      line_str[3] == 'a' &&
+      line_str[4] == ':'
+    } else {
+      false
+    }
+    if is_data {
+      // 提取 data: 后的内容
+      let mut payload = ""
+      let mut p = 5
+      while p < line_str.length() {
+        let ch = Int::unsafe_to_char(line_str[p].to_int())
+        payload = payload + "\{ch}"
+        p = p + 1
+      }
+      payload = payload.trim().to_owned()
+      if payload == "[DONE]" {
+        // 闭合未关闭的块
+        if text_block_open {
+          events.push(BlockEnd(0))
+          text_block_open = false
+        }
+        if thinking_block_open {
+          events.push(BlockEnd(1))
+          thinking_block_open = false
+        }
+        if current_tool_block >= 0 {
+          events.push(BlockEnd(current_tool_block))
+          current_tool_block = -1
+        }
+        events.push(Done)
+        i = i + 1
+        continue
+      }
+      let jv = @json.parse(payload) catch {
+        _ => {
+          i = i + 1
+          continue
+        }
+      }
+      // usage 帧（choices 空的最后一帧）
+      match @internal.obj_get(jv, "usage") {
+        Some(u) => {
+          let pt = @internal.field_int(u, "prompt_tokens").unwrap_or(0)
+          let ct = @internal.field_int(u, "completion_tokens").unwrap_or(0)
+          let tt = @internal.field_int(u, "total_tokens").unwrap_or(0)
+          events.push(Usage(@lux.LucentUsage::new(pt, ct, tt)))
+        }
+        None => ()
+      }
+      // choices[0].delta
+      match @internal.field_arr(jv, "choices") {
+        Some(choices) =>
+          if choices.length() > 0 {
+            match @internal.obj_get(choices[0], "delta") {
+              Some(delta) => {
+                // role
+                match @internal.field_str(delta, "role") {
+                  Some("assistant") =>
+                    events.push(
+                      ConversationStart(
+                        @lux.LucentConversationMeta::new(None, None, None),
+                      ),
+                    )
+                  _ => ()
+                }
+                // content
+                match @internal.field_str(delta, "content") {
+                  Some(s) => {
+                    if !text_block_open {
+                      events.push(BlockStart(0, Text))
+                      text_block_open = true
+                    }
+                    events.push(
+                      BlockDelta(0, @lux.LucentBlockDelta::text_delta(s)),
+                    )
+                  }
+                  None => ()
+                }
+                // reasoning（vLLM: delta.reasoning；DeepSeek/Fireworks: delta.reasoning_content）
+                // 独立块索引 1（content 固定用 0），经 Thinking 块生命周期表达
+                let reasoning_text = match
+                  @internal.field_str(delta, "reasoning") {
+                  Some(s) => Some(s)
+                  None => @internal.field_str(delta, "reasoning_content")
+                }
+                match reasoning_text {
+                  Some(s) => {
+                    if !thinking_block_open {
+                      events.push(
+                        BlockStart(1, @lux.LucentBlockType::thinking()),
+                      )
+                      thinking_block_open = true
+                    }
+                    events.push(
+                      BlockDelta(1, @lux.LucentBlockDelta::thinking_delta(s)),
+                    )
+                  }
+                  None => ()
+                }
+                // tool_calls
+                match @internal.field_arr(delta, "tool_calls") {
+                  Some(tcs) => {
+                    let mut k = 0
+                    while k < tcs.length() {
+                      let tc = tcs[k]
+                      let idx = @internal.field_int(tc, "index").unwrap_or(0)
+                      // 切换块：若旧块未关闭，先关旧块
+                      if current_tool_block >= 0 && current_tool_block != idx {
+                        events.push(BlockEnd(current_tool_block))
+                      }
+                      if current_tool_block != idx {
+                        // 新工具调用块开始：id + function.name（首帧）
+                        let id = @internal.field_str(tc, "id").unwrap_or("")
+                        let name = match @internal.obj_get(tc, "function") {
+                          Some(fn_obj) =>
+                            @internal.field_str(fn_obj, "name").unwrap_or("")
+                          None => ""
+                        }
+                        events.push(
+                          BlockStart(
+                            idx,
+                            @lux.LucentBlockType::tool_call(id, name),
+                          ),
+                        )
+                        current_tool_block = idx
+                      }
+                      // arguments 增量
+                      match @internal.obj_get(tc, "function") {
+                        Some(fn_obj) =>
+                          match @internal.field_str(fn_obj, "arguments") {
+                            Some(args) =>
+                              events.push(
+                                BlockDelta(
+                                  idx,
+                                  @lux.LucentBlockDelta::tool_arguments_delta(
+                                    args,
+                                  ),
+                                ),
+                              )
+                            None => ()
+                          }
+                        None => ()
+                      }
+                      k = k + 1
+                    }
+                  }
+                  None => ()
+                }
+              }
+              None => ()
+            }
+            // finish_reason
+            match @internal.field_str(choices[0], "finish_reason") {
+              Some(fr) => {
+                // 闭合未关闭的块
+                if text_block_open {
+                  events.push(BlockEnd(0))
+                  text_block_open = false
+                }
+                if thinking_block_open {
+                  events.push(BlockEnd(1))
+                  thinking_block_open = false
+                }
+                if current_tool_block >= 0 {
+                  events.push(BlockEnd(current_tool_block))
+                  current_tool_block = -1
+                }
+                events.push(Finish(@lux.LucentFinishReason::from_string(fr)))
+              }
+              None => ()
+            }
+          }
+        None => ()
+      }
+    }
+    i = i + 1
+  }
+  Ok(@lux.ConversionResult::new(events))
 }
 
 ///|
-/// 6. 流编码 — openai-chat 核心（vLLM 流式 reasoning 暂走 content Thinking 块，
-/// 由 openai-chat 的 ThinkingDelta → delta.reasoning 编码完成）
+/// 6. 流编码 — Lux 事件 → vLLM SSE（含 delta.reasoning 发射）
+///
+/// 与标准 openai-chat 的差异：ThinkingDelta → `delta.reasoning` 增量
+/// （标准 Chat API 无 reasoning 字段）。
 pub fn lux_events_to_vllm_sse(
   events : Array[@lux.LucentStreamEvent],
 ) -> Result[@lux.ConversionResult[String], String] {
-  @openai_chat.lux_events_to_openai_chat_sse(events)
+  let out : Array[String] = []
+  let mut i = 0
+  while i < events.length() {
+    match events[i] {
+      ConversationStart(_) =>
+        out.push("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}")
+      ItemStart(_, _) | ItemEnd(_) | BlockDiscard(_) | Annotations(_, _) => ()
+      BlockStart(idx, bt) =>
+        match bt {
+          ToolCall(id, name) =>
+            out.push(
+              "data: {\"choices\":[{\"delta\":{\"tool_calls\":[" +
+              "{\"index\":" +
+              idx.to_string() +
+              ",\"id\":\"" +
+              @internal.json_escape(id) +
+              "\",\"type\":\"function\",\"function\":{\"name\":\"" +
+              @internal.json_escape(name) +
+              "\"}}]}}]}",
+            )
+          _ => ()
+        }
+      BlockEnd(_) => ()
+      BlockDelta(idx, delta) =>
+        match delta {
+          TextDelta(s) =>
+            out.push(
+              "data: {\"choices\":[{\"delta\":{\"content\":\"" +
+              @internal.json_escape(s) +
+              "\"}}]}",
+            )
+          ToolArgumentsDelta(s) =>
+            out.push(
+              "data: {\"choices\":[{\"delta\":{\"tool_calls\":[" +
+              "{\"index\":" +
+              idx.to_string() +
+              ",\"function\":{\"arguments\":\"" +
+              @internal.json_escape(s) +
+              "\"}}]}}]}",
+            )
+          ThinkingDelta(s) =>
+            out.push(
+              "data: {\"choices\":[{\"delta\":{\"reasoning\":\"" +
+              @internal.json_escape(s) +
+              "\"}}]}",
+            )
+          SignatureDelta(_) | RefusalDelta(_) | NativeDelta(_, _) => ()
+        }
+      Finish(fr) =>
+        out.push(
+          "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"" +
+          @internal.json_escape(fr.to_string()) +
+          "\"}]}",
+        )
+      Usage(u) =>
+        out.push(
+          "data: {\"usage\":{\"prompt_tokens\":" +
+          u.prompt_tokens.to_string() +
+          ",\"completion_tokens\":" +
+          u.completion_tokens.to_string() +
+          ",\"total_tokens\":" +
+          u.total_tokens.to_string() +
+          "}}",
+        )
+      Error(e) =>
+        out.push(
+          "data: {\"error\":{\"message\":\"" +
+          @internal.json_escape(e.message) +
+          "\"}}",
+        )
+      Done => out.push("data: [DONE]")
+    }
+    i = i + 1
+  }
+  Ok(@lux.ConversionResult::new(out.join("\n\n") + "\n\n"))
 }
 
 ///|

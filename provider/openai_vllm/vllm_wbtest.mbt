@@ -190,3 +190,94 @@ test "vllm capability declares provider" {
   assert_eq(cap.provider, "openai-chat")
   assert_eq(cap.model_pattern, "gpt-*,o*")
 }
+
+///|
+/// 流式入站：delta.reasoning → Thinking 块（块索引 1）
+test "vllm_sse_to_events - captures delta.reasoning as Thinking block" {
+  let sse = "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"reasoning\":\"think hard\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\"answer\"}}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
+  match vllm_sse_to_events(sse) {
+    Ok(cr) => {
+      let events = cr.value()
+      let mut has_thinking = false
+      let mut has_text = false
+      for ev in events {
+        match ev {
+          BlockStart(1, Thinking) => has_thinking = true
+          BlockDelta(1, ThinkingDelta(s)) =>
+            if s == "think hard" {
+              has_thinking = true
+            }
+          BlockDelta(0, TextDelta(s)) => if s == "answer" { has_text = true }
+          _ => ()
+        }
+      }
+      assert_true(has_thinking)
+      assert_true(has_text)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// 流式入站：delta.reasoning_content（DeepSeek 形态）同样捕获
+test "vllm_sse_to_events - captures delta.reasoning_content" {
+  let sse = "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\"chain\"}}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
+  match vllm_sse_to_events(sse) {
+    Ok(cr) => {
+      let mut has_thinking = false
+      for ev in cr.value() {
+        match ev {
+          BlockDelta(1, ThinkingDelta(s)) =>
+            if s == "chain" {
+              has_thinking = true
+            }
+          _ => ()
+        }
+      }
+      assert_true(has_thinking)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// 流式出站：ThinkingDelta → delta.reasoning
+test "lux_events_to_vllm_sse - encodes ThinkingDelta as delta.reasoning" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(@lux.LucentConversationMeta::new(None, None, None)),
+    BlockStart(1, Thinking),
+    BlockDelta(1, @lux.LucentBlockDelta::thinking_delta("reasoning text")),
+    BlockEnd(1),
+    BlockStart(0, Text),
+    BlockDelta(0, @lux.LucentBlockDelta::text_delta("answer")),
+    BlockEnd(0),
+    Finish(Stop),
+    Done,
+  ]
+  match lux_events_to_vllm_sse(events) {
+    Ok(cr) => {
+      let sse = cr.value()
+      assert_true(sse.contains("\"reasoning\":\"reasoning text\""))
+      assert_true(sse.contains("\"content\":\"answer\""))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// 流式 round-trip：vLLM SSE（含 reasoning）→ Lux 事件 → vLLM SSE，reasoning 不丢
+test "vllm streaming round-trip preserves reasoning" {
+  let sse = "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"reasoning\":\"think\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\"answer\"}}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
+  match vllm_sse_to_events(sse) {
+    Ok(cr) =>
+      match lux_events_to_vllm_sse(cr.value()) {
+        Ok(enc) => {
+          let s = enc.value()
+          assert_true(s.contains("\"reasoning\":\"think\""))
+          assert_true(s.contains("\"content\":\"answer\""))
+        }
+        Err(_) => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
