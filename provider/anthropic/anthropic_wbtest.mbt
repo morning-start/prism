@@ -623,6 +623,106 @@ test "lux_response_to_anthropic - empty choices returns error" {
 }
 
 ///|
+/// 跨协议链路：vLLM 消息级 reasoning → IR → Anthropic 出站 → thinking block
+test "lux_response_to_anthropic - message-level reasoning emits thinking block" {
+  let th = @lux.LucentThinking::visible("step by step", None)
+  let msg = @lux.LucentMessage::with_reasoning(
+    Assistant,
+    [@lux.LucentContent::text("answer")],
+    Some(th),
+  )
+  let resp = @lux.LucentResponse::new(
+    "msg_1",
+    "model",
+    None,
+    [@lux.LucentChoice::new(0, msg, Stop, None)],
+    None,
+    None,
+  )
+  match lux_response_to_anthropic(resp) {
+    Ok(cr) => {
+      let s = cr.value()
+      // 消息级 reasoning 前置为 thinking block
+      assert_true(
+        s.contains("{\"type\":\"thinking\",\"thinking\":\"step by step\"}"),
+      )
+      // content 保留可见文本
+      assert_true(s.contains("{\"type\":\"text\",\"text\":\"answer\"}"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// 跨协议链路：signature 保留（Anthropic 原生承载，非 Degraded）
+test "lux_response_to_anthropic - message-level reasoning keeps signature" {
+  let th = @lux.LucentThinking::visible("thought", Some("sig-abc"))
+  let msg = @lux.LucentMessage::with_reasoning(
+    Assistant,
+    [@lux.LucentContent::text("answer")],
+    Some(th),
+  )
+  let resp = @lux.LucentResponse::new(
+    "msg_1",
+    "model",
+    None,
+    [@lux.LucentChoice::new(0, msg, Stop, None)],
+    None,
+    None,
+  )
+  match lux_response_to_anthropic(resp) {
+    Ok(cr) => {
+      let s = cr.value()
+      assert_true(s.contains("\"signature\":\"sig-abc\""))
+      // signature 可承载，不应产生 Degraded
+      let mut has_degraded = false
+      for d in cr.diagnostics() {
+        if d.status == Degraded {
+          has_degraded = true
+        }
+      }
+      assert_false(has_degraded)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// 双载体并存：message.reasoning 优先，content Thinking 跳过 → Degraded
+test "lux_response_to_anthropic - dual carrier yields Degraded" {
+  let th = @lux.LucentThinking::visible("msg reasoning", None)
+  let msg = @lux.LucentMessage::with_reasoning(
+    Assistant,
+    [@lux.LucentContent::thinking("block reasoning", None)],
+    Some(th),
+  )
+  let resp = @lux.LucentResponse::new(
+    "msg_1",
+    "model",
+    None,
+    [@lux.LucentChoice::new(0, msg, Stop, None)],
+    None,
+    None,
+  )
+  match lux_response_to_anthropic(resp) {
+    Ok(cr) => {
+      let mut has_dual = false
+      for d in cr.diagnostics() {
+        if d.field == "reasoning.dual_carrier" && d.status == Degraded {
+          has_dual = true
+        }
+      }
+      assert_true(has_dual)
+      // message.reasoning 胜出，content Thinking 被跳过（不重复输出）
+      let s = cr.value()
+      assert_true(s.contains("\"thinking\":\"msg reasoning\""))
+      assert_false(s.contains("\"thinking\":\"block reasoning\""))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
 /// === 5. 流解码 ===
 
 ///|
