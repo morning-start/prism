@@ -361,6 +361,28 @@ fn json_escape(s : String) -> String {
 }
 
 ///|
+/// LucentThinking → Anthropic thinking block JSON（消息级 reasoning 出站复用）
+fn thinking_to_block(th : @lux.LucentThinking) -> String {
+  if th.redacted {
+    "{\"type\":\"redacted_thinking\",\"signature\":" +
+    (match th.signature {
+      Some(s) => "\"" + json_escape(s) + "\""
+      None => "null"
+    }) +
+    "}"
+  } else {
+    "{\"type\":\"thinking\",\"thinking\":\"" +
+    json_escape(th.text) +
+    "\"" +
+    (match th.signature {
+      Some(s) => ",\"signature\":\"" + json_escape(s) + "\""
+      None => ""
+    }) +
+    "}"
+  }
+}
+
+///|
 /// 单个 LucentContent → Anthropic content block JSON 片段
 /// 无法映射的媒体产生 Unsupported 诊断并返回空串（调用方跳过，不输出空块）
 fn content_to_block(
@@ -385,24 +407,7 @@ fn content_to_block(
       ",\"is_error\":" +
       (if tr.is_error { "true" } else { "false" }) +
       "}"
-    Thinking(th) =>
-      if th.redacted {
-        "{\"type\":\"redacted_thinking\",\"signature\":" +
-        (match th.signature {
-          Some(s) => "\"" + json_escape(s) + "\""
-          None => "null"
-        }) +
-        "}"
-      } else {
-        "{\"type\":\"thinking\",\"thinking\":\"" +
-        json_escape(th.text) +
-        "\"" +
-        (match th.signature {
-          Some(s) => ",\"signature\":\"" + json_escape(s) + "\""
-          None => ""
-        }) +
-        "}"
-      }
+    Thinking(th) => thinking_to_block(th)
     Refusal(s) => "{\"type\":\"text\",\"text\":\"" + json_escape(s) + "\"}"
     Image(mm) =>
       // 图片：优先精确映射为 anthropic image block
@@ -774,8 +779,34 @@ pub fn lux_response_to_anthropic(
   let choice = resp.choices[0]
   // content blocks
   let content_blocks : Array[String] = []
+  // 消息级 reasoning 优先（vLLM/DeepSeek 入站 → IR → Anthropic 出站），前置为 thinking block
+  match choice.message.reasoning {
+    Some(th) => content_blocks.push(thinking_to_block(th))
+    None => ()
+  }
   let mut i = 0
   while i < choice.message.content.length() {
+    // 双载体并存：消息级 reasoning 已输出，content 中 Thinking block 跳过 → Degraded
+    match choice.message.content[i] {
+      Thinking(_) =>
+        match choice.message.reasoning {
+          Some(_) => {
+            diagnostics.push(
+              @lux.ConversionDiagnostic::new(
+                "reasoning.dual_carrier",
+                Degraded,
+                Some(
+                  "both message.reasoning and content Thinking present; using message.reasoning",
+                ),
+              ),
+            )
+            i = i + 1
+            continue
+          }
+          None => ()
+        }
+      _ => ()
+    }
     let block = content_to_block(choice.message.content[i], diagnostics)
     if block != "" {
       content_blocks.push(block)
