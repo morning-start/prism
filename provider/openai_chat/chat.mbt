@@ -702,15 +702,8 @@ fn parse_choices(jv : Json) -> Array[@lux.LucentChoice] {
               Some(r) => content.push(@lux.LucentContent::refusal(r))
               None => ()
             }
-            // 消息级 reasoning（vLLM: message.reasoning；DeepSeek/Fireworks: message.reasoning_content）
-            let reasoning = match @internal.field_str(msg_jv, "reasoning") {
-              Some(text) => Some(@lux.LucentThinking::visible(text, None))
-              None =>
-                match @internal.field_str(msg_jv, "reasoning_content") {
-                  Some(text) => Some(@lux.LucentThinking::visible(text, None))
-                  None => None
-                }
-            }
+            // 标准 OpenAI Chat 无消息级 reasoning 字段（vLLM/DeepSeek 扩展由
+            // openai_vllm 子协议承载，见 provider/openai_vllm）
             let finish = match @internal.field_str(c, "finish_reason") {
               Some(fr) => @lux.LucentFinishReason::from_string(fr)
               None => Stop
@@ -718,7 +711,7 @@ fn parse_choices(jv : Json) -> Array[@lux.LucentChoice] {
             result.push(
               @lux.LucentChoice::new(
                 idx,
-                @lux.LucentMessage::with_reasoning(role, content, reasoning),
+                @lux.LucentMessage::new(role, content),
                 finish,
                 None,
               ),
@@ -767,98 +760,14 @@ pub fn openai_chat_to_lux_response(
 /// === 响应编码：LucentResponse → OpenAI Chat JSON ===
 
 ///|
-/// 双载体回退：从 content 数组中提取首个 Thinking block（无则 None）。
-/// openai-chat 出站时 content Thinking 作为 message.reasoning 的回退载体。
-fn find_content_thinking(
-  content : Array[@lux.LucentContent],
-) -> @lux.LucentThinking? {
-  let mut result : @lux.LucentThinking? = None
-  let mut i = 0
-  while i < content.length() {
-    match content[i] {
-      Thinking(th) => {
-        result = Some(th)
-        break
-      }
-      _ => ()
-    }
-    i = i + 1
-  }
-  result
-}
-
-///|
-/// 单个 reasoning 载体 → 出站字段 JSON 片段。
-/// 保真度：openai-chat 的 reasoning 字符串无法承载 signature/redacted/summary → Degraded。
-fn emit_reasoning_field(
-  r : @lux.LucentThinking,
-  field_name : String,
-  diagnostics : Array[@lux.ConversionDiagnostic],
-) -> String {
-  match r.signature {
-    Some(_) =>
-      diagnostics.push(
-        @lux.ConversionDiagnostic::new(
-          "reasoning.signature",
-          Degraded,
-          Some("signature lost: openai-chat reasoning is a plain string"),
-        ),
-      )
-    None => ()
-  }
-  if r.redacted {
-    diagnostics.push(
-      @lux.ConversionDiagnostic::new(
-        "reasoning.redacted",
-        Degraded,
-        Some("redacted flag lost: openai-chat reasoning is a plain string"),
-      ),
-    )
-  }
-  match r.summary {
-    Some(_) =>
-      diagnostics.push(
-        @lux.ConversionDiagnostic::new(
-          "reasoning.summary",
-          Degraded,
-          Some("summary lost: openai-chat reasoning is a plain string"),
-        ),
-      )
-    None => ()
-  }
-  ",\"" + field_name + "\":\"" + escape_json(r.text) + "\""
-}
-
-///|
 /// 4. lux_response_to_openai_chat — 响应编码
 pub fn lux_response_to_openai_chat(
   resp : @lux.LucentResponse,
 ) -> Result[@lux.ConversionResult[String], String] {
   let choices_json : Array[String] = []
   let diagnostics : Array[@lux.ConversionDiagnostic] = []
-  // (a) 出站字段名：默认 reasoning（vLLM 形态）；经 provider_payload.reasoning_field
-  // 显式声明 "reasoning_content"（DeepSeek/Fireworks 形态）时切换；声明不支持的值
-  // 时产生 Unsupported 诊断，不静默回退。
-  let mut reasoning_field_name = "reasoning"
-  match resp.provider_payload {
-    Some(Object(m)) =>
-      match m.get("reasoning_field") {
-        Some(String(s)) =>
-          if s == "reasoning" || s == "reasoning_content" {
-            reasoning_field_name = s
-          } else {
-            diagnostics.push(
-              @lux.ConversionDiagnostic::new(
-                "reasoning.reasoning_field",
-                Unsupported,
-                Some("unsupported reasoning_field value: " + s),
-              ),
-            )
-          }
-        _ => ()
-      }
-    _ => ()
-  }
+  // 标准 OpenAI Chat 不发射消息级 reasoning 字段（vLLM/DeepSeek 扩展由
+  // openai_vllm 子协议承载，见 provider/openai_vllm）
   let mut i = 0
   while i < resp.choices.length() {
     let c = resp.choices[i]
@@ -882,29 +791,8 @@ pub fn lux_response_to_openai_chat(
       j = j + 1
     }
     let content_str = content_parts.join("")
-    // (b) 双载体出站：LucentMessage.reasoning 优先；回退 content 中的 Thinking block；
-    // 两者同时存在 → Degraded（不静默，提示消费者处理重复表达）。
-    // 出站字段名由 (a) 的 reasoning_field_name 决定（默认 reasoning，vLLM 形态）。
-    let reasoning_field = match
-      (c.message.reasoning, find_content_thinking(c.message.content)) {
-      (Some(r), Some(_)) => {
-        diagnostics.push(
-          @lux.ConversionDiagnostic::new(
-            "reasoning.dual_carrier",
-            Degraded,
-            Some(
-              "both message.reasoning and content Thinking present; using message.reasoning",
-            ),
-          ),
-        )
-        emit_reasoning_field(r, reasoning_field_name, diagnostics)
-      }
-      (Some(r), None) =>
-        emit_reasoning_field(r, reasoning_field_name, diagnostics)
-      (None, Some(t)) =>
-        emit_reasoning_field(t, reasoning_field_name, diagnostics)
-      (None, None) => ""
-    }
+    // 标准 OpenAI Chat 不发射 reasoning 字段（vLLM 扩展由 openai_vllm 子协议承载）
+    let reasoning_field = ""
     let mut msg_obj = "\"index\":" +
       c.index.to_string() +
       ",\"message\":{\"role\":\"" +
@@ -982,7 +870,6 @@ pub fn openai_chat_sse_to_events(
   let events : Array[@lux.LucentStreamEvent] = []
   let lines = sse_str.split("\n").to_array()
   let mut text_block_open = false // 是否有未闭合的文本块
-  let mut thinking_block_open = false // 是否有未闭合的 reasoning 块
   let mut current_tool_block = -1 // 当前工具调用块索引（-1 表示无）
   let mut i = 0
   while i < lines.length() {
@@ -1013,10 +900,6 @@ pub fn openai_chat_sse_to_events(
         if text_block_open {
           events.push(BlockEnd(0))
           text_block_open = false
-        }
-        if thinking_block_open {
-          events.push(BlockEnd(1))
-          thinking_block_open = false
         }
         if current_tool_block >= 0 {
           events.push(BlockEnd(current_tool_block))
@@ -1071,27 +954,8 @@ pub fn openai_chat_sse_to_events(
                   }
                   None => ()
                 }
-                // reasoning（vLLM: delta.reasoning；DeepSeek/Fireworks: delta.reasoning_content）
-                // 独立块索引 1（content 固定用 0），经 Thinking 块生命周期表达
-                let reasoning_text = match
-                  @internal.field_str(delta, "reasoning") {
-                  Some(s) => Some(s)
-                  None => @internal.field_str(delta, "reasoning_content")
-                }
-                match reasoning_text {
-                  Some(s) => {
-                    if !thinking_block_open {
-                      events.push(
-                        BlockStart(1, @lux.LucentBlockType::thinking()),
-                      )
-                      thinking_block_open = true
-                    }
-                    events.push(
-                      BlockDelta(1, @lux.LucentBlockDelta::thinking_delta(s)),
-                    )
-                  }
-                  None => ()
-                }
+                // 标准 OpenAI Chat 流无 delta.reasoning 字段（vLLM/DeepSeek 扩展由
+                // openai_vllm 子协议承载，见 provider/openai_vllm）
                 // tool_calls
                 match @internal.field_arr(delta, "tool_calls") {
                   Some(tcs) => {
@@ -1151,10 +1015,6 @@ pub fn openai_chat_sse_to_events(
                 if text_block_open {
                   events.push(BlockEnd(0))
                   text_block_open = false
-                }
-                if thinking_block_open {
-                  events.push(BlockEnd(1))
-                  thinking_block_open = false
                 }
                 if current_tool_block >= 0 {
                   events.push(BlockEnd(current_tool_block))
@@ -1232,13 +1092,8 @@ pub fn lux_events_to_openai_chat_sse(
               escape_json(s) +
               "\"}}]}}]}",
             )
-          ThinkingDelta(s) =>
-            out.push(
-              "data: {\"choices\":[{\"delta\":{\"reasoning\":\"" +
-              escape_json(s) +
-              "\"}}]}",
-            )
-          SignatureDelta(_) | RefusalDelta(_) => ()
+          ThinkingDelta(_) | SignatureDelta(_) | RefusalDelta(_) => ()
+          // 标准 OpenAI Chat 流无原生 thinking/refusal 增量（vLLM 扩展由 openai_vllm 子协议承载）
           // OpenAI Chat 流无原生 signature/refusal 增量，编码时忽略
           NativeDelta(_, _) => ()
         }
