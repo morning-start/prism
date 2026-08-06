@@ -374,3 +374,68 @@ test "responses store/extras round-trip" {
     Err(e) => fail("encode: \{e}")
   }
 }
+
+///|
+/// 跨协议链路：vLLM 消息级 reasoning → IR → openai-responses 出站 → reasoning item
+test "lux_response_to_openai_responses - message-level reasoning emits reasoning item" {
+  let th = @lux.LucentThinking::visible("step by step", None)
+  let msg = @lux.LucentMessage::with_reasoning(
+    Assistant,
+    [@lux.LucentContent::text("answer")],
+    Some(th),
+  )
+  let resp = @lux.LucentResponse::new(
+    "resp-1",
+    "model",
+    None,
+    [@lux.LucentChoice::new(0, msg, Stop, None)],
+    None,
+    None,
+  )
+  match lux_response_to_openai_responses(resp) {
+    Ok(cr) => {
+      let s = cr.value()
+      // 消息级 reasoning 前置为 reasoning item
+      assert_true(s.contains("{\"type\":\"reasoning\",\"id\":\"rs_0\""))
+      // 可见文本保留为 message item
+      assert_true(s.contains("\"type\":\"message\""))
+      assert_true(s.contains("\"text\":\"answer\""))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// 双载体并存：message.reasoning 优先，content Thinking item 跳过 → Degraded
+test "lux_response_to_openai_responses - dual carrier yields Degraded" {
+  let th = @lux.LucentThinking::visible("msg reasoning", None)
+  let msg = @lux.LucentMessage::with_reasoning(
+    Assistant,
+    [@lux.LucentContent::thinking("block reasoning", None)],
+    Some(th),
+  )
+  let resp = @lux.LucentResponse::new(
+    "resp-1",
+    "model",
+    None,
+    [@lux.LucentChoice::new(0, msg, Stop, None)],
+    None,
+    None,
+  )
+  match lux_response_to_openai_responses(resp) {
+    Ok(cr) => {
+      let mut has_dual = false
+      for d in cr.diagnostics() {
+        if d.field == "reasoning.dual_carrier" && d.status == Degraded {
+          has_dual = true
+        }
+      }
+      assert_true(has_dual)
+      // message.reasoning 胜出，content Thinking item 被跳过（不重复输出）
+      let s = cr.value()
+      assert_true(s.contains("\"reasoning\""))
+      assert_false(s.contains("block reasoning"))
+    }
+    Err(_) => assert_true(false)
+  }
+}

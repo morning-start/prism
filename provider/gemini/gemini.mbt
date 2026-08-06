@@ -783,13 +783,45 @@ pub fn lux_response_to_gemini(
   if resp.choices.length() == 0 {
     return Err("response has no choices")
   }
+  let diagnostics : Array[@lux.ConversionDiagnostic] = []
   let cands : Array[String] = []
   let mut i = 0
   while i < resp.choices.length() {
     let c = resp.choices[i]
     let parts : Array[String] = []
+    // 消息级 reasoning 优先（vLLM/DeepSeek 入站 → IR → Gemini 出站），前置为 thought:true part
+    match c.message.reasoning {
+      Some(th) =>
+        parts.push(
+          "{\"text\":\"" +
+          @internal.json_escape(th.text) +
+          "\",\"thought\":true}",
+        )
+      None => ()
+    }
     let mut j = 0
     while j < c.message.content.length() {
+      // 双载体并存：消息级 reasoning 已输出，content 中 Thinking part 跳过 → Degraded
+      match c.message.content[j] {
+        Thinking(_) =>
+          match c.message.reasoning {
+            Some(_) => {
+              diagnostics.push(
+                @lux.ConversionDiagnostic::new(
+                  "reasoning.dual_carrier",
+                  Degraded,
+                  Some(
+                    "both message.reasoning and content Thinking present; using message.reasoning",
+                  ),
+                ),
+              )
+              j = j + 1
+              continue
+            }
+            None => ()
+          }
+        _ => ()
+      }
       match c.message.content[j] {
         Text(s, _) =>
           parts.push("{\"text\":\"" + @internal.json_escape(s) + "\"}")
@@ -859,11 +891,13 @@ pub fn lux_response_to_gemini(
       "}"
     None => ""
   }
-  Ok(
-    @lux.ConversionResult::new(
-      "{\"candidates\":[" + cands.join(",") + "]" + usage_part + "}",
-    ),
+  let mut result = @lux.ConversionResult::new(
+    "{\"candidates\":[" + cands.join(",") + "]" + usage_part + "}",
   )
+  for d in diagnostics {
+    result = result.with_diagnostic(d)
+  }
+  Ok(result)
 }
 
 ///|
