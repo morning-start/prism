@@ -612,6 +612,41 @@ pub fn openai_responses_json_to_lux_response(
 }
 
 ///|
+/// LucentThinking → OpenAI Responses reasoning item JSON（消息级 reasoning 出站复用）
+fn thinking_to_reasoning_item(th : @lux.LucentThinking, id : Int) -> String {
+  let summary = match th.summary {
+    Some(arr) => {
+      let parts : Array[String] = []
+      let mut k = 0
+      while k < arr.length() {
+        match arr[k] {
+          Text(t, _) =>
+            parts.push(
+              "{\"type\":\"summary_text\",\"text\":\"" +
+              @internal.json_escape(t) +
+              "\"}",
+            )
+          _ => ()
+        }
+        k = k + 1
+      }
+      ",\"summary\":[" + parts.join(",") + "]"
+    }
+    None => ""
+  }
+  let sig_part = match th.signature {
+    Some(s) => ",\"signature\":\"" + @internal.json_escape(s) + "\""
+    None => ""
+  }
+  "{\"type\":\"reasoning\",\"id\":\"rs_" +
+  id.to_string() +
+  "\"" +
+  summary +
+  sig_part +
+  "}"
+}
+
+///|
 /// 4. lux_response_to_openai_responses — 响应编码
 pub fn lux_response_to_openai_responses(
   resp : @lux.LucentResponse,
@@ -619,11 +654,38 @@ pub fn lux_response_to_openai_responses(
   if resp.choices.length() == 0 {
     return Err("response has no choices")
   }
+  let diagnostics : Array[@lux.ConversionDiagnostic] = []
   let choice = resp.choices[0]
   // build output items
   let output_items : Array[String] = []
+  // 消息级 reasoning 优先（vLLM/DeepSeek 入站 → IR → openai-responses 出站），前置为 reasoning item
+  match choice.message.reasoning {
+    Some(th) => output_items.push(thinking_to_reasoning_item(th, 0))
+    None => ()
+  }
   let mut i = 0
   while i < choice.message.content.length() {
+    // 双载体并存：消息级 reasoning 已输出，content 中 Thinking block 跳过 → Degraded
+    match choice.message.content[i] {
+      Thinking(_) =>
+        match choice.message.reasoning {
+          Some(_) => {
+            diagnostics.push(
+              @lux.ConversionDiagnostic::new(
+                "reasoning.dual_carrier",
+                Degraded,
+                Some(
+                  "both message.reasoning and content Thinking present; using message.reasoning",
+                ),
+              ),
+            )
+            i = i + 1
+            continue
+          }
+          None => ()
+        }
+      _ => ()
+    }
     match choice.message.content[i] {
       Text(s, _) =>
         output_items.push(
@@ -646,40 +708,7 @@ pub fn lux_response_to_openai_responses(
           @internal.json_escape(tu.arguments_json) +
           "\",\"status\":\"completed\"}",
         )
-      Thinking(th) => {
-        let summary = match th.summary {
-          Some(arr) => {
-            let parts : Array[String] = []
-            let mut k = 0
-            while k < arr.length() {
-              match arr[k] {
-                Text(t, _) =>
-                  parts.push(
-                    "{\"type\":\"summary_text\",\"text\":\"" +
-                    @internal.json_escape(t) +
-                    "\"}",
-                  )
-                _ => ()
-              }
-              k = k + 1
-            }
-            ",\"summary\":[" + parts.join(",") + "]"
-          }
-          None => ""
-        }
-        let sig_part = match th.signature {
-          Some(s) => ",\"signature\":\"" + @internal.json_escape(s) + "\""
-          None => ""
-        }
-        output_items.push(
-          "{\"type\":\"reasoning\",\"id\":\"rs_" +
-          i.to_string() +
-          "\"" +
-          summary +
-          sig_part +
-          "}",
-        )
-      }
+      Thinking(th) => output_items.push(thinking_to_reasoning_item(th, i))
       Refusal(s) =>
         output_items.push(
           "{\"type\":\"message\",\"id\":\"ref_" +
@@ -727,7 +756,11 @@ pub fn lux_response_to_openai_responses(
     "]" +
     usage_json +
     "}"
-  Ok(@lux.ConversionResult::new(body))
+  let mut result = @lux.ConversionResult::new(body)
+  for d in diagnostics {
+    result = result.with_diagnostic(d)
+  }
+  Ok(result)
 }
 
 ///|
