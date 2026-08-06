@@ -129,13 +129,17 @@ LucentReasoningConfig {
 
 ### 3. 适配器出站规则
 
+> 目标协议 = 标准形态：Anthropic / OpenAI Chat（含兼容端点）/ OpenAI Responses / Gemini。
+> vLLM、DeepSeek、Fireworks 不是独立目标协议——它们是 **OpenAI Chat 兼容端点**（上游推理引擎），
+> 其 `message.reasoning` / `reasoning_content` 是 OpenAI Chat 形态上的**字段名变体**，
+> 出站时经 `reasoning_field` 声明切换（Batch E 已落地）。
+
 | 目标协议 | 输出方式 |
 |---------|---------|
 | **Anthropic** | `LucentContent::Thinking` → `content[]` block；`LucentResponse.reasoning` 忽略（或合成 thinking block） |
-| **OpenAI Chat** | `LucentResponse.reasoning` 忽略（Chat API 无 reasoning 字段）；`LucentContent::Thinking` 忽略 + `Unsupported` 诊断 |
+| **OpenAI Chat（标准）** | `LucentResponse.reasoning` 忽略（标准 Chat API 无 reasoning 字段）；`LucentContent::Thinking` 忽略 + `Unsupported` 诊断 |
+| **OpenAI Chat（兼容端点：vLLM/DeepSeek/Fireworks）** | `LucentResponse.reasoning` → `message.reasoning`（默认 vLLM 字段名）或 `message.reasoning_content`（经 `reasoning_field` 声明切换）；签名/redacted/summary 丢失 → `Degraded` |
 | **OpenAI Responses** | `LucentResponse.reasoning` → `reasoning` Item（encrypted 或 summary）；`LucentContent::Thinking` + `reasoning` → 两个 Item |
-| **vLLM** | `LucentResponse.reasoning` → `message.reasoning`；`LucentContent::Thinking` → 合成 `reasoning` 字段（丢失签名） |
-| **DeepSeek** | `LucentResponse.reasoning` → `message.reasoning_content`；`LucentContent::Thinking` → 合成 `reasoning_content` |
 | **Gemini generateContent** | `LucentContent::Thinking` → `thought:true` part；`LucentResponse.reasoning` → 合成 `thought:true` part |
 | **Gemini Interactions** | `LucentContent::Thinking` → `thought` step；`LucentResponse.reasoning` → `thought` step（无签名 → `Degraded`） |
 | **Mistral** | `LucentContent::Thinking` → `ThinkChunk`；`LucentResponse.reasoning` → 合成 `ThinkChunk` |
@@ -159,8 +163,7 @@ LucentReasoningConfig {
 | 目标协议流式 | 映射方式 |
 |-------------|---------|
 | **Anthropic** | `BlockDelta(ThinkingDelta)` → `thinking_delta`；`BlockDelta(SignatureDelta)` → `signature_delta` |
-| **vLLM** | `BlockDelta(ThinkingDelta)` → 累积后 `delta.reasoning` |
-| **DeepSeek** | `BlockDelta(ThinkingDelta)` → 累积后 `delta.reasoning_content` |
+| **OpenAI Chat（兼容端点）** | `BlockDelta(ThinkingDelta)` → 累积后 `delta.reasoning`（或经 `reasoning_field` 切换为 `delta.reasoning_content`） |
 
 ### 5. 保真度契约
 
@@ -168,7 +171,7 @@ LucentReasoningConfig {
 
 | 边界 | 诊断级别 | 条件 |
 |------|---------|------|
-| `reasoning.signature` | `Degraded` | 目标协议无签名概念（vLLM/DeepSeek/Mistral/Cohere/Gemini） |
+| `reasoning.signature` | `Degraded` | 目标协议无签名概念（OpenAI Chat 兼容端点/DeepSeek/Mistral/Cohere/Gemini generateContent） |
 | `reasoning.redacted` | `Degraded` | `redacted_thinking` 内容不可见，只能保留 signature |
 | `reasoning.encrypted` | `Degraded` | OpenAI Responses 的 `encrypted_content` 在目标协议中不可表达 |
 | `reasoning.effort.none` | `Degraded` | 目标协议 `reasoning_effort` 值域不包含 `none` |
@@ -204,7 +207,7 @@ pub enum LucentReasoningContinuity {
 
 - **openai-chat**（入站）：解析 `message.reasoning` / `message.reasoning_content` → `LucentResponse.reasoning`
 - **openai-chat**（流式入站）：解析 `delta.reasoning` / `delta.reasoning_content` → `BlockStart(Thinking)` + `ThinkingDelta`
-- **openai-chat**（出站）：`LucentResponse.reasoning` → `message.reasoning`（vLLM）或 `message.reasoning_content`（DeepSeek）
+- **openai-chat**（出站）：`LucentResponse.reasoning` → `message.reasoning`（OpenAI Chat 兼容端点默认字段名）或 `message.reasoning_content`（经 `reasoning_field` 切换）
 - **openai-chat**（出站流式）：`ThinkingDelta` → `delta.reasoning` / `delta.reasoning_content`
 - **openai-responses**（入站）：`reasoning` Item → `LucentResponse.reasoning`（summary 文本）
 - **openai-responses**（出站）：`LucentResponse.reasoning` → `reasoning` Item

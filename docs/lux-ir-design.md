@@ -519,7 +519,7 @@ pub enum LucentFinishReason {
 | 厂商 / API | 入站承载 | 出站展开 | 流式事件 | 保真度诊断 |
 |-----------|---------|---------|---------|-----------|
 | Anthropic Messages | `content[]` `Thinking` block（含 signature / redacted_thinking） | 展开为 `thinking` + `redacted_thinking` block | `block_start(thinking)` / `thinking_delta` / `signature_delta` | `signature` 保留 |
-| OpenAI Chat（o-series） | `message.reasoning`（vLLM）/ `reasoning_content`（DeepSeek/Fireworks）→ `LucentMessage.reasoning` | `message.reasoning`（默认 vLLM 字段名） | `delta.reasoning` / `delta.reasoning_content` → `Thinking` 块 | 出站签名/redacted/summary 丢失 → `Degraded`；字段名按 `reasoning_field` 扩展切换 |
+| OpenAI Chat（o-series） | 标准 Chat API 无 reasoning 字段（仅 `usage.reasoning_tokens` 计数）；vLLM/DeepSeek 扩展由 **openai_vllm 子协议**承载（`message.reasoning` / `reasoning_content` → `LucentMessage.reasoning`） | 标准 Chat API 不发射 reasoning 字段；vLLM 形态（`message.reasoning` / `reasoning_content`）由 openai_vllm 子协议后处理 | 标准 Chat API 无 `delta.reasoning`；vLLM 流式扩展由 openai_vllm 子协议承载 | 出站签名/redacted/summary 丢失 → `Degraded`（openai_vllm 子协议内） |
 | OpenAI Responses | `output[]` `reasoning` item（summary/signature）→ `Item::Reasoning` / 非流式折叠为 content Thinking | `Item::Reasoning` → `{"type":"reasoning", summary, signature}` | `reasoning` item + `response.reasoning_summary_text.delta/done` | `summary`/`signature` 保留 |
 | Gemini generateContent / Vertex | `part.thought:true` → 同时发 Text + `Thinking`（redacted=false） | `thought: true` 打在 part 上 | `BlockStart(Thinking) + BlockDelta(ThinkingDelta)`（与 Text 平行） | `thought` 布尔标记保留 |
 | Gemini Interactions | `steps[]` `thought` 步 | 展开为 `thought` 步 | 逐步 `thought` 增量 | `thought_summary` ↔ `LucentThinking.summary`（融合待定 → `Degraded`） |
@@ -532,8 +532,8 @@ pub enum LucentFinishReason {
 
 ### 未决问题收敛
 
-(a) **出站字段名分歧**：默认 `reasoning`（vLLM 形态）；经 `extra`/`ProviderCapability` 显式声明
-`reasoning_field: "reasoning_content"` 时切换；无声明且确需 DeepSeek 形态时产生 `Unsupported` 诊断，不静默。
+(a) **出站字段名分歧**：默认 `reasoning`（OpenAI Chat 兼容端点默认字段名，vLLM 采用）；经 `extra`/`ProviderCapability` 显式声明
+`reasoning_field: "reasoning_content"` 时切换（DeepSeek/Fireworks 形态）；无声明且确需 DeepSeek 形态时产生 `Unsupported` 诊断，不静默。
 
 (b) **双载体出站优先级**：`LucentMessage.reasoning` 优先；回退 `content` 的 Thinking block；
 两者同时存在时视为 `Degraded`（不静默，提示消费者处理重复表达）。

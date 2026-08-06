@@ -164,8 +164,7 @@ pub enum StreamEvent {
 | 目标协议 | 映射方式 |
 |---------|---------|
 | **Anthropic** | `ReasoningStart` → `content_block_start(thinking)`；`ReasoningDelta` → `thinking_delta`；`ReasoningSignature` → `signature_delta`；`ReasoningEnd` → `content_block_stop` |
-| **vLLM** | 累积所有 `ReasoningDelta` 文本 → `delta.reasoning` |
-| **DeepSeek** | 累积所有 `ReasoningDelta` 文本 → `delta.reasoning_content` |
+| **OpenAI Chat（兼容端点）** | 累积所有 `ReasoningDelta` 文本 → `delta.reasoning`（默认）或经 `reasoning_field` 切换为 `delta.reasoning_content` |
 | **Gemini** | `ReasoningDelta` → `thought_summary`；`ReasoningSignature` → `thought_signature` |
 
 ---
@@ -255,10 +254,9 @@ pub enum LucentReasoningContinuity {
 | 目标协议 | `LucentMessage.reasoning` → 目标格式 |
 |---------|-------------------------------------|
 | **Anthropic** | `text` + `signature` → `content[]` 中插入 `{type: "thinking", thinking: text, signature: sig}`；`redacted` → `{type: "redacted_thinking", signature: sig}` |
-| **OpenAI Chat** | 无 reasoning 字段，忽略（或 `reasoning_tokens` 计数） |
+| **OpenAI Chat（标准）** | 无 reasoning 字段，忽略（或 `reasoning_tokens` 计数） |
+| **OpenAI Chat（兼容端点：vLLM/DeepSeek/Fireworks）** | → `message.reasoning`（默认）或经 `reasoning_field` 切换为 `message.reasoning_content` |
 | **OpenAI Responses** | → `output[]` 中 `reasoning` Item（`summary` + `encrypted_content`） |
-| **vLLM** | → `message.reasoning` |
-| **DeepSeek** | → `message.reasoning_content` |
 | **Gemini generateContent** | → `part` 中插入 `{text: reasoning.text, thought: true}` |
 | **Gemini Interactions** | → `steps[]` 中 `thought` 步（`summary` + `signature`） |
 | **Mistral** | → `content[]` 中插入 `ThinkChunk` |
