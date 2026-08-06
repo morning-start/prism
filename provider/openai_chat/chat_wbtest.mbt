@@ -815,3 +815,31 @@ test "chat store/extras round-trip" {
     Err(e) => fail("encode: \{e}")
   }
 }
+
+///|
+/// 请求侧 reasoning 配置：enabled + effort → reasoning_effort 参数（o-series 标准）
+test "lux_request_to_openai_chat - reasoning config emits reasoning_effort" {
+  let req = @lux.LucentRequest::new(
+    "o3",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hello")]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    Some(@lux.LucentReasoningConfig::new(Some(High), None)),
+    None,
+    None,
+  )
+  match lux_request_to_openai_chat(req) {
+    Ok(cr) => {
+      let jv = @json.parse(cr.value())
+      assert_eq(@internal.field_str(jv, "reasoning_effort"), Some("high"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
