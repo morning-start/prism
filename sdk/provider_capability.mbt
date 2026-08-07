@@ -213,6 +213,19 @@ fn build_providers() -> Array[ProviderRegistration] {
       @openai_codex.codex_sse_to_events,
       @openai_codex.lux_events_to_codex_sse,
     ),
+    ///| OpenAI vLLM（Chat 兼容子协议，承载 message.reasoning / delta.reasoning）
+    ProviderRegistration::new(
+      "openai-vllm",
+      ["vllm", "vllm-chat"],
+      @openai_vllm.capability(),
+      "qwen-*,deepseek-*,glm-*,yi-*",
+      @openai_vllm.vllm_to_lux_request,
+      @openai_vllm.lux_request_to_vllm,
+      @openai_vllm.vllm_to_lux_response,
+      @openai_vllm.lux_response_to_vllm,
+      @openai_vllm.vllm_sse_to_events,
+      @openai_vllm.lux_events_to_vllm_sse,
+    ),
   ]
 }
 
