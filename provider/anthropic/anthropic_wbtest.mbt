@@ -1013,3 +1013,95 @@ test "anthropic extras round-trip" {
     Err(e) => fail("encode: \{e}")
   }
 }
+
+///|
+test "decode - image url block maps to image multimedia" {
+  let json = "{\"model\":\"claude\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"image\",\"source\":{\"type\":\"url\",\"url\":\"https://x.com/a.png\"}}]}]}"
+  match anthropic_to_lux_request(json) {
+    Ok(cr) =>
+      match cr.value().conversation[0] {
+        Message(m) =>
+          match m.content[0] {
+            Image(mm) => {
+              assert_eq(mm.media_type, "")
+              assert_eq(mm.source, Url("https://x.com/a.png"))
+            }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    Err(e) => fail("decode: \{e}")
+  }
+}
+
+///|
+test "decode - image base64 block maps to inline multimedia" {
+  let json = "{\"model\":\"claude\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"image\",\"source\":{\"type\":\"base64\",\"media_type\":\"image/jpeg\",\"data\":\"abc123\"}}]}]}"
+  match anthropic_to_lux_request(json) {
+    Ok(cr) =>
+      match cr.value().conversation[0] {
+        Message(m) =>
+          match m.content[0] {
+            Image(mm) => {
+              assert_eq(mm.media_type, "image/jpeg")
+              assert_eq(mm.source, Inline("abc123"))
+            }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    Err(e) => fail("decode: \{e}")
+  }
+}
+
+///|
+test "encode - file url maps to anthropic document block" {
+  let req = @lux.LucentRequest::new(
+    "claude",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [
+          @lux.LucentContent::file(
+            "application/pdf",
+            Url("https://x.com/a.pdf"),
+          ),
+        ]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_anthropic(req) {
+    Ok(cr) => {
+      assert_true(cr.value().contains("\"type\":\"document\""))
+      assert_true(cr.value().contains("https://x.com/a.pdf"))
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+test "decode - document block maps to file multimedia" {
+  let json = "{\"model\":\"claude\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"document\",\"source\":{\"type\":\"url\",\"url\":\"https://x.com/a.pdf\"},\"media_type\":\"application/pdf\"}]}]}"
+  match anthropic_to_lux_request(json) {
+    Ok(cr) =>
+      match cr.value().conversation[0] {
+        Message(m) =>
+          match m.content[0] {
+            File(mm) => {
+              assert_eq(mm.media_type, "application/pdf")
+              assert_eq(mm.source, Url("https://x.com/a.pdf"))
+            }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    Err(e) => fail("decode: \{e}")
+  }
+}

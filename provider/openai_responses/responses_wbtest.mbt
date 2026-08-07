@@ -302,17 +302,41 @@ test "decode - reasoning config yields Unsupported diagnostic" {
 }
 
 ///|
-test "decode - input_image yields Degraded diagnostic" {
+test "decode - input_image maps to image multimedia (url)" {
   let json = "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_image\",\"image_url\":\"https://x.com/a.png\"}]}]}"
   match openai_responses_to_lux_request(json) {
     Ok(cr) => {
-      let mut has_degraded = false
-      for d in cr.diagnostics() {
-        if d.status == Degraded {
-          has_degraded = true
-        }
+      let msg = cr.value().conversation[0]
+      match msg {
+        Message(m) =>
+          match m.content[0] {
+            Image(mm) => assert_eq(mm.source, Url("https://x.com/a.png"))
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
       }
-      assert_true(has_degraded)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "decode - input_image data uri maps to inline multimedia" {
+  let json = "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_image\",\"image_url\":\"data:image/png;base64,iVBORw0KGgo\"}]}]}"
+  match openai_responses_to_lux_request(json) {
+    Ok(cr) => {
+      let msg = cr.value().conversation[0]
+      match msg {
+        Message(m) =>
+          match m.content[0] {
+            Image(mm) => {
+              assert_eq(mm.media_type, "image/png")
+              assert_eq(mm.source, Inline("iVBORw0KGgo"))
+            }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
     }
     Err(_) => assert_true(false)
   }
@@ -437,5 +461,146 @@ test "lux_response_to_openai_responses - dual carrier yields Degraded" {
       assert_false(s.contains("block reasoning"))
     }
     Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "encode - image url maps to input_image" {
+  let req = @lux.LucentRequest::new(
+    "gpt-5",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [
+          @lux.LucentContent::image("image/png", Url("https://x.com/a.png")),
+        ]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai_responses(req) {
+    Ok(cr) => {
+      assert_true(cr.value().contains("\"type\":\"input_image\""))
+      assert_true(cr.value().contains("https://x.com/a.png"))
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+test "encode - image inline maps to data uri input_image" {
+  let req = @lux.LucentRequest::new(
+    "gpt-5",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [
+          @lux.LucentContent::image("image/png", Inline("iVBORw0KGgo")),
+        ]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai_responses(req) {
+    Ok(cr) =>
+      assert_true(cr.value().contains("data:image/png;base64,iVBORw0KGgo"))
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+test "encode - image file_uri yields unsupported diagnostic" {
+  let req = @lux.LucentRequest::new(
+    "gpt-5",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [
+          @lux.LucentContent::image("image/png", FileUri("file:///tmp/a.png")),
+        ]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai_responses(req) {
+    Ok(cr) => {
+      let mut has_unsupported = false
+      for d in cr.diagnostics() {
+        if d.status == Unsupported && d.field == "content.image" {
+          has_unsupported = true
+        }
+      }
+      assert_true(has_unsupported)
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+test "decode - input_file data uri maps to file multimedia" {
+  let json = "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_file\",\"file_data\":\"data:application/pdf;base64,JVBERi0xLjQ\"}]}]}"
+  match openai_responses_to_lux_request(json) {
+    Ok(cr) =>
+      match cr.value().conversation[0] {
+        Message(m) =>
+          match m.content[0] {
+            File(mm) => {
+              assert_eq(mm.media_type, "application/pdf")
+              assert_eq(mm.source, Inline("JVBERi0xLjQ"))
+            }
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "encode - file inline maps to input_file file_data" {
+  let req = @lux.LucentRequest::new(
+    "gpt-5",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [
+          @lux.LucentContent::file("application/pdf", Inline("JVBERi0xLjQ")),
+        ]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai_responses(req) {
+    Ok(cr) => {
+      assert_true(cr.value().contains("\"type\":\"input_file\""))
+      assert_true(
+        cr.value().contains("data:application/pdf;base64,JVBERi0xLjQ"),
+      )
+    }
+    Err(e) => fail("encode: \{e}")
   }
 }

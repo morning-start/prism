@@ -73,8 +73,63 @@ fn parse_content_block(block : Json) -> Result[@lux.LucentContent, String] {
       Ok(@lux.LucentContent::redacted_thinking(signature))
     }
     Some("image") =>
-      // stub：简化处理 image content block
-      Err("image content block not yet supported")
+      // image content block：source 支持 url / base64 两种
+      match @internal.obj_get(block, "source") {
+        Some(source_jv) =>
+          match @internal.field_str(source_jv, "type").unwrap_or("") {
+            "url" => {
+              let url = @internal.field_str(source_jv, "url").unwrap_or("")
+              Ok(
+                @lux.LucentContent::image("", @lux.LucentMediaSource::url(url)),
+              )
+            }
+            "base64" => {
+              let media_type = @internal.field_str(source_jv, "media_type").unwrap_or(
+                "image/png",
+              )
+              let data = @internal.field_str(source_jv, "data").unwrap_or("")
+              Ok(
+                @lux.LucentContent::image(
+                  media_type,
+                  @lux.LucentMediaSource::inline(data),
+                ),
+              )
+            }
+            other => Err("image block with unknown source type: " + other)
+          }
+        None => Err("image block missing 'source' field")
+      }
+    Some("document") =>
+      // document content block（PDF 等文件）：source 支持 url / base64 两种
+      match @internal.obj_get(block, "source") {
+        Some(source_jv) => {
+          let media_type = @internal.field_str(block, "media_type").unwrap_or(
+            "application/pdf",
+          )
+          match @internal.field_str(source_jv, "type").unwrap_or("") {
+            "url" => {
+              let url = @internal.field_str(source_jv, "url").unwrap_or("")
+              Ok(
+                @lux.LucentContent::file(
+                  media_type,
+                  @lux.LucentMediaSource::url(url),
+                ),
+              )
+            }
+            "base64" => {
+              let data = @internal.field_str(source_jv, "data").unwrap_or("")
+              Ok(
+                @lux.LucentContent::file(
+                  media_type,
+                  @lux.LucentMediaSource::inline(data),
+                ),
+              )
+            }
+            other => Err("document block with unknown source type: " + other)
+          }
+        }
+        None => Err("document block missing 'source' field")
+      }
     Some(other) => Err("unknown content block type: " + other)
     None => Err("content block missing 'type' field")
   }
@@ -428,6 +483,32 @@ fn content_to_block(
               "content.image",
               Unsupported,
               Some("file_uri image source not supported by anthropic"),
+            ),
+          )
+          ""
+        }
+      }
+    File(mm) =>
+      // 文件（PDF 等）：精确映射为 anthropic document block
+      match mm.source {
+        Url(url) =>
+          "{\"type\":\"document\",\"source\":{\"type\":\"url\",\"url\":\"" +
+          json_escape(url) +
+          "\"},\"media_type\":\"" +
+          json_escape(mm.media_type) +
+          "\"}"
+        Inline(data) =>
+          "{\"type\":\"document\",\"source\":{\"type\":\"base64\",\"media_type\":\"" +
+          json_escape(mm.media_type) +
+          "\",\"data\":\"" +
+          json_escape(data) +
+          "\"}}"
+        FileUri(_) => {
+          diagnostics.push(
+            @lux.ConversionDiagnostic::new(
+              "content.file",
+              Unsupported,
+              Some("file_uri file source not supported by anthropic"),
             ),
           )
           ""
