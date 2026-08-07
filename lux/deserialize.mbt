@@ -614,6 +614,17 @@ pub fn LucentContent::from_json(jv : Json) -> Result[LucentContent, String] {
               }
               Ok(Video(mm))
             }
+            "file" => {
+              let mm = match m.get("file") {
+                Some(j) =>
+                  match LucentMultimedia::from_json(j) {
+                    Ok(v) => v
+                    Err(e) => return Err(e)
+                  }
+                None => return Err("missing file")
+              }
+              Ok(File(mm))
+            }
             "native" => {
               let tag = match get_str(m, "native_tag") {
                 Ok(s) => s

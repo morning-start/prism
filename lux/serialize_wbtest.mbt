@@ -1308,3 +1308,12 @@ test "edge - multiple messages" {
     _ => fail("missing conversation")
   }
 }
+
+///|
+test "LucentContent::to_json - file variant" {
+  let c = LucentContent::file("application/pdf", Url("https://x.com/a.pdf"))
+  let s = c.to_json().stringify()
+  assert_true(s.contains("\"type\":\"file\""))
+  let inline = LucentContent::file("application/pdf", Inline("JVBERi0xLjQ"))
+  assert_true(inline.to_json().stringify().contains("\"file\""))
+}

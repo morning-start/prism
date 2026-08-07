@@ -662,3 +662,19 @@ test "LucentDiscovery round trip" {
     Err(e) => fail("LucentDiscovery round trip failed: " + e)
   }
 }
+
+///|
+test "LucentContent round trip - file variant" {
+  let c = LucentContent::file("application/pdf", Url("https://x.com/a.pdf"))
+  let s = c.to_json().stringify()
+  match LucentContent::from_json(@json.parse(s)) {
+    Ok(d) => assert_true(d == c)
+    Err(e) => fail("LucentContent file round trip failed: " + e)
+  }
+  let c2 = LucentContent::file("application/pdf", Inline("JVBERi0xLjQ"))
+  let s2 = c2.to_json().stringify()
+  match LucentContent::from_json(@json.parse(s2)) {
+    Ok(d2) => assert_true(d2 == c2)
+    Err(e) => fail("LucentContent file inline round trip failed: " + e)
+  }
+}

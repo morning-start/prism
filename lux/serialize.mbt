@@ -209,6 +209,8 @@ pub fn LucentContent::to_json(self : LucentContent) -> Json {
       Json::object({ "type": Json::string("audio"), "audio": m.to_json() })
     Video(m) =>
       Json::object({ "type": Json::string("video"), "video": m.to_json() })
+    File(m) =>
+      Json::object({ "type": Json::string("file"), "file": m.to_json() })
     Native(tag, raw) =>
       Json::object({
         "type": Json::string("native"),
