@@ -1,15 +1,15 @@
 {
   "pipeline": "development",
-  "phase": "completed",
-  "phase_name": "thinking-reasoning",
-  "plan_file": "docs/tasks/2026-08-05-thinking-reasoning-tasks.md",
+  "phase": "e2e-verification",
+  "phase_name": "mock-vllm-e2e",
+  "plan_file": "docs/plans/2026-08-07-e2e-verification.md",
   "progress": {
-    "total_tasks": 4,
-    "completed_tasks": 4,
-    "current_task": 4
+    "total_tasks": 5,
+    "completed_tasks": 5,
+    "current_task": 5
   },
-  "last_verification": "2026-08-05T00:00:00Z",
-  "last_updated": "2026-08-05T00:00:00Z",
-  "next": "plan:sdk-gen-pipeline | moonbit-native-daemon",
-  "notes": "Thinking/Reasoning 统一 4 batch (A-D) 全部完成并合入 master：A IR 承载 (LucentMessage.reasoning + serialize/deserialize + LucentResponse::reasoning())；B openai-chat 非流式捕获/输出；C 流式捕获/输出 + 累加器归位 + Degraded 诊断；D 跨厂商映射表 (lux-ir-design.md §9.1)。727 测试全绿。此前 grpc-binding (phase4b) 计划文件已随历史任务文档归档，不再引用。"
+  "last_verification": "2026-08-07T00:00:00Z",
+  "last_updated": "2026-08-07T00:00:00Z",
+  "next": "agnes-real-endpoint | wasm-convertstream-stale-artifact",
+  "notes": "mock-vllm 模拟线路 e2e 验证完成：V1 入站捕获、V2 非流式跨协议出站（openai-vllm→anthropic thinking 块）、V3 流式（SSEToEvents+EventsToSSE 组合，wasm 产物内已证完整 len=1046）均通过。native 层 sdk.convert_stream 对 mock 帧 136/136 通过（step one/step two/answer 全保留），743 测试全绿、0 警告。已知产物问题：wasm 产物中 ConvertStream（wasm_convert_stream→sdk.convert_stream）单步丢帧（len=564 仅剩 step one），与 native 编译不一致，疑 moon 增量构建产物陈旧，需彻底清理 _build 与 ~/.moon/registry 后重建验证；agnes 真实链路留待用户本地执行 scripts/agnes_probe.sh（凭证安全边界拦截 key）。"
 }
