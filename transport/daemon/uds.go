@@ -135,6 +135,8 @@ func serveUDSStream(ctx context.Context, backend Backend, conn net.Conn, req *Re
 			_ = writeUDSLine(conn, rpcError(id, e))
 			return
 		}
+		// file:// 预读：把 file:// 字符串转 data URI，转换层（纯函数）无需文件系统
+		sse = resolveFileURIs(sse)
 		envStr, err := backend.ConvertStream(ctx, from, to, sse)
 		if err != nil {
 			_ = writeUDSLine(conn, rpcError(id, domainError(err.Error())))
