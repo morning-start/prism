@@ -7,5 +7,6 @@ import {
   "morning-start/prism/provider/gemini_vertex",
   "morning-start/prism/provider/openai_azure",
   "morning-start/prism/provider/openai_codex",
+  "morning-start/prism/provider/openai_vllm",
   "moonbitlang/core/json",
 }
