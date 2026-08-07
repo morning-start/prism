@@ -204,6 +204,8 @@ func serveConvert(ctx context.Context, backend Backend, id json.RawMessage, raw 
 	if rpcErr != nil {
 		return rpcError(id, rpcErr)
 	}
+	// file:// 预读：把 file:// 字符串转 data URI，转换层（纯函数）无需文件系统
+	payload = resolveFileURIs(payload)
 	result, err := backend.Convert(ctx, from, to, direction, payload)
 	if err != nil {
 		return rpcError(id, domainError(err.Error()))
@@ -232,6 +234,8 @@ func serveConvertStream(ctx context.Context, backend Backend, id json.RawMessage
 	if rpcErr != nil {
 		return rpcError(id, rpcErr)
 	}
+	// file:// 预读：把 file:// 字符串转 data URI，转换层（纯函数）无需文件系统
+	sse = resolveFileURIs(sse)
 	result, err := backend.ConvertStream(ctx, from, to, sse)
 	if err != nil {
 		return rpcError(id, domainError(err.Error()))

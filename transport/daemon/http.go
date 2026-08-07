@@ -134,6 +134,8 @@ func (h *HTTPHandler) serveSSE(w http.ResponseWriter, r *http.Request, req *Requ
 			streamError(w, id, e.Message)
 			return
 		}
+		// file:// 预读：把 file:// 字符串转 data URI，转换层（纯函数）无需文件系统
+		sse = resolveFileURIs(sse)
 		envStr, err := h.backend.ConvertStream(r.Context(), from, to, sse)
 		if err != nil {
 			streamError(w, id, err.Error())
