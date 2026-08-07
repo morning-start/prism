@@ -111,6 +111,7 @@ pub(all) enum LucentContent {
   Image(LucentMultimedia)
   Audio(LucentMultimedia)
   Video(LucentMultimedia)
+  File(LucentMultimedia)
   Native(String, Json)
 } derive(Eq, Debug)
 
@@ -619,6 +620,15 @@ pub fn LucentContent::image(
   source : LucentMediaSource,
 ) -> LucentContent {
   Image({ media_type, source })
+}
+
+///|
+/// 构造文件 content（PDF 等非媒体文件），来源三选一：url / inline / file_uri
+pub fn LucentContent::file(
+  media_type : String,
+  source : LucentMediaSource,
+) -> LucentContent {
+  File({ media_type, source })
 }
 
 ///|

@@ -110,6 +110,7 @@ pub enum LucentContent {
   Image(LucentMultimedia)
   Audio(LucentMultimedia)
   Video(LucentMultimedia)                      // 新增：Gemini 已支持，未来通用
+  File(LucentMultimedia)                       // 文件（PDF 等）：media_type + source（url/inline/file_uri）
   Native(String, Json)                         // (type_tag, raw_json) 厂商私有内容类型
 }
 ```
