@@ -519,6 +519,20 @@ pub fn lux_request_to_gemini(
                 @internal.json_escape(th.text) +
                 "\",\"thought\":true}",
               )
+            File(mm) =>
+              content_parts.push(
+                "{\"fileData\":{\"mimeType\":\"" +
+                @internal.json_escape(mm.media_type) +
+                "\",\"fileUri\":\"" +
+                @internal.json_escape(
+                  match mm.source {
+                    Url(u) => u
+                    FileUri(u) => u
+                    Inline(_) => ""
+                  },
+                ) +
+                "\"}}",
+              )
             _ => ()
           }
           j = j + 1
@@ -838,6 +852,20 @@ pub fn lux_response_to_gemini(
             "{\"text\":\"" +
             @internal.json_escape(th.text) +
             "\",\"thought\":true}",
+          )
+        File(mm) =>
+          parts.push(
+            "{\"fileData\":{\"mimeType\":\"" +
+            @internal.json_escape(mm.media_type) +
+            "\",\"fileUri\":\"" +
+            @internal.json_escape(
+              match mm.source {
+                Url(u) => u
+                FileUri(u) => u
+                Inline(_) => ""
+              },
+            ) +
+            "\"}}",
           )
         _ => ()
       }

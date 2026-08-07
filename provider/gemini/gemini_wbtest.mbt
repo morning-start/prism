@@ -461,3 +461,32 @@ test "lux_response_to_gemini - dual carrier yields Degraded" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "encode - file maps to fileData part" {
+  let req = @lux.LucentRequest::new(
+    "gemini-2.0-flash",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [
+          @lux.LucentContent::file("application/pdf", Url("gs://bucket/a.pdf")),
+        ]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_gemini(req) {
+    Ok(cr) => {
+      assert_true(cr.value().contains("\"fileData\""))
+      assert_true(cr.value().contains("gs://bucket/a.pdf"))
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}

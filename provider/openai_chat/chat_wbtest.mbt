@@ -843,3 +843,95 @@ test "lux_request_to_openai_chat - reasoning config emits reasoning_effort" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+test "encode - image url maps to image_url array content" {
+  let req = @lux.LucentRequest::new(
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [
+          @lux.LucentContent::text("看图"),
+          @lux.LucentContent::image("image/png", Url("https://x.com/a.png")),
+        ]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai_chat(req) {
+    Ok(cr) => {
+      assert_true(cr.value().contains("\"type\":\"image_url\""))
+      assert_true(cr.value().contains("https://x.com/a.png"))
+      assert_true(cr.value().contains("\"type\":\"text\""))
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+test "encode - image inline maps to data uri image_url" {
+  let req = @lux.LucentRequest::new(
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [
+          @lux.LucentContent::image("image/png", Inline("iVBORw0KGgo")),
+        ]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai_chat(req) {
+    Ok(cr) =>
+      assert_true(cr.value().contains("data:image/png;base64,iVBORw0KGgo"))
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+test "encode - image file_uri yields unsupported diagnostic" {
+  let req = @lux.LucentRequest::new(
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [
+          @lux.LucentContent::image("image/png", FileUri("file:///tmp/a.png")),
+        ]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai_chat(req) {
+    Ok(cr) => {
+      let mut has_unsupported = false
+      for d in cr.diagnostics() {
+        if d.status == Unsupported && d.field == "content.image" {
+          has_unsupported = true
+        }
+      }
+      assert_true(has_unsupported)
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}

@@ -49,23 +49,97 @@ fn parse_input_item(
                   None => ()
                 }
               Some("input_image") =>
-                // 图像输入：当前不支持精确映射，显式 Degraded 诊断
-                diagnostics.push(
-                  @lux.ConversionDiagnostic::new(
-                    "input.image",
-                    Degraded,
-                    Some("input_image not mapped to multimedia"),
-                  ),
-                )
+                // 图片输入：精确映射为 multimedia（data URI 拆出 media_type + base64）
+                match @internal.field_str(parts[i], "image_url") {
+                  Some(u) =>
+                    if u == "" {
+                      ()
+                    } else if u[0] == 'd' && u.length() > 5 && u[4] == ':' {
+                      // data:image/png;base64,xxx → Inline(纯 base64) + media_type
+                      let segs = u.split(";").to_array()
+                      if segs.length() >= 2 {
+                        let media_type_parts = segs[0].split(":").to_array()
+                        let body_parts = segs[1].split(",").to_array()
+                        let media_type = if media_type_parts.length() >= 2 {
+                          media_type_parts[1].to_owned()
+                        } else {
+                          "image/png"
+                        }
+                        let data = if body_parts.length() >= 2 {
+                          body_parts[1].to_owned()
+                        } else {
+                          ""
+                        }
+                        if data != "" {
+                          result.push(
+                            @lux.LucentContent::image(
+                              media_type,
+                              @lux.LucentMediaSource::inline(data),
+                            ),
+                          )
+                        }
+                      }
+                    } else {
+                      result.push(
+                        @lux.LucentContent::image(
+                          "",
+                          @lux.LucentMediaSource::url(u),
+                        ),
+                      )
+                    }
+                  None => ()
+                }
               Some("input_file") =>
-                // 文件输入：当前不支持，显式 Degraded 诊断
-                diagnostics.push(
-                  @lux.ConversionDiagnostic::new(
-                    "input.file",
-                    Degraded,
-                    Some("input_file not mapped to multimedia"),
-                  ),
-                )
+                // 文件输入：file_data（data URI）精确映射为 File；file_id（服务器引用）显式 Degraded
+                match @internal.field_str(parts[i], "file_data") {
+                  Some(fd) =>
+                    if fd == "" {
+                      ()
+                    } else if fd[0] == 'd' && fd.length() > 5 && fd[4] == ':' {
+                      // data:application/pdf;base64,xxx → File(Inline)
+                      let segs = fd.split(";").to_array()
+                      if segs.length() >= 2 {
+                        let media_type_parts = segs[0].split(":").to_array()
+                        let body_parts = segs[1].split(",").to_array()
+                        let media_type = if media_type_parts.length() >= 2 {
+                          media_type_parts[1].to_owned()
+                        } else {
+                          "application/pdf"
+                        }
+                        let data = if body_parts.length() >= 2 {
+                          body_parts[1].to_owned()
+                        } else {
+                          ""
+                        }
+                        if data != "" {
+                          result.push(
+                            @lux.LucentContent::file(
+                              media_type,
+                              @lux.LucentMediaSource::inline(data),
+                            ),
+                          )
+                        }
+                      }
+                    } else {
+                      // 非 data URI：file_data 通常必须是 data URI，否则显式诊断
+                      diagnostics.push(
+                        @lux.ConversionDiagnostic::new(
+                          "input.file",
+                          Degraded,
+                          Some("file_data must be a data URI"),
+                        ),
+                      )
+                    }
+                  None =>
+                    // 仅 file_id（服务器端文件引用）：跨协议无法映射，显式 Degraded
+                    diagnostics.push(
+                      @lux.ConversionDiagnostic::new(
+                        "input.file",
+                        Degraded,
+                        Some("file_id not mapped to multimedia"),
+                      ),
+                    )
+                }
               _ => ()
             }
             i = i + 1
@@ -292,6 +366,7 @@ pub fn lux_request_to_openai_responses(
   req : @lux.LucentRequest,
 ) -> Result[@lux.ConversionResult[String], String] {
   let parts : Array[String] = []
+  let diagnostics : Array[@lux.ConversionDiagnostic] = []
   parts.push("\"model\":\"" + @internal.json_escape(req.model) + "\"")
   // instructions
   match req.instructions {
@@ -320,7 +395,65 @@ pub fn lux_request_to_openai_responses(
                 @internal.json_escape(s) +
                 "\"}",
               )
-            Image(_) => () // stub
+            Image(mm) =>
+              match mm.source {
+                Url(url) =>
+                  content_parts.push(
+                    "{\"type\":\"input_image\",\"image_url\":\"" +
+                    @internal.json_escape(url) +
+                    "\"}",
+                  )
+                Inline(data) =>
+                  content_parts.push(
+                    "{\"type\":\"input_image\",\"image_url\":\"data:" +
+                    @internal.json_escape(mm.media_type) +
+                    ";base64," +
+                    @internal.json_escape(data) +
+                    "\"}",
+                  )
+                FileUri(_) =>
+                  diagnostics.push(
+                    @lux.ConversionDiagnostic::new(
+                      "content.image",
+                      Unsupported,
+                      Some(
+                        "file_uri image source not supported by openai-responses",
+                      ),
+                    ),
+                  )
+              }
+            File(mm) =>
+              // 文件：仅支持 Inline（base64 data URI）；url/file_uri 无对应载体，显式诊断
+              match mm.source {
+                Inline(data) =>
+                  content_parts.push(
+                    "{\"type\":\"input_file\",\"file_data\":\"data:" +
+                    @internal.json_escape(mm.media_type) +
+                    ";base64," +
+                    @internal.json_escape(data) +
+                    "\"}",
+                  )
+                Url(url) => {
+                  diagnostics.push(
+                    @lux.ConversionDiagnostic::new(
+                      "content.file",
+                      Unsupported,
+                      Some("url file source not supported by openai-responses"),
+                    ),
+                  )
+                  let _ = url
+                }
+                FileUri(_) =>
+                  diagnostics.push(
+                    @lux.ConversionDiagnostic::new(
+                      "content.file",
+                      Unsupported,
+                      Some(
+                        "file_uri file source not supported by openai-responses",
+                      ),
+                    ),
+                  )
+              }
             _ => ()
           }
           j = j + 1
@@ -484,7 +617,11 @@ pub fn lux_request_to_openai_responses(
       }
     None => ()
   }
-  Ok(@lux.ConversionResult::new("{" + parts.join(",") + "}"))
+  let mut result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
+  for d in diagnostics {
+    result = result.with_diagnostic(d)
+  }
+  Ok(result)
 }
 
 ///|

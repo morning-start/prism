@@ -41,14 +41,31 @@ fn parse_content_parts(msg_jv : Json) -> Array[@lux.LucentContent] {
                   Some(u) =>
                     if u == "" {
                       ()
-                    } else if u[0] == 'd' && u.length() > 5 && u[5] == ':' {
-                      // data:image/... 简化：不解析内部细节，整体作为 inline
-                      result.push(
-                        @lux.LucentContent::image(
-                          "image/png",
-                          @lux.LucentMediaSource::inline(u),
-                        ),
-                      )
+                    } else if u[0] == 'd' && u.length() > 5 && u[4] == ':' {
+                      // data:image/png;base64,xxx → 拆出 media_type + 纯 base64 存 Inline
+                      let segs = u.split(";").to_array()
+                      if segs.length() >= 2 {
+                        let media_type_parts = segs[0].split(":").to_array()
+                        let body_parts = segs[1].split(",").to_array()
+                        let media_type = if media_type_parts.length() >= 2 {
+                          media_type_parts[1].to_owned()
+                        } else {
+                          "image/png"
+                        }
+                        let data = if body_parts.length() >= 2 {
+                          body_parts[1].to_owned()
+                        } else {
+                          ""
+                        }
+                        if data != "" {
+                          result.push(
+                            @lux.LucentContent::image(
+                              media_type,
+                              @lux.LucentMediaSource::inline(data),
+                            ),
+                          )
+                        }
+                      }
                     } else {
                       result.push(
                         @lux.LucentContent::image(
@@ -351,6 +368,89 @@ fn tool_choice_to_json(tc : @lux.LucentToolChoice) -> String {
 }
 
 ///|
+/// 构造 messages[].content 字段：含图片时用数组形式（image_url），否则字符串形式。
+/// 返回 `"content":...` 片段（含键名与值，调用方直接拼接）。
+fn content_field_to_json(
+  content : Array[@lux.LucentContent],
+  diagnostics : Array[@lux.ConversionDiagnostic],
+) -> String {
+  let mut needs_array = false
+  let mut i = 0
+  while i < content.length() {
+    match content[i] {
+      Image(_) | Audio(_) | Video(_) => needs_array = true
+      _ => ()
+    }
+    i = i + 1
+  }
+  if needs_array {
+    let parts : Array[String] = []
+    let mut j = 0
+    while j < content.length() {
+      match content[j] {
+        Text(s, _) =>
+          parts.push("{\"type\":\"text\",\"text\":\"" + escape_json(s) + "\"}")
+        Image(mm) =>
+          match mm.source {
+            Url(url) =>
+              parts.push(
+                "{\"type\":\"image_url\",\"image_url\":{\"url\":\"" +
+                escape_json(url) +
+                "\"}}",
+              )
+            Inline(data) =>
+              parts.push(
+                "{\"type\":\"image_url\",\"image_url\":{\"url\":\"data:" +
+                escape_json(mm.media_type) +
+                ";base64," +
+                escape_json(data) +
+                "\"}}",
+              )
+            FileUri(_) =>
+              diagnostics.push(
+                @lux.ConversionDiagnostic::new(
+                  "content.image",
+                  Unsupported,
+                  Some("file_uri image source not supported by openai-chat"),
+                ),
+              )
+          }
+        Audio(_) =>
+          diagnostics.push(
+            @lux.ConversionDiagnostic::new(
+              "content.audio",
+              Unsupported,
+              Some("audio content not supported by openai-chat"),
+            ),
+          )
+        Video(_) =>
+          diagnostics.push(
+            @lux.ConversionDiagnostic::new(
+              "content.video",
+              Unsupported,
+              Some("video content not supported by openai-chat"),
+            ),
+          )
+        _ => ()
+      }
+      j = j + 1
+    }
+    "\"content\":[" + parts.join(",") + "]"
+  } else {
+    let text_parts : Array[String] = []
+    let mut k = 0
+    while k < content.length() {
+      match content[k] {
+        Text(s, _) => text_parts.push(s)
+        _ => ()
+      }
+      k = k + 1
+    }
+    "\"content\":\"" + escape_json(text_parts.join("")) + "\""
+  }
+}
+
+///|
 /// 单个 content part → 文本片段（用于 messages[].content 字符串拼接）
 /// 返回 Some(fragment) 表示该 part 需入 content；None 表示不入 content
 /// 注意：Text 返回原始文本，由调用方统一 escape_json 转义
@@ -381,13 +481,14 @@ fn content_part_to_json(
       out_refusal.push(s)
       None
     }
-    Image(_) => {
-      // OpenAI Chat 无媒体载体：不静默丢弃，显式 Unsupported 诊断
+    Image(_) => None // 图片由 content_field_to_json 以数组形式（image_url）编码
+    File(_) => {
+      // OpenAI Chat 无文件载体（仅图片 image_url 与工具），显式 Unsupported 诊断
       diagnostics.push(
         @lux.ConversionDiagnostic::new(
-          "content.image",
+          "content.file",
           Unsupported,
-          Some("image content not supported by openai-chat"),
+          Some("file content not supported by openai-chat"),
         ),
       )
       None
@@ -458,28 +559,23 @@ fn message_to_json(
       "\"}"
     }
     _ => {
-      // 普通 role：content 拼为字符串；tool_calls 入数组；refusal 入字段
-      let content_parts : Array[String] = []
+      // 普通 role：content 由 content_field_to_json 统一构造（含图片时数组形式）；
+      // tool_calls 入数组；refusal 入字段
       let mut i = 0
       while i < msg.content.length() {
-        match
-          content_part_to_json(
-            msg.content[i],
-            tool_calls,
-            refusal_buf,
-            diagnostics,
-          ) {
-          Some(s) => content_parts.push(s)
-          None => ()
-        }
+        let _ = content_part_to_json(
+          msg.content[i],
+          tool_calls,
+          refusal_buf,
+          diagnostics,
+        )
         i = i + 1
       }
-      let content_str = content_parts.join("")
+      let content_field = content_field_to_json(msg.content, diagnostics)
       let mut msg_obj = "{\"role\":\"" +
         escape_json(role) +
-        "\",\"content\":\"" +
-        escape_json(content_str) +
-        "\""
+        "\"," +
+        content_field
       if tool_calls.length() > 0 {
         msg_obj = msg_obj + ",\"tool_calls\":[" + tool_calls.join(",") + "]"
       }
@@ -801,34 +897,28 @@ pub fn lux_response_to_openai_chat(
   while i < resp.choices.length() {
     let c = resp.choices[i]
     let role = role_to_string(c.message.role)
-    // content 拼为字符串；tool_calls 入数组；refusal 入字段
+    // content 由 content_field_to_json 统一构造（含图片时数组形式）；tool_calls 入数组；refusal 入字段
     let tool_calls : Array[String] = []
     let refusal_buf : Array[String] = []
-    let content_parts : Array[String] = []
     let mut j = 0
     while j < c.message.content.length() {
-      match
-        content_part_to_json(
-          c.message.content[j],
-          tool_calls,
-          refusal_buf,
-          diagnostics,
-        ) {
-        Some(s) => content_parts.push(s)
-        None => ()
-      }
+      let _ = content_part_to_json(
+        c.message.content[j],
+        tool_calls,
+        refusal_buf,
+        diagnostics,
+      )
       j = j + 1
     }
-    let content_str = content_parts.join("")
+    let content_field = content_field_to_json(c.message.content, diagnostics)
     // 标准 OpenAI Chat 不发射 reasoning 字段（vLLM 扩展由 openai_vllm 子协议承载）
     let reasoning_field = ""
     let mut msg_obj = "\"index\":" +
       c.index.to_string() +
       ",\"message\":{\"role\":\"" +
       escape_json(role) +
-      "\",\"content\":\"" +
-      escape_json(content_str) +
-      "\"" +
+      "\"," +
+      content_field +
       reasoning_field
     if tool_calls.length() > 0 {
       msg_obj = msg_obj + ",\"tool_calls\":[" + tool_calls.join(",") + "]"
