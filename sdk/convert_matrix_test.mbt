@@ -499,3 +499,109 @@ test "convert_response_with_meta - openai-chat to openai" {
     Err(e) => fail(e)
   }
 }
+
+///|
+/// 图片转发：source 编码（含图片）→ convert_request → target 解码 → 图片保留
+fn verify_image_forward(
+  source : String,
+  target : String,
+) -> Result[Unit, String] {
+  let req = @lux.LucentRequest::new(
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [
+          @lux.LucentContent::text("看图"),
+          @lux.LucentContent::image("image/png", Url("https://x.com/a.png")),
+        ]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  let json = match source {
+    "openai-chat" =>
+      match @openai_chat.lux_request_to_openai_chat(req) {
+        Ok(cr) => cr.value()
+        Err(e) => return Err("source encode (\{source}): \{e}")
+      }
+    "openai" =>
+      match @openai_responses.lux_request_to_openai_responses(req) {
+        Ok(cr) => cr.value()
+        Err(e) => return Err("source encode (\{source}): \{e}")
+      }
+    "anthropic" =>
+      match @anthropic.lux_request_to_anthropic(req) {
+        Ok(cr) => cr.value()
+        Err(e) => return Err("source encode (\{source}): \{e}")
+      }
+    _ => return Err("unknown source: " + source)
+  }
+  match convert_request(source, json, target) {
+    Ok(cr) =>
+      match target_decode_req(target, cr.value()) {
+        Ok(out_req) =>
+          // 检查首条消息是否含 Image content
+          match out_req.conversation[0] {
+            Message(m) => {
+              let mut has_image = false
+              let mut i = 0
+              while i < m.content.length() {
+                if m.content[i] is Image(_) {
+                  has_image = true
+                }
+                i = i + 1
+              }
+              if !has_image {
+                return Err("image lost (\{source}->\{target})")
+              }
+              Ok(())
+            }
+            _ => Err("first item not a message (\{source}->\{target})")
+          }
+        Err(e) => Err("target decode failed (\{source}->\{target}): \{e}")
+      }
+    Err(e) => Err("convert_request failed (\{source}->\{target}): \{e}")
+  }
+}
+
+///|
+/// === 图片转发矩阵（4 方向 × 保真断言）===
+
+///|
+test "image forward - openai-chat to anthropic preserves image" {
+  match verify_image_forward("openai-chat", "anthropic") {
+    Ok(_) => ()
+    Err(e) => fail(e)
+  }
+}
+
+///|
+test "image forward - openai to anthropic preserves image" {
+  match verify_image_forward("openai", "anthropic") {
+    Ok(_) => ()
+    Err(e) => fail(e)
+  }
+}
+
+///|
+test "image forward - anthropic to openai-chat preserves image" {
+  match verify_image_forward("anthropic", "openai-chat") {
+    Ok(_) => ()
+    Err(e) => fail(e)
+  }
+}
+
+///|
+test "image forward - anthropic to openai preserves image" {
+  match verify_image_forward("anthropic", "openai") {
+    Ok(_) => ()
+    Err(e) => fail(e)
+  }
+}
