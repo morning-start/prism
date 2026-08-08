@@ -827,20 +827,26 @@ fn parse_choices(jv : Json) -> Array[@lux.LucentChoice] {
               Some(r) => content.push(@lux.LucentContent::refusal(r))
               None => ()
             }
-            // 标准 OpenAI Chat 无消息级 reasoning 字段（vLLM/DeepSeek 扩展由
-            // openai_vllm 子协议承载，见 provider/openai_vllm）
+            // reasoning（vLLM: message.reasoning；DeepSeek/Fireworks: message.reasoning_content）
+            let reasoning : @lux.LucentThinking? = match
+              @internal.field_str(msg_jv, "reasoning") {
+              Some(text) => Some(@lux.LucentThinking::visible(text, None))
+              None =>
+                match @internal.field_str(msg_jv, "reasoning_content") {
+                  Some(text) => Some(@lux.LucentThinking::visible(text, None))
+                  None => None
+                }
+            }
             let finish = match @internal.field_str(c, "finish_reason") {
               Some(fr) => @lux.LucentFinishReason::from_string(fr)
               None => Stop
             }
-            result.push(
-              @lux.LucentChoice::new(
-                idx,
-                @lux.LucentMessage::new(role, content),
-                finish,
-                None,
-              ),
-            )
+            let msg = match reasoning {
+              Some(th) =>
+                @lux.LucentMessage::with_reasoning(role, content, Some(th))
+              None => @lux.LucentMessage::new(role, content)
+            }
+            result.push(@lux.LucentChoice::new(idx, msg, finish, None))
           }
           None => ()
         }
@@ -891,8 +897,6 @@ pub fn lux_response_to_openai_chat(
 ) -> Result[@lux.ConversionResult[String], String] {
   let choices_json : Array[String] = []
   let diagnostics : Array[@lux.ConversionDiagnostic] = []
-  // 标准 OpenAI Chat 不发射消息级 reasoning 字段（vLLM/DeepSeek 扩展由
-  // openai_vllm 子协议承载，见 provider/openai_vllm）
   let mut i = 0
   while i < resp.choices.length() {
     let c = resp.choices[i]
@@ -911,8 +915,22 @@ pub fn lux_response_to_openai_chat(
       j = j + 1
     }
     let content_field = content_field_to_json(c.message.content, diagnostics)
-    // 标准 OpenAI Chat 不发射 reasoning 字段（vLLM 扩展由 openai_vllm 子协议承载）
-    let reasoning_field = ""
+    // reasoning：消息级 reasoning → message.reasoning 字段
+    // 字段名默认 "reasoning"（vLLM）；经 provider_payload.reasoning_field 声明 "reasoning_content" 时切换
+    let reasoning_field = match c.message.reasoning {
+      Some(th) => {
+        let field_name = match resp.provider_payload {
+          Some(Object(m)) =>
+            match m.get("reasoning_field") {
+              Some(String(s)) if s == "reasoning_content" => s
+              _ => "reasoning"
+            }
+          _ => "reasoning"
+        }
+        ",\"" + field_name + "\":\"" + escape_json(th.text) + "\""
+      }
+      None => ""
+    }
     let mut msg_obj = "\"index\":" +
       c.index.to_string() +
       ",\"message\":{\"role\":\"" +

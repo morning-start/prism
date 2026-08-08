@@ -163,9 +163,11 @@ pub(all) enum LucentContent {
   Image(LucentMultimedia)
   Audio(LucentMultimedia)
   Video(LucentMultimedia)
+  File(LucentMultimedia)
   Native(String, Json)
 } derive(Eq, @debug.Debug)
 pub fn LucentContent::audio(String, LucentMediaSource) -> Self
+pub fn LucentContent::file(String, LucentMediaSource) -> Self
 pub fn LucentContent::from_json(Json) -> Result[Self, String]
 pub fn LucentContent::image(String, LucentMediaSource) -> Self
 pub fn LucentContent::native(String, Json) -> Self
