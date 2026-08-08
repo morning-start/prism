@@ -15,18 +15,23 @@ You can browse and install extra skills here:
 - In the toplevel directory, there is a `moon.mod` file listing module
   metadata.
 
-## Planning & Task Documents
+## Planning & Task Documents (flowstate)
 
 When starting work on this project, read these in order to restore context:
 
-- `docs/plans/` — roadmap-style planning only (e.g. `2026-08-01-project-roadmap.md`).
-  Do NOT put task breakdowns here.
-- `docs/tasks/` — task breakdown documents (per-phase implementation plans).
-  Task breakdowns MUST go here, not in `docs/plans/`.
+- `.agent-workplace/` — Agent private workspace (gitignored). Contains:
+  - `docs/plan/` — Plan mode: roadmap-style planning (e.g. `2026-08-01-project-roadmap.md`)
+  - `docs/spec/` — Spec mode: requirements→plan→task three-chain (e.g. thinking-reasoning unification)
+  - `docs/task/` — Task mode: numbered checkbox task lists (e.g. thinking-reasoning tasks, e2e verification)
+  - `docs/decisions.md` — Decision records (options, rationale, rejections)
+  - `docs/requirements.md` — Requirements list (Spec mode starting point)
+  - `state/checkpoint.json` — Breakpoint resume state
+  - `modes/` — Flowstate mode definitions (graph/plan/spec/task/goal)
 - `.moonbit-pipeline.json` — pipeline state (current phase, plan file pointer,
   task progress). Use it as the session checkpoint.
-- `docs/requirements.md` — dual-scenario architecture requirements (IR hub +
+- `docs/architecture.md` — dual-scenario architecture design (IR hub +
   developer SDK / relay server), the source of truth for design decisions.
+- `docs/status.md` — current project status and module completion tracking.
 - `docs/rules/lucent-ir-evolution.md` — mandatory governance before changing
   any Lucent IR field, enum variant, stream event, capability, or payload.
 

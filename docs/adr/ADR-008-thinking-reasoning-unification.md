@@ -2,7 +2,14 @@
 
 ## 状态
 
-**提案**（2026-08-04）— 待评审后实施。
+**已实施**（2026-08-05）— 方案 B 已落地，但最终实现与本提案有差异。
+
+> **实现差异说明**：本提案建议在 `LucentResponse` 增加 `reasoning: String?` 字段。
+> 最终实现将 `reasoning` 放在 `LucentMessage` 上（`reasoning : LucentThinking? = None`），
+> 因为消息级 reasoning 是 message 的属性（vLLM/DeepSeek 在 message 字段内），
+> 且 `LucentResponse` 是多 choice 容器。`LucentResponse` 仅提供便捷访问方法
+> `reasoning() : LucentThinking?`（取 `choices[0].message.reasoning`），不新增字段。
+> 详见 `lux-ir-design.md` §1.2 和 §9.1。
 
 ## 背景
 
