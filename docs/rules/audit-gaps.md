@@ -24,7 +24,11 @@ pub struct LucentOptions {
 }
 ```
 
-### 🔴 缺口 2：`store` 和 `extras` 未接入适配器编解码
+### ✅ 缺口 2：`store` 和 `extras` 未接入适配器编解码 — **已解决**（Phase 2）
+
+> **状态更新**（2026-08-08）：`store`/`extras` 已接入 4 基础适配器
+> （OpenAI 原生支持，Anthropic/Gemini `Unsupported` 诊断 + extras 往返）。
+> 详见 `docs/status.md` Phase 2。
 
 **问题：** `LucentOptions.store` 和 `LucentOptions.extras` 已在 IR 结构体中，但没有任何适配器：
 
@@ -54,7 +58,7 @@ pub struct LucentOptions {
 | # | 缺口 | 优先级 | 需要立即修？ |
 |---|------|--------|:----------:|
 | 1 | `seed` 在错误位置 | 低 | ❌ 标记 deprecated 即可 |
-| 2 | `store`/`extras` 未连通 | 低 | ❌ 等 SDK 表层 API 时一起 |
+| 2 | `store`/`extras` 未连通 | ~~低~~ | ✅ Phase 2 已解决 |
 | 3 | AgentAction 未实现 | 中 | ❌ v2 范围 |
 | 4 | `wasm_sdk_decode_sse` / `wasm_sdk_capability` 无诊断源 | 低 | ❌ 形状已对齐（恒 `diagnostics: []`），待 SDK 补 `*_with_diagnostics` |
 

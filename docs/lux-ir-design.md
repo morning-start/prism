@@ -1,7 +1,7 @@
 # Lux IR 设计规范
 
 > Prism 自研中立中间协议（Lucent IR）的形式规范。
-> 本文件是 `protocol/lux/` 包实现的**唯一依据**，所有适配器以此为准。
+> 本文件是 `lux/` 包实现的**唯一依据**，所有适配器以此为准。
 > 版本：`schema_version = "v1"`
 
 ---
@@ -547,13 +547,16 @@ pub enum LucentFinishReason {
 
 ## 10. 6-Function 适配器契约
 
-每个适配器实现 6 个纯函数，方向正交：
+每个适配器实现 6 个纯函数，方向正交。输入输出均为 JSON String，附带 `ConversionResult`
+信封（含 `value` + `diagnostics`），诊断信息显式报告 `Exact`/`Degraded`/`Unsupported`/`Invalid`：
 
 | # | 方向 | 解码（外部 → Lux） | 编码（Lux → 外部） |
 |---|------|------------------|------------------|
-| 1 | 请求 | `ext_to_lux_request(String) → Result[LucentRequest, String]` | `lux_request_to_ext(LucentRequest) → Result[String, String]` |
-| 2 | 响应 | `ext_to_lux_response(String) → Result[LucentResponse, String]` | `lux_response_to_ext(LucentResponse) → Result[String, String]` |
-| 3 | 流式 | `ext_sse_to_events(String) → Result[Array[LucentStreamEvent], String]` | `lux_events_to_ext_sse(Array[LucentStreamEvent]) → Result[String, String]` |
+| 1 | 请求 | `ext_to_lux_request(String) → ConversionResult[LucentRequest]` | `lux_request_to_ext(LucentRequest) → ConversionResult[String]` |
+| 2 | 响应 | `ext_to_lux_response(String) → ConversionResult[LucentResponse]` | `lux_response_to_ext(LucentResponse) → ConversionResult[String]` |
+| 3 | 流式 | `ext_sse_to_events(String) → ConversionResult[Array[LucentStreamEvent]]` | `lux_events_to_ext_sse(Array[LucentStreamEvent]) → ConversionResult[String]` |
+
+> `ConversionResult` 信封格式见 `lux/conversion_json.mbt`；诊断详情见 `docs/rules/lucent-ir-evolution.md` §4。
 
 **契约不变性**：
 - 纯函数，无 IO、无状态、无网络（WASM 安全边界）。
