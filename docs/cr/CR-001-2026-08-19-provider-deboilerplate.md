@@ -50,7 +50,7 @@ Agent 上一轮架构审查确认的具体需求：
 ## 5. 实施记录
 
 - **分支**: `feature/cr-001-provider-deboilerplate`
-- **提交**: 待填（功能分支提交后回填）
+- **提交**: `81f26d0`（refactor(provider): de-boilerplate adapter code (CR-001 batch A)）
 - **验证**: `moon fmt --check` ✅ / `moon check` ✅ / `moon test` 796/796 ✅
 - **`.mbti` 变化**: 新增 4 个 pub 辅助（`parse_protocol_json`、`ConversionResult::with_diagnostics`、`ConversionDiagnostic::unsupported`、`ConversionDiagnostic::degraded`），符合预期
 - **归档日期**: 2026-08-19
