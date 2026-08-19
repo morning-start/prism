@@ -664,21 +664,34 @@ pub fn lux_request_to_openai_chat(
       let mut j = 0
       while j < tools.length() {
         let t = tools[j]
-        // parameters 应为 JSON object 字符串，嵌入为对象而非字符串
-        // 但为简化（且 parameters_json 本身就是 JSON 字符串），直接嵌入
-        let desc_part = match t.description {
-          Some(d) => ",\"description\":\"" + escape_json(d) + "\""
-          None => ""
+        match t.kind {
+          Function => {
+            // parameters 应为 JSON object 字符串，嵌入为对象而非字符串
+            // 但为简化（且 parameters_json 本身就是 JSON 字符串），直接嵌入
+            let desc_part = match t.description {
+              Some(d) => ",\"description\":\"" + escape_json(d) + "\""
+              None => ""
+            }
+            let fn_str = "\"function\":{" +
+              "\"name\":\"" +
+              escape_json(t.name) +
+              "\"" +
+              desc_part +
+              ",\"parameters\":" +
+              t.parameters_json + // 直接嵌入 JSON
+              "}"
+            tools_json.push("{\"type\":\"function\"," + fn_str + "}")
+          }
+          _ =>
+            // OpenAI Chat 仅支持 function 工具：不静默降级为 function，显式 Unsupported
+            diagnostics.push(
+              @lux.ConversionDiagnostic::new(
+                "tools.kind",
+                Unsupported,
+                Some("tool kind not supported by openai-chat"),
+              ),
+            )
         }
-        let fn_str = "\"function\":{" +
-          "\"name\":\"" +
-          escape_json(t.name) +
-          "\"" +
-          desc_part +
-          ",\"parameters\":" +
-          t.parameters_json + // 直接嵌入 JSON
-          "}"
-        tools_json.push("{\"type\":\"function\"," + fn_str + "}")
         j = j + 1
       }
       parts.push("\"tools\":[" + tools_json.join(",") + "]")

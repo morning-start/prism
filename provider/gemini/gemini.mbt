@@ -581,19 +581,32 @@ pub fn lux_request_to_gemini(
       let mut j = 0
       while j < tools.length() {
         let t = tools[j]
-        let desc_part = match t.description {
-          Some(d) => ",\"description\":\"" + @internal.json_escape(d) + "\""
-          None => ""
+        match t.kind {
+          Function => {
+            let desc_part = match t.description {
+              Some(d) => ",\"description\":\"" + @internal.json_escape(d) + "\""
+              None => ""
+            }
+            decls.push(
+              "{\"name\":\"" +
+              @internal.json_escape(t.name) +
+              "\"" +
+              desc_part +
+              ",\"parameters\":" +
+              t.parameters_json +
+              "}",
+            )
+          }
+          _ =>
+            // Gemini 仅支持 functionDeclarations：不静默降级为 function，显式 Unsupported
+            diagnostics.push(
+              @lux.ConversionDiagnostic::new(
+                "tools.kind",
+                Unsupported,
+                Some("tool kind not supported by gemini"),
+              ),
+            )
         }
-        decls.push(
-          "{\"name\":\"" +
-          @internal.json_escape(t.name) +
-          "\"" +
-          desc_part +
-          ",\"parameters\":" +
-          t.parameters_json +
-          "}",
-        )
         j = j + 1
       }
       parts.push(

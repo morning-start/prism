@@ -231,13 +231,24 @@ fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
       let mut i = 0
       while i < tools.length() {
         let t = tools[i]
+        // OpenAI Responses tools[].type → LucentToolKind（非 function 不再静默降级）
+        let kind : @lux.LucentToolKind = match @internal.field_str(t, "type") {
+          Some("function") => Function
+          Some("file_search") => FileSearch
+          Some("web_search") => WebSearch
+          Some("code_interpreter") => CodeInterpreter
+          Some("computer_use") => ComputerUse
+          Some("mcp") => MCP
+          Some(other) => Native(other)
+          _ => Function
+        }
         let name = @internal.field_str(t, "name").unwrap_or("")
         let desc = @internal.field_str(t, "description")
         let params = match @internal.obj_get(t, "parameters") {
           Some(p) => p.stringify()
           None => "{}"
         }
-        result.push(@lux.LucentTool::new(name, desc, params, None, Function))
+        result.push(@lux.LucentTool::new(name, desc, params, None, kind))
         i = i + 1
       }
       result
@@ -536,15 +547,86 @@ pub fn lux_request_to_openai_responses(
           Some(d) => ",\"description\":\"" + @internal.json_escape(d) + "\""
           None => ""
         }
-        tools_json.push(
-          "{\"type\":\"function\",\"name\":\"" +
-          @internal.json_escape(t.name) +
-          "\"" +
-          desc_part +
-          ",\"parameters\":" +
-          t.parameters_json +
-          "}",
-        )
+        match t.kind {
+          Function =>
+            tools_json.push(
+              "{\"type\":\"function\",\"name\":\"" +
+              @internal.json_escape(t.name) +
+              "\"" +
+              desc_part +
+              ",\"parameters\":" +
+              t.parameters_json +
+              "}",
+            )
+          FileSearch =>
+            tools_json.push(
+              "{\"type\":\"file_search\",\"name\":\"" +
+              @internal.json_escape(t.name) +
+              "\"" +
+              desc_part +
+              "}",
+            )
+          WebSearch =>
+            tools_json.push(
+              "{\"type\":\"web_search\",\"name\":\"" +
+              @internal.json_escape(t.name) +
+              "\"" +
+              desc_part +
+              "}",
+            )
+          CodeInterpreter =>
+            tools_json.push(
+              "{\"type\":\"code_interpreter\",\"name\":\"" +
+              @internal.json_escape(t.name) +
+              "\"" +
+              desc_part +
+              "}",
+            )
+          ComputerUse =>
+            tools_json.push(
+              "{\"type\":\"computer_use\",\"name\":\"" +
+              @internal.json_escape(t.name) +
+              "\"" +
+              desc_part +
+              "}",
+            )
+          MCP => {
+            // mcp_server 引用无法从 IR 重建 → Degraded 诊断（不伪装 Exact）
+            diagnostics.push(
+              @lux.ConversionDiagnostic::new(
+                "tools.mcp",
+                Degraded,
+                Some("mcp_server reference not preserved"),
+              ),
+            )
+            tools_json.push(
+              "{\"type\":\"mcp\",\"name\":\"" +
+              @internal.json_escape(t.name) +
+              "\"" +
+              desc_part +
+              "}",
+            )
+          }
+          Native(tag) =>
+            tools_json.push(
+              "{\"type\":\"" +
+              @internal.json_escape(tag) +
+              "\",\"name\":\"" +
+              @internal.json_escape(t.name) +
+              "\"" +
+              desc_part +
+              "}",
+            )
+          CodeExecution | Shell | ApplyPatch =>
+            // Responses 无对应原生工具类型：不静默降级为 function，显式 Unsupported
+            diagnostics.push(
+              @lux.ConversionDiagnostic::new(
+                "tools.kind",
+                Unsupported,
+                Some("tool kind not supported by openai-responses"),
+              ),
+            )
+        }
         j = j + 1
       }
       parts.push("\"tools\":[" + tools_json.join(",") + "]")
