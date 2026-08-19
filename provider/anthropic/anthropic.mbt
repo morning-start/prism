@@ -248,6 +248,14 @@ fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
       let mut i = 0
       while i < tools.length() {
         let t = tools[i]
+        // Anthropic tools[].type（custom / code_execution_20250522 / bash_20250124）→ kind
+        let kind : @lux.LucentToolKind = match @internal.field_str(t, "type") {
+          Some("code_execution_20250522") => CodeExecution
+          Some("bash_20250124") => Shell
+          Some("custom") => Function
+          Some(other) => Native(other)
+          _ => Function
+        }
         let name = @internal.field_str(t, "name").unwrap_or("")
         let desc = @internal.field_str(t, "description")
         // Anthropic 用 input_schema 而非 parameters
@@ -255,7 +263,7 @@ fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
           Some(schema) => schema.stringify()
           None => "{}"
         }
-        result.push(@lux.LucentTool::new(name, desc, params, None, Function))
+        result.push(@lux.LucentTool::new(name, desc, params, None, kind))
         i = i + 1
       }
       result
@@ -692,15 +700,49 @@ pub fn lux_request_to_anthropic(
           Some(d) => ",\"description\":\"" + json_escape(d) + "\""
           None => ""
         }
-        tools_json.push(
-          "{\"name\":\"" +
-          json_escape(t.name) +
-          "\"" +
-          desc_part +
-          ",\"input_schema\":" +
-          t.parameters_json +
-          "}",
-        )
+        match t.kind {
+          // custom 工具：name + input_schema（Anthropic 默认无 type 字段）
+          Function =>
+            tools_json.push(
+              "{\"name\":\"" +
+              json_escape(t.name) +
+              "\"" +
+              desc_part +
+              ",\"input_schema\":" +
+              t.parameters_json +
+              "}",
+            )
+          CodeExecution =>
+            // code_execution_20250522 无 name/schema，只有 type
+            tools_json.push("{\"type\":\"code_execution_20250522\"}")
+          Shell =>
+            tools_json.push(
+              "{\"type\":\"bash_20250124\",\"name\":\"" +
+              json_escape(t.name) +
+              "\"" +
+              desc_part +
+              "}",
+            )
+          Native(tag) =>
+            tools_json.push(
+              "{\"type\":\"" +
+              json_escape(tag) +
+              "\",\"name\":\"" +
+              json_escape(t.name) +
+              "\"" +
+              desc_part +
+              "}",
+            )
+          _ =>
+            // Anthropic 无对应原生工具类型：不静默降级为 custom，显式 Unsupported
+            diagnostics.push(
+              @lux.ConversionDiagnostic::new(
+                "tools.kind",
+                Unsupported,
+                Some("tool kind not supported by anthropic"),
+              ),
+            )
+        }
         j = j + 1
       }
       parts.push("\"tools\":[" + tools_json.join(",") + "]")

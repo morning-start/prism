@@ -335,6 +335,37 @@ test "lux_request_to_openai_chat - tools encoded" {
 }
 
 ///|
+test "lux_request_to_openai_chat - non-function tool kind unsupported" {
+  let req = @lux.LucentRequest::from_messages(
+    "gpt-4o",
+    None,
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
+    Some([@lux.LucentTool::new("ws", None, "{}", None, WebSearch)]),
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai_chat(req) {
+    Ok(cr) => {
+      // 必须携带 Unsupported 诊断（不静默降级为 function）
+      let mut has_unsupported = false
+      for d in cr.diagnostics() {
+        if d.field == "tools.kind" && d.status == Unsupported {
+          has_unsupported = true
+        }
+      }
+      assert_true(has_unsupported)
+      // 且编码 JSON 不含被跳过的工具名
+      assert_false(cr.value().contains("ws"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
 /// === 3. 响应解码 ===
 
 ///|

@@ -77,6 +77,24 @@ test "openai_responses_to_lux_request - reasoning item" {
 }
 
 ///|
+test "openai_responses_to_lux_request - tool types mapped to kinds" {
+  let json = "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hi\"}]}],\"tools\":[{\"type\":\"function\",\"name\":\"f\",\"description\":\"d\",\"parameters\":{\"type\":\"object\"}},{\"type\":\"web_search\",\"name\":\"ws\"},{\"type\":\"mcp\",\"name\":\"mt\"}]}"
+  match openai_responses_to_lux_request(json) {
+    Ok(cr) =>
+      match cr.value().tools {
+        Some(tools) => {
+          assert_eq(tools.length(), 3)
+          assert_eq(tools[0].kind, Function)
+          assert_eq(tools[1].kind, WebSearch)
+          assert_eq(tools[2].kind, MCP)
+        }
+        None => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
 /// === 2. 请求编码 ===
 
 ///|
@@ -99,6 +117,49 @@ test "lux_request_to_openai_responses - simple user message" {
       assert_true(s.contains("\"model\":\"gpt-5\""))
       assert_true(s.contains("\"input\":"))
       assert_true(s.contains("\"type\":\"message\""))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "lux_request_to_openai_responses - tool kinds encoded" {
+  let req = @lux.LucentRequest::from_messages(
+    "gpt-5",
+    None,
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
+    Some([
+      @lux.LucentTool::new(
+        "f",
+        Some("d"),
+        "{\"type\":\"object\"}",
+        None,
+        Function,
+      ),
+      @lux.LucentTool::new("ws", None, "{}", None, WebSearch),
+      @lux.LucentTool::new("mt", None, "{}", None, MCP),
+    ]),
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai_responses(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      assert_true(s.contains("\"type\":\"function\""))
+      assert_true(s.contains("\"type\":\"web_search\""))
+      assert_true(s.contains("\"type\":\"mcp\""))
+      // MCP 的 mcp_server 引用无法从 IR 重建 → 必须携带 Degraded 诊断
+      let mut has_degraded = false
+      for d in cr.diagnostics() {
+        if d.field == "tools.mcp" && d.status == Degraded {
+          has_degraded = true
+        }
+      }
+      assert_true(has_degraded)
     }
     Err(_) => assert_true(false)
   }
