@@ -26,6 +26,8 @@ pub fn obj_set(Json, String, Json) -> Json
 
 pub fn parse_json_opt(String) -> Json?
 
+pub fn parse_protocol_json(String) -> Result[Json, String]
+
 pub fn parse_sse_line(StringView) -> SseLine?
 
 // Errors

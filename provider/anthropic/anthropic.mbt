@@ -315,7 +315,10 @@ fn parse_reasoning(jv : Json) -> @lux.LucentReasoningConfig? {
 pub fn anthropic_to_lux_request(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentRequest], String] {
-  let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
+  let jv = match @internal.parse_protocol_json(json_str) {
+    Ok(v) => v
+    Err(e) => return Err(e)
+  }
   let model = @internal.field_str(jv, "model").unwrap_or("")
   // system 指令
   let instructions = parse_system(jv)
@@ -418,27 +421,21 @@ pub fn anthropic_to_lux_request(
 }
 
 ///|
-/// JSON 字符串转义（手动构建，因 @json.String 不可跨包构造）
-fn json_escape(s : String) -> String {
-  @internal.json_escape(s)
-}
-
-///|
 /// LucentThinking → Anthropic thinking block JSON（消息级 reasoning 出站复用）
 fn thinking_to_block(th : @lux.LucentThinking) -> String {
   if th.redacted {
     "{\"type\":\"redacted_thinking\",\"signature\":" +
     (match th.signature {
-      Some(s) => "\"" + json_escape(s) + "\""
+      Some(s) => "\"" + @internal.json_escape(s) + "\""
       None => "null"
     }) +
     "}"
   } else {
     "{\"type\":\"thinking\",\"thinking\":\"" +
-    json_escape(th.text) +
+    @internal.json_escape(th.text) +
     "\"" +
     (match th.signature {
-      Some(s) => ",\"signature\":\"" + json_escape(s) + "\""
+      Some(s) => ",\"signature\":\"" + @internal.json_escape(s) + "\""
       None => ""
     }) +
     "}"
@@ -453,43 +450,44 @@ fn content_to_block(
   diagnostics : Array[@lux.ConversionDiagnostic],
 ) -> String {
   match c {
-    Text(s, _) => "{\"type\":\"text\",\"text\":\"" + json_escape(s) + "\"}"
+    Text(s, _) =>
+      "{\"type\":\"text\",\"text\":\"" + @internal.json_escape(s) + "\"}"
     ToolUse(tu) =>
       "{\"type\":\"tool_use\",\"id\":\"" +
-      json_escape(tu.id) +
+      @internal.json_escape(tu.id) +
       "\",\"name\":\"" +
-      json_escape(tu.name) +
+      @internal.json_escape(tu.name) +
       "\",\"input\":" +
       tu.arguments_json +
       "}"
     ToolResult(tr) =>
       "{\"type\":\"tool_result\",\"tool_use_id\":\"" +
-      json_escape(tr.tool_use_id) +
+      @internal.json_escape(tr.tool_use_id) +
       "\",\"content\":" +
       content_array_to_json(tr.content, diagnostics) +
       ",\"is_error\":" +
       (if tr.is_error { "true" } else { "false" }) +
       "}"
     Thinking(th) => thinking_to_block(th)
-    Refusal(s) => "{\"type\":\"text\",\"text\":\"" + json_escape(s) + "\"}"
+    Refusal(s) =>
+      "{\"type\":\"text\",\"text\":\"" + @internal.json_escape(s) + "\"}"
     Image(mm) =>
       // 图片：优先精确映射为 anthropic image block
       match mm.source {
         Url(url) =>
           "{\"type\":\"image\",\"source\":{\"type\":\"url\",\"url\":\"" +
-          json_escape(url) +
+          @internal.json_escape(url) +
           "\"}}"
         Inline(data) =>
           "{\"type\":\"image\",\"source\":{\"type\":\"base64\",\"media_type\":\"" +
-          json_escape(mm.media_type) +
+          @internal.json_escape(mm.media_type) +
           "\",\"data\":\"" +
-          json_escape(data) +
+          @internal.json_escape(data) +
           "\"}}"
         FileUri(_) => {
           diagnostics.push(
-            @lux.ConversionDiagnostic::new(
+            @lux.ConversionDiagnostic::unsupported(
               "content.image",
-              Unsupported,
               Some("file_uri image source not supported by anthropic"),
             ),
           )
@@ -501,21 +499,20 @@ fn content_to_block(
       match mm.source {
         Url(url) =>
           "{\"type\":\"document\",\"source\":{\"type\":\"url\",\"url\":\"" +
-          json_escape(url) +
+          @internal.json_escape(url) +
           "\"},\"media_type\":\"" +
-          json_escape(mm.media_type) +
+          @internal.json_escape(mm.media_type) +
           "\"}"
         Inline(data) =>
           "{\"type\":\"document\",\"source\":{\"type\":\"base64\",\"media_type\":\"" +
-          json_escape(mm.media_type) +
+          @internal.json_escape(mm.media_type) +
           "\",\"data\":\"" +
-          json_escape(data) +
+          @internal.json_escape(data) +
           "\"}}"
         FileUri(_) => {
           diagnostics.push(
-            @lux.ConversionDiagnostic::new(
+            @lux.ConversionDiagnostic::unsupported(
               "content.file",
-              Unsupported,
               Some("file_uri file source not supported by anthropic"),
             ),
           )
@@ -524,9 +521,8 @@ fn content_to_block(
       }
     Audio(_) => {
       diagnostics.push(
-        @lux.ConversionDiagnostic::new(
+        @lux.ConversionDiagnostic::unsupported(
           "content.audio",
-          Unsupported,
           Some("audio content not supported by anthropic"),
         ),
       )
@@ -534,9 +530,8 @@ fn content_to_block(
     }
     Video(_) => {
       diagnostics.push(
-        @lux.ConversionDiagnostic::new(
+        @lux.ConversionDiagnostic::unsupported(
           "content.video",
-          Unsupported,
           Some("video content not supported by anthropic"),
         ),
       )
@@ -544,9 +539,8 @@ fn content_to_block(
     }
     Native(tag, _) => {
       diagnostics.push(
-        @lux.ConversionDiagnostic::new(
+        @lux.ConversionDiagnostic::unsupported(
           "content.native",
-          Unsupported,
           Some("native content (" + tag + ") not supported by anthropic"),
         ),
       )
@@ -572,7 +566,7 @@ fn message_to_json(
     i = i + 1
   }
   "{\"role\":\"" +
-  json_escape(role_str) +
+  @internal.json_escape(role_str) +
   "\",\"content\":[" +
   blocks.join(",") +
   "]}"
@@ -603,7 +597,7 @@ pub fn lux_request_to_anthropic(
 ) -> Result[@lux.ConversionResult[String], String] {
   let parts : Array[String] = []
   let diagnostics : Array[@lux.ConversionDiagnostic] = []
-  parts.push("\"model\":\"" + json_escape(req.model) + "\"")
+  parts.push("\"model\":\"" + @internal.json_escape(req.model) + "\"")
   // system 指令（顶层）
   match req.instructions {
     Some(instrs) => {
@@ -617,13 +611,15 @@ pub fn lux_request_to_anthropic(
         i = i + 1
       }
       if texts.length() == 1 {
-        parts.push("\"system\":\"" + json_escape(texts[0]) + "\"")
+        parts.push("\"system\":\"" + @internal.json_escape(texts[0]) + "\"")
       } else if texts.length() > 1 {
         let blocks : Array[String] = []
         let mut j = 0
         while j < texts.length() {
           blocks.push(
-            "{\"type\":\"text\",\"text\":\"" + json_escape(texts[j]) + "\"}",
+            "{\"type\":\"text\",\"text\":\"" +
+            @internal.json_escape(texts[j]) +
+            "\"}",
           )
           j = j + 1
         }
@@ -643,9 +639,9 @@ pub fn lux_request_to_anthropic(
         // 独立 ToolCall → assistant 消息含 tool_use
         msgs_json.push(
           "{\"role\":\"assistant\",\"content\":[{\"type\":\"tool_use\",\"id\":\"" +
-          json_escape(tu.id) +
+          @internal.json_escape(tu.id) +
           "\",\"name\":\"" +
-          json_escape(tu.name) +
+          @internal.json_escape(tu.name) +
           "\",\"input\":" +
           tu.arguments_json +
           "}]}",
@@ -654,7 +650,7 @@ pub fn lux_request_to_anthropic(
         // ToolResult → user 消息含 tool_result content block
         msgs_json.push(
           "{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"" +
-          json_escape(tr.tool_use_id) +
+          @internal.json_escape(tr.tool_use_id) +
           "\",\"content\":" +
           content_array_to_json(tr.content, diagnostics) +
           ",\"is_error\":" +
@@ -667,7 +663,7 @@ pub fn lux_request_to_anthropic(
           msgs_json.push(
             "{\"role\":\"assistant\",\"content\":[{\"type\":\"redacted_thinking\"" +
             (match th.signature {
-              Some(s) => ",\"signature\":\"" + json_escape(s) + "\""
+              Some(s) => ",\"signature\":\"" + @internal.json_escape(s) + "\""
               None => ""
             }) +
             "}]}",
@@ -675,10 +671,10 @@ pub fn lux_request_to_anthropic(
         } else {
           msgs_json.push(
             "{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"" +
-            json_escape(th.text) +
+            @internal.json_escape(th.text) +
             "\"" +
             (match th.signature {
-              Some(s) => ",\"signature\":\"" + json_escape(s) + "\""
+              Some(s) => ",\"signature\":\"" + @internal.json_escape(s) + "\""
               None => ""
             }) +
             "}]}",
@@ -697,7 +693,7 @@ pub fn lux_request_to_anthropic(
       while j < tools.length() {
         let t = tools[j]
         let desc_part = match t.description {
-          Some(d) => ",\"description\":\"" + json_escape(d) + "\""
+          Some(d) => ",\"description\":\"" + @internal.json_escape(d) + "\""
           None => ""
         }
         match t.kind {
@@ -705,7 +701,7 @@ pub fn lux_request_to_anthropic(
           Function =>
             tools_json.push(
               "{\"name\":\"" +
-              json_escape(t.name) +
+              @internal.json_escape(t.name) +
               "\"" +
               desc_part +
               ",\"input_schema\":" +
@@ -718,7 +714,7 @@ pub fn lux_request_to_anthropic(
           Shell =>
             tools_json.push(
               "{\"type\":\"bash_20250124\",\"name\":\"" +
-              json_escape(t.name) +
+              @internal.json_escape(t.name) +
               "\"" +
               desc_part +
               "}",
@@ -726,9 +722,9 @@ pub fn lux_request_to_anthropic(
           Native(tag) =>
             tools_json.push(
               "{\"type\":\"" +
-              json_escape(tag) +
+              @internal.json_escape(tag) +
               "\",\"name\":\"" +
-              json_escape(t.name) +
+              @internal.json_escape(t.name) +
               "\"" +
               desc_part +
               "}",
@@ -736,9 +732,8 @@ pub fn lux_request_to_anthropic(
           _ =>
             // Anthropic 无对应原生工具类型：不静默降级为 custom，显式 Unsupported
             diagnostics.push(
-              @lux.ConversionDiagnostic::new(
+              @lux.ConversionDiagnostic::unsupported(
                 "tools.kind",
-                Unsupported,
                 Some("tool kind not supported by anthropic"),
               ),
             )
@@ -756,7 +751,7 @@ pub fn lux_request_to_anthropic(
     Some(SpecificTool(name)) =>
       parts.push(
         "\"tool_choice\":{\"type\":\"tool\",\"name\":\"" +
-        json_escape(name) +
+        @internal.json_escape(name) +
         "\"}",
       )
     _ => ()
@@ -784,7 +779,7 @@ pub fn lux_request_to_anthropic(
       let stops : Array[String] = []
       let mut k = 0
       while k < arr.length() {
-        stops.push("\"" + json_escape(arr[k]) + "\"")
+        stops.push("\"" + @internal.json_escape(arr[k]) + "\"")
         k = k + 1
       }
       parts.push("\"stop_sequences\":[" + stops.join(",") + "]")
@@ -815,7 +810,13 @@ pub fn lux_request_to_anthropic(
       for entry in meta {
         match entry {
           (k, v) =>
-            fields.push("\"" + json_escape(k) + "\":\"" + json_escape(v) + "\"")
+            fields.push(
+              "\"" +
+              @internal.json_escape(k) +
+              "\":\"" +
+              @internal.json_escape(v) +
+              "\"",
+            )
         }
       }
       parts.push("\"metadata\":{" + fields.join(",") + "}")
@@ -826,9 +827,8 @@ pub fn lux_request_to_anthropic(
   match opts.store {
     Some(_) =>
       diagnostics.push(
-        @lux.ConversionDiagnostic::new(
+        @lux.ConversionDiagnostic::unsupported(
           "options.store",
-          Unsupported,
           Some("anthropic has no store field"),
         ),
       )
@@ -838,15 +838,12 @@ pub fn lux_request_to_anthropic(
   match opts.extras {
     Some(m) =>
       for k, v in m {
-        parts.push("\"" + json_escape(k) + "\":" + v.stringify())
+        parts.push("\"" + @internal.json_escape(k) + "\":" + v.stringify())
       }
     None => ()
   }
-  let mut result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
-  for d in diagnostics {
-    result = result.with_diagnostic(d)
-  }
-  Ok(result)
+  let result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
+  Ok(result.with_diagnostics(diagnostics))
 }
 
 ///|
@@ -854,7 +851,10 @@ pub fn lux_request_to_anthropic(
 pub fn anthropic_to_lux_response(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
-  let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
+  let jv = match @internal.parse_protocol_json(json_str) {
+    Ok(v) => v
+    Err(e) => return Err(e)
+  }
   let id = @internal.field_str(jv, "id").unwrap_or("")
   let model = @internal.field_str(jv, "model").unwrap_or("")
   // content blocks → assistant message content
@@ -915,9 +915,8 @@ pub fn lux_response_to_anthropic(
         match choice.message.reasoning {
           Some(_) => {
             diagnostics.push(
-              @lux.ConversionDiagnostic::new(
+              @lux.ConversionDiagnostic::degraded(
                 "reasoning.dual_carrier",
-                Degraded,
                 Some(
                   "both message.reasoning and content Thinking present; using message.reasoning",
                 ),
@@ -947,7 +946,7 @@ pub fn lux_response_to_anthropic(
     Recitation => "\"end_turn\""
     MalformedToolCall => "\"end_turn\""
     Error => "\"end_turn\""
-    Native(s) => "\"" + json_escape(s) + "\""
+    Native(s) => "\"" + @internal.json_escape(s) + "\""
   }
   // usage
   let usage_json = match resp.usage {
@@ -960,9 +959,9 @@ pub fn lux_response_to_anthropic(
     None => ""
   }
   let body = "{\"id\":\"" +
-    json_escape(resp.id) +
+    @internal.json_escape(resp.id) +
     "\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"" +
-    json_escape(resp.model) +
+    @internal.json_escape(resp.model) +
     "\",\"content\":" +
     content_json +
     ",\"stop_reason\":" +
@@ -970,11 +969,8 @@ pub fn lux_response_to_anthropic(
     ",\"stop_sequence\":null" +
     usage_json +
     "}"
-  let mut result = @lux.ConversionResult::new(body)
-  for d in diagnostics {
-    result = result.with_diagnostic(d)
-  }
-  Ok(result)
+  let result = @lux.ConversionResult::new(body)
+  Ok(result.with_diagnostics(diagnostics))
 }
 
 ///|
@@ -1188,11 +1184,13 @@ pub fn lux_events_to_anthropic_sse(
       ConversationStart(meta) => {
         let mut fields = "\"type\":\"message_start\""
         match meta.id {
-          Some(id) => fields = fields + ",\"id\":\"" + json_escape(id) + "\""
+          Some(id) =>
+            fields = fields + ",\"id\":\"" + @internal.json_escape(id) + "\""
           None => ()
         }
         match meta.model {
-          Some(m) => fields = fields + ",\"model\":\"" + json_escape(m) + "\""
+          Some(m) =>
+            fields = fields + ",\"model\":\"" + @internal.json_escape(m) + "\""
           None => ()
         }
         match meta.usage_input {
@@ -1216,13 +1214,13 @@ pub fn lux_events_to_anthropic_sse(
           Thinking => "{\"type\":\"thinking\",\"thinking\":\"\"}"
           ToolCall(id, name) =>
             "{\"type\":\"tool_use\",\"id\":\"" +
-            json_escape(id) +
+            @internal.json_escape(id) +
             "\",\"name\":\"" +
-            json_escape(name) +
+            @internal.json_escape(name) +
             "\",\"input\":{}}"
           Refusal => "{\"type\":\"text\",\"text\":\"\"}"
           Image | Audio | Video => "{\"type\":\"text\",\"text\":\"\"}"
-          Native(tag) => "{\"type\":\"" + json_escape(tag) + "\"}"
+          Native(tag) => "{\"type\":\"" + @internal.json_escape(tag) + "\"}"
         }
         lines.push(
           "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":" +
@@ -1235,22 +1233,27 @@ pub fn lux_events_to_anthropic_sse(
       BlockDelta(idx, delta) => {
         let delta_json = match delta {
           TextDelta(s) =>
-            "{\"type\":\"text_delta\",\"text\":\"" + json_escape(s) + "\"}"
+            "{\"type\":\"text_delta\",\"text\":\"" +
+            @internal.json_escape(s) +
+            "\"}"
           ThinkingDelta(s) =>
             "{\"type\":\"thinking_delta\",\"thinking\":\"" +
-            json_escape(s) +
+            @internal.json_escape(s) +
             "\"}"
           SignatureDelta(s) =>
             "{\"type\":\"signature_delta\",\"signature\":\"" +
-            json_escape(s) +
+            @internal.json_escape(s) +
             "\"}"
           ToolArgumentsDelta(s) =>
             "{\"type\":\"input_json_delta\",\"partial_json\":\"" +
-            json_escape(s) +
+            @internal.json_escape(s) +
             "\"}"
           RefusalDelta(s) =>
-            "{\"type\":\"text_delta\",\"text\":\"" + json_escape(s) + "\"}"
-          NativeDelta(tag, _) => "{\"type\":\"" + json_escape(tag) + "\"}"
+            "{\"type\":\"text_delta\",\"text\":\"" +
+            @internal.json_escape(s) +
+            "\"}"
+          NativeDelta(tag, _) =>
+            "{\"type\":\"" + @internal.json_escape(tag) + "\"}"
         }
         lines.push(
           "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":" +
@@ -1269,7 +1272,7 @@ pub fn lux_events_to_anthropic_sse(
       Finish(fr) =>
         lines.push(
           "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"" +
-          json_escape(fr.to_string()) +
+          @internal.json_escape(fr.to_string()) +
           "\"}}",
         )
       Usage(u) =>
@@ -1281,7 +1284,7 @@ pub fn lux_events_to_anthropic_sse(
       Error(e) =>
         lines.push(
           "event: error\ndata: {\"type\":\"error\",\"error\":{\"message\":\"" +
-          json_escape(e.message) +
+          @internal.json_escape(e.message) +
           "\"}}",
         )
       Done =>

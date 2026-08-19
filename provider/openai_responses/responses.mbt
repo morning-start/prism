@@ -123,9 +123,8 @@ fn parse_input_item(
                     } else {
                       // 非 data URI：file_data 通常必须是 data URI，否则显式诊断
                       diagnostics.push(
-                        @lux.ConversionDiagnostic::new(
+                        @lux.ConversionDiagnostic::degraded(
                           "input.file",
-                          Degraded,
                           Some("file_data must be a data URI"),
                         ),
                       )
@@ -133,9 +132,8 @@ fn parse_input_item(
                   None =>
                     // 仅 file_id（服务器端文件引用）：跨协议无法映射，显式 Degraded
                     diagnostics.push(
-                      @lux.ConversionDiagnostic::new(
+                      @lux.ConversionDiagnostic::degraded(
                         "input.file",
-                        Degraded,
                         Some("file_id not mapped to multimedia"),
                       ),
                     )
@@ -266,9 +264,8 @@ fn parse_reasoning(
   match @internal.obj_get(jv, "reasoning") {
     Some(_) => {
       diagnostics.push(
-        @lux.ConversionDiagnostic::new(
+        @lux.ConversionDiagnostic::unsupported(
           "reasoning.config",
-          Unsupported,
           Some("reasoning config not parsed by openai-responses"),
         ),
       )
@@ -306,7 +303,10 @@ fn parse_text_format(jv : Json) -> @lux.LucentStructuredOutput? {
 pub fn openai_responses_to_lux_request(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentRequest], String] {
-  let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
+  let jv = match @internal.parse_protocol_json(json_str) {
+    Ok(v) => v
+    Err(e) => return Err(e)
+  }
   let diagnostics : Array[@lux.ConversionDiagnostic] = []
   let model = @internal.field_str(jv, "model").unwrap_or("")
   let instructions = match @internal.field_str(jv, "instructions") {
@@ -351,7 +351,7 @@ pub fn openai_responses_to_lux_request(
     Some(_id) => None // previous_response_id → metadata, skip extra for now
     None => None
   }
-  let mut result = @lux.ConversionResult::new(
+  let result = @lux.ConversionResult::new(
     @lux.LucentRequest::new(
       model,
       instructions,
@@ -365,10 +365,7 @@ pub fn openai_responses_to_lux_request(
       extra,
     ),
   )
-  for d in diagnostics {
-    result = result.with_diagnostic(d)
-  }
-  Ok(result)
+  Ok(result.with_diagnostics(diagnostics))
 }
 
 ///|
@@ -424,9 +421,8 @@ pub fn lux_request_to_openai_responses(
                   )
                 FileUri(_) =>
                   diagnostics.push(
-                    @lux.ConversionDiagnostic::new(
+                    @lux.ConversionDiagnostic::unsupported(
                       "content.image",
-                      Unsupported,
                       Some(
                         "file_uri image source not supported by openai-responses",
                       ),
@@ -446,9 +442,8 @@ pub fn lux_request_to_openai_responses(
                   )
                 Url(url) => {
                   diagnostics.push(
-                    @lux.ConversionDiagnostic::new(
+                    @lux.ConversionDiagnostic::unsupported(
                       "content.file",
-                      Unsupported,
                       Some("url file source not supported by openai-responses"),
                     ),
                   )
@@ -456,9 +451,8 @@ pub fn lux_request_to_openai_responses(
                 }
                 FileUri(_) =>
                   diagnostics.push(
-                    @lux.ConversionDiagnostic::new(
+                    @lux.ConversionDiagnostic::unsupported(
                       "content.file",
-                      Unsupported,
                       Some(
                         "file_uri file source not supported by openai-responses",
                       ),
@@ -593,9 +587,8 @@ pub fn lux_request_to_openai_responses(
           MCP => {
             // mcp_server 引用无法从 IR 重建 → Degraded 诊断（不伪装 Exact）
             diagnostics.push(
-              @lux.ConversionDiagnostic::new(
+              @lux.ConversionDiagnostic::degraded(
                 "tools.mcp",
-                Degraded,
                 Some("mcp_server reference not preserved"),
               ),
             )
@@ -620,9 +613,8 @@ pub fn lux_request_to_openai_responses(
           CodeExecution | Shell | ApplyPatch =>
             // Responses 无对应原生工具类型：不静默降级为 function，显式 Unsupported
             diagnostics.push(
-              @lux.ConversionDiagnostic::new(
+              @lux.ConversionDiagnostic::unsupported(
                 "tools.kind",
-                Unsupported,
                 Some("tool kind not supported by openai-responses"),
               ),
             )
@@ -699,11 +691,8 @@ pub fn lux_request_to_openai_responses(
       }
     None => ()
   }
-  let mut result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
-  for d in diagnostics {
-    result = result.with_diagnostic(d)
-  }
-  Ok(result)
+  let result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
+  Ok(result.with_diagnostics(diagnostics))
 }
 
 ///|
@@ -775,7 +764,10 @@ fn parse_output_content(output_item : Json) -> Array[@lux.LucentContent] {
 pub fn openai_responses_to_lux_response(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
-  let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
+  let jv = match @internal.parse_protocol_json(json_str) {
+    Ok(v) => v
+    Err(e) => return Err(e)
+  }
   openai_responses_json_to_lux_response(jv)
 }
 
@@ -890,9 +882,8 @@ pub fn lux_response_to_openai_responses(
         match choice.message.reasoning {
           Some(_) => {
             diagnostics.push(
-              @lux.ConversionDiagnostic::new(
+              @lux.ConversionDiagnostic::degraded(
                 "reasoning.dual_carrier",
-                Degraded,
                 Some(
                   "both message.reasoning and content Thinking present; using message.reasoning",
                 ),
@@ -975,11 +966,8 @@ pub fn lux_response_to_openai_responses(
     "]" +
     usage_json +
     "}"
-  let mut result = @lux.ConversionResult::new(body)
-  for d in diagnostics {
-    result = result.with_diagnostic(d)
-  }
-  Ok(result)
+  let result = @lux.ConversionResult::new(body)
+  Ok(result.with_diagnostics(diagnostics))
 }
 
 ///|
@@ -1166,11 +1154,8 @@ pub fn openai_responses_sse_to_events(
     }
     i = i + 1
   }
-  let mut result = @lux.ConversionResult::new(events)
-  for d in diagnostics {
-    result = result.with_diagnostic(d)
-  }
-  Ok(result)
+  let result = @lux.ConversionResult::new(events)
+  Ok(result.with_diagnostics(diagnostics))
 }
 
 ///|
