@@ -36,10 +36,12 @@ pub struct ConversionDiagnostic {
   status : ConversionStatus
   detail : String?
 } derive(Eq, @debug.Debug)
+pub fn ConversionDiagnostic::degraded(String, String?) -> Self
 pub fn ConversionDiagnostic::from_json(Json) -> Result[Self, String]
 pub fn ConversionDiagnostic::new(String, ConversionStatus, String?) -> Self
 pub fn ConversionDiagnostic::status(Self) -> ConversionStatus
 pub fn ConversionDiagnostic::to_json(Self) -> Json
+pub fn ConversionDiagnostic::unsupported(String, String?) -> Self
 
 pub struct ConversionResult[T] {
   value : T
@@ -52,6 +54,7 @@ pub fn[T] ConversionResult::new(T) -> Self[T]
 pub fn[T] ConversionResult::to_json(Self[T], (T) -> Json) -> Json
 pub fn[T] ConversionResult::value(Self[T]) -> T
 pub fn[T] ConversionResult::with_diagnostic(Self[T], ConversionDiagnostic) -> Self[T]
+pub fn[T] ConversionResult::with_diagnostics(Self[T], Array[ConversionDiagnostic]) -> Self[T]
 
 pub(all) enum ConversionStatus {
   Exact

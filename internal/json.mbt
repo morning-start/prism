@@ -136,6 +136,14 @@ pub fn parse_json_opt(s : String) -> Json? {
 }
 
 ///|
+/// 解析协议 JSON 字符串 → Result[Json, String]
+/// 统一各 provider 解码入口的 `@json.parse catch` 样板。
+pub fn parse_protocol_json(s : String) -> Result[Json, String] {
+  let v = @json.parse(s) catch { _ => return Err("json parse error") }
+  Ok(v)
+}
+
+///|
 /// 收集 JSON 对象顶层未被已知字段消费的键值对（extras 透传）
 /// 已知字段集合 = 该协议解码函数实际读取的顶层字段名。
 /// 返回 None 表示无额外字段。

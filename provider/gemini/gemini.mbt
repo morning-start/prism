@@ -106,9 +106,8 @@ fn parse_part(
                       ]
                     None => {
                       diagnostics.push(
-                        @lux.ConversionDiagnostic::new(
+                        @lux.ConversionDiagnostic::degraded(
                           "part.inline_data",
-                          Degraded,
                           Some("inlineData missing data field"),
                         ),
                       )
@@ -130,9 +129,8 @@ fn parse_part(
                           ]
                         None => {
                           diagnostics.push(
-                            @lux.ConversionDiagnostic::new(
+                            @lux.ConversionDiagnostic::degraded(
                               "part.file_data",
-                              Degraded,
                               Some("fileData missing fileUri field"),
                             ),
                           )
@@ -406,7 +404,10 @@ fn parse_thinking_config(jv : Json) -> @lux.LucentReasoningConfig? {
 pub fn gemini_to_lux_request(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentRequest], String] {
-  let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
+  let jv = match @internal.parse_protocol_json(json_str) {
+    Ok(v) => v
+    Err(e) => return Err(e)
+  }
   let diagnostics : Array[@lux.ConversionDiagnostic] = []
   let model = @internal.field_str(jv, "model").unwrap_or("")
   let instructions = parse_system_instruction(jv)
@@ -424,7 +425,7 @@ pub fn gemini_to_lux_request(
   let tool_choice = parse_tool_config(jv)
   let opts = parse_generation_config(jv)
   let reasoning = parse_thinking_config(jv)
-  let mut result = @lux.ConversionResult::new(
+  let result = @lux.ConversionResult::new(
     @lux.LucentRequest::new(
       model,
       instr_opt,
@@ -438,10 +439,7 @@ pub fn gemini_to_lux_request(
       None,
     ),
   )
-  for d in diagnostics {
-    result = result.with_diagnostic(d)
-  }
-  Ok(result)
+  Ok(result.with_diagnostics(diagnostics))
 }
 
 ///|
@@ -600,9 +598,8 @@ pub fn lux_request_to_gemini(
           _ =>
             // Gemini 仅支持 functionDeclarations：不静默降级为 function，显式 Unsupported
             diagnostics.push(
-              @lux.ConversionDiagnostic::new(
+              @lux.ConversionDiagnostic::unsupported(
                 "tools.kind",
-                Unsupported,
                 Some("tool kind not supported by gemini"),
               ),
             )
@@ -694,9 +691,8 @@ pub fn lux_request_to_gemini(
   match opts.store {
     Some(_) =>
       diagnostics.push(
-        @lux.ConversionDiagnostic::new(
+        @lux.ConversionDiagnostic::unsupported(
           "options.store",
-          Unsupported,
           Some("gemini has no store field"),
         ),
       )
@@ -713,11 +709,8 @@ pub fn lux_request_to_gemini(
   if gc_parts.length() > 0 {
     parts.push("\"generationConfig\":{" + gc_parts.join(",") + "}")
   }
-  let mut result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
-  for d in diagnostics {
-    result = result.with_diagnostic(d)
-  }
-  Ok(result)
+  let result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
+  Ok(result.with_diagnostics(diagnostics))
 }
 
 ///|
@@ -725,7 +718,10 @@ pub fn lux_request_to_gemini(
 pub fn gemini_to_lux_response(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
-  let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
+  let jv = match @internal.parse_protocol_json(json_str) {
+    Ok(v) => v
+    Err(e) => return Err(e)
+  }
   let diagnostics : Array[@lux.ConversionDiagnostic] = []
   let id = @internal.field_str(jv, "model").unwrap_or("")
   let model = @internal.field_str(jv, "modelVersion").unwrap_or(id)
@@ -793,13 +789,10 @@ pub fn gemini_to_lux_response(
     }
     None => @lux.LucentUsage::new(0, 0, 0)
   }
-  let mut result = @lux.ConversionResult::new(
+  let result = @lux.ConversionResult::new(
     @lux.LucentResponse::new(id, model, None, choices, Some(usage), None),
   )
-  for d in diagnostics {
-    result = result.with_diagnostic(d)
-  }
-  Ok(result)
+  Ok(result.with_diagnostics(diagnostics))
 }
 
 ///|
@@ -834,9 +827,8 @@ pub fn lux_response_to_gemini(
           match c.message.reasoning {
             Some(_) => {
               diagnostics.push(
-                @lux.ConversionDiagnostic::new(
+                @lux.ConversionDiagnostic::degraded(
                   "reasoning.dual_carrier",
-                  Degraded,
                   Some(
                     "both message.reasoning and content Thinking present; using message.reasoning",
                   ),
@@ -932,13 +924,10 @@ pub fn lux_response_to_gemini(
       "}"
     None => ""
   }
-  let mut result = @lux.ConversionResult::new(
+  let result = @lux.ConversionResult::new(
     "{\"candidates\":[" + cands.join(",") + "]" + usage_part + "}",
   )
-  for d in diagnostics {
-    result = result.with_diagnostic(d)
-  }
-  Ok(result)
+  Ok(result.with_diagnostics(diagnostics))
 }
 
 ///|
