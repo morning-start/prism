@@ -385,6 +385,40 @@ pub fn[T] ConversionResult::with_diagnostic(
 }
 
 ///|
+/// 批量附加诊断（返回新结果，等价于逐条 with_diagnostic）。
+pub fn[T] ConversionResult::with_diagnostics(
+  self : ConversionResult[T],
+  diagnostics : Array[ConversionDiagnostic],
+) -> ConversionResult[T] {
+  if diagnostics.length() == 0 {
+    return self
+  }
+  let all = self.diagnostics.copy()
+  for d in diagnostics {
+    all.push(d)
+  }
+  { ..self, diagnostics: all }
+}
+
+///|
+/// 构造 Unsupported 诊断（provider 适配器共用样板）。
+pub fn ConversionDiagnostic::unsupported(
+  field : String,
+  detail : String?,
+) -> ConversionDiagnostic {
+  { field, status: Unsupported, detail }
+}
+
+///|
+/// 构造 Degraded 诊断（provider 适配器共用样板）。
+pub fn ConversionDiagnostic::degraded(
+  field : String,
+  detail : String?,
+) -> ConversionDiagnostic {
+  { field, status: Degraded, detail }
+}
+
+///|
 /// 获取诊断状态。
 pub fn ConversionDiagnostic::status(
   self : ConversionDiagnostic,

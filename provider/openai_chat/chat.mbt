@@ -213,7 +213,10 @@ fn parse_tool_choice(jv : Json) -> @lux.LucentToolChoice? {
 pub fn openai_chat_to_lux_request(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentRequest], String] {
-  let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
+  let jv = match @internal.parse_protocol_json(json_str) {
+    Ok(v) => v
+    Err(e) => return Err(e)
+  }
   let model = @internal.field_str(jv, "model").unwrap_or("")
   // 系统指令：role=system/developer 的消息抽出为 instructions
   let instructions : Array[@lux.LucentContent] = []
@@ -348,12 +351,6 @@ fn reasoning_effort_to_string(e : @lux.LucentReasoningEffort) -> String {
 }
 
 ///|
-/// JSON 字符串转义 — 委托共享实现（@internal）
-fn escape_json(s : String) -> String {
-  @internal.json_escape(s)
-}
-
-///|
 /// 工具选择 → JSON 片段
 fn tool_choice_to_json(tc : @lux.LucentToolChoice) -> String {
   match tc {
@@ -362,7 +359,7 @@ fn tool_choice_to_json(tc : @lux.LucentToolChoice) -> String {
     Required => "\"required\""
     SpecificTool(name) =>
       "{\"type\":\"function\",\"function\":{\"name\":\"" +
-      escape_json(name) +
+      @internal.json_escape(name) +
       "\"}}"
   }
 }
@@ -389,45 +386,44 @@ fn content_field_to_json(
     while j < content.length() {
       match content[j] {
         Text(s, _) =>
-          parts.push("{\"type\":\"text\",\"text\":\"" + escape_json(s) + "\"}")
+          parts.push(
+            "{\"type\":\"text\",\"text\":\"" + @internal.json_escape(s) + "\"}",
+          )
         Image(mm) =>
           match mm.source {
             Url(url) =>
               parts.push(
                 "{\"type\":\"image_url\",\"image_url\":{\"url\":\"" +
-                escape_json(url) +
+                @internal.json_escape(url) +
                 "\"}}",
               )
             Inline(data) =>
               parts.push(
                 "{\"type\":\"image_url\",\"image_url\":{\"url\":\"data:" +
-                escape_json(mm.media_type) +
+                @internal.json_escape(mm.media_type) +
                 ";base64," +
-                escape_json(data) +
+                @internal.json_escape(data) +
                 "\"}}",
               )
             FileUri(_) =>
               diagnostics.push(
-                @lux.ConversionDiagnostic::new(
+                @lux.ConversionDiagnostic::unsupported(
                   "content.image",
-                  Unsupported,
                   Some("file_uri image source not supported by openai-chat"),
                 ),
               )
           }
         Audio(_) =>
           diagnostics.push(
-            @lux.ConversionDiagnostic::new(
+            @lux.ConversionDiagnostic::unsupported(
               "content.audio",
-              Unsupported,
               Some("audio content not supported by openai-chat"),
             ),
           )
         Video(_) =>
           diagnostics.push(
-            @lux.ConversionDiagnostic::new(
+            @lux.ConversionDiagnostic::unsupported(
               "content.video",
-              Unsupported,
               Some("video content not supported by openai-chat"),
             ),
           )
@@ -446,7 +442,7 @@ fn content_field_to_json(
       }
       k = k + 1
     }
-    "\"content\":\"" + escape_json(text_parts.join("")) + "\""
+    "\"content\":\"" + @internal.json_escape(text_parts.join("")) + "\""
   }
 }
 
@@ -466,11 +462,11 @@ fn content_part_to_json(
       // 工具调用入 tool_calls 数组，不入 content
       out_tool_calls.push(
         "{\"id\":\"" +
-        escape_json(tu.id) +
+        @internal.json_escape(tu.id) +
         "\",\"type\":\"function\",\"function\":{\"name\":\"" +
-        escape_json(tu.name) +
+        @internal.json_escape(tu.name) +
         "\",\"arguments\":\"" +
-        escape_json(tu.arguments_json) +
+        @internal.json_escape(tu.arguments_json) +
         "\"}}",
       )
       None
@@ -485,9 +481,8 @@ fn content_part_to_json(
     File(_) => {
       // OpenAI Chat 无文件载体（仅图片 image_url 与工具），显式 Unsupported 诊断
       diagnostics.push(
-        @lux.ConversionDiagnostic::new(
+        @lux.ConversionDiagnostic::unsupported(
           "content.file",
-          Unsupported,
           Some("file content not supported by openai-chat"),
         ),
       )
@@ -495,9 +490,8 @@ fn content_part_to_json(
     }
     Audio(_) => {
       diagnostics.push(
-        @lux.ConversionDiagnostic::new(
+        @lux.ConversionDiagnostic::unsupported(
           "content.audio",
-          Unsupported,
           Some("audio content not supported by openai-chat"),
         ),
       )
@@ -505,9 +499,8 @@ fn content_part_to_json(
     }
     Video(_) => {
       diagnostics.push(
-        @lux.ConversionDiagnostic::new(
+        @lux.ConversionDiagnostic::unsupported(
           "content.video",
-          Unsupported,
           Some("video content not supported by openai-chat"),
         ),
       )
@@ -515,9 +508,8 @@ fn content_part_to_json(
     }
     Native(tag, _) => {
       diagnostics.push(
-        @lux.ConversionDiagnostic::new(
+        @lux.ConversionDiagnostic::unsupported(
           "content.native",
-          Unsupported,
           Some("native content (" + tag + ") not supported by openai-chat"),
         ),
       )
@@ -553,9 +545,9 @@ fn message_to_json(
         i = i + 1
       }
       "{\"role\":\"tool\",\"tool_call_id\":\"" +
-      escape_json(tcid) +
+      @internal.json_escape(tcid) +
       "\",\"content\":\"" +
-      escape_json(content_str) +
+      @internal.json_escape(content_str) +
       "\"}"
     }
     _ => {
@@ -573,7 +565,7 @@ fn message_to_json(
       }
       let content_field = content_field_to_json(msg.content, diagnostics)
       let mut msg_obj = "{\"role\":\"" +
-        escape_json(role) +
+        @internal.json_escape(role) +
         "\"," +
         content_field
       if tool_calls.length() > 0 {
@@ -582,7 +574,7 @@ fn message_to_json(
       if refusal_buf.length() > 0 {
         msg_obj = msg_obj +
           ",\"refusal\":\"" +
-          escape_json(refusal_buf[0]) +
+          @internal.json_escape(refusal_buf[0]) +
           "\""
       }
       msg_obj + "}"
@@ -596,14 +588,16 @@ pub fn lux_request_to_openai_chat(
   req : @lux.LucentRequest,
 ) -> Result[@lux.ConversionResult[String], String] {
   let parts : Array[String] = []
-  parts.push("\"model\":\"" + escape_json(req.model) + "\"")
+  parts.push("\"model\":\"" + @internal.json_escape(req.model) + "\"")
   // instructions → system 消息（前置）
   let msgs_json : Array[String] = []
   match req.instructions {
     Some(instrs) => {
       let instr_text = @lux.lucent_content_to_text(instrs)
       msgs_json.push(
-        "{\"role\":\"system\",\"content\":\"" + escape_json(instr_text) + "\"}",
+        "{\"role\":\"system\",\"content\":\"" +
+        @internal.json_escape(instr_text) +
+        "\"}",
       )
     }
     None => ()
@@ -620,36 +614,34 @@ pub fn lux_request_to_openai_chat(
         msgs_json.push(
           "{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[" +
           "{\"id\":\"" +
-          escape_json(tu.id) +
+          @internal.json_escape(tu.id) +
           "\",\"type\":\"function\",\"function\":{\"name\":\"" +
-          escape_json(tu.name) +
+          @internal.json_escape(tu.name) +
           "\",\"arguments\":\"" +
-          escape_json(tu.arguments_json) +
+          @internal.json_escape(tu.arguments_json) +
           "\"}}]}",
         )
       ToolResult(tr) =>
         msgs_json.push(
           "{\"role\":\"tool\",\"tool_call_id\":\"" +
-          escape_json(tr.tool_use_id) +
+          @internal.json_escape(tr.tool_use_id) +
           "\",\"content\":\"" +
-          escape_json(@lux.lucent_content_to_text(tr.content)) +
+          @internal.json_escape(@lux.lucent_content_to_text(tr.content)) +
           "\"}",
         )
       Reasoning(_) =>
         // OpenAI Chat 无原生 reasoning：不静默忽略，显式 Unsupported 诊断
         diagnostics.push(
-          @lux.ConversionDiagnostic::new(
+          @lux.ConversionDiagnostic::unsupported(
             "conversation.reasoning",
-            Unsupported,
             Some("reasoning not supported by openai-chat"),
           ),
         )
       AgentAction(_) =>
         // OpenAI Chat 无 AgentAction 载体：不静默忽略，显式 Unsupported 诊断
         diagnostics.push(
-          @lux.ConversionDiagnostic::new(
+          @lux.ConversionDiagnostic::unsupported(
             "conversation.agent_action",
-            Unsupported,
             Some("agent_action not supported by openai-chat"),
           ),
         )
@@ -669,12 +661,12 @@ pub fn lux_request_to_openai_chat(
             // parameters 应为 JSON object 字符串，嵌入为对象而非字符串
             // 但为简化（且 parameters_json 本身就是 JSON 字符串），直接嵌入
             let desc_part = match t.description {
-              Some(d) => ",\"description\":\"" + escape_json(d) + "\""
+              Some(d) => ",\"description\":\"" + @internal.json_escape(d) + "\""
               None => ""
             }
             let fn_str = "\"function\":{" +
               "\"name\":\"" +
-              escape_json(t.name) +
+              @internal.json_escape(t.name) +
               "\"" +
               desc_part +
               ",\"parameters\":" +
@@ -685,9 +677,8 @@ pub fn lux_request_to_openai_chat(
           _ =>
             // OpenAI Chat 仅支持 function 工具：不静默降级为 function，显式 Unsupported
             diagnostics.push(
-              @lux.ConversionDiagnostic::new(
+              @lux.ConversionDiagnostic::unsupported(
                 "tools.kind",
-                Unsupported,
                 Some("tool kind not supported by openai-chat"),
               ),
             )
@@ -722,7 +713,7 @@ pub fn lux_request_to_openai_chat(
       let stops : Array[String] = []
       let mut k = 0
       while k < arr.length() {
-        stops.push("\"" + escape_json(arr[k]) + "\"")
+        stops.push("\"" + @internal.json_escape(arr[k]) + "\"")
         k = k + 1
       }
       parts.push("\"stop\":[" + stops.join(",") + "]")
@@ -777,11 +768,8 @@ pub fn lux_request_to_openai_chat(
       }
     None => ()
   }
-  let mut result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
-  for d in diagnostics {
-    result = result.with_diagnostic(d)
-  }
-  Ok(result)
+  let result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
+  Ok(result.with_diagnostics(diagnostics))
 }
 
 ///|
@@ -876,7 +864,10 @@ fn parse_choices(jv : Json) -> Array[@lux.LucentChoice] {
 pub fn openai_chat_to_lux_response(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
-  let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
+  let jv = match @internal.parse_protocol_json(json_str) {
+    Ok(v) => v
+    Err(e) => return Err(e)
+  }
   let id = @internal.field_str(jv, "id").unwrap_or("")
   let model = @internal.field_str(jv, "model").unwrap_or("")
   let created = @internal.field_int(jv, "created")
@@ -940,14 +931,14 @@ pub fn lux_response_to_openai_chat(
             }
           _ => "reasoning"
         }
-        ",\"" + field_name + "\":\"" + escape_json(th.text) + "\""
+        ",\"" + field_name + "\":\"" + @internal.json_escape(th.text) + "\""
       }
       None => ""
     }
     let mut msg_obj = "\"index\":" +
       c.index.to_string() +
       ",\"message\":{\"role\":\"" +
-      escape_json(role) +
+      @internal.json_escape(role) +
       "\"," +
       content_field +
       reasoning_field
@@ -955,11 +946,14 @@ pub fn lux_response_to_openai_chat(
       msg_obj = msg_obj + ",\"tool_calls\":[" + tool_calls.join(",") + "]"
     }
     if refusal_buf.length() > 0 {
-      msg_obj = msg_obj + ",\"refusal\":\"" + escape_json(refusal_buf[0]) + "\""
+      msg_obj = msg_obj +
+        ",\"refusal\":\"" +
+        @internal.json_escape(refusal_buf[0]) +
+        "\""
     }
     msg_obj = msg_obj +
       "},\"finish_reason\":\"" +
-      escape_json(c.finish_reason.to_string()) +
+      @internal.json_escape(c.finish_reason.to_string()) +
       "\""
     choices_json.push("{" + msg_obj + "}")
     i = i + 1
@@ -980,9 +974,9 @@ pub fn lux_response_to_openai_chat(
     None => ""
   }
   let body = "{\"id\":\"" +
-    escape_json(resp.id) +
+    @internal.json_escape(resp.id) +
     "\",\"object\":\"chat.completion\",\"model\":\"" +
-    escape_json(resp.model) +
+    @internal.json_escape(resp.model) +
     "\"" +
     created_part +
     ",\"choices\":[" +
@@ -990,11 +984,8 @@ pub fn lux_response_to_openai_chat(
     "]" +
     usage_obj +
     "}"
-  let mut result = @lux.ConversionResult::new(body)
-  for d in diagnostics {
-    result = result.with_diagnostic(d)
-  }
-  Ok(result)
+  let result = @lux.ConversionResult::new(body)
+  Ok(result.with_diagnostics(diagnostics))
 }
 
 ///|
@@ -1217,9 +1208,9 @@ pub fn lux_events_to_openai_chat_sse(
               "{\"index\":" +
               idx.to_string() +
               ",\"id\":\"" +
-              escape_json(id) +
+              @internal.json_escape(id) +
               "\",\"type\":\"function\",\"function\":{\"name\":\"" +
-              escape_json(name) +
+              @internal.json_escape(name) +
               "\"}}]}}]}",
             )
           _ => ()
@@ -1230,7 +1221,7 @@ pub fn lux_events_to_openai_chat_sse(
           TextDelta(s) =>
             out.push(
               "data: {\"choices\":[{\"delta\":{\"content\":\"" +
-              escape_json(s) +
+              @internal.json_escape(s) +
               "\"}}]}",
             )
           ToolArgumentsDelta(s) =>
@@ -1239,7 +1230,7 @@ pub fn lux_events_to_openai_chat_sse(
               "{\"index\":" +
               idx.to_string() +
               ",\"function\":{\"arguments\":\"" +
-              escape_json(s) +
+              @internal.json_escape(s) +
               "\"}}]}}]}",
             )
           ThinkingDelta(_) | SignatureDelta(_) | RefusalDelta(_) => ()
@@ -1250,7 +1241,7 @@ pub fn lux_events_to_openai_chat_sse(
       Finish(fr) =>
         out.push(
           "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"" +
-          escape_json(fr.to_string()) +
+          @internal.json_escape(fr.to_string()) +
           "\"}]}",
         )
       Usage(u) =>
@@ -1265,7 +1256,9 @@ pub fn lux_events_to_openai_chat_sse(
         )
       Error(e) =>
         out.push(
-          "data: {\"error\":{\"message\":\"" + escape_json(e.message) + "\"}}",
+          "data: {\"error\":{\"message\":\"" +
+          @internal.json_escape(e.message) +
+          "\"}}",
         )
       Done => out.push("data: [DONE]")
     }
