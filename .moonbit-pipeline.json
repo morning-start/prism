@@ -1,15 +1,18 @@
 {
   "pipeline": "development",
-  "phase": "e2e-verification",
-  "phase_name": "mock-vllm-e2e",
-  "plan_file": ".agent-workplace/docs/task/2026-08-07-e2e-verification-tasks.md",
+  "phase": "spec-complete",
+  "phase_name": "fst-init-prd",
+  "plan_file": "docs/plan/PLAN.md",
+  "spec_file": ".agent-workplace/docs/spec/tasks.md",
+  "checklist_file": ".agent-workplace/docs/spec/checklist.md",
+  "requirements_file": "docs/requirements.md",
   "progress": {
-    "total_tasks": 5,
-    "completed_tasks": 5,
-    "current_task": 5
+    "total_tasks": 12,
+    "completed_tasks": 0,
+    "current_task": null
   },
-  "last_verification": "2026-08-07T00:00:00Z",
-  "last_updated": "2026-08-07T00:00:00Z",
-  "next": "agnes-real-endpoint | wasm-convertstream-stale-artifact",
-  "notes": "mock-vllm e2e 验证完成：V1 入站捕获、V2 非流式跨协议出站、V3 流式（SSEToEvents+EventsToSSE）均通过。743 测试全绿。已知问题：wasm 产物 ConvertStream 单步丢帧，疑增量构建陈旧。agnes 真实链路留待 scripts/agnes_probe.sh。"
+  "last_verification": "2026-08-21T00:00:00Z",
+  "last_updated": "2026-08-21T00:00:00Z",
+  "next": "fst-iterate",
+  "notes": "Spec 模式完成：需求分层（REQ-001~010）+ 范围冻结 + 柔性 PRD + 任务清单（T01-T12）+ 验收清单。下一步 /fst-iterate 进入迭代开发。"
 }
