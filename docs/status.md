@@ -1,7 +1,25 @@
 # Prism 当前状态
 
-> 项目各模块的完成度追踪。架构设计见 [`architecture.md`](./architecture.md)，路线图见
-> `.agent-workplace/docs/plan/2026-08-01-project-roadmap.md`（Agent 私有工作区）。
+> 项目各模块的完成度追踪。架构设计见 [`architecture.md`](./architecture.md)。
+> 正式需求见 [`requirements.md`](./requirements.md)，迭代计划见 [`plan/PLAN.md`](./plan/PLAN.md)。
+
+---
+
+## 当前阶段：Spec 完成 → 迭代开发
+
+**立项状态：** ✅ 三条底线已确认 / 范围已签署 / 柔性 PRD 已通过
+**文档状态：** ✅ 需求分层（REQ-001~010）/ 迭代计划 / 任务清单（T01-T12）/ 验收清单
+**下一步：** `/fst-iterate` 进入迭代开发（Phase 1：SDK API 验证）
+
+### fst 文档映射
+
+| fst 产物 | 正式文档位置 | Agent 工作区位置 |
+|----------|-------------|-----------------|
+| 需求分层清单 | `docs/requirements.md` | — |
+| 范围说明书 | `docs/plan/PLAN.md` | — |
+| 柔性 PRD | — | `.agent-workplace/docs/plan/prd.md` |
+| 任务清单 | — | `.agent-workplace/docs/spec/tasks.md` |
+| 验收清单 | — | `.agent-workplace/docs/spec/checklist.md` |
 
 ---
 
