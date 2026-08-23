@@ -187,8 +187,6 @@ pub struct LucentOptions {
   stop : Array[String]?
   stream : Bool
   candidate_count : Int?
-  /// @deprecated 仅 OpenAI Chat 使用，非通用生成参数，后续移入 extras
-  seed : Int?
   structured_output : LucentStructuredOutput?
   store : Bool?
   extras : Map[String, Json]?
@@ -827,7 +825,6 @@ pub fn LucentOptions::default() -> LucentOptions {
     stop: None,
     stream: false,
     candidate_count: None,
-    seed: None,
     structured_output: None,
     store: None,
     extras: None,
@@ -843,7 +840,6 @@ pub fn LucentOptions::new(
   stop : Array[String]?,
   stream : Bool,
   candidate_count : Int?,
-  seed : Int?,
   structured_output : LucentStructuredOutput?,
   store : Bool?,
   extras : Map[String, Json]?,
@@ -856,7 +852,6 @@ pub fn LucentOptions::new(
     stop,
     stream,
     candidate_count,
-    seed,
     structured_output,
     store,
     extras,

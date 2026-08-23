@@ -314,7 +314,6 @@ test "LucentOptions round trip - defaults and all fields" {
       Some(["STOP"]),
       true,
       Some(1),
-      Some(42),
       Some(JsonObject),
       None,
       None,

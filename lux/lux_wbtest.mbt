@@ -367,7 +367,6 @@ test "LucentOptions default" {
   assert_eq(opts.stop, None)
   assert_eq(opts.stream, false)
   assert_eq(opts.candidate_count, None)
-  assert_eq(opts.seed, None)
   assert_eq(opts.structured_output, None)
 }
 

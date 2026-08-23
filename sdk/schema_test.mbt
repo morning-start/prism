@@ -131,7 +131,6 @@ test "validate_request - openai rejects temperature below 0" {
     None,
     None,
     None,
-    None,
   )
   let req = @lux.LucentRequest::new(
     "gpt-4o",
@@ -164,7 +163,6 @@ test "validate_request - openai rejects temperature above 2" {
     None,
     None,
     false,
-    None,
     None,
     None,
     None,
@@ -203,7 +201,6 @@ test "validate_request - openai rejects top_p > 1" {
     None,
     None,
     None,
-    None,
   )
   let req = @lux.LucentRequest::new(
     "gpt-4o",
@@ -234,7 +231,6 @@ test "validate_request - openai accepts top_p at boundary" {
     None,
     None,
     false,
-    None,
     None,
     None,
     None,
@@ -273,7 +269,6 @@ test "validate_request - openai rejects max_output_tokens < 1" {
     None,
     None,
     None,
-    None,
   )
   let req = @lux.LucentRequest::new(
     "gpt-4o",
@@ -304,7 +299,6 @@ test "validate_request - openai reports multiple errors at once" {
     Some(0), // bad max_output_tokens
     None,
     false,
-    None,
     None,
     None,
     None,
@@ -345,7 +339,6 @@ test "validate_request - anthropic rejects top_k < 1" {
     None,
     None,
     None,
-    None,
   )
   let req = @lux.LucentRequest::new(
     "claude-sonnet-4-20250514",
@@ -376,7 +369,6 @@ test "validate_request - anthropic accepts top_k = 1" {
     None,
     None,
     false,
-    None,
     None,
     None,
     None,
@@ -416,7 +408,6 @@ test "validate_request - gemini accepts temperature 0.5" {
     None,
     None,
     None,
-    None,
   )
   let req = @lux.LucentRequest::new(
     "gemini-2.5-pro",
@@ -447,7 +438,6 @@ test "validate_request - gemini rejects temperature 1.5" {
     None,
     None,
     false,
-    None,
     None,
     None,
     None,

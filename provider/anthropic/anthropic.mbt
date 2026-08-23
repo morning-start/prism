@@ -427,7 +427,6 @@ pub fn anthropic_to_lux_request(
     stop,
     stream,
     None,
-    None,
     structured_output,
     None,
     extras,

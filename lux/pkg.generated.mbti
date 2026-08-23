@@ -134,15 +134,15 @@ pub fn LucentBlockType::to_json(Self) -> Json
 pub fn LucentBlockType::tool_call(String, String) -> Self
 
 pub struct LucentCapabilities {
-  tool_calling : Bool
-  parallel_tool_calls : Bool
-  reasoning : Bool
-  multimodal_input : Bool
-  structured_output : Bool
+  tool_calling : SupportLevel
+  parallel_tool_calls : SupportLevel
+  reasoning : SupportLevel
+  multimodal_input : SupportLevel
+  structured_output : SupportLevel
   input_modalities : Array[LucentModality]
   output_modalities : Array[LucentModality]
 } derive(Eq, @debug.Debug)
-pub fn LucentCapabilities::create(Bool, Bool, Bool, Bool, Bool, Array[LucentModality], Array[LucentModality]) -> Self
+pub fn LucentCapabilities::create(SupportLevel, SupportLevel, SupportLevel, SupportLevel, SupportLevel, Array[LucentModality], Array[LucentModality]) -> Self
 pub fn LucentCapabilities::default() -> Self
 pub fn LucentCapabilities::from_json(Json) -> Result[Self, String]
 pub fn LucentCapabilities::to_json(Self) -> Json
@@ -308,14 +308,13 @@ pub struct LucentOptions {
   stop : Array[String]?
   stream : Bool
   candidate_count : Int?
-  seed : Int?
   structured_output : LucentStructuredOutput?
   store : Bool?
   extras : Map[String, Json]?
 } derive(Eq, @debug.Debug)
 pub fn LucentOptions::default() -> Self
 pub fn LucentOptions::from_json(Json) -> Result[Self, String]
-pub fn LucentOptions::new(Double?, Double?, Int?, Int?, Array[String]?, Bool, Int?, Int?, LucentStructuredOutput?, Bool?, Map[String, Json]?) -> Self
+pub fn LucentOptions::new(Double?, Double?, Int?, Int?, Array[String]?, Bool, Int?, LucentStructuredOutput?, Bool?, Map[String, Json]?) -> Self
 pub fn LucentOptions::to_json(Self) -> Json
 pub fn LucentOptions::with_extras(Self, Map[String, Json]?) -> Self
 pub fn LucentOptions::with_store(Self, Bool?) -> Self
@@ -521,6 +520,16 @@ pub struct ProviderCapability {
 pub fn ProviderCapability::from_json(Json) -> Result[Self, String]
 pub fn ProviderCapability::new(String, String, LucentCapabilities, Map[String, Json]?) -> Self
 pub fn ProviderCapability::to_json(Self) -> Json
+
+pub(all) enum SupportLevel {
+  Full
+  Partial
+  Absent
+} derive(Eq, @debug.Debug)
+pub fn SupportLevel::from_json(Json) -> Result[Self, String]
+pub fn SupportLevel::from_string(String) -> Self?
+pub fn SupportLevel::to_json(Self) -> Json
+pub fn SupportLevel::to_string(Self) -> String
 
 pub struct ValidateResult {
   valid : Bool

@@ -352,7 +352,6 @@ fn parse_generation_config(jv : Json) -> @lux.LucentOptions {
         @internal.field_int(gc, "candidateCount"),
         None,
         None,
-        None,
         extras,
       )
     }

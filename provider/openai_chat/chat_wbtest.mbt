@@ -131,7 +131,10 @@ test "openai_chat_to_lux_request - options mapping" {
       }
       assert_eq(req.options.max_output_tokens, Some(1024))
       assert_eq(req.options.stream, true)
-      assert_eq(req.options.seed, Some(42))
+      match req.options.extras {
+        Some(m) => assert_true(m.contains("seed"))
+        None => fail("seed should persist in extras")
+      }
       match req.options.stop {
         Some(arr) => assert_eq(arr.length(), 1)
         None => assert_true(false)

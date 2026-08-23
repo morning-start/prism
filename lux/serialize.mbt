@@ -356,10 +356,6 @@ pub fn LucentOptions::to_json(self : LucentOptions) -> Json {
     Some(n) => fields["candidate_count"] = n.to_json()
     None => ()
   }
-  match self.seed {
-    Some(n) => fields["seed"] = n.to_json()
-    None => ()
-  }
   match self.structured_output {
     Some(so) => fields["structured_output"] = so.to_json()
     None => ()
