@@ -90,7 +90,7 @@ Lucent IR 同时服务两个场景，优先级不可倒置：
 | `seed` | ❌否 | ❌ OpenAI 独有 | **extra** |
 | `logprobs` | ❌否 | ❌ OpenAI 独有 | **extra** |
 | `background` | ❌否 | ❌ 否，Transport | **Transport 层** |
-| `store` | ❌否 | ❌ 否，Provider 行为 | **extra** |
+| `store` | ❌否 | ✅ 是 | **可移植控制** |
 | `parallel_tool_calls` | ❌否 | ⚠️ 有语义但不稳定 | **extra**（暂定） |
 | `tool kind` (FileSearch vs Function) | ✅ 是 | ✅ 三家 | **核心类型** |
 | `mediaResolution` | ❌否 | ❌ Gemini 独有 | **extra** |
