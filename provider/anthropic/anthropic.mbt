@@ -311,6 +311,35 @@ fn parse_reasoning(jv : Json) -> @lux.LucentReasoningConfig? {
 }
 
 ///|
+/// 解析 output_config.format → LucentStructuredOutput（Anthropic 结构化输出）
+fn parse_output_config(jv : Json) -> @lux.LucentStructuredOutput? {
+  match @internal.obj_get(jv, "output_config") {
+    Some(oc) =>
+      match @internal.obj_get(oc, "format") {
+        Some(fmt) =>
+          match @internal.field_str(fmt, "type") {
+            Some("json_schema") =>
+              match @internal.obj_get(fmt, "schema") {
+                Some(schema) => {
+                  let s = schema.stringify()
+                  if s == "{}" {
+                    Some(@lux.LucentStructuredOutput::JsonObject)
+                  } else {
+                    Some(@lux.LucentStructuredOutput::JsonSchema(s))
+                  }
+                }
+                None => Some(@lux.LucentStructuredOutput::JsonObject)
+              }
+            Some("text") => Some(@lux.LucentStructuredOutput::Text)
+            _ => None
+          }
+        None => None
+      }
+    None => None
+  }
+}
+
+///|
 /// 1. anthropic_to_lux_request — 请求解码
 pub fn anthropic_to_lux_request(
   json_str : String,
@@ -387,8 +416,9 @@ pub fn anthropic_to_lux_request(
   let reasoning = parse_reasoning(jv)
   let extras = @internal.collect_extra_fields(jv, [
     "model", "system", "messages", "tools", "tool_choice", "temperature", "top_p",
-    "top_k", "max_tokens", "stream", "stop_sequences", "metadata", "thinking",
+    "top_k", "max_tokens", "stream", "stop_sequences", "metadata", "thinking", "output_config",
   ])
+  let structured_output = parse_output_config(jv)
   let opts = @lux.LucentOptions::new(
     temperature,
     top_p,
@@ -398,7 +428,7 @@ pub fn anthropic_to_lux_request(
     stream,
     None,
     None,
-    None,
+    structured_output,
     None,
     extras,
   )
@@ -773,6 +803,20 @@ pub fn lux_request_to_anthropic(
   match opts.top_k {
     Some(k) => parts.push("\"top_k\":" + k.to_string())
     None => ()
+  }
+  // structured output → output_config.format
+  match opts.structured_output {
+    Some(JsonObject) =>
+      parts.push(
+        "\"output_config\":{\"format\":{\"type\":\"json_schema\",\"schema\":{}}}",
+      )
+    Some(JsonSchema(schema)) =>
+      parts.push(
+        "\"output_config\":{\"format\":{\"type\":\"json_schema\",\"schema\":" +
+        schema +
+        "}",
+      )
+    _ => ()
   }
   match opts.stop {
     Some(arr) => {
