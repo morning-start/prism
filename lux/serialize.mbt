@@ -406,6 +406,12 @@ pub fn LucentReasoningConfig::to_json(self : LucentReasoningConfig) -> Json {
 }
 
 ///|
+/// === SupportLevel ===
+pub fn SupportLevel::to_json(self : SupportLevel) -> Json {
+  Json::string(self.to_string())
+}
+
+///|
 /// === LucentCapabilities ===
 pub fn LucentCapabilities::to_json(self : LucentCapabilities) -> Json {
   Json::object({

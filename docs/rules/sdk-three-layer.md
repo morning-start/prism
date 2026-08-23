@@ -186,7 +186,7 @@ for event in stream {
 ```moonbit
 // 面向 L2/L3 需要精细控制的用户
 let caps = prism.capability("anthropic")
-if caps.tool_calling {
+if caps.tool_calling != Absent {
   // 确认支持工具调用后再注册
 }
 

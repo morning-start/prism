@@ -57,6 +57,21 @@ fn get_bool(m : Map[String, Json], key : String) -> Result[Bool, String] {
 }
 
 ///|
+fn get_support_level(
+  m : Map[String, Json],
+  key : String,
+) -> Result[SupportLevel, String] {
+  match m.get(key) {
+    Some(v) =>
+      match SupportLevel::from_json(v) {
+        Ok(l) => Ok(l)
+        Err(_) => Err("invalid support level for " + key)
+      }
+    None => Err("missing required field " + key)
+  }
+}
+
+///|
 fn get_bool_opt(m : Map[String, Json], key : String) -> Bool? {
   match m.get(key) {
     Some(True) => Some(true)
@@ -322,6 +337,19 @@ pub fn LucentModality::from_json(jv : Json) -> Result[LucentModality, String] {
         None => Ok(Native(s))
       }
     _ => Err("expected string for LucentModality")
+  }
+}
+
+///|
+/// === SupportLevel ===
+pub fn SupportLevel::from_json(jv : Json) -> Result[SupportLevel, String] {
+  match jv {
+    String(s) =>
+      match SupportLevel::from_string(s) {
+        Some(l) => Ok(l)
+        None => Err("unknown support level: " + s)
+      }
+    _ => Err("expected string for support level")
   }
 }
 
@@ -962,24 +990,25 @@ pub fn LucentCapabilities::from_json(
 ) -> Result[LucentCapabilities, String] {
   match jv {
     Object(m) => {
-      let tool_calling = match get_bool(m, "tool_calling") {
-        Ok(b) => b
+      let tool_calling = match get_support_level(m, "tool_calling") {
+        Ok(l) => l
         Err(e) => return Err(e)
       }
-      let parallel_tool_calls = match get_bool(m, "parallel_tool_calls") {
-        Ok(b) => b
+      let parallel_tool_calls = match
+        get_support_level(m, "parallel_tool_calls") {
+        Ok(l) => l
         Err(e) => return Err(e)
       }
-      let reasoning = match get_bool(m, "reasoning") {
-        Ok(b) => b
+      let reasoning = match get_support_level(m, "reasoning") {
+        Ok(l) => l
         Err(e) => return Err(e)
       }
-      let multimodal_input = match get_bool(m, "multimodal_input") {
-        Ok(b) => b
+      let multimodal_input = match get_support_level(m, "multimodal_input") {
+        Ok(l) => l
         Err(e) => return Err(e)
       }
-      let structured_output = match get_bool(m, "structured_output") {
-        Ok(b) => b
+      let structured_output = match get_support_level(m, "structured_output") {
+        Ok(l) => l
         Err(e) => return Err(e)
       }
       let input_modalities = match get_arr_modality(m, "input_modalities") {
