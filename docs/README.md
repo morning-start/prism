@@ -65,7 +65,8 @@
 | [`02-openai-responses.md`](./protocols/02-openai-responses.md) | OpenAI Responses |
 | [`03-anthropic-messages.md`](./protocols/03-anthropic-messages.md) | Anthropic Messages |
 | [`04-google-gemini.md`](./protocols/04-google-gemini.md) | Google Gemini |
-| [`field-comparison.md`](./protocols/field-comparison.md) | 字段级对比与审计 |
+| [`field-comparison.md`](./protocols/field-comparison.md) | 字段级对比与审计（IR 归属） |
+| [`compatibility-fields.md`](./protocols/compatibility-fields.md) | 兼容字段清单（协议要提供哪些字段） |
 
 ---
 
