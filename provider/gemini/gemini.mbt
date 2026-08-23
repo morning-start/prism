@@ -380,18 +380,67 @@ fn parse_tool_config(jv : Json) -> @lux.LucentToolChoice? {
 }
 
 ///|
+/// Gemini thinkingLevel → LucentReasoningEffort（Gemini 3，替代 thinkingBudget）
+/// 返回 (effort, 是否降级)。minimal 在 IR 无对等档位，降级为 Low。
+fn gemini_thinking_level_to_effort(
+  level : String,
+) -> (@lux.LucentReasoningEffort, Bool) {
+  match level {
+    "low" => (@lux.LucentReasoningEffort::Low, false)
+    "medium" => (@lux.LucentReasoningEffort::Medium, false)
+    "high" => (@lux.LucentReasoningEffort::High, false)
+    _ => (@lux.LucentReasoningEffort::Low, true)
+  }
+}
+
+///|
+/// LucentReasoningEffort → Gemini thinkingLevel
+/// 返回 (level, 是否降级)。XHigh 在 Gemini 无对等档位，降级为 high。
+fn lux_effort_to_gemini_level(e : @lux.LucentReasoningEffort) -> (String, Bool) {
+  match e {
+    Low => ("low", false)
+    Medium => ("medium", false)
+    High => ("high", false)
+    XHigh => ("high", true)
+  }
+}
+
+///|
 /// 解析 thinkingConfig → LucentReasoningConfig
-fn parse_thinking_config(jv : Json) -> @lux.LucentReasoningConfig? {
+/// 优先 Gemini 3 的 thinkingLevel（映射到 effort），回退 legacy 的 thinkingBudget
+fn parse_thinking_config(
+  jv : Json,
+  diagnostics : Array[@lux.ConversionDiagnostic],
+) -> @lux.LucentReasoningConfig? {
   match @internal.obj_get(jv, "generationConfig") {
     Some(gc) =>
       match @internal.obj_get(gc, "thinkingConfig") {
         Some(tc) =>
-          match @internal.field_bool(tc, "includeThoughts") {
-            Some(true) => {
-              let budget = @internal.field_int(tc, "thinkingBudget")
-              Some(@lux.LucentReasoningConfig::enabled(budget))
+          match @internal.field_str(tc, "thinkingLevel") {
+            Some(level) => {
+              let (effort, degraded) = gemini_thinking_level_to_effort(level)
+              if degraded {
+                diagnostics.push(
+                  @lux.ConversionDiagnostic::degraded(
+                    "generationConfig.thinkingConfig.thinkingLevel",
+                    Some(
+                      "gemini thinkingLevel \"" +
+                      level +
+                      "\" 降级映射为 LucentReasoningEffort",
+                    ),
+                  ),
+                )
+              }
+              Some(@lux.LucentReasoningConfig::new(Some(effort), None))
             }
-            _ => Some(@lux.LucentReasoningConfig::disabled())
+            None =>
+              match @internal.field_bool(tc, "includeThoughts") {
+                Some(true) => {
+                  let budget = @internal.field_int(tc, "thinkingBudget")
+                  Some(@lux.LucentReasoningConfig::enabled(budget))
+                }
+                _ => Some(@lux.LucentReasoningConfig::disabled())
+              }
           }
         None => None
       }
@@ -424,7 +473,7 @@ pub fn gemini_to_lux_request(
   let tools = if tools_list.length() > 0 { Some(tools_list) } else { None }
   let tool_choice = parse_tool_config(jv)
   let opts = parse_generation_config(jv)
-  let reasoning = parse_thinking_config(jv)
+  let reasoning = parse_thinking_config(jv, diagnostics)
   let result = @lux.ConversionResult::new(
     @lux.LucentRequest::new(
       model,
@@ -673,17 +722,41 @@ pub fn lux_request_to_gemini(
     }
     _ => ()
   }
-  // thinking config
+  // thinking config（Gemini 3 优先 thinkingLevel；legacy 回退 thinkingBudget）
   match req.reasoning {
     Some(rc) =>
       if rc.enabled {
-        let budget_part = match rc.budget_tokens {
-          Some(n) => ",\"thinkingBudget\":" + n.to_string()
-          None => ""
+        match rc.effort {
+          Some(effort) => {
+            let (level, degraded) = lux_effort_to_gemini_level(effort)
+            if degraded {
+              diagnostics.push(
+                @lux.ConversionDiagnostic::degraded(
+                  "reasoning.effort",
+                  Some(
+                    "LucentReasoningEffort 无 gemini thinkingLevel 对等档位，降级为 \"high\"",
+                  ),
+                ),
+              )
+            }
+            gc_parts.push(
+              "\"thinkingConfig\":{\"includeThoughts\":true,\"thinkingLevel\":\"" +
+              level +
+              "\"}",
+            )
+          }
+          None =>
+            match rc.budget_tokens {
+              Some(n) =>
+                gc_parts.push(
+                  "\"thinkingConfig\":{\"includeThoughts\":true,\"thinkingBudget\":" +
+                  n.to_string() +
+                  "}",
+                )
+              None =>
+                gc_parts.push("\"thinkingConfig\":{\"includeThoughts\":true}")
+            }
         }
-        gc_parts.push(
-          "\"thinkingConfig\":{\"includeThoughts\":true" + budget_part + "}",
-        )
       }
     None => ()
   }
