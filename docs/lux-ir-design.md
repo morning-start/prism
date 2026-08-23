@@ -317,12 +317,18 @@ pub enum LucentReasoningSummary { Auto; Concise; Detailed }
 ## 6. 能力分级：`LucentCapabilities`
 
 ```moonbit
+pub enum SupportLevel {
+  Full
+  Partial
+  Absent
+}
+
 pub struct LucentCapabilities {
-  tool_calling : Bool
-  parallel_tool_calls : Bool
-  reasoning : Bool
-  multimodal_input : Bool
-  structured_output : Bool
+  tool_calling : SupportLevel
+  parallel_tool_calls : SupportLevel
+  reasoning : SupportLevel
+  multimodal_input : SupportLevel
+  structured_output : SupportLevel
   input_modalities : Array[LucentModality]
   output_modalities : Array[LucentModality]
 }
@@ -591,7 +597,7 @@ pub struct LucentAgentAction {
 
 新增一个厂商接口（例如文心 / 讯飞 / Cohere）的步骤：
 
-1. **归类能力**：对照 `LucentCapabilities`，把该厂商支持的能力标 true。
+1. **归类能力**：对照 `LucentCapabilities`，把该厂商支持的能力标注为 `SupportLevel`（`Full` / `Partial` / `Absent`）。
 2. **映射消息**：该厂商的 messages/contents/input → `LucentConversationItem`，选择最贴近的变体。
 3. **映射内容**：该厂商的 content types → `LucentContent`，无对应的走 `Native(String, Json)`。
 4. **归类扩展**：

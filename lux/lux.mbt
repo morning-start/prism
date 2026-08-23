@@ -221,13 +221,42 @@ pub struct LucentReasoningConfig {
 } derive(Eq, Debug)
 
 ///|
+/// SupportLevel — 能力支持级别
+/// 替代原有 Bool 能力声明，区分「完全支持 / 部分支持 / 不支持」三档。
+/// 线格式：`"full"` / `"partial"` / `"none"`（`Absent` 命名避开 Option::None 冲突）。
+pub(all) enum SupportLevel {
+  Full
+  Partial
+  Absent
+} derive(Eq, Debug)
+
+///|
+pub fn SupportLevel::from_string(s : String) -> SupportLevel? {
+  match s {
+    "full" => Some(Full)
+    "partial" => Some(Partial)
+    "none" => Some(Absent)
+    _ => None
+  }
+}
+
+///|
+pub fn SupportLevel::to_string(self : SupportLevel) -> String {
+  match self {
+    Full => "full"
+    Partial => "partial"
+    Absent => "none"
+  }
+}
+
+///|
 /// LucentCapabilities — 标准化能力声明
 pub struct LucentCapabilities {
-  tool_calling : Bool
-  parallel_tool_calls : Bool
-  reasoning : Bool
-  multimodal_input : Bool
-  structured_output : Bool
+  tool_calling : SupportLevel
+  parallel_tool_calls : SupportLevel
+  reasoning : SupportLevel
+  multimodal_input : SupportLevel
+  structured_output : SupportLevel
   input_modalities : Array[LucentModality]
   output_modalities : Array[LucentModality]
 } derive(Eq, Debug)
@@ -839,11 +868,11 @@ pub fn LucentOptions::new(
 ///|
 pub fn LucentCapabilities::default() -> LucentCapabilities {
   {
-    tool_calling: false,
-    parallel_tool_calls: false,
-    reasoning: false,
-    multimodal_input: false,
-    structured_output: false,
+    tool_calling: Absent,
+    parallel_tool_calls: Absent,
+    reasoning: Absent,
+    multimodal_input: Absent,
+    structured_output: Absent,
     input_modalities: [],
     output_modalities: [],
   }
@@ -851,11 +880,11 @@ pub fn LucentCapabilities::default() -> LucentCapabilities {
 
 ///|
 pub fn LucentCapabilities::create(
-  tool_calling : Bool,
-  parallel_tool_calls : Bool,
-  reasoning : Bool,
-  multimodal_input : Bool,
-  structured_output : Bool,
+  tool_calling : SupportLevel,
+  parallel_tool_calls : SupportLevel,
+  reasoning : SupportLevel,
+  multimodal_input : SupportLevel,
+  structured_output : SupportLevel,
   input_modalities : Array[LucentModality],
   output_modalities : Array[LucentModality],
 ) -> LucentCapabilities {

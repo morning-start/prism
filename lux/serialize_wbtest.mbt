@@ -714,8 +714,8 @@ test "LucentReasoningConfig::to_json - enabled with effort" {
 test "LucentCapabilities::to_json - default" {
   let caps = LucentCapabilities::default()
   let jv = caps.to_json()
-  match json_bool(jv, "tool_calling") {
-    Some(v) => assert_eq(v, false)
+  match json_str(jv, "tool_calling") {
+    Some(v) => assert_eq(v, "none")
     _ => fail("wrong tool_calling")
   }
   match json_arr(jv, "input_modalities") {

@@ -374,11 +374,11 @@ test "LucentOptions default" {
 ///|
 test "LucentCapabilities default" {
   let caps = LucentCapabilities::default()
-  assert_eq(caps.tool_calling, false)
-  assert_eq(caps.parallel_tool_calls, false)
-  assert_eq(caps.reasoning, false)
-  assert_eq(caps.multimodal_input, false)
-  assert_eq(caps.structured_output, false)
+  assert_eq(caps.tool_calling, Absent)
+  assert_eq(caps.parallel_tool_calls, Absent)
+  assert_eq(caps.reasoning, Absent)
+  assert_eq(caps.multimodal_input, Absent)
+  assert_eq(caps.structured_output, Absent)
   assert_eq(caps.input_modalities.length(), 0)
   assert_eq(caps.output_modalities.length(), 0)
 }
