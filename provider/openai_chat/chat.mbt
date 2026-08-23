@@ -276,11 +276,10 @@ pub fn openai_chat_to_lux_request(
     }
     _ => None
   }
-  let seed = @internal.field_int(jv, "seed")
   let store = @internal.field_bool(jv, "store")
   let extras = @internal.collect_extra_fields(jv, [
     "model", "messages", "tools", "tool_choice", "temperature", "top_p", "max_completion_tokens",
-    "max_tokens", "stream", "stop", "seed", "response_format", "store",
+    "max_tokens", "stream", "stop", "response_format", "store",
   ])
   // response_format → structured_output
   let structured = match @internal.obj_get(jv, "response_format") {
@@ -317,7 +316,6 @@ pub fn openai_chat_to_lux_request(
           stop,
           stream,
           None,
-          seed,
           structured,
           store,
           extras,
@@ -739,10 +737,6 @@ pub fn lux_request_to_openai_chat(
         // "none"，此处保守省略（模型默认行为）
         ()
       }
-    None => ()
-  }
-  match opts.seed {
-    Some(n) => parts.push("\"seed\":" + n.to_string())
     None => ()
   }
   match opts.structured_output {

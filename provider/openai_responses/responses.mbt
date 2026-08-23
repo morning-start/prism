@@ -341,7 +341,6 @@ pub fn openai_responses_to_lux_request(
     None,
     stream,
     None,
-    None,
     structured,
     store,
     extras,

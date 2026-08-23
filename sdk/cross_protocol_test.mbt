@@ -202,7 +202,6 @@ fn req_with_opts(
     None,
     None,
     None,
-    None,
   )
   @lux.LucentRequest::new(
     "test-model",

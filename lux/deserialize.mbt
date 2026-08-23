@@ -916,7 +916,6 @@ pub fn LucentOptions::from_json(jv : Json) -> Result[LucentOptions, String] {
         Err(e) => return Err(e)
       }
       let candidate_count = get_int_opt(m, "candidate_count")
-      let seed = get_int_opt(m, "seed")
       let structured_output : LucentStructuredOutput? = match
         m.get("structured_output") {
         Some(so) =>
@@ -939,7 +938,6 @@ pub fn LucentOptions::from_json(jv : Json) -> Result[LucentOptions, String] {
         stop,
         stream,
         candidate_count,
-        seed,
         structured_output,
         store,
         extras,
