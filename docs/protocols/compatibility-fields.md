@@ -189,3 +189,4 @@
 | 日期 | 更新内容 |
 |------|---------|
 | 2026-08-23 | 首次汇总：四协议最小兼容集 + 完整字段清单 + 跨协议映射 + 9 项 gap |
+| 2026-08-23 | gap 收尾：#8 seed 迁移至 extras；#9 store 归类可移植控制；#5/#6/#7 确认 verbosity/strict/max_tool_calls 经 catch-all 自动归 extras |
