@@ -197,7 +197,7 @@ match prism.decode_sse(sse_text) {
 # MoonBit SDK 示例
 moon run examples/sdk-basic
 
-# TypeScript WASM 示例（真实 API）
+# TypeScript WASM 示例（真实 API），详见 examples/README.md
 cd examples/ts-wasm && bun run src/main.ts
 ```
 
@@ -231,16 +231,7 @@ moon run examples/sdk-basic
 
 ### TypeScript WASM 示例（真实 API）
 
-```bash
-cd examples/ts-wasm
-bun install
-bun run src/main.ts
-```
-
-展示内容：
-- 真实 API 调用
-- 协议转换 (OpenAI Chat → Anthropic/Gemini)
-- 流式响应处理
+真实 API 演示（安装依赖、环境变量配置、端到端测试等）请参见 [examples/README.md](examples/README.md)。
 
 ---
 
