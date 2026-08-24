@@ -248,9 +248,9 @@ pub fn lucent_stream_events_to_accumulated(
   fn ensure_block(idx : Int) -> Unit {
     while block_types.length() <= idx {
       block_types.push(Text) // 占位，真实类型由 BlockStart 覆盖
-      block_texts.push(StringBuilder::new())
-      block_thinking.push(StringBuilder::new())
-      block_signatures.push(StringBuilder::new())
+      block_texts.push(StringBuilder())
+      block_thinking.push(StringBuilder())
+      block_signatures.push(StringBuilder())
       block_tool_ids.push("")
       block_tool_names.push("")
     }

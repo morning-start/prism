@@ -27,4 +27,3 @@ pub fn lux_response_to_gemini(@lux.LucentResponse) -> Result[@lux.ConversionResu
 // Type aliases
 
 // Traits
-

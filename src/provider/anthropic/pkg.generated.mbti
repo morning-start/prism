@@ -27,4 +27,3 @@ pub fn lux_response_to_anthropic(@lux.LucentResponse) -> Result[@lux.ConversionR
 // Type aliases
 
 // Traits
-

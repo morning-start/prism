@@ -29,4 +29,3 @@ pub fn openai_responses_to_lux_response(String) -> Result[@lux.ConversionResult[
 // Type aliases
 
 // Traits
-

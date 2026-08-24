@@ -77,7 +77,7 @@ pub fn field_int_exact(jv : Json, key : String) -> Int? {
 ///|
 /// JSON 字符串转义（用于 SSE 手动拼接等非标准输出）
 pub fn json_escape(s : String) -> String {
-  let sb = StringBuilder::new()
+  let sb = StringBuilder()
   let mut i = 0
   while i < s.length() {
     let cp = s[i]

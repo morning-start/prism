@@ -27,4 +27,3 @@ pub fn vllm_to_lux_response(String) -> Result[@lux.ConversionResult[@lux.LucentR
 // Type aliases
 
 // Traits
-

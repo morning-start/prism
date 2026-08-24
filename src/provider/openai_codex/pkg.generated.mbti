@@ -27,4 +27,3 @@ pub fn lux_response_to_codex(@lux.LucentResponse) -> Result[@lux.ConversionResul
 // Type aliases
 
 // Traits
-

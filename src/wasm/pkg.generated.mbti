@@ -39,4 +39,3 @@ pub fn wasm_to_lux_response(String, String) -> String
 // Type aliases
 
 // Traits
-

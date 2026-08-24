@@ -27,4 +27,3 @@ pub using @sdk {type PrismToolCall}
 pub using @sdk {type PrismToolResult}
 
 // Traits
-

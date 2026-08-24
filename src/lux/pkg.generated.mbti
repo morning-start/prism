@@ -542,4 +542,3 @@ pub fn ValidateResult::ok() -> Self
 // Type aliases
 
 // Traits
-

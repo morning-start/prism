@@ -27,4 +27,3 @@ pub fn vertex_to_lux_response(String) -> Result[@lux.ConversionResult[@lux.Lucen
 // Type aliases
 
 // Traits
-

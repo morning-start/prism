@@ -27,4 +27,3 @@ pub fn openai_chat_to_lux_response(String) -> Result[@lux.ConversionResult[@lux.
 // Type aliases
 
 // Traits
-
