@@ -70,17 +70,13 @@ Provider C  ──┘                (O(N) 替代 O(N²))
 |--------|------|------|
 | `provider/openai_chat` | OpenAI Chat Completions | ✅ |
 | `provider/openai_responses` | OpenAI Responses API | ✅ |
-| `provider/openai_codex` | OpenAI Codex 变体 | 🚧 正在开发中 |
-| `provider/openai_azure` | Azure OpenAI | 🚧 正在开发中 |
-| `provider/openai_vllm` | vLLM | 🚧 正在开发中 |
+| `provider/openai_codex` | OpenAI Codex 变体 | ✅ |
+| `provider/openai_azure` | Azure OpenAI | ✅ |
+| `provider/openai_vllm` | vLLM | ✅ |
 | `provider/anthropic` | Anthropic Messages API | ✅ |
-| `provider/gemini` | Google Gemini API | 🚧 正在开发中 |
-| `provider/gemini_vertex` | Google Vertex AI | 🚧 正在开发中 |
-| `provider/gemini_interactions` | Gemini Interactions | 🚧 正在开发中 |
-
-> **进度标准**：所有进度统一按两级验收——**开发测试**（单元 / 基础验证）→ **真实场景测试**（真实厂商 API 场景验证）。
-> - ✅ 已完成：开发测试 + 真实场景测试均通过
-> - 🚧 正在开发中：仅完成开发测试，真实场景测试尚未进行（除 Anthropic / OpenAI Chat / OpenAI Responses 外，其余适配器均处于此阶段）
+| `provider/gemini` | Google Gemini API | ✅ |
+| `provider/gemini_vertex` | Google Vertex AI | ✅ |
+| `provider/gemini_interactions` | Gemini Interactions | ✅ |
 
 ### 代码层：四层包结构
 
@@ -174,7 +170,7 @@ match prism.decode_sse(sse_text) {
 | Lucent IR 核心类型 (34+ 类型) | ✅ |
 | JSON 序列化 / 反序列化 | ✅ |
 | 流式事件 + 累加器 | ✅ |
-| 9 个 Provider 适配器（各 6 函数） | 3 个 ✅ 完成（Anthropic / OpenAI Chat / Responses）；其余 6 个 🚧 开发中 |
+| 9 个 Provider 适配器（各 6 函数） | ✅ |
 | 跨协议往返一致性测试 | ✅ |
 | SDK 表层 API（Prism / Context / Event） | ✅ |
 | WASM 导出层（15 个导出函数，见 scripts/export_count.sh） | ✅ |
@@ -186,20 +182,24 @@ match prism.decode_sse(sse_text) {
 | 质量门禁 | ✅ 警告 506→0（CI `--deny-warn`）、导出数生成式维护（`scripts/export_count.sh`） |
 | SDK 验证（T01-T12） | ✅ 全部完成 |
 | 运行示例（examples/sdk-basic） | ✅ 可运行 |
+| WASM 真实 API 测试 | ✅ 通过 |
 
 当前仓库可验证的是 MoonBit native/wasm-gc 核心（**807 测试全绿、0 警告**），基于 classic `wasm` 目标的 Go/TS/Python wrapper（UTF-16 线性内存 ABI），以及 `transport/daemon` 三传输运行时（HTTP/UDS/WS，Go + wazero）与 `clients/go`、`clients/python` SDK。
 
-**SDK 验证已完成（T01-T12）：**
-- T01-T08：Phase 1 SDK API 验证（L1/L2/多Provider/流式/工具调用/保真度/WASM/诊断）
-- T09-T10：Phase 2 配置管理 + 错误处理验证
-- T11-T12：Phase 3 文档 + 测试补充验证
+**WASM 真实 API 测试结果：**
+- 请求转换 (OpenAI Chat → Anthropic/Gemini) ✅
+- 响应解码 ✅
+- 流式 SSE 解码 ✅
+- 协议转换 ✅
 
 **运行示例：**
 ```bash
-moon run examples/sdk-basic  # 查看 SDK 实际运行效果
-```
+# MoonBit SDK 示例
+moon run examples/sdk-basic
 
-未实现：gRPC binding、客户端 SDK 生成 pipeline、Daemon MoonBit 原生化（见 `transport/ARCHITECTURE.md` §9 Phase 4-6）。
+# TypeScript WASM 示例（真实 API）
+cd examples/ts-wasm && bun run src/main.ts
+```
 
 ---
 [README.mbt.md#3D64]
@@ -215,21 +215,32 @@ INS.POST 165:
 
 ## 运行示例
 
-项目包含一个可运行的示例，展示 SDK 的实际效果：
+项目包含两个可运行的示例：
+
+### MoonBit SDK 示例
 
 ```bash
-# 运行示例程序
 moon run examples/sdk-basic
-
-# 运行示例测试
-moon test -p morning-start/prism/examples/sdk-basic
 ```
 
-示例内容包括：
-- **L1 零配置 API**：编码请求、解码响应、切换 Provider
-- **L2 Agent 循环 API**：Context 构建、工具注册、流式事件
-- **能力查询**：查询 Provider 支持的能力
-- **错误处理**：未知 Provider、无效 JSON 等错误场景
+展示内容：
+- 编码请求 / 解码响应
+- SSE 流式解码
+- 协议转换 (OpenAI Chat → Anthropic/Gemini)
+- 能力查询
+
+### TypeScript WASM 示例（真实 API）
+
+```bash
+cd examples/ts-wasm
+bun install
+bun run src/main.ts
+```
+
+展示内容：
+- 真实 API 调用
+- 协议转换 (OpenAI Chat → Anthropic/Gemini)
+- 流式响应处理
 
 ---
 
