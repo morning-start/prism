@@ -323,14 +323,14 @@ fn parse_output_config(jv : Json) -> @lux.LucentStructuredOutput? {
                 Some(schema) => {
                   let s = schema.stringify()
                   if s == "{}" {
-                    Some(@lux.LucentStructuredOutput::JsonObject)
+                    Some(JsonObject)
                   } else {
-                    Some(@lux.LucentStructuredOutput::JsonSchema(s))
+                    Some(JsonSchema(s))
                   }
                 }
-                None => Some(@lux.LucentStructuredOutput::JsonObject)
+                None => Some(JsonObject)
               }
-            Some("text") => Some(@lux.LucentStructuredOutput::Text)
+            Some("text") => Some(Text)
             _ => None
           }
         None => None

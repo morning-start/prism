@@ -31,9 +31,12 @@ let prism = Prism::new().with_provider("anthropic") // 自动适配 Claude 格�
 **完整请求-响应流程（L1 零配置）：**
 
 ```moonbit nocheck
+///|
 let prism = Prism::new().with_provider("openai-chat")
 
 // send 是 Host 注入的 HTTP 回调
+
+///|
 let result = prism.complete("你好", PrismOptions::default(), send)
 // result = Ok("你好！有什么可以帮你的？")
 ```
