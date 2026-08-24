@@ -2,12 +2,17 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [master, dev]
   pull_request:
-    branches: [master]
+    branches: [master, dev]
 
 permissions:
   contents: read
+
+# 同一分支的新提交自动取消进行中的旧运行，节省 runner 资源
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   fmt:
@@ -108,6 +113,12 @@ jobs:
       - name: Build classic WASM (wrapper ABI)
         run: moon build --target wasm
 
+      # --experimental-strip-types 需要 Node >= 22.6，显式固定版本，不依赖 runner 默认值
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Go wrapper integration test
         run: |
           cd wrappers/go
@@ -118,22 +129,31 @@ jobs:
         run: |
           node --experimental-strip-types wrappers/ts/test/integration.test.ts
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
       - name: H10. Python wrapper integration test
         run: |
-          pip install wasmtime
           cd wrappers/py
-          PYTHONPATH=src python - <<'EOF'
-import json
-from prism_wasm import PrismClient
-client = PrismClient('../../_build/wasm/debug/build/cmd/main/main.wasm')
-cap = client.capability('openai')
-assert cap['provider'] == 'openai' and 'model_pattern' in cap
-req = json.loads(client.encode_request('openai', 'Hello'))
-assert req['input'][0]['content'][0]['text'] == 'Hello'
-resp = json.dumps({'id':'1','object':'chat.completion','model':'gpt-4o','choices':[{'index':0,'message':{'role':'assistant','content':'Hi'},'finish_reason':'stop'}]})
-assert client.decode_response('openai-chat', resp) == 'Hi'
-print('python wrapper integration passed')
-EOF
+          PYTHONPATH=src uv run --frozen python - <<'EOF'
+          import json
+          from prism_wasm import PrismClient
+          client = PrismClient('../../_build/wasm/debug/build/cmd/main/main.wasm')
+          cap = client.capability('openai')
+          assert cap['provider'] == 'openai' and 'model_pattern' in cap
+          req = json.loads(client.encode_request('openai', 'Hello'))
+          assert req['input'][0]['content'][0]['text'] == 'Hello'
+          resp = json.dumps({'id':'1','object':'chat.completion','model':'gpt-4o','choices':[{'index':0,'message':{'role':'assistant','content':'Hi'},'finish_reason':'stop'}]})
+          assert client.decode_response('openai-chat', resp) == 'Hi'
+          print('python wrapper integration passed')
+          EOF
+
+      - name: H10b. Python wrapper test suite (pytest)
+        run: |
+          cd wrappers/py
+          uv run --frozen pytest -q
 
       - name: H11. Transport daemon build + integration test
         run: |

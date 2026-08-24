@@ -123,9 +123,8 @@ fn parse_input_item(
                     } else {
                       // 非 data URI：file_data 通常必须是 data URI，否则显式诊断
                       diagnostics.push(
-                        @lux.ConversionDiagnostic::new(
+                        @lux.ConversionDiagnostic::degraded(
                           "input.file",
-                          Degraded,
                           Some("file_data must be a data URI"),
                         ),
                       )
@@ -133,9 +132,8 @@ fn parse_input_item(
                   None =>
                     // 仅 file_id（服务器端文件引用）：跨协议无法映射，显式 Degraded
                     diagnostics.push(
-                      @lux.ConversionDiagnostic::new(
+                      @lux.ConversionDiagnostic::degraded(
                         "input.file",
-                        Degraded,
                         Some("file_id not mapped to multimedia"),
                       ),
                     )
@@ -231,13 +229,24 @@ fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
       let mut i = 0
       while i < tools.length() {
         let t = tools[i]
+        // OpenAI Responses tools[].type → LucentToolKind（非 function 不再静默降级）
+        let kind : @lux.LucentToolKind = match @internal.field_str(t, "type") {
+          Some("function") => Function
+          Some("file_search") => FileSearch
+          Some("web_search") => WebSearch
+          Some("code_interpreter") => CodeInterpreter
+          Some("computer_use") => ComputerUse
+          Some("mcp") => MCP
+          Some(other) => Native(other)
+          _ => Function
+        }
         let name = @internal.field_str(t, "name").unwrap_or("")
         let desc = @internal.field_str(t, "description")
         let params = match @internal.obj_get(t, "parameters") {
           Some(p) => p.stringify()
           None => "{}"
         }
-        result.push(@lux.LucentTool::new(name, desc, params, None, Function))
+        result.push(@lux.LucentTool::new(name, desc, params, None, kind))
         i = i + 1
       }
       result
@@ -255,9 +264,8 @@ fn parse_reasoning(
   match @internal.obj_get(jv, "reasoning") {
     Some(_) => {
       diagnostics.push(
-        @lux.ConversionDiagnostic::new(
+        @lux.ConversionDiagnostic::unsupported(
           "reasoning.config",
-          Unsupported,
           Some("reasoning config not parsed by openai-responses"),
         ),
       )
@@ -295,7 +303,10 @@ fn parse_text_format(jv : Json) -> @lux.LucentStructuredOutput? {
 pub fn openai_responses_to_lux_request(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentRequest], String] {
-  let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
+  let jv = match @internal.parse_protocol_json(json_str) {
+    Ok(v) => v
+    Err(e) => return Err(e)
+  }
   let diagnostics : Array[@lux.ConversionDiagnostic] = []
   let model = @internal.field_str(jv, "model").unwrap_or("")
   let instructions = match @internal.field_str(jv, "instructions") {
@@ -330,7 +341,6 @@ pub fn openai_responses_to_lux_request(
     None,
     stream,
     None,
-    None,
     structured,
     store,
     extras,
@@ -340,7 +350,7 @@ pub fn openai_responses_to_lux_request(
     Some(_id) => None // previous_response_id → metadata, skip extra for now
     None => None
   }
-  let mut result = @lux.ConversionResult::new(
+  let result = @lux.ConversionResult::new(
     @lux.LucentRequest::new(
       model,
       instructions,
@@ -354,10 +364,7 @@ pub fn openai_responses_to_lux_request(
       extra,
     ),
   )
-  for d in diagnostics {
-    result = result.with_diagnostic(d)
-  }
-  Ok(result)
+  Ok(result.with_diagnostics(diagnostics))
 }
 
 ///|
@@ -413,9 +420,8 @@ pub fn lux_request_to_openai_responses(
                   )
                 FileUri(_) =>
                   diagnostics.push(
-                    @lux.ConversionDiagnostic::new(
+                    @lux.ConversionDiagnostic::unsupported(
                       "content.image",
-                      Unsupported,
                       Some(
                         "file_uri image source not supported by openai-responses",
                       ),
@@ -435,9 +441,8 @@ pub fn lux_request_to_openai_responses(
                   )
                 Url(url) => {
                   diagnostics.push(
-                    @lux.ConversionDiagnostic::new(
+                    @lux.ConversionDiagnostic::unsupported(
                       "content.file",
-                      Unsupported,
                       Some("url file source not supported by openai-responses"),
                     ),
                   )
@@ -445,9 +450,8 @@ pub fn lux_request_to_openai_responses(
                 }
                 FileUri(_) =>
                   diagnostics.push(
-                    @lux.ConversionDiagnostic::new(
+                    @lux.ConversionDiagnostic::unsupported(
                       "content.file",
-                      Unsupported,
                       Some(
                         "file_uri file source not supported by openai-responses",
                       ),
@@ -536,15 +540,84 @@ pub fn lux_request_to_openai_responses(
           Some(d) => ",\"description\":\"" + @internal.json_escape(d) + "\""
           None => ""
         }
-        tools_json.push(
-          "{\"type\":\"function\",\"name\":\"" +
-          @internal.json_escape(t.name) +
-          "\"" +
-          desc_part +
-          ",\"parameters\":" +
-          t.parameters_json +
-          "}",
-        )
+        match t.kind {
+          Function =>
+            tools_json.push(
+              "{\"type\":\"function\",\"name\":\"" +
+              @internal.json_escape(t.name) +
+              "\"" +
+              desc_part +
+              ",\"parameters\":" +
+              t.parameters_json +
+              "}",
+            )
+          FileSearch =>
+            tools_json.push(
+              "{\"type\":\"file_search\",\"name\":\"" +
+              @internal.json_escape(t.name) +
+              "\"" +
+              desc_part +
+              "}",
+            )
+          WebSearch =>
+            tools_json.push(
+              "{\"type\":\"web_search\",\"name\":\"" +
+              @internal.json_escape(t.name) +
+              "\"" +
+              desc_part +
+              "}",
+            )
+          CodeInterpreter =>
+            tools_json.push(
+              "{\"type\":\"code_interpreter\",\"name\":\"" +
+              @internal.json_escape(t.name) +
+              "\"" +
+              desc_part +
+              "}",
+            )
+          ComputerUse =>
+            tools_json.push(
+              "{\"type\":\"computer_use\",\"name\":\"" +
+              @internal.json_escape(t.name) +
+              "\"" +
+              desc_part +
+              "}",
+            )
+          MCP => {
+            // mcp_server 引用无法从 IR 重建 → Degraded 诊断（不伪装 Exact）
+            diagnostics.push(
+              @lux.ConversionDiagnostic::degraded(
+                "tools.mcp",
+                Some("mcp_server reference not preserved"),
+              ),
+            )
+            tools_json.push(
+              "{\"type\":\"mcp\",\"name\":\"" +
+              @internal.json_escape(t.name) +
+              "\"" +
+              desc_part +
+              "}",
+            )
+          }
+          Native(tag) =>
+            tools_json.push(
+              "{\"type\":\"" +
+              @internal.json_escape(tag) +
+              "\",\"name\":\"" +
+              @internal.json_escape(t.name) +
+              "\"" +
+              desc_part +
+              "}",
+            )
+          CodeExecution | Shell | ApplyPatch =>
+            // Responses 无对应原生工具类型：不静默降级为 function，显式 Unsupported
+            diagnostics.push(
+              @lux.ConversionDiagnostic::unsupported(
+                "tools.kind",
+                Some("tool kind not supported by openai-responses"),
+              ),
+            )
+        }
         j = j + 1
       }
       parts.push("\"tools\":[" + tools_json.join(",") + "]")
@@ -617,11 +690,8 @@ pub fn lux_request_to_openai_responses(
       }
     None => ()
   }
-  let mut result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
-  for d in diagnostics {
-    result = result.with_diagnostic(d)
-  }
-  Ok(result)
+  let result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
+  Ok(result.with_diagnostics(diagnostics))
 }
 
 ///|
@@ -693,7 +763,10 @@ fn parse_output_content(output_item : Json) -> Array[@lux.LucentContent] {
 pub fn openai_responses_to_lux_response(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
-  let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
+  let jv = match @internal.parse_protocol_json(json_str) {
+    Ok(v) => v
+    Err(e) => return Err(e)
+  }
   openai_responses_json_to_lux_response(jv)
 }
 
@@ -808,9 +881,8 @@ pub fn lux_response_to_openai_responses(
         match choice.message.reasoning {
           Some(_) => {
             diagnostics.push(
-              @lux.ConversionDiagnostic::new(
+              @lux.ConversionDiagnostic::degraded(
                 "reasoning.dual_carrier",
-                Degraded,
                 Some(
                   "both message.reasoning and content Thinking present; using message.reasoning",
                 ),
@@ -893,11 +965,8 @@ pub fn lux_response_to_openai_responses(
     "]" +
     usage_json +
     "}"
-  let mut result = @lux.ConversionResult::new(body)
-  for d in diagnostics {
-    result = result.with_diagnostic(d)
-  }
-  Ok(result)
+  let result = @lux.ConversionResult::new(body)
+  Ok(result.with_diagnostics(diagnostics))
 }
 
 ///|
@@ -1084,11 +1153,8 @@ pub fn openai_responses_sse_to_events(
     }
     i = i + 1
   }
-  let mut result = @lux.ConversionResult::new(events)
-  for d in diagnostics {
-    result = result.with_diagnostic(d)
-  }
-  Ok(result)
+  let result = @lux.ConversionResult::new(events)
+  Ok(result.with_diagnostics(diagnostics))
 }
 
 ///|
@@ -1299,11 +1365,11 @@ pub fn capability() -> @lux.ProviderCapability {
     "gpt-*,o*",
     "openai",
     @lux.LucentCapabilities::create(
-      true,
-      true,
-      true,
-      true,
-      true,
+      Full,
+      Absent,
+      Full,
+      Full,
+      Full,
       [Text, Image, Pdf],
       [Text],
     ),

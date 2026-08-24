@@ -187,8 +187,6 @@ pub struct LucentOptions {
   stop : Array[String]?
   stream : Bool
   candidate_count : Int?
-  /// @deprecated 仅 OpenAI Chat 使用，非通用生成参数，后续移入 extras
-  seed : Int?
   structured_output : LucentStructuredOutput?
   store : Bool?
   extras : Map[String, Json]?
@@ -221,13 +219,42 @@ pub struct LucentReasoningConfig {
 } derive(Eq, Debug)
 
 ///|
+/// SupportLevel — 能力支持级别
+/// 替代原有 Bool 能力声明，区分「完全支持 / 部分支持 / 不支持」三档。
+/// 线格式：`"full"` / `"partial"` / `"none"`（`Absent` 命名避开 Option::None 冲突）。
+pub(all) enum SupportLevel {
+  Full
+  Partial
+  Absent
+} derive(Eq, Debug)
+
+///|
+pub fn SupportLevel::from_string(s : String) -> SupportLevel? {
+  match s {
+    "full" => Some(Full)
+    "partial" => Some(Partial)
+    "none" => Some(Absent)
+    _ => None
+  }
+}
+
+///|
+pub fn SupportLevel::to_string(self : SupportLevel) -> String {
+  match self {
+    Full => "full"
+    Partial => "partial"
+    Absent => "none"
+  }
+}
+
+///|
 /// LucentCapabilities — 标准化能力声明
 pub struct LucentCapabilities {
-  tool_calling : Bool
-  parallel_tool_calls : Bool
-  reasoning : Bool
-  multimodal_input : Bool
-  structured_output : Bool
+  tool_calling : SupportLevel
+  parallel_tool_calls : SupportLevel
+  reasoning : SupportLevel
+  multimodal_input : SupportLevel
+  structured_output : SupportLevel
   input_modalities : Array[LucentModality]
   output_modalities : Array[LucentModality]
 } derive(Eq, Debug)
@@ -382,6 +409,40 @@ pub fn[T] ConversionResult::with_diagnostic(
   let diagnostics = self.diagnostics.copy()
   diagnostics.push(diagnostic)
   { ..self, diagnostics, }
+}
+
+///|
+/// 批量附加诊断（返回新结果，等价于逐条 with_diagnostic）。
+pub fn[T] ConversionResult::with_diagnostics(
+  self : ConversionResult[T],
+  diagnostics : Array[ConversionDiagnostic],
+) -> ConversionResult[T] {
+  if diagnostics.length() == 0 {
+    return self
+  }
+  let all = self.diagnostics.copy()
+  for d in diagnostics {
+    all.push(d)
+  }
+  { ..self, diagnostics: all }
+}
+
+///|
+/// 构造 Unsupported 诊断（provider 适配器共用样板）。
+pub fn ConversionDiagnostic::unsupported(
+  field : String,
+  detail : String?,
+) -> ConversionDiagnostic {
+  { field, status: Unsupported, detail }
+}
+
+///|
+/// 构造 Degraded 诊断（provider 适配器共用样板）。
+pub fn ConversionDiagnostic::degraded(
+  field : String,
+  detail : String?,
+) -> ConversionDiagnostic {
+  { field, status: Degraded, detail }
 }
 
 ///|
@@ -764,7 +825,6 @@ pub fn LucentOptions::default() -> LucentOptions {
     stop: None,
     stream: false,
     candidate_count: None,
-    seed: None,
     structured_output: None,
     store: None,
     extras: None,
@@ -780,7 +840,6 @@ pub fn LucentOptions::new(
   stop : Array[String]?,
   stream : Bool,
   candidate_count : Int?,
-  seed : Int?,
   structured_output : LucentStructuredOutput?,
   store : Bool?,
   extras : Map[String, Json]?,
@@ -793,7 +852,6 @@ pub fn LucentOptions::new(
     stop,
     stream,
     candidate_count,
-    seed,
     structured_output,
     store,
     extras,
@@ -805,11 +863,11 @@ pub fn LucentOptions::new(
 ///|
 pub fn LucentCapabilities::default() -> LucentCapabilities {
   {
-    tool_calling: false,
-    parallel_tool_calls: false,
-    reasoning: false,
-    multimodal_input: false,
-    structured_output: false,
+    tool_calling: Absent,
+    parallel_tool_calls: Absent,
+    reasoning: Absent,
+    multimodal_input: Absent,
+    structured_output: Absent,
     input_modalities: [],
     output_modalities: [],
   }
@@ -817,11 +875,11 @@ pub fn LucentCapabilities::default() -> LucentCapabilities {
 
 ///|
 pub fn LucentCapabilities::create(
-  tool_calling : Bool,
-  parallel_tool_calls : Bool,
-  reasoning : Bool,
-  multimodal_input : Bool,
-  structured_output : Bool,
+  tool_calling : SupportLevel,
+  parallel_tool_calls : SupportLevel,
+  reasoning : SupportLevel,
+  multimodal_input : SupportLevel,
+  structured_output : SupportLevel,
   input_modalities : Array[LucentModality],
   output_modalities : Array[LucentModality],
 ) -> LucentCapabilities {

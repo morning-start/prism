@@ -131,7 +131,10 @@ test "openai_chat_to_lux_request - options mapping" {
       }
       assert_eq(req.options.max_output_tokens, Some(1024))
       assert_eq(req.options.stream, true)
-      assert_eq(req.options.seed, Some(42))
+      match req.options.extras {
+        Some(m) => assert_true(m.contains("seed"))
+        None => fail("seed should persist in extras")
+      }
       match req.options.stop {
         Some(arr) => assert_eq(arr.length(), 1)
         None => assert_true(false)
@@ -329,6 +332,37 @@ test "lux_request_to_openai_chat - tools encoded" {
         Some(arr) => assert_eq(arr.length(), 1)
         None => assert_true(false)
       }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "lux_request_to_openai_chat - non-function tool kind unsupported" {
+  let req = @lux.LucentRequest::from_messages(
+    "gpt-4o",
+    None,
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
+    Some([@lux.LucentTool::new("ws", None, "{}", None, WebSearch)]),
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai_chat(req) {
+    Ok(cr) => {
+      // 必须携带 Unsupported 诊断（不静默降级为 function）
+      let mut has_unsupported = false
+      for d in cr.diagnostics() {
+        if d.field == "tools.kind" && d.status == Unsupported {
+          has_unsupported = true
+        }
+      }
+      assert_true(has_unsupported)
+      // 且编码 JSON 不含被跳过的工具名
+      assert_false(cr.value().contains("ws"))
     }
     Err(_) => assert_true(false)
   }
@@ -933,5 +967,175 @@ test "encode - image file_uri yields unsupported diagnostic" {
       assert_true(has_unsupported)
     }
     Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// === reasoning 契约测试 ===
+
+///|
+/// 入站：vLLM message.reasoning → LucentMessage.reasoning
+test "openai_chat_to_lux_response - vLLM reasoning captured" {
+  let json = "{\"id\":\"c-1\",\"model\":\"qwen\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Final answer\",\"reasoning\":\"step by step\"},\"finish_reason\":\"stop\"}]}"
+  match openai_chat_to_lux_response(json) {
+    Ok(cr) =>
+      match cr.value().choices[0].message.reasoning {
+        Some(r) => assert_eq(r.text, "step by step")
+        None => assert_true(false)
+      }
+    Err(e) => fail("decode: \{e}")
+  }
+}
+
+///|
+/// 入站：DeepSeek reasoning_content → LucentMessage.reasoning
+test "openai_chat_to_lux_response - DeepSeek reasoning_content captured" {
+  let json = "{\"id\":\"c-1\",\"model\":\"deepseek\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Final\",\"reasoning_content\":\"chain of thought\"},\"finish_reason\":\"stop\"}]}"
+  match openai_chat_to_lux_response(json) {
+    Ok(cr) =>
+      match cr.value().choices[0].message.reasoning {
+        Some(r) => assert_eq(r.text, "chain of thought")
+        None => assert_true(false)
+      }
+    Err(e) => fail("decode: \{e}")
+  }
+}
+
+///|
+/// 入站：无 reasoning 字段 → message.reasoning 为 None
+test "openai_chat_to_lux_response - no reasoning yields None" {
+  let json = "{\"id\":\"c-1\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello\"},\"finish_reason\":\"stop\"}]}"
+  match openai_chat_to_lux_response(json) {
+    Ok(cr) => assert_eq(cr.value().choices[0].message.reasoning, None)
+    Err(e) => fail("decode: \{e}")
+  }
+}
+
+///|
+/// 出站：LucentMessage.reasoning → message.reasoning（默认字段名）
+test "lux_response_to_openai_chat - reasoning emitted as message.reasoning" {
+  let th = @lux.LucentThinking::visible("thought", None)
+  let msg = @lux.LucentMessage::with_reasoning(
+    Assistant,
+    [@lux.LucentContent::text("answer")],
+    Some(th),
+  )
+  let resp = @lux.LucentResponse::new(
+    "c-1",
+    "gpt-4o",
+    None,
+    [@lux.LucentChoice::new(0, msg, Stop, None)],
+    None,
+    None,
+  )
+  match lux_response_to_openai_chat(resp) {
+    Ok(cr) => {
+      let jv = @json.parse(cr.value())
+      match @internal.obj_get(jv, "choices") {
+        Some(Array(cs)) =>
+          match @internal.obj_get(cs[0], "message") {
+            Some(m) =>
+              assert_eq(@internal.field_str(m, "reasoning"), Some("thought"))
+            None => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// 出站：provider_payload.reasoning_field 切换为 reasoning_content
+test "lux_response_to_openai_chat - reasoning_field switches to reasoning_content" {
+  let th = @lux.LucentThinking::visible("thought", None)
+  let msg = @lux.LucentMessage::with_reasoning(
+    Assistant,
+    [@lux.LucentContent::text("answer")],
+    Some(th),
+  )
+  let resp = @lux.LucentResponse::new(
+    "c-1",
+    "deepseek",
+    None,
+    [@lux.LucentChoice::new(0, msg, Stop, None)],
+    None,
+    Some({ "reasoning_field": @json.parse("\"reasoning_content\"") }),
+  )
+  match lux_response_to_openai_chat(resp) {
+    Ok(cr) => {
+      let jv = @json.parse(cr.value())
+      match @internal.obj_get(jv, "choices") {
+        Some(Array(cs)) =>
+          match @internal.obj_get(cs[0], "message") {
+            Some(m) =>
+              assert_eq(
+                @internal.field_str(m, "reasoning_content"),
+                Some("thought"),
+              )
+            None => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// 出站：无 reasoning 时 message 不含 reasoning 字段
+test "lux_response_to_openai_chat - no reasoning yields plain message" {
+  let msg = @lux.LucentMessage::new(Assistant, [
+    @lux.LucentContent::text("answer"),
+  ])
+  let resp = @lux.LucentResponse::new(
+    "c-1",
+    "gpt-4o",
+    None,
+    [@lux.LucentChoice::new(0, msg, Stop, None)],
+    None,
+    None,
+  )
+  match lux_response_to_openai_chat(resp) {
+    Ok(cr) => {
+      let jv = @json.parse(cr.value())
+      match @internal.obj_get(jv, "choices") {
+        Some(Array(cs)) =>
+          match @internal.obj_get(cs[0], "message") {
+            Some(m) => assert_eq(@internal.field_str(m, "reasoning"), None)
+            None => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// round-trip：vLLM 入站 → IR → openai_chat 出站，reasoning 不丢
+test "openai_chat round-trip preserves vLLM reasoning" {
+  let inbound = "{\"id\":\"c-1\",\"model\":\"qwen\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Final\",\"reasoning\":\"thought\"},\"finish_reason\":\"stop\"}]}"
+  match openai_chat_to_lux_response(inbound) {
+    Ok(cr) =>
+      match lux_response_to_openai_chat(cr.value()) {
+        Ok(out) => {
+          let jv = @json.parse(out.value())
+          match @internal.obj_get(jv, "choices") {
+            Some(Array(cs)) =>
+              match @internal.obj_get(cs[0], "message") {
+                Some(m) =>
+                  assert_eq(
+                    @internal.field_str(m, "reasoning"),
+                    Some("thought"),
+                  )
+                None => assert_true(false)
+              }
+            _ => assert_true(false)
+          }
+        }
+        Err(e) => fail("encode: \{e}")
+      }
+    Err(e) => fail("decode: \{e}")
   }
 }

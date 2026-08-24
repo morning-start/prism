@@ -106,9 +106,8 @@ fn parse_part(
                       ]
                     None => {
                       diagnostics.push(
-                        @lux.ConversionDiagnostic::new(
+                        @lux.ConversionDiagnostic::degraded(
                           "part.inline_data",
-                          Degraded,
                           Some("inlineData missing data field"),
                         ),
                       )
@@ -130,9 +129,8 @@ fn parse_part(
                           ]
                         None => {
                           diagnostics.push(
-                            @lux.ConversionDiagnostic::new(
+                            @lux.ConversionDiagnostic::degraded(
                               "part.file_data",
-                              Degraded,
                               Some("fileData missing fileUri field"),
                             ),
                           )
@@ -354,7 +352,6 @@ fn parse_generation_config(jv : Json) -> @lux.LucentOptions {
         @internal.field_int(gc, "candidateCount"),
         None,
         None,
-        None,
         extras,
       )
     }
@@ -382,18 +379,67 @@ fn parse_tool_config(jv : Json) -> @lux.LucentToolChoice? {
 }
 
 ///|
+/// Gemini thinkingLevel → LucentReasoningEffort（Gemini 3，替代 thinkingBudget）
+/// 返回 (effort, 是否降级)。minimal 在 IR 无对等档位，降级为 Low。
+fn gemini_thinking_level_to_effort(
+  level : String,
+) -> (@lux.LucentReasoningEffort, Bool) {
+  match level {
+    "low" => (Low, false)
+    "medium" => (Medium, false)
+    "high" => (High, false)
+    _ => (Low, true)
+  }
+}
+
+///|
+/// LucentReasoningEffort → Gemini thinkingLevel
+/// 返回 (level, 是否降级)。XHigh 在 Gemini 无对等档位，降级为 high。
+fn lux_effort_to_gemini_level(e : @lux.LucentReasoningEffort) -> (String, Bool) {
+  match e {
+    Low => ("low", false)
+    Medium => ("medium", false)
+    High => ("high", false)
+    XHigh => ("high", true)
+  }
+}
+
+///|
 /// 解析 thinkingConfig → LucentReasoningConfig
-fn parse_thinking_config(jv : Json) -> @lux.LucentReasoningConfig? {
+/// 优先 Gemini 3 的 thinkingLevel（映射到 effort），回退 legacy 的 thinkingBudget
+fn parse_thinking_config(
+  jv : Json,
+  diagnostics : Array[@lux.ConversionDiagnostic],
+) -> @lux.LucentReasoningConfig? {
   match @internal.obj_get(jv, "generationConfig") {
     Some(gc) =>
       match @internal.obj_get(gc, "thinkingConfig") {
         Some(tc) =>
-          match @internal.field_bool(tc, "includeThoughts") {
-            Some(true) => {
-              let budget = @internal.field_int(tc, "thinkingBudget")
-              Some(@lux.LucentReasoningConfig::enabled(budget))
+          match @internal.field_str(tc, "thinkingLevel") {
+            Some(level) => {
+              let (effort, degraded) = gemini_thinking_level_to_effort(level)
+              if degraded {
+                diagnostics.push(
+                  @lux.ConversionDiagnostic::degraded(
+                    "generationConfig.thinkingConfig.thinkingLevel",
+                    Some(
+                      "gemini thinkingLevel \"" +
+                      level +
+                      "\" 降级映射为 LucentReasoningEffort",
+                    ),
+                  ),
+                )
+              }
+              Some(@lux.LucentReasoningConfig::new(Some(effort), None))
             }
-            _ => Some(@lux.LucentReasoningConfig::disabled())
+            None =>
+              match @internal.field_bool(tc, "includeThoughts") {
+                Some(true) => {
+                  let budget = @internal.field_int(tc, "thinkingBudget")
+                  Some(@lux.LucentReasoningConfig::enabled(budget))
+                }
+                _ => Some(@lux.LucentReasoningConfig::disabled())
+              }
           }
         None => None
       }
@@ -406,7 +452,10 @@ fn parse_thinking_config(jv : Json) -> @lux.LucentReasoningConfig? {
 pub fn gemini_to_lux_request(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentRequest], String] {
-  let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
+  let jv = match @internal.parse_protocol_json(json_str) {
+    Ok(v) => v
+    Err(e) => return Err(e)
+  }
   let diagnostics : Array[@lux.ConversionDiagnostic] = []
   let model = @internal.field_str(jv, "model").unwrap_or("")
   let instructions = parse_system_instruction(jv)
@@ -423,8 +472,8 @@ pub fn gemini_to_lux_request(
   let tools = if tools_list.length() > 0 { Some(tools_list) } else { None }
   let tool_choice = parse_tool_config(jv)
   let opts = parse_generation_config(jv)
-  let reasoning = parse_thinking_config(jv)
-  let mut result = @lux.ConversionResult::new(
+  let reasoning = parse_thinking_config(jv, diagnostics)
+  let result = @lux.ConversionResult::new(
     @lux.LucentRequest::new(
       model,
       instr_opt,
@@ -438,10 +487,7 @@ pub fn gemini_to_lux_request(
       None,
     ),
   )
-  for d in diagnostics {
-    result = result.with_diagnostic(d)
-  }
-  Ok(result)
+  Ok(result.with_diagnostics(diagnostics))
 }
 
 ///|
@@ -581,19 +627,31 @@ pub fn lux_request_to_gemini(
       let mut j = 0
       while j < tools.length() {
         let t = tools[j]
-        let desc_part = match t.description {
-          Some(d) => ",\"description\":\"" + @internal.json_escape(d) + "\""
-          None => ""
+        match t.kind {
+          Function => {
+            let desc_part = match t.description {
+              Some(d) => ",\"description\":\"" + @internal.json_escape(d) + "\""
+              None => ""
+            }
+            decls.push(
+              "{\"name\":\"" +
+              @internal.json_escape(t.name) +
+              "\"" +
+              desc_part +
+              ",\"parameters\":" +
+              t.parameters_json +
+              "}",
+            )
+          }
+          _ =>
+            // Gemini 仅支持 functionDeclarations：不静默降级为 function，显式 Unsupported
+            diagnostics.push(
+              @lux.ConversionDiagnostic::unsupported(
+                "tools.kind",
+                Some("tool kind not supported by gemini"),
+              ),
+            )
         }
-        decls.push(
-          "{\"name\":\"" +
-          @internal.json_escape(t.name) +
-          "\"" +
-          desc_part +
-          ",\"parameters\":" +
-          t.parameters_json +
-          "}",
-        )
         j = j + 1
       }
       parts.push(
@@ -663,17 +721,41 @@ pub fn lux_request_to_gemini(
     }
     _ => ()
   }
-  // thinking config
+  // thinking config（Gemini 3 优先 thinkingLevel；legacy 回退 thinkingBudget）
   match req.reasoning {
     Some(rc) =>
       if rc.enabled {
-        let budget_part = match rc.budget_tokens {
-          Some(n) => ",\"thinkingBudget\":" + n.to_string()
-          None => ""
+        match rc.effort {
+          Some(effort) => {
+            let (level, degraded) = lux_effort_to_gemini_level(effort)
+            if degraded {
+              diagnostics.push(
+                @lux.ConversionDiagnostic::degraded(
+                  "reasoning.effort",
+                  Some(
+                    "LucentReasoningEffort 无 gemini thinkingLevel 对等档位，降级为 \"high\"",
+                  ),
+                ),
+              )
+            }
+            gc_parts.push(
+              "\"thinkingConfig\":{\"includeThoughts\":true,\"thinkingLevel\":\"" +
+              level +
+              "\"}",
+            )
+          }
+          None =>
+            match rc.budget_tokens {
+              Some(n) =>
+                gc_parts.push(
+                  "\"thinkingConfig\":{\"includeThoughts\":true,\"thinkingBudget\":" +
+                  n.to_string() +
+                  "}",
+                )
+              None =>
+                gc_parts.push("\"thinkingConfig\":{\"includeThoughts\":true}")
+            }
         }
-        gc_parts.push(
-          "\"thinkingConfig\":{\"includeThoughts\":true" + budget_part + "}",
-        )
       }
     None => ()
   }
@@ -681,9 +763,8 @@ pub fn lux_request_to_gemini(
   match opts.store {
     Some(_) =>
       diagnostics.push(
-        @lux.ConversionDiagnostic::new(
+        @lux.ConversionDiagnostic::unsupported(
           "options.store",
-          Unsupported,
           Some("gemini has no store field"),
         ),
       )
@@ -700,11 +781,8 @@ pub fn lux_request_to_gemini(
   if gc_parts.length() > 0 {
     parts.push("\"generationConfig\":{" + gc_parts.join(",") + "}")
   }
-  let mut result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
-  for d in diagnostics {
-    result = result.with_diagnostic(d)
-  }
-  Ok(result)
+  let result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
+  Ok(result.with_diagnostics(diagnostics))
 }
 
 ///|
@@ -712,7 +790,10 @@ pub fn lux_request_to_gemini(
 pub fn gemini_to_lux_response(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
-  let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
+  let jv = match @internal.parse_protocol_json(json_str) {
+    Ok(v) => v
+    Err(e) => return Err(e)
+  }
   let diagnostics : Array[@lux.ConversionDiagnostic] = []
   let id = @internal.field_str(jv, "model").unwrap_or("")
   let model = @internal.field_str(jv, "modelVersion").unwrap_or(id)
@@ -780,13 +861,10 @@ pub fn gemini_to_lux_response(
     }
     None => @lux.LucentUsage::new(0, 0, 0)
   }
-  let mut result = @lux.ConversionResult::new(
+  let result = @lux.ConversionResult::new(
     @lux.LucentResponse::new(id, model, None, choices, Some(usage), None),
   )
-  for d in diagnostics {
-    result = result.with_diagnostic(d)
-  }
-  Ok(result)
+  Ok(result.with_diagnostics(diagnostics))
 }
 
 ///|
@@ -821,9 +899,8 @@ pub fn lux_response_to_gemini(
           match c.message.reasoning {
             Some(_) => {
               diagnostics.push(
-                @lux.ConversionDiagnostic::new(
+                @lux.ConversionDiagnostic::degraded(
                   "reasoning.dual_carrier",
-                  Degraded,
                   Some(
                     "both message.reasoning and content Thinking present; using message.reasoning",
                   ),
@@ -919,13 +996,10 @@ pub fn lux_response_to_gemini(
       "}"
     None => ""
   }
-  let mut result = @lux.ConversionResult::new(
+  let result = @lux.ConversionResult::new(
     "{\"candidates\":[" + cands.join(",") + "]" + usage_part + "}",
   )
-  for d in diagnostics {
-    result = result.with_diagnostic(d)
-  }
-  Ok(result)
+  Ok(result.with_diagnostics(diagnostics))
 }
 
 ///|
@@ -1191,11 +1265,11 @@ pub fn capability() -> @lux.ProviderCapability {
     "gemini-*",
     "google",
     @lux.LucentCapabilities::create(
-      true,
-      true,
-      true,
-      true,
-      true,
+      Full,
+      Absent,
+      Full,
+      Full,
+      Full,
       [Text, Image, Audio, Video, Pdf],
       [Text],
     ),

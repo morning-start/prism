@@ -28,7 +28,10 @@ pub fn lux_request_to_azure(
 pub fn azure_to_lux_response(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
-  let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
+  let jv = match @internal.parse_protocol_json(json_str) {
+    Ok(v) => v
+    Err(e) => return Err(e)
+  }
   match @openai_responses.openai_responses_json_to_lux_response(jv) {
     Ok(base) =>
       match @internal.obj_get(jv, "content_filters") {
@@ -75,11 +78,11 @@ pub fn capability() -> @lux.ProviderCapability {
     "azure-*",
     "azure-openai",
     @lux.LucentCapabilities::create(
-      true,
-      true,
-      true,
-      true,
-      true,
+      Full,
+      Absent,
+      Full,
+      Full,
+      Full,
       [Text, Image, Pdf],
       [Text],
     ),

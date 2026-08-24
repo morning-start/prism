@@ -319,6 +319,37 @@ test "gemini store unsupported diagnostic" {
 }
 
 ///|
+test "gemini non-function tool kind unsupported" {
+  let req = @lux.LucentRequest::from_messages(
+    "gemini-2.0-flash",
+    None,
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")])],
+    Some([@lux.LucentTool::new("ws", None, "{}", None, WebSearch)]),
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_gemini(req) {
+    Ok(cr) => {
+      // 必须携带 Unsupported 诊断（不静默降级为 function）
+      let mut has_unsupported = false
+      for d in cr.diagnostics() {
+        if d.field == "tools.kind" && d.status == Unsupported {
+          has_unsupported = true
+        }
+      }
+      assert_true(has_unsupported)
+      // 且编码 JSON 不含被跳过的工具名
+      assert_false(cr.value().contains("ws"))
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
 test "gemini extras round-trip" {
   let opts = @lux.LucentOptions::default().with_extras(
     Some({ "extra_field": Json::string("v1") }),

@@ -1,11 +1,11 @@
 {
   "version": 1,
   "plugins": {
-    "moonbit-skills@moonbit-skills": {
-      "marketplace": "moonbit-skills",
+    "moonbit-skills@agent-plugins": {
+      "marketplace": "agent-plugins",
       "plugin": "moonbit-skills",
-      "plugin_dir": "installed/moonbit-skills/moonbit-skills",
-      "installed_at": "2026-08-02T12:52:22.237295+00:00",
+      "plugin_dir": "installed/agent-plugins/moonbit-skills",
+      "installed_at": "2026-08-08T13:05:49.087453600+00:00",
       "scope": "project"
     }
   }

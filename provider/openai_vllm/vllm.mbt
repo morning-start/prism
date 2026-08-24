@@ -74,7 +74,10 @@ pub fn lux_request_to_vllm(
 pub fn vllm_to_lux_response(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
-  let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
+  let jv = match @internal.parse_protocol_json(json_str) {
+    Ok(v) => v
+    Err(e) => return Err(e)
+  }
   match @openai_chat.openai_chat_to_lux_response(json_str) {
     Ok(base) => Ok(attach_reasoning(base.value(), jv))
     Err(e) => Err(e)

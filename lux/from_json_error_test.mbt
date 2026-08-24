@@ -533,7 +533,7 @@ test "LucentCapabilities from_json - missing tool_calling rejects" {
 ///|
 test "LucentCapabilities from_json - missing input_modalities rejects" {
   let jv = @json.parse(
-    "{\"tool_calling\":true,\"parallel_tool_calls\":true,\"reasoning\":true,\"multimodal_input\":true,\"structured_output\":true}",
+    "{\"tool_calling\":\"full\",\"parallel_tool_calls\":\"none\",\"reasoning\":\"full\",\"multimodal_input\":\"full\",\"structured_output\":\"full\"}",
   )
   match LucentCapabilities::from_json(jv) {
     Ok(_) => fail("expected Err, got Ok")

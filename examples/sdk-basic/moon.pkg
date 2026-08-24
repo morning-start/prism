@@ -1,0 +1,7 @@
+pkgtype(kind: "executable")
+
+import {
+  "morning-start/prism/sdk",
+  "morning-start/prism/lux",
+  "moonbitlang/core/json",
+}

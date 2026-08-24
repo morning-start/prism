@@ -54,7 +54,10 @@ fn insert_phase_into_json(s : String, phase : String) -> String {
 pub fn codex_to_lux_request(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentRequest], String] {
-  let jv = @json.parse(json_str) catch { _ => return Err("json parse error") }
+  let jv = match @internal.parse_protocol_json(json_str) {
+    Ok(v) => v
+    Err(e) => return Err(e)
+  }
   // 提取 phase 信息：按 input 数组顺序
   let phases : Array[String?] = []
   match @internal.field_arr(jv, "input") {
@@ -329,11 +332,11 @@ pub fn capability() -> @lux.ProviderCapability {
     "gpt-*-codex",
     "openai-codex",
     @lux.LucentCapabilities::create(
-      true,
-      true,
-      true,
-      true,
-      true,
+      Full,
+      Absent,
+      Full,
+      Full,
+      Full,
       [Text, Image],
       [Text],
     ),

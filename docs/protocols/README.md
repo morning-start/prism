@@ -38,6 +38,8 @@
 - [02 — OpenAI Responses（含 Codex/Azure）](./02-openai-responses.md)
 - [03 — Anthropic Messages](./03-anthropic-messages.md)
 - [04 — Google Gemini（含 Vertex）](./04-google-gemini.md)
+- [field-comparison — 字段覆盖审计（IR 归属）](./field-comparison.md)
+- [compatibility-fields — 兼容字段清单（协议要提供哪些字段）](./compatibility-fields.md)
 
 ## 版本更新记录
 

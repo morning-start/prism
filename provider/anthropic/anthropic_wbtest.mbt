@@ -124,6 +124,24 @@ test "anthropic_to_lux_request - tools with input_schema" {
 }
 
 ///|
+test "anthropic_to_lux_request - tool types mapped to kinds" {
+  let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}],\"tools\":[{\"type\":\"custom\",\"name\":\"f\",\"input_schema\":{\"type\":\"object\"}},{\"type\":\"code_execution_20250522\"},{\"type\":\"bash_20250124\",\"name\":\"bash\",\"description\":\"Run shell\"}]}"
+  match anthropic_to_lux_request(json) {
+    Ok(cr) =>
+      match cr.value().tools {
+        Some(tools) => {
+          assert_eq(tools.length(), 3)
+          assert_eq(tools[0].kind, Function)
+          assert_eq(tools[1].kind, CodeExecution)
+          assert_eq(tools[2].kind, Shell)
+        }
+        None => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
 test "anthropic_to_lux_request - tool_choice auto" {
   let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}],\"tool_choice\":{\"type\":\"auto\"}}"
   match anthropic_to_lux_request(json) {
@@ -240,7 +258,6 @@ test "lux_request_to_anthropic - simple user message" {
       None,
       None,
       None,
-      None,
     ),
     None,
     None,
@@ -273,7 +290,6 @@ test "lux_request_to_anthropic - instructions as system" {
       Some(1024),
       None,
       false,
-      None,
       None,
       None,
       None,
@@ -319,7 +335,6 @@ test "lux_request_to_anthropic - tool_use encoded" {
       None,
       None,
       None,
-      None,
     ),
     None,
     None,
@@ -359,7 +374,6 @@ test "lux_request_to_anthropic - tool_result encoded" {
       None,
       None,
       None,
-      None,
     ),
     None,
     None,
@@ -391,7 +405,6 @@ test "lux_request_to_anthropic - thinking encoded" {
       Some(1024),
       None,
       false,
-      None,
       None,
       None,
       None,
@@ -431,7 +444,6 @@ test "lux_request_to_anthropic - tools with input_schema" {
       None,
       None,
       None,
-      None,
     ),
     None,
     None,
@@ -440,6 +452,44 @@ test "lux_request_to_anthropic - tools with input_schema" {
   )
   match lux_request_to_anthropic(req) {
     Ok(cr) => assert_true(cr.value().contains("\"input_schema\":"))
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "lux_request_to_anthropic - tool kinds encoded" {
+  let req = @lux.LucentRequest::from_messages(
+    "claude-sonnet-4",
+    None,
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
+    Some([
+      @lux.LucentTool::new(
+        "f",
+        Some("d"),
+        "{\"type\":\"object\"}",
+        None,
+        Function,
+      ),
+      @lux.LucentTool::new("", None, "{}", None, CodeExecution),
+      @lux.LucentTool::new("bash", Some("Run shell"), "{}", None, Shell),
+    ]),
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_anthropic(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      // custom 工具保持 name + input_schema，无 type 字段
+      assert_true(s.contains("\"input_schema\":"))
+      // code_execution_20250522 只有 type
+      assert_true(s.contains("\"type\":\"code_execution_20250522\""))
+      // bash_20250124 携带 name
+      assert_true(s.contains("\"type\":\"bash_20250124\""))
+    }
     Err(_) => assert_true(false)
   }
 }
@@ -459,7 +509,6 @@ test "lux_request_to_anthropic - thinking config" {
       Some(1024),
       None,
       false,
-      None,
       None,
       None,
       None,

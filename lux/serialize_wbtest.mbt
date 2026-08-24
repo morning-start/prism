@@ -644,7 +644,6 @@ test "LucentOptions::to_json - all fields" {
     Some(["STOP"]),
     true,
     Some(1),
-    Some(42),
     Some(JsonObject),
     None,
     None,
@@ -669,10 +668,6 @@ test "LucentOptions::to_json - all fields" {
   match json_num(jv, "max_output_tokens") {
     Some(v) => assert_eq(v, 4096.0)
     _ => fail("missing max")
-  }
-  match json_num(jv, "seed") {
-    Some(v) => assert_eq(v, 42.0)
-    _ => fail("missing seed")
   }
   match json_arr(jv, "stop") {
     Some(arr) => assert_eq(arr.length(), 1)
@@ -714,8 +709,8 @@ test "LucentReasoningConfig::to_json - enabled with effort" {
 test "LucentCapabilities::to_json - default" {
   let caps = LucentCapabilities::default()
   let jv = caps.to_json()
-  match json_bool(jv, "tool_calling") {
-    Some(v) => assert_eq(v, false)
+  match json_str(jv, "tool_calling") {
+    Some(v) => assert_eq(v, "none")
     _ => fail("wrong tool_calling")
   }
   match json_arr(jv, "input_modalities") {

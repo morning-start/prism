@@ -14,6 +14,10 @@
       "type": "string",
       "enum": ["text", "image", "audio", "video", "pdf"]
     },
+    "SupportLevel": {
+      "type": "string",
+      "enum": ["full", "partial", "none"]
+    },
     "LucentMediaSource": {
       "oneOf": [
         { "type": "string", "const": "inline", "description": "base64 内联数据" },
@@ -282,11 +286,11 @@
     "LucentCapabilities": {
       "type": "object",
       "properties": {
-        "tool_calling": { "type": "boolean" },
-        "parallel_tool_calls": { "type": "boolean" },
-        "reasoning": { "type": "boolean" },
-        "multimodal_input": { "type": "boolean" },
-        "structured_output": { "type": "boolean" },
+        "tool_calling": { "$ref": "#/definitions/SupportLevel" },
+        "parallel_tool_calls": { "$ref": "#/definitions/SupportLevel" },
+        "reasoning": { "$ref": "#/definitions/SupportLevel" },
+        "multimodal_input": { "$ref": "#/definitions/SupportLevel" },
+        "structured_output": { "$ref": "#/definitions/SupportLevel" },
         "input_modalities": { "type": "array", "items": { "$ref": "#/definitions/LucentModality" } },
         "output_modalities": { "type": "array", "items": { "$ref": "#/definitions/LucentModality" } }
       },

@@ -150,13 +150,13 @@ fn run_agent(text: String, tools: Array[SdkTool]) {
 let caps = prism.capability("anthropic")
 match caps {
   Some(c) => {
-    if c.capabilities.tool_calling {
+    if c.capabilities.tool_calling != Absent {
       // 确认支持工具调用
     }
-    if c.capabilities.multimodal_input {
+    if c.capabilities.multimodal_input != Absent {
       // 可以传入图片
     }
-    if c.capabilities.reasoning {
+    if c.capabilities.reasoning != Absent {
       // 可以启用推理
     }
   }
