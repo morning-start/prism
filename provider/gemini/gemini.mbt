@@ -385,10 +385,10 @@ fn gemini_thinking_level_to_effort(
   level : String,
 ) -> (@lux.LucentReasoningEffort, Bool) {
   match level {
-    "low" => (@lux.LucentReasoningEffort::Low, false)
-    "medium" => (@lux.LucentReasoningEffort::Medium, false)
-    "high" => (@lux.LucentReasoningEffort::High, false)
-    _ => (@lux.LucentReasoningEffort::Low, true)
+    "low" => (Low, false)
+    "medium" => (Medium, false)
+    "high" => (High, false)
+    _ => (Low, true)
   }
 }
 
