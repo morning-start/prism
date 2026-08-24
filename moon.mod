@@ -1,5 +1,7 @@
 name = "morning-start/prism"
 
+source = "src"
+
 version = "0.1.0"
 
 readme = "README.mbt.md"

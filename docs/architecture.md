@@ -12,17 +12,17 @@
 ## 架构总览
 
 ```
-lux/          ← Lucent IR 核心（纯数据结构，无 IO、无厂商绑定）
+src/lux/      ← Lucent IR 核心（纯数据结构，无 IO、无厂商绑定）
     │
-    ├── provider/openai_chat/      ← OpenAI Chat 适配器 ✅
-    ├── provider/openai_responses/ ← OpenAI Responses 适配器 ✅
-    ├── provider/openai_codex/     ← OpenAI Codex 变体 ✅
-    ├── provider/openai_azure/     ← Azure OpenAI 变体 ✅
-    ├── provider/anthropic/        ← Anthropic Messages 适配器 ✅
-    ├── provider/gemini/           ← Google Gemini 适配器 ✅
-    ├── provider/gemini_vertex/    ← Google Vertex AI 变体 ✅
+    ├── src/provider/openai_chat/      ← OpenAI Chat 适配器 ✅
+    ├── src/provider/openai_responses/ ← OpenAI Responses 适配器 ✅
+    ├── src/provider/openai_codex/     ← OpenAI Codex 变体 ✅
+    ├── src/provider/openai_azure/     ← Azure OpenAI 变体 ✅
+    ├── src/provider/anthropic/        ← Anthropic Messages 适配器 ✅
+    ├── src/provider/gemini/           ← Google Gemini 适配器 ✅
+    ├── src/provider/gemini_vertex/    ← Google Vertex AI 变体 ✅
     │
-    └── wasm/                      ← WASM 导出层（15 个导出函数，以 .mbti 为真值）✅
+    └── src/wasm/                      ← WASM 导出层（15 个导出函数，以 .mbti 为真值）✅
 ```
 
 每一层都是纯函数；公开转换契约通过 `ProviderRegistration` 注册表（6 个纯函数）分发，`ConversionResult` 已接入请求/响应校验（`decode_response_with_diagnostics` / `encode_request_with_diagnostics`）。
@@ -32,36 +32,40 @@ lux/          ← Lucent IR 核心（纯数据结构，无 IO、无厂商绑定�
 ```
 prism/
 │
-├── moon.mod                     # 模块元数据，name = "morning-start/prism"
+├── moon.mod                     # 模块元数据，name = "morning-start/prism"，source = "src"
 │
-├── lux/                         # Lucent IR 核心包
-│   ├── moon.pkg                 # 依赖 moonbitlang/core/json
-│   ├── lux.mbt                  # 34+ 核心类型定义
-│   ├── stream.mbt               # 流式事件枚举 + 累加器
-│   ├── serialize.mbt            # to_json() 显式序列化
-│   ├── deserialize.mbt          # from_json() 显式反序列化
-│   ├── lux_wbtest.mbt           # 核心类型白盒测试
-│   ├── serialize_wbtest.mbt     # 序列化白盒测试
-│   └── deserialize_wbtest.mbt   # 反序列化 round-trip 测试
-│
-├── provider/                    # 厂商适配器
-│   ├── openai_chat/
-│   │   ├── moon.pkg             # 依赖 lux + moonbitlang/core/json
-│   │   ├── chat.mbt             # 6 函数（双向转换 + 流式）
-│   │   └── chat_wbtest.mbt      # 35+ 测试
+├── src/                         # 源码根（source = "src"）
+│   ├── moon.pkg                 # 根包：类型提升（Prism/PrismOptions/PrismEvent 等）
+│   ├── prism.mbt                # 根包入口，use morning-start/prism 即用
 │   │
-│   ├── anthropic/               # Anthropic Messages 适配器
-│   ├── openai_responses/        # OpenAI Responses 适配器
-│   ├── openai_codex/            # OpenAI Codex 变体
-│   ├── openai_azure/            # Azure OpenAI 变体
-│   ├── gemini/                  # Google Gemini 适配器
-│   └── gemini_vertex/           # Google Vertex AI 变体
-│
-├── sdk/                         # Provider 注册表 + Prism/Context/Event
-│
-├── wasm/                        # WASM 导出层
-│   ├── moon.pkg                 # 依赖 sdk + lux
-│   └── wasm.mbt                # 15 导出函数（以 .mbti 为真值，见 scripts/export_count.sh）
+│   ├── lux/                     # Lucent IR 核心包
+│   │   ├── moon.pkg             # 依赖 moonbitlang/core/json
+│   │   ├── lux.mbt              # 34+ 核心类型定义
+│   │   ├── stream.mbt           # 流式事件枚举 + 累加器
+│   │   ├── serialize.mbt        # to_json() 显式序列化
+│   │   ├── deserialize.mbt      # from_json() 显式反序列化
+│   │   ├── lux_wbtest.mbt       # 核心类型白盒测试
+│   │   ├── serialize_wbtest.mbt # 序列化白盒测试
+│   │   └── deserialize_wbtest.mbt # 反序列化 round-trip 测试
+│   │
+│   ├── provider/                # 厂商适配器
+│   │   ├── openai_chat/
+│   │   │   ├── moon.pkg         # 依赖 lux + moonbitlang/core/json
+│   │   │   ├── chat.mbt         # 6 函数（双向转换 + 流式）
+│   │   │   └── chat_wbtest.mbt  # 35+ 测试
+│   │   │
+│   │   ├── anthropic/           # Anthropic Messages 适配器
+│   │   ├── openai_responses/    # OpenAI Responses 适配器
+│   │   ├── openai_codex/        # OpenAI Codex 变体
+│   │   ├── openai_azure/        # Azure OpenAI 变体
+│   │   ├── gemini/              # Google Gemini 适配器
+│   │   └── gemini_vertex/       # Google Vertex AI 变体
+│   │
+│   ├── sdk/                     # Provider 注册表 + Prism/Context/Event
+│   │
+│   └── wasm/                    # WASM 导出层
+│       ├── moon.pkg             # 依赖 sdk + lux
+│       └── wasm.mbt             # 15 导出函数（以 .mbti 为真值，见 scripts/export_count.sh）
 │
 ├── schemas/
 │   └── lux-ir-v1.json           # JSON Schema v1（事实标准）

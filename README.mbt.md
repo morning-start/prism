@@ -184,7 +184,7 @@ match prism.decode_sse(sse_text) {
 | 客户端 SDK（clients/go、clients/python，传输可插拔） | ✅（HTTP/UDS/WS 一行切换） |
 | 质量门禁 | ✅ 警告 506→0（CI `--deny-warn`）、导出数生成式维护（`scripts/export_count.sh`） |
 | SDK 验证（T01-T12） | ✅ 全部完成 |
-| 运行示例（examples/sdk-basic） | ✅ 可运行 |
+| 运行示例（src/examples/sdk-basic） | ✅ 可运行 |
 | WASM 真实 API 测试 | ✅ 通过 |
 
 当前仓库可验证的是 MoonBit native/wasm-gc 核心（**807 测试全绿、0 警告**），基于 classic `wasm` 目标的 Go/TS wrapper（UTF-16 线性内存 ABI），以及 `transport/daemon` 三传输运行时（HTTP/UDS/WS，Go + wazero）与 `clients/go`、`clients/python` SDK。
@@ -198,7 +198,7 @@ match prism.decode_sse(sse_text) {
 **运行示例：**
 ```bash
 # MoonBit SDK 示例
-moon run examples/sdk-basic
+moon run src/examples/sdk-basic
 
 # TypeScript WASM 示例（真实 API），详见 examples/README.md
 cd examples/ts-wasm && bun run src/main.ts
@@ -223,7 +223,7 @@ INS.POST 165:
 ### MoonBit SDK 示例
 
 ```bash
-moon run examples/sdk-basic
+moon run src/examples/sdk-basic
 ```
 
 展示内容：

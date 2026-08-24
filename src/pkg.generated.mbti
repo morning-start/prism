@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "morning-start/prism"
+package "morning-start/prism/src"
 
 import {
   "morning-start/prism/sdk",

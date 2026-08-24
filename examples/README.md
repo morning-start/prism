@@ -7,12 +7,13 @@
 ## 目录结构
 
 ```
-examples/
+src/examples/           # MoonBit 示例（源码根 src/ 下）
 ├── sdk-basic/          # MoonBit SDK 示例
 │   ├── moon.pkg        # 包配置
 │   ├── main.mbt        # 主程序
-│   └── main_test.mbt   # 测试文件
+│   └── main_wbtest.mbt # 测试文件
 │
+examples/               # 其余示例
 ├── ts-wasm/            # TypeScript WASM 示例（真实 API）
 │   ├── package.json    # 项目配置
 │   ├── .env            # 环境变量（API Key）
@@ -35,7 +36,7 @@ examples/
 **运行示例：**
 ```bash
 # 在项目根目录
-moon run examples/sdk-basic
+moon run src/examples/sdk-basic
 ```
 
 **运行测试：**
