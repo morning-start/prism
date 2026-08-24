@@ -178,7 +178,7 @@ match prism.decode_sse(sse_text) {
 | SDK 表层 API（Prism / Context / Event） | ✅ |
 | WASM 导出层（15 个导出函数，见 scripts/export_count.sh） | ✅ |
 | MoonBit 测试 | ✅ **807 passed** |
-| 多语言 wrapper（Go/TS/Python） | ✅ 可用（classic wasm ABI） |
+| 多语言 wrapper（Go/TS） | ✅ 可用（classic wasm ABI） |
 | Transport Daemon（HTTP JSON-RPC + SSE 流式） | ✅（Go，wazero backend） |
 | Transport Daemon（UDS/NamedPipe/WebSocket + session 流式） | ✅ |
 | 客户端 SDK（clients/go、clients/python，传输可插拔） | ✅（HTTP/UDS/WS 一行切换） |
@@ -187,7 +187,7 @@ match prism.decode_sse(sse_text) {
 | 运行示例（examples/sdk-basic） | ✅ 可运行 |
 | WASM 真实 API 测试 | ✅ 通过 |
 
-当前仓库可验证的是 MoonBit native/wasm-gc 核心（**807 测试全绿、0 警告**），基于 classic `wasm` 目标的 Go/TS/Python wrapper（UTF-16 线性内存 ABI），以及 `transport/daemon` 三传输运行时（HTTP/UDS/WS，Go + wazero）与 `clients/go`、`clients/python` SDK。
+当前仓库可验证的是 MoonBit native/wasm-gc 核心（**807 测试全绿、0 警告**），基于 classic `wasm` 目标的 Go/TS wrapper（UTF-16 线性内存 ABI），以及 `transport/daemon` 三传输运行时（HTTP/UDS/WS，Go + wazero）与 `clients/go`、`clients/python` SDK。
 
 **WASM 真实 API 测试结果：**
 - 请求转换 (OpenAI Chat → Anthropic/Gemini) ✅

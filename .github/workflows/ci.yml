@@ -129,32 +129,6 @@ jobs:
         run: |
           node --experimental-strip-types wrappers/ts/test/integration.test.ts
 
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-
-      - name: H10. Python wrapper integration test
-        run: |
-          cd wrappers/py
-          PYTHONPATH=src uv run --frozen python - <<'EOF'
-          import json
-          from prism_wasm import PrismClient
-          client = PrismClient('../../_build/wasm/debug/build/cmd/main/main.wasm')
-          cap = client.capability('openai')
-          assert cap['provider'] == 'openai' and 'model_pattern' in cap
-          req = json.loads(client.encode_request('openai', 'Hello'))
-          assert req['input'][0]['content'][0]['text'] == 'Hello'
-          resp = json.dumps({'id':'1','object':'chat.completion','model':'gpt-4o','choices':[{'index':0,'message':{'role':'assistant','content':'Hi'},'finish_reason':'stop'}]})
-          assert client.decode_response('openai-chat', resp) == 'Hi'
-          print('python wrapper integration passed')
-          EOF
-
-      - name: H10b. Python wrapper test suite (pytest)
-        run: |
-          cd wrappers/py
-          uv run --frozen pytest -q
-
       - name: H11. Transport daemon build + integration test
         run: |
           cd transport/daemon

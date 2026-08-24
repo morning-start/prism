@@ -9,13 +9,12 @@
 1. [快速概览](#1-快速概览)
 2. [MoonBit 原生使用](#2-moonbit-原生使用)
 3. [Go wrapper 使用](#3-go-wrapper-使用)
-4. [Python wrapper 使用](#4-python-wrapper-使用)
-5. [TypeScript wrapper 使用](#5-typescript-wrapper-使用)
-6. [场景一：嵌入 SDK —— 应用内协议转换](#6-场景一嵌入-sdk--应用内协议转换)
-7. [场景二：跨协议中间件 —— 网关模式](#7-场景二跨协议中间件--网关模式)
-8. [场景三：流式转码 —— SSE 处理](#8-场景三流式转码--sse-处理)
-9. [场景四：企业审计网关 —— 全量日志](#9-场景四企业审计网关--全量日志)
-10. [完整 API 参考](#10-完整-api-参考)
+4. [TypeScript wrapper 使用](#4-typescript-wrapper-使用)
+5. [场景一：嵌入 SDK —— 应用内协议转换](#5-场景一嵌入-sdk--应用内协议转换)
+6. [场景二：跨协议中间件 —— 网关模式](#6-场景二跨协议中间件--网关模式)
+7. [场景三：流式转码 —— SSE 处理](#7-场景三流式转码--sse-处理)
+8. [场景四：企业审计网关 —— 全量日志](#8-场景四企业审计网关--全量日志)
+9. [完整 API 参考](#9-完整-api-参考)
 
 ---
 
@@ -31,13 +30,12 @@ Gemini JSON  ◄──[encode]──  Lucent IR  ◄──[decode]──  OpenAI
                     （审计、改写、路由、过滤）
 ```
 
-Prism 提供 **四种使用形态**：
+Prism 提供 **三种使用形态**：
 
 | 形态 | 适合谁 | 一句话 |
 |------|--------|--------|
 | MoonBit SDK | MoonBit 用户 | `Prism::new().with_provider("openai")` |
 | Go wrapper | Go 服务端开发者 | `prism.New(wasmBytes)` |
-| Python wrapper | AI/ML 开发者 | `PrismClient("prism.wasm")` |
 | TypeScript wrapper | Node/Bun 全栈开发者 | `new PrismClient(wasmBytes)` |
 
 ---
@@ -154,59 +152,15 @@ func main() {
 
 ---
 
-## 4. Python wrapper 使用
+## 4. TypeScript wrapper 使用
 
 ### 4.1 安装
-
-```bash
-pip install prism-wasm
-```
-
-### 4.2 快速开始
-
-```python
-from prism_wasm import PrismClient
-
-client = PrismClient("prism.wasm")
-
-# 编码请求
-req = client.encode_request("openai", "你好")
-print(req)  # → {"model":"gpt-4o","messages":[...]}
-
-# 解码响应
-text = client.decode_response("openai", resp_json)
-print(text)  # → "你好！有什么可以帮你的？"
-
-# 跨协议转换
-anthropic_req = client.convert("openai", "anthropic", "request", openai_req)
-
-# 列出所有 provider
-print(client.list_providers())
-# → ["openai", "openai-chat", "anthropic", "gemini", ...]
-```
-
-### 4.3 异步版本
-
-```python
-from prism_wasm import AsyncPrismClient
-
-async def main():
-    client = AsyncPrismClient("prism.wasm")
-    req = await client.encode_request("openai", "你好")
-    events = await client.decode_sse("anthropic", sse_text)
-```
-
----
-
-## 5. TypeScript wrapper 使用
-
-### 5.1 安装
 
 ```bash
 bun add @morning-start/prism-wasm
 ```
 
-### 5.2 快速开始
+### 4.2 快速开始
 
 ```typescript
 import { PrismClient } from "@morning-start/prism-wasm";
@@ -233,7 +187,7 @@ console.log(cap);  // → { provider: "openai" }
 
 ---
 
-## 6. 场景一：嵌入 SDK —— 应用内协议转换
+## 5. 场景一：嵌入 SDK —— 应用内协议转换
 
 **你只需要在代码里集成一个 LLM 协议，但想让用户自由切换厂商。**
 
@@ -278,7 +232,7 @@ app2 = LLMApp("gemini", "AIza-xxx")
 
 ---
 
-## 7. 场景二：跨协议中间件 —— 网关模式
+## 6. 场景二：跨协议中间件 —— 网关模式
 
 **你的客户端只支持 OpenAI 格式，但你想用 Anthropic 的 Claude 模型。**
 
@@ -358,7 +312,7 @@ requests.post("http://localhost:5000/v1/chat/completions", json={
 
 ---
 
-## 8. 场景三：流式转码 —— SSE 处理
+## 7. 场景三：流式转码 —— SSE 处理
 
 **你在客户端收到 Anthropic 的 SSE 流，但你的 UI 只认 OpenAI 的 SSE 格式。**
 
@@ -411,7 +365,7 @@ for (const event of events) {
 
 ---
 
-## 9. 场景四：企业审计网关 —— 全量日志
+## 8. 场景四：企业审计网关 —— 全量日志
 
 **你想在每一条 LLM 请求/响应中间插入审计、脱敏、限流逻辑。**
 
@@ -474,7 +428,7 @@ class AuditGateway:
 
 ---
 
-## 10. 完整 API 参考
+## 9. 完整 API 参考
 
 ### 所有语言的统一 API 签名
 
