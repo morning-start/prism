@@ -16,6 +16,12 @@ while read -r local_ref local_sha remote_ref remote_sha || [ -n "$local_ref" ]; 
   fi
 done
 
+echo "=== [L2] moon info --target native ==="
+moon info --target native
+
+echo "=== [L2] moon check --warn-list +73 --deny-warn ==="
+moon check --warn-list +73 --deny-warn
+
 echo "=== [L2] moon test --target native ==="
 moon test --target native
 
