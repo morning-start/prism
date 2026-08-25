@@ -2,19 +2,33 @@
 package "morning-start/prism/wasm"
 
 // Values
+pub fn wasm_convert_req_trace(String, String, String, Int, Int) -> String
+
 pub fn wasm_convert_request(String, String, String) -> String
+
+pub fn wasm_convert_resp_trace(String, String, String, Int, Int) -> String
 
 pub fn wasm_convert_response(String, String, String) -> String
 
 pub fn wasm_convert_stream(String, String, String) -> String
 
+pub fn wasm_convert_stream_trace(String, String, String, Int, Int) -> String
+
 pub fn wasm_events_to_sse(String, String) -> String
 
+pub fn wasm_init_scratch(Int) -> Int
+
 pub fn wasm_list_providers() -> String
+
+pub fn wasm_log_init(Int) -> Int
+
+pub fn wasm_log_pos(Int) -> Int
 
 pub fn wasm_lux_request_to_provider(String, String) -> String
 
 pub fn wasm_lux_response_to_provider(String, String) -> String
+
+pub fn wasm_read_scratch_arg(Int, Int) -> String
 
 pub fn wasm_sdk_capability(String) -> String
 
