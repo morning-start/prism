@@ -94,6 +94,13 @@ All functions take and return strings. Call them by name from the WASM module's 
 |---|---|---|
 | `wasm_list_providers` | `()` | JSON array of all registered provider names |
 
+### Scratch buffer (2) — for large strings in pure WASM
+
+| Export | Args | Description |
+|---|---|---|
+| `wasm_init_scratch` | `(size)` | Allocate scratch buffer, return i32 address |
+| `wasm_read_scratch_arg` | `(buf_ptr, offset)` | Read String from scratch at offset |
+
 ## Envelope Contract
 
 Every function (except `wasm_list_providers`) returns an **envelope**:
@@ -152,9 +159,15 @@ These are the canonical implementations. When writing a new language wrapper, mi
 
 2. **Length is code units, not bytes**: The length header at `ptr - 4` counts UTF-16 code units (each 2 bytes), not bytes. For BMP characters it equals the character count; for supplementary characters (>U+FFFF) one character becomes two code units.
 
-3. **Scratch collision with GC heap**: Don't write argument strings above `0x1000` — the MoonBit garbage collector uses that region. Reset your scratch pointer on each call.
+3. **Scratch collision with GC heap**: Don't write argument strings above `0x1000` — the MoonBit garbage collector uses that region. Reset your scratch pointer on each call. **For large strings (>252 UTF-16 code units)**: use the WASM-side scratch buffer API (see below). If that's not available (older prism builds), use host-side dynamic memory growth (see `references/rust.md`).
 
-4. **Memory buffer detachment**: In JS/TS, `WebAssembly.Memory.buffer` detaches when memory grows. Always get a fresh `DataView`/`Uint8Array` per call, not once at load time.
+4. **WASM-side scratch buffer API** (prism ≥0.1.2): For pure WASM environments or when host-side memory growth isn't available, prism exports two functions:
+   - `wasm_init_scratch(size) → i32`: Allocates a scratch buffer in the MoonBit heap, returns its linear memory address. Call once at startup. Recommended size: 24576 (8192 × 3 args).
+   - `wasm_read_scratch_arg(buf_ptr, offset) → String`: Reads a string from the scratch buffer. Host writes UTF-16LE at `buf_ptr + offset` with length header at `buf_ptr + offset - 4`.
+   - MoonBit uses reference counting (non-moving GC), so the buffer stays at a fixed address forever.
+   - Usage pattern: call `wasm_init_scratch` → write args to returned address → call `wasm_read_scratch_arg` to get String → pass String pointer to conversion functions.
+
+4. **Memory buffer detachment**: In JS/TS, `WebAssembly.Memory.buffer` detaches when memory grows. Always get a fresh `DataView`/`Uint8Array` per call, not once at load time. This also applies when using the scratch buffer API — if you call `wasm_init_scratch` and then grow memory, the buffer address from `wasm_init_scratch` remains valid (MoonBit uses reference counting, not a moving GC).
 
 5. **_start must run**: The WASM module has a `_start` export that initializes the MoonBit runtime. Call it once after instantiation before any conversion function.
 

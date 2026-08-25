@@ -222,3 +222,40 @@ impl PrismClient {
 - Consider embedding prism.wasm with `include_bytes!()` for single-binary distribution.
 - For `no_std` environments, you'll need to handle UTF-16 conversion manually (the `alloc` crate provides `String`/`Vec`).
 - The scratch region (0x0400-0x1000) gives ~3KB for arguments. Each string gets 512 bytes of scratch space, so up to 3 arguments fit comfortably. For very long strings (>250 UTF-16 code units), consider using a larger stride or dynamic allocation.
+
+### Handling large strings (CRITICAL)
+
+The fixed scratch region (0x0400, stride 512) only holds ~252 UTF-16 code units per argument. Real-world JSON payloads (especially Anthropic requests with tool use, images, or extended thinking) often exceed this. Writing past the scratch boundary corrupts the MoonBit GC heap or panics with `index out of bounds`.
+
+**Solution**: dynamically grow WASM linear memory and write large strings at the end of the grown region, safely past the GC heap.
+
+```rust
+fn write_string(&mut self, ptr: u32, s: &str) -> u32 {
+    let units: Vec<u16> = s.encode_utf16().collect();
+    let len = units.len() as u32;
+    let needed = 4 + len * 2;
+
+    let write_ptr = if needed <= SCRATCH_STRIDE {
+        ptr  // small string: use fixed scratch slot
+    } else {
+        // large string: grow memory, write at the old end (+4 for header safety)
+        let current_pages = self.memory.size(&self.store);
+        let current_bytes = (current_pages as usize) * 65536;
+        let grow_pages = ((needed as usize + 65535) / 65536) as u64;
+        if grow_pages > 0 {
+            self.memory.grow(&mut self.store, grow_pages).unwrap();
+        }
+        (current_bytes + 4) as u32  // +4: header at ptr-4 must not land in old memory
+    };
+
+    // write header + payload at write_ptr (same as before)
+    // ...
+    write_ptr
+}
+```
+
+Key points:
+- `write_string` returns the actual `ptr` where the string was written — pass this to the WASM function, not the original scratch slot
+- The `+4` offset ensures the length header at `write_ptr - 4` stays within the newly allocated pages
+- MoonBit's GC heap grows upward from ~0x1000 but won't reach the memory end for typical workloads
+- Each `write_string` call may grow memory independently — multiple large arguments each get their own region
