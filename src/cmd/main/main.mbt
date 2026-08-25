@@ -122,6 +122,72 @@ pub fn wasm_list_providers() -> String {
 }
 
 ///|
+/// === 纯 WASM 大字符串支持 ===
+
+///|
+/// 初始化暂存缓冲区，返回线性内存地址
+pub fn wasm_init_scratch(size : Int) -> Int {
+  @wasm.wasm_init_scratch(size)
+}
+
+///|
+/// 从暂存缓冲区读取字符串参数
+pub fn wasm_read_scratch_arg(buf_ptr : Int, offset : Int) -> String {
+  @wasm.wasm_read_scratch_arg(buf_ptr, offset)
+}
+
+///|
+/// === 日志系统 ===
+
+///|
+/// 初始化日志缓冲区，返回线性内存地址
+pub fn wasm_log_init(size : Int) -> Int {
+  @wasm.wasm_log_init(size)
+}
+
+///|
+/// 获取日志缓冲区当前写入位置
+pub fn wasm_log_pos(buf_ptr : Int) -> Int {
+  @wasm.wasm_log_pos(buf_ptr)
+}
+
+///|
+/// 带追踪的请求转换
+pub fn wasm_convert_req_trace(
+  source : String,
+  json_str : String,
+  target : String,
+  log_ptr : Int,
+  log_size : Int,
+) -> String {
+  @wasm.wasm_convert_req_trace(source, json_str, target, log_ptr, log_size)
+}
+
+///|
+/// 带追踪的响应转换
+pub fn wasm_convert_resp_trace(
+  source : String,
+  json_str : String,
+  target : String,
+  log_ptr : Int,
+  log_size : Int,
+) -> String {
+  @wasm.wasm_convert_resp_trace(source, json_str, target, log_ptr, log_size)
+}
+
+///|
+/// 带追踪的流式转换
+pub fn wasm_convert_stream_trace(
+  source : String,
+  sse_str : String,
+  target : String,
+  log_ptr : Int,
+  log_size : Int,
+) -> String {
+  @wasm.wasm_convert_stream_trace(source, sse_str, target, log_ptr, log_size)
+}
+
+///|
 fn main {
   let _ = @sdk.list_provider_names()
 }
