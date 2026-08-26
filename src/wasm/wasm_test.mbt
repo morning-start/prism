@@ -494,6 +494,84 @@ test "wasm_convert_stream - openai-chat to anthropic" {
 }
 
 ///|
+/// === wasm_convert_stream_event（单事件流转换）===
+
+///|
+test "wasm_convert_stream_event - single openai-chat event to anthropic" {
+  // 单个 OpenAI Chat SSE 事件
+  let sse_event = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n"
+  let result = wasm_convert_stream_event("openai-chat", sse_event, "anthropic")
+  // 应返回信封格式
+  assert_true(result.contains("\"value\""))
+  assert_true(result.contains("\"diagnostics\""))
+  // value 应包含 Anthropic 格式的 SSE 事件
+  let jv = @json.parse(result) catch { _ => Json::null() }
+  match jv {
+    Object(map) =>
+      match map.get("value") {
+        Some(String(target_sse)) =>
+          // Anthropic SSE 应包含 content_block_delta
+          assert_true(target_sse.contains("content_block_delta"))
+        _ => fail("expected value string in envelope")
+      }
+    _ => fail("expected object envelope")
+  }
+}
+
+///|
+test "wasm_convert_stream_event - [DONE] event to anthropic" {
+  // OpenAI Chat 的流结束事件
+  let sse_event = "data: [DONE]\n\n"
+  let result = wasm_convert_stream_event("openai-chat", sse_event, "anthropic")
+  // 应返回信封格式
+  assert_true(result.contains("\"value\""))
+  let jv = @json.parse(result) catch { _ => Json::null() }
+  match jv {
+    Object(map) =>
+      match map.get("value") {
+        Some(String(target_sse)) =>
+          // Anthropic 的流结束应包含 message_stop
+          assert_true(target_sse.contains("message_stop"))
+        _ => fail("expected value string in envelope")
+      }
+    _ => fail("expected object envelope")
+  }
+}
+
+///|
+test "wasm_convert_stream_event - same protocol passthrough" {
+  // 同协议转换应返回等价内容
+  let sse_event = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n"
+  let result = wasm_convert_stream_event("openai-chat", sse_event, "openai-chat")
+  assert_true(result.contains("\"value\""))
+  let jv = @json.parse(result) catch { _ => Json::null() }
+  match jv {
+    Object(map) =>
+      match map.get("value") {
+        Some(String(target_sse)) =>
+          // 同协议应包含相同的 data: 行
+          assert_true(target_sse.contains("data:"))
+        _ => fail("expected value string in envelope")
+      }
+    _ => fail("expected object envelope")
+  }
+}
+
+///|
+test "wasm_convert_stream_event - unknown provider returns error" {
+  let result = wasm_convert_stream_event("unknown", "data: {}\n\n", "anthropic")
+  assert_true(result.contains("error"))
+  assert_true(result.contains("unknown provider"))
+}
+
+///|
+test "wasm_convert_stream_event - invalid target returns error" {
+  let result = wasm_convert_stream_event("openai-chat", "data: {}\n\n", "invalid")
+  assert_true(result.contains("error"))
+  assert_true(result.contains("unknown provider"))
+}
+
+///|
 /// === 信封 JSON（value + diagnostics）===
 
 ///|

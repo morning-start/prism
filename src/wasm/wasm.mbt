@@ -612,6 +612,33 @@ pub fn wasm_convert_stream(
 }
 
 ///|
+/// 单事件流转换：一个 SSE 事件文本 → 目标协议 SSE 事件文本
+///
+/// 与 wasm_convert_stream 的区别：
+/// - 输入是单个 SSE 事件（如 "data: {...}\n\n"），不是完整事件流
+/// - 输出是单个目标协议 SSE 事件
+/// - 无状态，可高频逐事件调用
+///
+/// 输入要求：
+/// - 必须包含完整的事件文本（含结尾 \n\n）
+/// - data: [DONE] 事件应输出目标协议的流结束事件
+///
+/// 错误处理：
+/// - 解析失败返回 {"error": "...", "diagnostics": []}
+/// - 空事件（无 data: 行）返回 {"value": "", "diagnostics": []}
+pub fn wasm_convert_stream_event(
+  source : String,
+  sse_event : String,
+  target : String,
+) -> String {
+  // 复用现有的 convert_stream，它已支持单事件输入
+  match @sdk.convert_stream(source, sse_event, target) {
+    Ok(cr) => cr.envelope_json(Json::string(cr.value())).stringify()
+    Err(e) => wasm_envelope_err(e)
+  }
+}
+
+///|
 /// === 查询 ===
 
 ///|

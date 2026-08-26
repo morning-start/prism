@@ -83,3 +83,61 @@ pub fn parse_sse_line(line : StringView) -> SseLine? {
   }
   None
 }
+
+///|
+/// 从 SSE 流中提取所有 data 行并合并
+///
+/// SSE 规范允许多个 data: 行合并为一个事件（用换行符连接）。
+/// 此函数正确处理多行 data，并过滤注释行和心跳。
+pub fn extract_sse_events(sse_str : String) -> Array[String] {
+  let events : Array[String] = []
+  let lines = sse_str.split("\n").to_array()
+  let mut current_data : Array[String] = []
+  let mut i = 0
+  while i < lines.length() {
+    let line = lines[i].to_owned()
+    // 空行表示事件边界
+    if line.trim() == "" {
+      if current_data.length() > 0 {
+        events.push(current_data.join("\n"))
+        current_data = []
+      }
+      i = i + 1
+      continue
+    }
+    // 跳过注释行（以 : 开头，如心跳 : keep-alive）
+    if line.length() > 0 && line[0] == ':' {
+      i = i + 1
+      continue
+    }
+    // 检查 data: 前缀
+    let is_data = line.length() >= 5 &&
+      line[0] == 'd' &&
+      line[1] == 'a' &&
+      line[2] == 't' &&
+      line[3] == 'a' &&
+      line[4] == ':'
+    if is_data {
+      // 提取 data: 后的内容
+      let mut payload = ""
+      let mut p = 5
+      // 跳过 data: 后的可选空格
+      if p < line.length() && line[p] == ' ' {
+        p = p + 1
+      }
+      while p < line.length() {
+        let ch = Int::unsafe_to_char(line[p].to_int())
+        payload = payload + "\{ch}"
+        p = p + 1
+      }
+      current_data.push(payload)
+    }
+    // 忽略其他行（event: 等）
+    i = i + 1
+  }
+  // 处理最后一个事件（如果没有尾部空行）
+  if current_data.length() > 0 {
+    events.push(current_data.join("\n"))
+  }
+  events
+}

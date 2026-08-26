@@ -188,6 +188,16 @@ pub fn wasm_convert_stream_trace(
 }
 
 ///|
+/// 单事件流转换：source SSE 事件 → target SSE 事件
+pub fn wasm_convert_stream_event(
+  source : String,
+  sse_event : String,
+  target : String,
+) -> String {
+  @wasm.wasm_convert_stream_event(source, sse_event, target)
+}
+
+///|
 fn main {
   let _ = @sdk.list_provider_names()
 }

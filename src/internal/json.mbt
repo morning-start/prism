@@ -75,6 +75,115 @@ pub fn field_int_exact(jv : Json, key : String) -> Int? {
 }
 
 ///|
+/// 清理 JSON 字符串中的 SSE 心跳标记
+///
+/// 某些 SSE 实现会在数据后附加心跳标记（如 `: keep-alive`），
+/// 导致 JSON 字符串中混入非法内容。此函数移除这些标记。
+pub fn clean_sse_heartbeat(s : String) -> String {
+  // 移除常见的 SSE 心跳标记
+  // 模式：`": keep-alive` 或 `: keep-alive` 在字符串末尾
+  let trimmed = s.trim_end().to_owned()
+  // 检查是否以心跳标记结尾
+  let heartbeat_patterns = [
+    ": keep-alive",
+    ":keep-alive",
+    ": heartbeat",
+    ":heartbeat",
+  ]
+  let mut result = trimmed
+  let mut j = 0
+  while j < heartbeat_patterns.length() {
+    let pattern = heartbeat_patterns[j]
+    // 检查字符串是否以模式结尾
+    if result.length() > pattern.length() {
+      let suffix = result[result.length() - pattern.length():result.length()].to_owned()
+      if suffix == pattern {
+        result = result[0:result.length() - pattern.length()].to_owned()
+      }
+    }
+    j = j + 1
+  }
+  result
+}
+
+///|
+/// 检测 JSON 字符串是否被截断
+///
+/// 检查常见截断模式：
+/// - 字符串未闭合（奇数个未转义引号）
+/// - 对象/数组未闭合（括号不匹配）
+pub fn is_json_truncated(s : String) -> Bool {
+  let mut in_string = false
+  let mut escape_next = false
+  let mut brace_depth = 0
+  let mut bracket_depth = 0
+  let mut i = 0
+  while i < s.length() {
+    let cp = s[i]
+    if escape_next {
+      escape_next = false
+      i = i + 1
+      continue
+    }
+    if cp == '\\' && in_string {
+      escape_next = true
+      i = i + 1
+      continue
+    }
+    if cp == '"' {
+      in_string = !in_string
+    }
+    if !in_string {
+      if cp == '{' {
+        brace_depth = brace_depth + 1
+      } else if cp == '}' {
+        brace_depth = brace_depth - 1
+      } else if cp == '[' {
+        bracket_depth = bracket_depth + 1
+      } else if cp == ']' {
+        bracket_depth = bracket_depth - 1
+      }
+    }
+    i = i + 1
+  }
+  // 截断条件：字符串未闭合 或 括号不匹配
+  in_string || brace_depth != 0 || bracket_depth != 0
+}
+
+///|
+/// 清理 JSON 字符串中的无效转义序列
+///
+/// 某些 API（如 OpenAI）可能在字符串字段中包含非标准转义（如 `\:`），
+/// 导致标准 JSON 解析器失败。此函数将无效转义 `\X` 替换为 `\\X`。
+pub fn sanitize_json_escapes(s : String) -> String {
+  let sb = StringBuilder()
+  let mut i = 0
+  while i < s.length() {
+    let cp = s[i]
+    if cp == '\\' && i + 1 < s.length() {
+      let next = s[i + 1]
+      // 有效 JSON 转义: ", \, /, b, f, n, r, t, uXXXX
+      if next == '"' || next == '\\' || next == '/' ||
+        next == 'b' || next == 'f' || next == 'n' ||
+        next == 'r' || next == 't' || next == 'u' {
+        sb.write_char(Int::unsafe_to_char(cp.to_int()))
+        sb.write_char(Int::unsafe_to_char(next.to_int()))
+        i = i + 2
+      } else {
+        // 无效转义：转义反斜杠本身
+        sb.write_string("\\\\")
+        sb.write_char(Int::unsafe_to_char(next.to_int()))
+        i = i + 2
+      }
+    } else {
+      sb.write_char(Int::unsafe_to_char(cp.to_int()))
+      i = i + 1
+    }
+  }
+  sb.to_string()
+}
+
+///|
 /// JSON 字符串转义（用于 SSE 手动拼接等非标准输出）
 pub fn json_escape(s : String) -> String {
   let sb = StringBuilder()

@@ -1044,6 +1044,15 @@ pub fn openai_chat_sse_to_events(
         i = i + 1
         continue
       }
+      // 清理 SSE 心跳标记（如 : keep-alive）
+      payload = @internal.clean_sse_heartbeat(payload)
+      // 检测截断的 JSON（字符串未闭合、括号不匹配）
+      if @internal.is_json_truncated(payload) {
+        i = i + 1
+        continue
+      }
+      // 清理无效转义序列（某些 API 可能包含 \: 等非标准转义）
+      payload = @internal.sanitize_json_escapes(payload)
       let jv = @json.parse(payload) catch {
         _ => {
           i = i + 1

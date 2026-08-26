@@ -31,6 +31,7 @@ options(
         "wasm_convert_req_trace",
         "wasm_convert_resp_trace",
         "wasm_convert_stream_trace",
+        "wasm_convert_stream_event",
       ],
       "export-memory-name": "memory",
     },

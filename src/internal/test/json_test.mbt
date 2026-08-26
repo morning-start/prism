@@ -268,3 +268,144 @@ test "parse_json_opt - whitespace around JSON" {
     None => fail("expected Some for JSON with whitespace")
   }
 }
+
+///|
+/// === sanitize_json_escapes ===
+
+///|
+test "sanitize_json_escapes - valid escapes preserved" {
+  let input = "\"hello\\nworld\""
+  let result = @internal.sanitize_json_escapes(input)
+  assert_eq(result, "\"hello\\nworld\"")
+}
+
+///|
+test "sanitize_json_escapes - invalid escape fixed" {
+  // \: 不是有效 JSON 转义，应被转义为 \\:
+  let input = "\"test\\:value\""
+  let result = @internal.sanitize_json_escapes(input)
+  assert_eq(result, "\"test\\\\:value\"")
+}
+
+///|
+test "sanitize_json_escapes - mixed valid and invalid" {
+  let input = "\"line1\\nline2\\:end\""
+  let result = @internal.sanitize_json_escapes(input)
+  assert_eq(result, "\"line1\\nline2\\\\:end\"")
+}
+
+///|
+test "sanitize_json_escapes - backslash at end" {
+  // 反斜杠在字符串末尾，没有下一个字符
+  let input = "\"test\\"
+  let result = @internal.sanitize_json_escapes(input)
+  assert_eq(result, "\"test\\")
+}
+
+///|
+test "sanitize_json_escapes - all valid escapes" {
+  let input = "\"\\\"\\\\\\/\\b\\f\\n\\r\\t\\u0041\""
+  let result = @internal.sanitize_json_escapes(input)
+  assert_eq(result, "\"\\\"\\\\\\/\\b\\f\\n\\r\\t\\u0041\"")
+}
+
+///|
+test "sanitize_json_escapes - real world OpenAI instructions" {
+  // 模拟 OpenAI 返回的 instructions 字段，包含 \:
+  let input = "{\"instructions\":\"You are opencode.\\n\\nIMPORTANT:\\: keep-alive.\"}"
+  let result = @internal.sanitize_json_escapes(input)
+  // 验证结果可以被正确解析
+  let jv = @json.parse(result) catch { _ => Json::null() }
+  match @internal.obj_get(jv, "instructions") {
+    Some(String(s)) => assert_true(s.contains("keep-alive"))
+    _ => fail("expected instructions field")
+  }
+}
+
+///|
+/// === is_json_truncated ===
+
+///|
+test "is_json_truncated - valid JSON object" {
+  assert_false(@internal.is_json_truncated("{\"key\":\"value\"}"))
+}
+
+///|
+test "is_json_truncated - truncated string (unterminated quote)" {
+  assert_true(@internal.is_json_truncated("{\"key\":\"value"))
+}
+
+///|
+test "is_json_truncated - truncated object (missing closing brace)" {
+  assert_true(@internal.is_json_truncated("{\"key\":\"value\""))
+}
+
+///|
+test "is_json_truncated - truncated array (missing closing bracket)" {
+  assert_true(@internal.is_json_truncated("[1,2,3"))
+}
+
+///|
+test "is_json_truncated - nested truncated" {
+  assert_true(@internal.is_json_truncated("{\"a\":{\"b\":\"c\"}"))
+}
+
+///|
+test "is_json_truncated - escaped quotes handled correctly" {
+  // 引号被转义，不是字符串结束
+  assert_false(@internal.is_json_truncated("{\"key\":\"val\\\"ue\"}"))
+}
+
+///|
+test "is_json_truncated - real world truncated instructions" {
+  // 模拟实际截断的 JSON
+  let input = "{\"type\":\"response.created\",\"response\":{\"id\":\"resp_123\",\"created_at\":1787722174,\"instructions\":\"You are opencode.\\n\\nIMPORTANT: keep-alive.\"}"
+  assert_true(@internal.is_json_truncated(input))
+}
+
+///|
+/// === clean_sse_heartbeat ===
+
+///|
+test "clean_sse_heartbeat - removes : keep-alive at end" {
+  let input = "{\"key\":\"value\"}: keep-alive"
+  let result = @internal.clean_sse_heartbeat(input)
+  assert_eq(result, "{\"key\":\"value\"}")
+}
+
+///|
+test "clean_sse_heartbeat - removes :keep-alive at end" {
+  let input = "{\"key\":\"value\"}:keep-alive"
+  let result = @internal.clean_sse_heartbeat(input)
+  assert_eq(result, "{\"key\":\"value\"}")
+}
+
+///|
+test "clean_sse_heartbeat - removes : heartbeat at end" {
+  let input = "{\"key\":\"value\"}: heartbeat"
+  let result = @internal.clean_sse_heartbeat(input)
+  assert_eq(result, "{\"key\":\"value\"}")
+}
+
+///|
+test "clean_sse_heartbeat - preserves valid JSON" {
+  let input = "{\"key\":\"value\"}"
+  let result = @internal.clean_sse_heartbeat(input)
+  assert_eq(result, "{\"key\":\"value\"}")
+}
+
+///|
+test "clean_sse_heartbeat - preserves heartbeat in middle" {
+  // 心跳标记在字符串中间，不应被移除
+  let input = "{\"key\":\"value: keep-alive\"}"
+  let result = @internal.clean_sse_heartbeat(input)
+  assert_eq(result, "{\"key\":\"value: keep-alive\"}")
+}
+
+///|
+test "clean_sse_heartbeat - real world SSE with heartbeat" {
+  // 模拟实际 SSE 数据，末尾有心跳
+  let input = "{\"type\":\"response.created\",\"response\":{\"id\":\"resp_123\"}}: keep-alive"
+  let result = @internal.clean_sse_heartbeat(input)
+  assert_eq(result, "{\"type\":\"response.created\",\"response\":{\"id\":\"resp_123\"}}")
+}

@@ -134,3 +134,92 @@ test "parse_sse_line - event without data content" {
     None => fail("expected Some")
   }
 }
+
+///|
+/// === extract_sse_events ===
+
+///|
+test "extract_sse_events - single event" {
+  let sse = "data: {\"key\":\"value\"}\n\n"
+  let events = @internal.extract_sse_events(sse)
+  assert_eq(events.length(), 1)
+  assert_eq(events[0], "{\"key\":\"value\"}")
+}
+
+///|
+test "extract_sse_events - multiple events" {
+  let sse = "data: {\"id\":1}\n\ndata: {\"id\":2}\n\n"
+  let events = @internal.extract_sse_events(sse)
+  assert_eq(events.length(), 2)
+  assert_eq(events[0], "{\"id\":1}")
+  assert_eq(events[1], "{\"id\":2}")
+}
+
+///|
+test "extract_sse_events - filters heartbeat comments" {
+  // 心跳注释行应被过滤
+  let sse = "data: {\"key\":\"value\"}\n: keep-alive\n\n"
+  let events = @internal.extract_sse_events(sse)
+  assert_eq(events.length(), 1)
+  assert_eq(events[0], "{\"key\":\"value\"}")
+}
+
+///|
+test "extract_sse_events - filters heartbeat between events" {
+  // 心跳在两个事件之间
+  let sse = "data: {\"id\":1}\n\n: keep-alive\ndata: {\"id\":2}\n\n"
+  let events = @internal.extract_sse_events(sse)
+  assert_eq(events.length(), 2)
+  assert_eq(events[0], "{\"id\":1}")
+  assert_eq(events[1], "{\"id\":2}")
+}
+
+///|
+test "extract_sse_events - multi-line data" {
+  // 多个 data: 行应合并
+  let sse = "data: line1\ndata: line2\n\n"
+  let events = @internal.extract_sse_events(sse)
+  assert_eq(events.length(), 1)
+  assert_eq(events[0], "line1\nline2")
+}
+
+///|
+test "extract_sse_events - [DONE] sentinel" {
+  let sse = "data: [DONE]\n\n"
+  let events = @internal.extract_sse_events(sse)
+  assert_eq(events.length(), 1)
+  assert_eq(events[0], "[DONE]")
+}
+
+///|
+test "extract_sse_events - empty stream" {
+  let sse = ""
+  let events = @internal.extract_sse_events(sse)
+  assert_eq(events.length(), 0)
+}
+
+///|
+test "extract_sse_events - only heartbeats" {
+  let sse = ": keep-alive\n: heartbeat\n\n"
+  let events = @internal.extract_sse_events(sse)
+  assert_eq(events.length(), 0)
+}
+
+///|
+test "extract_sse_events - event type ignored" {
+  // event: 行应被忽略，只提取 data:
+  let sse = "event: message_start\ndata: {\"type\":\"start\"}\n\n"
+  let events = @internal.extract_sse_events(sse)
+  assert_eq(events.length(), 1)
+  assert_eq(events[0], "{\"type\":\"start\"}")
+}
+
+///|
+test "extract_sse_events - real world OpenAI SSE with heartbeat" {
+  // 模拟实际 OpenAI SSE 流，包含心跳
+  let sse = "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_123\"}}\n\n: keep-alive\ndata: {\"type\":\"response.output_item.added\"}\n\n"
+  let events = @internal.extract_sse_events(sse)
+  assert_eq(events.length(), 2)
+  assert_true(events[0].contains("response.created"))
+  assert_true(events[1].contains("output_item.added"))
+}

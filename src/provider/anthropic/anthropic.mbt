@@ -1085,6 +1085,16 @@ pub fn anthropic_sse_to_events(
       i = i + 1
       continue
     }
+    // 清理 SSE 心跳标记（如 : keep-alive）
+    data_str = @internal.clean_sse_heartbeat(data_str)
+    // 检测截断的 JSON（字符串未闭合、括号不匹配）
+    if @internal.is_json_truncated(data_str) {
+      // 截断的事件，跳过
+      i = i + 1
+      continue
+    }
+    // 清理无效转义序列（某些 API 可能包含非标准转义）
+    data_str = @internal.sanitize_json_escapes(data_str)
     let jv = @json.parse(data_str) catch {
       _ => {
         i = i + 1
