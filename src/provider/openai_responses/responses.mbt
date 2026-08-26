@@ -23,6 +23,36 @@ fn append_field(base : String, field : String) -> String {
 }
 
 ///|
+/// 从 Json 对象中提取非排除字段，构建 extra Json。
+/// 排除的字段名通过 `exclude` 数组指定。
+fn build_extra(jv : Json, exclude : Array[String]) -> Json? {
+  match jv {
+    Object(m) => {
+      let extra_fields : Map[String, Json] = Map([])
+      m.each(fn(k, v) {
+        let mut excluded = false
+        let mut j = 0
+        while j < exclude.length() {
+          if k == exclude[j] {
+            excluded = true
+          }
+          j = j + 1
+        }
+        if !excluded {
+          extra_fields[k] = v
+        }
+      })
+      if extra_fields.is_empty() {
+        None
+      } else {
+        Some(Json::object(extra_fields))
+      }
+    }
+    _ => None
+  }
+}
+
+///|
 /// 解析 input Item → LucentConversationItem
 fn parse_input_item(
   item : Json,
@@ -1049,9 +1079,18 @@ pub fn openai_responses_sse_to_events(
           Some(r) => {
             let rid = @internal.field_str(r, "id")
             let rmodel = @internal.field_str(r, "model")
+            let created_at = @internal.field_int(r, "created_at")
+            // 提取非通用字段到 extra（排除 id, model, created_at）
+            let extra = build_extra(r, ["id", "model", "created_at"])
             events.push(
               ConversationStart(
-                @lux.LucentConversationMeta::new(rid, rmodel, None),
+                @lux.LucentConversationMeta::new_full(
+                  rid,
+                  rmodel,
+                  None,
+                  created_at,
+                  extra,
+                ),
               ),
             )
           }
@@ -1180,6 +1219,31 @@ pub fn lux_events_to_openai_responses_sse(
               "\"model\":\"" +
               @internal.json_escape(m) +
               "\""
+          None => ()
+        }
+        match meta.created_at {
+          Some(ts) =>
+            fields = fields +
+              (if fields == "" { "" } else { "," }) +
+              "\"created_at\":" +
+              ts.to_string()
+          None => ()
+        }
+        // 合并 extra 中的非通用字段（instructions, status 等）
+        match meta.extra {
+          Some(ex) =>
+            match ex {
+              Object(m) =>
+                m.each(fn(key, val) {
+                  fields = fields +
+                    (if fields == "" { "" } else { "," }) +
+                    "\"" +
+                    @internal.json_escape(key) +
+                    "\":" +
+                    val.stringify()
+                })
+              _ => ()
+            }
           None => ()
         }
         lines.push(

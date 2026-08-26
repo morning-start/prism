@@ -608,6 +608,14 @@ pub fn LucentConversationMeta::to_json(self : LucentConversationMeta) -> Json {
     Some(n) => fields["usage_input"] = n.to_json()
     None => ()
   }
+  match self.created_at {
+    Some(ts) => fields["created_at"] = ts.to_json()
+    None => ()
+  }
+  match self.extra {
+    Some(ex) => fields["extra"] = ex
+    None => ()
+  }
   Json::object(fields)
 }
 

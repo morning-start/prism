@@ -25,10 +25,20 @@ pub struct LucentError {
 
 ///|
 /// LucentConversationMeta — 会话元信息（ConversationStart 携带）
+///
+/// 通用字段（所有/多家 provider 共有）：
+/// - `id`：会话/响应 ID
+/// - `model`：模型名
+/// - `usage_input`：输入 token 数
+/// - `created_at`：创建时间戳（OpenAI 系的 created / created_at）
+///
+/// 非通用字段通过 `extra` 透传（如 OpenAI Responses 的 instructions、status 等）。
 pub struct LucentConversationMeta {
   id : String?
   model : String?
   usage_input : Int?
+  created_at : Int?
+  extra : Json?
 } derive(Eq, Debug)
 
 ///|
@@ -119,7 +129,19 @@ pub fn LucentConversationMeta::new(
   model : String?,
   usage_input : Int?,
 ) -> LucentConversationMeta {
-  { id, model, usage_input }
+  { id, model, usage_input, created_at: None, extra: None }
+}
+
+///|
+/// 创建完整的 LucentConversationMeta（含 created_at 和 extra）
+pub fn LucentConversationMeta::new_full(
+  id : String?,
+  model : String?,
+  usage_input : Int?,
+  created_at : Int?,
+  extra : Json?,
+) -> LucentConversationMeta {
+  { id, model, usage_input, created_at, extra }
 }
 
 ///|

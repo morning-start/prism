@@ -1326,7 +1326,9 @@ pub fn LucentConversationMeta::from_json(
       let id = get_str_opt(m, "id")
       let model = get_str_opt(m, "model")
       let usage_input = get_int_opt(m, "usage_input")
-      Ok({ id, model, usage_input })
+      let created_at = get_int_opt(m, "created_at")
+      let extra = m.get("extra")
+      Ok({ id, model, usage_input, created_at, extra })
     }
     _ => Err("expected object for LucentConversationMeta")
   }
