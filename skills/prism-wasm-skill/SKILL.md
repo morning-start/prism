@@ -8,18 +8,80 @@ description: |
 
 Prism is an LLM protocol conversion engine. It converts between provider formats (OpenAI, Anthropic, Gemini, Azure, Vertex, vLLM) via a neutral intermediate representation called Lucent IR. The WASM build exposes 15 pure functions — all `String → String`, no state, no side effects — making it safe and easy to embed in any language.
 
-## Architecture Overview
+## 核心使用模式：协议代理（Transit）
 
+prism.wasm 的主要用途是**协议代理**。它是一个纯函数库，嵌入到你的 Gateway 中，只负责格式转换，不发请求、不管理连接。
+
+### 请求-响应流程
+
+```mermaid
+sequenceDiagram
+    participant C as Client<br/>(格式 A)
+    participant G as Gateway
+    participant P as prism.wasm
+    participant S as LLM Server<br/>(格式 B)
+
+    C->>G: reqA
+    G->>P: wasm_convert_req(A, json, B)
+    P-->>G: reqB
+    G->>S: reqB
+    S-->>G: respB
+    G->>P: wasm_convert_resp(B, json, A)
+    P-->>G: respA
+    G-->>C: respA
 ```
-Your App  ──String JSON──▸  prism.wasm  ──String JSON──▸  Your App
-              (provider       (convert via         (provider
-               format A)       Lucent IR)           format B)
+
+### 流式代理（SSE）
+
+```mermaid
+sequenceDiagram
+    participant C as Client<br/>(格式 A)
+    participant G as Gateway
+    participant P as prism.wasm
+    participant S as LLM Server<br/>(格式 B)
+
+    C->>G: reqA
+    G->>S: reqB
+
+    loop 逐块转发
+        S-->>G: sseB[i]
+        G->>P: wasm_convert_stream(B, sseB, A)
+        P-->>G: sseA[i]
+        G-->>C: sseA[i]
+    end
+
+    S-->>G: [DONE]
+    G-->>C: 流结束
 ```
 
-Two usage patterns:
+**核心关系**：Gateway = 路由 + prism.wasm（转换） + HTTP 客户端。prism.wasm 只做一件事：格式 A 字符串 → 格式 B 字符串。不发请求、不管理连接、不处理网络——纯粹的纯函数。
 
-1. **SDK mode** — your app speaks one provider format, Prism encodes/decodes for you
-2. **Transit mode** — convert provider A's format directly to provider B's format in one call
+### 三个转换函数
+
+| 函数 | 用途 | 参数 |
+|---|---|---|
+| `wasm_convert_req` | 请求体转换 | `(source_provider, json, target_provider)` |
+| `wasm_convert_resp` | 响应体转换 | `(source_provider, json, target_provider)` |
+| `wasm_convert_stream` | SSE 流转换 | `(source_provider, sse_text, target_provider)` |
+
+**Provider 名称**（source/target 参数）：
+`openai-chat` · `anthropic` · `openai` · `openai-codex` · `openai-azure` · `gemini` · `gemini-vertex` · `openai-vllm`
+
+### 另一种模式：SDK 编解码
+
+如果你的应用只和一个 provider 交互，可以用 SDK API 直接编解码：
+
+```mermaid
+sequenceDiagram
+    participant App as Your App
+    participant P as prism.wasm
+
+    App->>P: wasm_sdk_encode_req("openai-chat", "Hello")
+    P-->>App: {"model":"gpt-4","messages":[...]}
+    Note over App: 发送到 OpenAI API
+    App->>P: wasm_sdk_decode_resp("openai-chat", respJSON)
+    P-->>App: "Hi there!"
+```
 
 ## Critical: The String ABI
 
