@@ -1013,7 +1013,9 @@ pub fn openai_responses_sse_to_events(
   let events : Array[@lux.LucentStreamEvent] = []
   let diagnostics : Array[@lux.ConversionDiagnostic] = []
   // 统一换行符：CRLF → LF
-  let normalized = sse_str.replace(old= "\r\n", new= "\n").replace(old= "\r", new= "\n")
+  let normalized = sse_str
+    .replace(old="\r\n", new="\n")
+    .replace(old="\r", new="\n")
   let all_lines = normalized.split("\n").to_array()
   let mut event_type = ""
   let mut data_lines : Array[String] = []
@@ -1026,8 +1028,9 @@ pub fn openai_responses_sse_to_events(
         // SSE 规范：多个 data: 行用换行符连接
         let data_str_raw = data_lines.join("\n")
         data_lines = []
-        let data_str = @internal.clean_sse_heartbeat(
-          @internal.sanitize_json_escapes(data_str_raw.trim().to_owned()),
+        // 先清理心跳脏字符（含 \: keep-alive. 等无效转义），再修复其余无效转义
+        let data_str = @internal.sanitize_json_escapes(
+          @internal.clean_sse_heartbeat(data_str_raw.trim().to_owned()),
         )
         if data_str != "" {
           // 检测截断的 JSON（字符串未闭合、括号不匹配）
@@ -1119,10 +1122,7 @@ pub fn openai_responses_sse_to_events(
                 match @internal.field_str(jv, "delta") {
                   Some(t) =>
                     events.push(
-                      BlockDelta(
-                        idx,
-                        @lux.LucentBlockDelta::thinking_delta(t),
-                      ),
+                      BlockDelta(idx, @lux.LucentBlockDelta::thinking_delta(t)),
                     )
                   None => ()
                 }
@@ -1160,10 +1160,12 @@ pub fn openai_responses_sse_to_events(
                     }
                     match @internal.obj_get(r, "usage") {
                       Some(u) => {
-                        let pt =
-                          @internal.field_int(u, "input_tokens").unwrap_or(0)
-                        let ct =
-                          @internal.field_int(u, "output_tokens").unwrap_or(0)
+                        let pt = @internal.field_int(u, "input_tokens").unwrap_or(
+                          0,
+                        )
+                        let ct = @internal.field_int(u, "output_tokens").unwrap_or(
+                          0,
+                        )
                         let tt = @internal.field_int(u, "total_tokens").unwrap_or(
                           pt + ct,
                         )
@@ -1237,8 +1239,9 @@ pub fn openai_responses_sse_to_events(
   // 处理流末尾未以空行结束的最后一个事件
   if data_lines.length() > 0 {
     let data_str_raw = data_lines.join("\n")
-    let data_str = @internal.clean_sse_heartbeat(
-      @internal.sanitize_json_escapes(data_str_raw.trim().to_owned()),
+    // 先清理心跳脏字符，再修复其余无效转义
+    let data_str = @internal.sanitize_json_escapes(
+      @internal.clean_sse_heartbeat(data_str_raw.trim().to_owned()),
     )
     if data_str != "" && !@internal.is_json_truncated(data_str) {
       let jv = @json.parse(data_str) catch { _ => Json::null() }
@@ -1254,8 +1257,7 @@ pub fn openai_responses_sse_to_events(
               match @internal.obj_get(r, "usage") {
                 Some(u) => {
                   let pt = @internal.field_int(u, "input_tokens").unwrap_or(0)
-                  let ct =
-                    @internal.field_int(u, "output_tokens").unwrap_or(0)
+                  let ct = @internal.field_int(u, "output_tokens").unwrap_or(0)
                   let tt = @internal.field_int(u, "total_tokens").unwrap_or(
                     pt + ct,
                   )

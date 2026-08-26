@@ -78,24 +78,31 @@ pub fn field_int_exact(jv : Json, key : String) -> Int? {
 /// 清理 JSON 字符串中的 SSE 心跳标记
 ///
 /// 某些 SSE 实现会在数据后附加心跳标记（如 `: keep-alive`），
-/// 导致 JSON 字符串中混入非法内容。此函数移除这些标记。
+/// 或把心跳注释行错误合并进 JSON payload（产生 `\: keep-alive.` 等
+/// 无效转义序列），导致 JSON 字符串中混入非法内容。此函数移除这些标记。
 pub fn clean_sse_heartbeat(s : String) -> String {
-  // 移除常见的 SSE 心跳标记
-  // 模式：`": keep-alive` 或 `: keep-alive` 在字符串末尾
-  let trimmed = s.trim_end().to_owned()
-  // 检查是否以心跳标记结尾
-  let heartbeat_patterns = [
-    ": keep-alive",
-    ":keep-alive",
-    ": heartbeat",
-    ":heartbeat",
+  let mut result = s.trim_end().to_owned()
+  // 第一类：带反斜杠的心跳片段（`\:` 是非法 JSON 转义，正常数据中不会出现，
+  // 只可能来自心跳行被错误合并进 payload，可安全全局移除）
+  let escaped_patterns = [
+    "\\: keep-alive.", "\\: keep-alive", "\\:keep-alive.", "\\:keep-alive", "\\: heartbeat.",
+    "\\: heartbeat", "\\:heartbeat.", "\\:heartbeat",
   ]
-  let mut result = trimmed
+  let mut k = 0
+  while k < escaped_patterns.length() {
+    result = result.replace(old=escaped_patterns[k], new="")
+    k = k + 1
+  }
+  // 第二类：无反斜杠心跳标记（可能带句点），仅移除字符串末尾的标记
+  let heartbeat_patterns = [
+    ": keep-alive.", ": keep-alive", ":keep-alive.", ":keep-alive", ": heartbeat.",
+    ": heartbeat", ":heartbeat.", ":heartbeat",
+  ]
   let mut j = 0
   while j < heartbeat_patterns.length() {
     let pattern = heartbeat_patterns[j]
-    // 检查字符串是否以模式结尾
-    if result.length() > pattern.length() {
+    // 允许 result 恰好等于 pattern（纯心跳行）
+    if result.length() >= pattern.length() {
       let suffix = result[result.length() - pattern.length():result.length()].to_owned()
       if suffix == pattern {
         result = result[0:result.length() - pattern.length()].to_owned()
@@ -163,9 +170,15 @@ pub fn sanitize_json_escapes(s : String) -> String {
     if cp == '\\' && i + 1 < s.length() {
       let next = s[i + 1]
       // 有效 JSON 转义: ", \, /, b, f, n, r, t, uXXXX
-      if next == '"' || next == '\\' || next == '/' ||
-        next == 'b' || next == 'f' || next == 'n' ||
-        next == 'r' || next == 't' || next == 'u' {
+      if next == '"' ||
+        next == '\\' ||
+        next == '/' ||
+        next == 'b' ||
+        next == 'f' ||
+        next == 'n' ||
+        next == 'r' ||
+        next == 't' ||
+        next == 'u' {
         sb.write_char(Int::unsafe_to_char(cp.to_int()))
         sb.write_char(Int::unsafe_to_char(next.to_int()))
         i = i + 2

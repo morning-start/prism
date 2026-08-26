@@ -665,3 +665,47 @@ test "encode - file inline maps to input_file file_data" {
     Err(e) => fail("encode: \{e}")
   }
 }
+
+///|
+test "openai_responses_sse_to_events - heartbeat merged into JSON payload (\\:)" {
+  // 真实场景：SSE data 行内 instructions 字段末尾混入 ": keep-alive."，
+  // 被错误合并成 "\: keep-alive."（无效转义），clean_sse_heartbeat 必须剥离
+  let sse = "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\",\"created_at\":1787722850,\"instructions\":\"You are opencode.\\n\\nIMPORTANT:\\: keep-alive.\"}}\n\n"
+  match openai_responses_sse_to_events(sse) {
+    Ok(cr) => {
+      let diags = cr.diagnostics()
+      assert_eq(diags.length(), 0)
+      let events = cr.value()
+      assert_true(events.length() >= 1)
+      // extra.instructions 不应残留心跳脏文本
+      match events[0] {
+        ConversationStart(meta) =>
+          match meta.extra {
+            Some(ex) =>
+              match @internal.obj_get(ex, "instructions") {
+                Some(String(s)) => assert_true(!s.contains("keep-alive"))
+                _ => ()
+              }
+            None => ()
+          }
+        _ => ()
+      }
+    }
+    Err(e) => fail("unexpected Err: \{e}")
+  }
+}
+
+///|
+test "openai_responses_sse_to_events - heartbeat line merged as data: : keep-alive row" {
+  // 心跳行以 "data: : keep-alive." 形式混入 data 行序列（带句点变体）
+  let sse = "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\",\"created_at\":1787722850,\"instructions\":\"You are opencode.\\n\"}}\n\ndata: : keep-alive.\n\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\"}}\n\n"
+  match openai_responses_sse_to_events(sse) {
+    Ok(cr) => {
+      let diags = cr.diagnostics()
+      assert_eq(diags.length(), 0)
+      let events = cr.value()
+      assert_true(events.length() >= 1)
+    }
+    Err(e) => fail("unexpected Err: \{e}")
+  }
+}

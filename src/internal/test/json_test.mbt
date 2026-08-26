@@ -407,5 +407,45 @@ test "clean_sse_heartbeat - real world SSE with heartbeat" {
   // 模拟实际 SSE 数据，末尾有心跳
   let input = "{\"type\":\"response.created\",\"response\":{\"id\":\"resp_123\"}}: keep-alive"
   let result = @internal.clean_sse_heartbeat(input)
-  assert_eq(result, "{\"type\":\"response.created\",\"response\":{\"id\":\"resp_123\"}}")
+  assert_eq(
+    result, "{\"type\":\"response.created\",\"response\":{\"id\":\"resp_123\"}}",
+  )
+}
+
+///|
+test "clean_sse_heartbeat - removes : keep-alive. with period" {
+  // 真实心跳带句点：": keep-alive."
+  let input = "{\"key\":\"value\"}: keep-alive."
+  let result = @internal.clean_sse_heartbeat(input)
+  assert_eq(result, "{\"key\":\"value\"}")
+}
+
+///|
+test "clean_sse_heartbeat - removes bare : keep-alive. row" {
+  // 独立心跳行（整个字符串就是心跳）
+  let input = ": keep-alive."
+  let result = @internal.clean_sse_heartbeat(input)
+  assert_eq(result, "")
+}
+
+///|
+test "clean_sse_heartbeat - removes \\: keep-alive. escaped heartbeat" {
+  // 心跳被错误合并进 JSON payload，产生无效转义 \: keep-alive.
+  let input = "{\"instructions\":\"You are opencode.\\n\\nIMPORTANT:\\: keep-alive.\"}"
+  let result = @internal.clean_sse_heartbeat(input)
+  assert_eq(result, "{\"instructions\":\"You are opencode.\\n\\nIMPORTANT:\"}")
+  // 清理结果必须能被 @json.parse 解析
+  let jv = @json.parse(result) catch { _ => Json::null() }
+  match @internal.obj_get(jv, "instructions") {
+    Some(String(s)) => assert_true(!s.contains("keep-alive"))
+    _ => fail("expected instructions field")
+  }
+}
+
+///|
+test "clean_sse_heartbeat - removes escaped heartbeat in real response.created payload" {
+  // 复现用户报错：instructions 字段末尾混入 \: keep-alive. 且 JSON 未闭合
+  let input = "{\"type\":\"response.created\",\"response\":{\"id\":\"resp_123\",\"created_at\":1787722850,\"instructions\":\"You are opencode.\\n\\nIMPORTANT:\\: keep-alive."
+  let result = @internal.clean_sse_heartbeat(input)
+  assert_true(!result.contains("keep-alive"))
 }
