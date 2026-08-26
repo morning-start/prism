@@ -12,6 +12,8 @@ pub fn wasm_convert_response(String, String, String) -> String
 
 pub fn wasm_convert_stream(String, String, String) -> String
 
+pub fn wasm_convert_stream_event(String, String, String) -> String
+
 pub fn wasm_convert_stream_trace(String, String, String, Int, Int) -> String
 
 pub fn wasm_events_to_sse(String, String) -> String

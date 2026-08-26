@@ -2,7 +2,11 @@
 package "morning-start/prism/internal"
 
 // Values
+pub fn clean_sse_heartbeat(String) -> String
+
 pub fn collect_extra_fields(Json, Array[String]) -> Map[String, Json]?
+
+pub fn extract_sse_events(String) -> Array[String]
 
 pub fn field_arr(Json, String) -> Array[Json]?
 
@@ -15,6 +19,8 @@ pub fn field_int_exact(Json, String) -> Int?
 pub fn field_num(Json, String) -> Double?
 
 pub fn field_str(Json, String) -> String?
+
+pub fn is_json_truncated(String) -> Bool
 
 pub fn json_escape(String) -> String
 
@@ -29,6 +35,8 @@ pub fn parse_json_opt(String) -> Json?
 pub fn parse_protocol_json(String) -> Result[Json, String]
 
 pub fn parse_sse_line(StringView) -> SseLine?
+
+pub fn sanitize_json_escapes(String) -> String
 
 // Errors
 

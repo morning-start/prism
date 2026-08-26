@@ -542,7 +542,9 @@ test "wasm_convert_stream_event - [DONE] event to anthropic" {
 test "wasm_convert_stream_event - same protocol passthrough" {
   // 同协议转换应返回等价内容
   let sse_event = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n"
-  let result = wasm_convert_stream_event("openai-chat", sse_event, "openai-chat")
+  let result = wasm_convert_stream_event(
+    "openai-chat", sse_event, "openai-chat",
+  )
   assert_true(result.contains("\"value\""))
   let jv = @json.parse(result) catch { _ => Json::null() }
   match jv {
@@ -566,7 +568,9 @@ test "wasm_convert_stream_event - unknown provider returns error" {
 
 ///|
 test "wasm_convert_stream_event - invalid target returns error" {
-  let result = wasm_convert_stream_event("openai-chat", "data: {}\n\n", "invalid")
+  let result = wasm_convert_stream_event(
+    "openai-chat", "data: {}\n\n", "invalid",
+  )
   assert_true(result.contains("error"))
   assert_true(result.contains("unknown provider"))
 }
