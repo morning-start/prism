@@ -1018,6 +1018,11 @@ pub fn gemini_sse_to_events(
   let mut i = 0
   while i < lines.length() {
     let l_str = lines[i].to_owned()
+    // 跳过注释行（以 : 开头，如心跳 : keep-alive）
+    if l_str.length() > 0 && l_str[0] == ':' {
+      i = i + 1
+      continue
+    }
     let is_data = l_str.length() >= 6 &&
       l_str[0] == 'd' &&
       l_str[1] == 'a' &&

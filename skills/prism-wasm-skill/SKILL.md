@@ -33,6 +33,8 @@ sequenceDiagram
 
 ### 流式代理（SSE）
 
+**方式 1：完整流转换**（适合小流或已缓冲的流）
+
 ```mermaid
 sequenceDiagram
     participant C as Client<br/>(格式 A)
@@ -54,18 +56,54 @@ sequenceDiagram
     G-->>C: 流结束
 ```
 
+**方式 2：单事件转换**（推荐，适合高频流式场景）
+
+```mermaid
+sequenceDiagram
+    participant C as Client<br/>(格式 A)
+    participant G as Gateway
+    participant P as prism.wasm
+    participant S as LLM Server<br/>(格式 B)
+
+    C->>G: reqA
+    G->>S: reqB
+
+    loop 逐事件转发
+        S-->>G: sseEvent (单个 SSE 事件)
+        G->>P: wasm_convert_stream_event(B, sseEvent, A)
+        P-->>G: sseEvent'
+        G-->>C: sseEvent'
+    end
+
+    S-->>G: data: [DONE]
+    G->>P: wasm_convert_stream_event(B, "[DONE]", A)
+    P-->>G: 流结束事件
+    G-->>C: 流结束
+```
+
+**两种方式的区别**：
+- `wasm_convert_stream`：输入完整 SSE 流文本，适合已缓冲的场景
+- `wasm_convert_stream_event`：输入单个 SSE 事件，无状态、O(n) 复杂度，推荐用于实时流式代理
+
 **核心关系**：Gateway = 路由 + prism.wasm（转换） + HTTP 客户端。prism.wasm 只做一件事：格式 A 字符串 → 格式 B 字符串。不发请求、不管理连接、不处理网络——纯粹的纯函数。
 
-### 三个转换函数
+### 四个转换函数
 
 | 函数 | 用途 | 参数 |
 |---|---|---|
 | `wasm_convert_req` | 请求体转换 | `(source_provider, json, target_provider)` |
 | `wasm_convert_resp` | 响应体转换 | `(source_provider, json, target_provider)` |
-| `wasm_convert_stream` | SSE 流转换 | `(source_provider, sse_text, target_provider)` |
+| `wasm_convert_stream` | SSE 流转换（完整流） | `(source_provider, sse_text, target_provider)` |
+| `wasm_convert_stream_event` | 单事件 SSE 转换 | `(source_provider, sse_event, target_provider)` |
 
 **Provider 名称**（source/target 参数）：
 `openai-chat` · `anthropic` · `openai` · `openai-codex` · `openai-azure` · `gemini` · `gemini-vertex` · `openai-vllm`
+
+**`wasm_convert_stream` vs `wasm_convert_stream_event`**：
+- `wasm_convert_stream`：输入完整的 SSE 流（多个事件），输出完整的 SSE 流
+- `wasm_convert_stream_event`：输入单个 SSE 事件（如 `"data: {...}\n\n"`），输出单个目标协议 SSE 事件
+- 两者都支持 `data: [DONE]\n\n` → 目标协议的流结束事件
+- 单事件版本适合高频逐事件调用，避免 O(n²) 累积转换开销
 
 ### 另一种模式：SDK 编解码
 
@@ -142,13 +180,14 @@ All functions take and return strings. Call them by name from the WASM module's 
 | `wasm_sdk_decode_sse` | `(provider, sseText)` | Provider SSE → PrismEvent JSON array |
 | `wasm_sdk_capability` | `(provider)` | Query provider capability declaration |
 
-### Transit conversion (3)
+### Transit conversion (4)
 
 | Export | Args | Description |
 |---|---|---|
 | `wasm_convert_req` | `(source, json, target)` | Convert request: source provider → target provider |
 | `wasm_convert_resp` | `(source, json, target)` | Convert response: source provider → target provider |
 | `wasm_convert_stream` | `(source, sseText, target)` | Convert SSE stream: source → target |
+| `wasm_convert_stream_event` | `(source, sseEvent, target)` | Convert single SSE event: source → target |
 
 ### Query (1)
 
@@ -236,3 +275,41 @@ These are the canonical implementations. When writing a new language wrapper, mi
 6. **Error envelope parsing**: Don't assume the result is valid JSON on error. Check for `{"error":` prefix first, then parse.
 
 7. **wasm_list_providers takes no args**: It's the only function with zero string arguments. Just call it directly — no need to write anything to linear memory.
+
+## Usage Examples
+
+### Single Event Stream Conversion
+
+The `wasm_convert_stream_event` function is ideal for real-time streaming scenarios where you want to convert each SSE event individually:
+
+```rust
+// Rust example
+let event = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n";
+let result = prism.convert_stream_event("openai-chat", event, "anthropic");
+// result.value contains the Anthropic-format SSE event
+```
+
+```typescript
+// TypeScript example
+const event = 'data: {"id":"1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}\n\n';
+const result = client.convertStreamEvent("openai-chat", event, "anthropic");
+// result.value contains the Anthropic-format SSE event
+```
+
+### Stream End Event
+
+Convert the `[DONE]` marker to the target protocol's stream end event:
+
+```rust
+let done_event = "data: [DONE]\n\n";
+let result = prism.convert_stream_event("openai-chat", done_event, "anthropic");
+// result.value contains Anthropic's message_stop event
+```
+
+### Error Handling
+
+```rust
+let invalid_event = "invalid sse data";
+let result = prism.convert_stream_event("openai-chat", invalid_event, "anthropic");
+// result will be an error envelope: {"error": "...", "diagnostics": []}
+```

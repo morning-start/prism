@@ -259,3 +259,17 @@ Key points:
 - The `+4` offset ensures the length header at `write_ptr - 4` stays within the newly allocated pages
 - MoonBit's GC heap grows upward from ~0x1000 but won't reach the memory end for typical workloads
 - Each `write_string` call may grow memory independently — multiple large arguments each get their own region
+
+### Single Event Stream Conversion Example
+
+```rust
+// Convert a single SSE event from OpenAI to Anthropic
+let openai_event = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n";
+let result = prism.convert_stream_event("openai-chat", openai_event, "anthropic")?;
+println!("{}", result.value); // Anthropic-format SSE event
+
+// Convert stream end event
+let done_event = "data: [DONE]\n\n";
+let end_result = prism.convert_stream_event("openai-chat", done_event, "anthropic")?;
+println!("{}", end_result.value); // Anthropic's message_stop event
+```

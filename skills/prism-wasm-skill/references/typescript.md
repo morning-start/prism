@@ -183,3 +183,17 @@ function parseEnvelope(raw: string): Envelope {
 - In the browser, use `WebAssembly.instantiateStreaming()` for faster loading.
 - Bun supports the same WebAssembly API as Node.js — the existing wrapper works with both.
 - For Deno, use `Deno.readFile()` to load the WASM bytes.
+
+### Single Event Stream Conversion Example
+
+```typescript
+// Convert a single SSE event from OpenAI to Anthropic
+const openaiEvent = 'data: {"id":"1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}\n\n';
+const result = client.convertStreamEvent("openai-chat", openaiEvent, "anthropic");
+console.log(result.value); // Anthropic-format SSE event
+
+// Convert stream end event
+const doneEvent = "data: [DONE]\n\n";
+const endResult = client.convertStreamEvent("openai-chat", doneEvent, "anthropic");
+console.log(endResult.value); // Anthropic's message_stop event
+```

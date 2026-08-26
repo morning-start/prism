@@ -1042,6 +1042,11 @@ pub fn anthropic_sse_to_events(
     let mut j = 0
     while j < lines.length() {
       let l_str = lines[j].to_owned()
+      // 跳过注释行（以 : 开头，如心跳 : keep-alive）
+      if l_str.length() > 0 && l_str[0] == ':' {
+        j = j + 1
+        continue
+      }
       // 检查 "event: " 前缀（前 7 个字符）
       let is_event = l_str.length() >= 7 &&
         l_str[0] == 'e' &&

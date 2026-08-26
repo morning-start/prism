@@ -223,3 +223,21 @@ test "extract_sse_events - real world OpenAI SSE with heartbeat" {
   assert_true(events[0].contains("response.created"))
   assert_true(events[1].contains("output_item.added"))
 }
+
+///|
+test "extract_sse_events - multi-line data concatenation" {
+  // SSE 规范：多个 data: 行应合并
+  let sse = "data: line1\ndata: line2\ndata: line3\n\n"
+  let events = @internal.extract_sse_events(sse)
+  assert_eq(events.length(), 1)
+  assert_eq(events[0], "line1\nline2\nline3")
+}
+
+///|
+test "extract_sse_events - multi-line data with heartbeat" {
+  // 多行 data 中间有心跳
+  let sse = "data: line1\n: keep-alive\ndata: line2\n\n"
+  let events = @internal.extract_sse_events(sse)
+  assert_eq(events.length(), 1)
+  assert_eq(events[0], "line1\nline2")
+}

@@ -241,6 +241,11 @@ pub fn vllm_sse_to_events(
   while i < lines.length() {
     let line = lines[i]
     let line_str = line.to_owned()
+    // 跳过注释行（以 : 开头，如心跳 : keep-alive）
+    if line_str.length() > 0 && line_str[0] == ':' {
+      i = i + 1
+      continue
+    }
     // 检查是否为 data: 行（逐字符比较，因为 MoonBit String 无 startsWith 方法）
     let is_data = if line_str.length() >= 5 {
       line_str[0] == 'd' &&

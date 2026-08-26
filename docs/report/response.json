@@ -1,0 +1,30 @@
+{
+  "id": "resp_xxx",
+  "object": "response",
+  "status": "completed",
+  "model": "agnes-2.5-flash",
+  "output": [
+    {
+      "type": "reasoning",
+      "summary": []
+    },
+    {
+      "type": "message",
+      "role": "assistant",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "Autonomous agents use tools to retrieve data and perform actions."
+        }
+      ]
+    }
+  ],
+  "usage": {
+    "input_tokens": 40,
+    "output_tokens": 80,
+    "total_tokens": 120
+  },
+  "error": null,
+  "incomplete_details": null
+}

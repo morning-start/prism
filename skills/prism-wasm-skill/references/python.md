@@ -194,6 +194,20 @@ class PrismClient:
         return json.loads(raw)
 ```
 
+### Single Event Stream Conversion Example
+
+```python
+# Convert a single SSE event from OpenAI to Anthropic
+openai_event = 'data: {"id":"1","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}\n\n'
+result = prism.convert_stream_event("openai-chat", openai_event, "anthropic")
+print(result.value)  # Anthropic-format SSE event
+
+# Convert stream end event
+done_event = "data: [DONE]\n\n"
+end_result = prism.convert_stream_event("openai-chat", done_event, "anthropic")
+print(end_result.value)  # Anthropic's message_stop event
+```
+
 ### Alternative: wasmer-python
 
 If you prefer [wasmer](https://github.com/wasmerio/wasmer-python):

@@ -177,3 +177,23 @@ func parseEnvelope(raw string) (*Envelope, error) {
 - The `unicode/utf16` stdlib handles BMP and supplementary characters correctly.
 - Use `//go:embed` to bundle prism.wasm into your binary, or load from filesystem.
 - Always call `_start` after instantiation (wazero's `InstantiateWithConfig` does this automatically for WASI modules).
+
+### Single Event Stream Conversion Example
+
+```go
+// Convert a single SSE event from OpenAI to Anthropic
+openaiEvent := "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n"
+result, err := client.ConvertStreamEvent("openai-chat", openaiEvent, "anthropic")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(result.Value) // Anthropic-format SSE event
+
+// Convert stream end event
+doneEvent := "data: [DONE]\n\n"
+endResult, err := client.ConvertStreamEvent("openai-chat", doneEvent, "anthropic")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(endResult.Value) // Anthropic's message_stop event
+```
