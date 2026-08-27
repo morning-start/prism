@@ -5,12 +5,12 @@
 /// 依据：docs/protocols/03-anthropic-messages.md（协议映射）
 ///
 /// 6 函数：
-///   1. anthropic_to_lux_request      请求解码
-///   2. lux_request_to_anthropic      请求编码
-///   3. anthropic_to_lux_response     响应解码
-///   4. lux_response_to_anthropic     响应编码
-///   5. anthropic_sse_to_events       流解码
-///   6. lux_events_to_anthropic_sse   流编码
+///   1. messages_to_lux_request      请求解码
+///   2. lux_request_to_messages      请求编码
+///   3. messages_to_lux_response     响应解码
+///   4. lux_response_to_messages     响应编码
+///   5. messages_sse_to_events       流解码
+///   6. lux_events_to_messages_sse   流编码
 ///
 /// 关键差异（vs OpenAI Chat）：
 ///   - 无 tool 角色：工具结果由 user 角色发送，内含 tool_result content block
@@ -340,8 +340,8 @@ fn parse_output_config(jv : Json) -> @lux.LucentStructuredOutput? {
 }
 
 ///|
-/// 1. anthropic_to_lux_request — 请求解码
-pub fn anthropic_to_lux_request(
+/// 1. messages_to_lux_request — 请求解码
+pub fn messages_to_lux_request(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentRequest], String] {
   let jv = match @internal.parse_protocol_json(json_str) {
@@ -620,8 +620,8 @@ fn content_array_to_json(
 }
 
 ///|
-/// 2. lux_request_to_anthropic — 请求编码
-pub fn lux_request_to_anthropic(
+/// 2. lux_request_to_messages — 请求编码
+pub fn lux_request_to_messages(
   req : @lux.LucentRequest,
 ) -> Result[@lux.ConversionResult[String], String] {
   let parts : Array[String] = []
@@ -890,8 +890,8 @@ pub fn lux_request_to_anthropic(
 }
 
 ///|
-/// 3. anthropic_to_lux_response — 响应解码
-pub fn anthropic_to_lux_response(
+/// 3. messages_to_lux_response — 响应解码
+pub fn messages_to_lux_response(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
   let jv = match @internal.parse_protocol_json(json_str) {
@@ -934,8 +934,8 @@ pub fn anthropic_to_lux_response(
 }
 
 ///|
-/// 4. lux_response_to_anthropic — 响应编码
-pub fn lux_response_to_anthropic(
+/// 4. lux_response_to_messages — 响应编码
+pub fn lux_response_to_messages(
   resp : @lux.LucentResponse,
 ) -> Result[@lux.ConversionResult[String], String] {
   if resp.choices.length() == 0 {
@@ -1017,14 +1017,14 @@ pub fn lux_response_to_anthropic(
 }
 
 ///|
-/// 5. anthropic_sse_to_events — 流解码
+/// 5. messages_sse_to_events — 流解码
 ///
 /// Anthropic SSE 格式：
 ///   event: X
 ///   data: {...}
 ///
 /// 用 \n\n 分隔 SSE 消息，再逐条解析 event/data 行
-pub fn anthropic_sse_to_events(
+pub fn messages_sse_to_events(
   sse_str : String,
 ) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String] {
   let events : Array[@lux.LucentStreamEvent] = []
@@ -1229,10 +1229,10 @@ pub fn anthropic_sse_to_events(
 }
 
 ///|
-/// 6. lux_events_to_anthropic_sse — 流编码
+/// 6. lux_events_to_messages_sse — 流编码
 ///
 /// 把 Lux 事件流编码为 Anthropic SSE 格式（同 chromic_sse_to_events 的逆过程）
-pub fn lux_events_to_anthropic_sse(
+pub fn lux_events_to_messages_sse(
   events : Array[@lux.LucentStreamEvent],
 ) -> Result[@lux.ConversionResult[String], String] {
   let lines : Array[String] = []
@@ -1358,7 +1358,7 @@ pub fn lux_events_to_anthropic_sse(
 pub fn capability() -> @lux.ProviderCapability {
   @lux.ProviderCapability::new(
     "claude-*",
-    "anthropic",
+    "messages",
     @lux.LucentCapabilities::create(
       Full,
       Absent,

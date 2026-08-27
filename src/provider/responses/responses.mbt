@@ -329,8 +329,8 @@ fn parse_text_format(jv : Json) -> @lux.LucentStructuredOutput? {
 }
 
 ///|
-/// 1. openai_responses_to_lux_request — 请求解码
-pub fn openai_responses_to_lux_request(
+/// 1. responses_to_lux_request — 请求解码
+pub fn responses_to_lux_request(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentRequest], String] {
   let jv = match @internal.parse_protocol_json(json_str) {
@@ -398,8 +398,8 @@ pub fn openai_responses_to_lux_request(
 }
 
 ///|
-/// 2. lux_request_to_openai_responses — 请求编码
-pub fn lux_request_to_openai_responses(
+/// 2. lux_request_to_responses — 请求编码
+pub fn lux_request_to_responses(
   req : @lux.LucentRequest,
 ) -> Result[@lux.ConversionResult[String], String] {
   let parts : Array[String] = []
@@ -789,22 +789,22 @@ fn parse_output_content(output_item : Json) -> Array[@lux.LucentContent] {
 }
 
 ///|
-/// 3. openai_responses_to_lux_response — 响应解码
-pub fn openai_responses_to_lux_response(
+/// 3. responses_to_lux_response — 响应解码
+pub fn responses_to_lux_response(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
   let jv = match @internal.parse_protocol_json(json_str) {
     Ok(v) => v
     Err(e) => return Err(e)
   }
-  openai_responses_json_to_lux_response(jv)
+  responses_json_to_lux_response(jv)
 }
 
 ///|
 /// 3b. 已解析 Json 的响应解码入口
 ///
 /// 供薄封装子协议（如 Azure）复用：调用方已持有 `Json` 时可避免二次解析。
-pub fn openai_responses_json_to_lux_response(
+pub fn responses_json_to_lux_response(
   jv : Json,
 ) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
   let id = @internal.field_str(jv, "id").unwrap_or("")
@@ -887,8 +887,8 @@ fn thinking_to_reasoning_item(th : @lux.LucentThinking, id : Int) -> String {
 }
 
 ///|
-/// 4. lux_response_to_openai_responses — 响应编码
-pub fn lux_response_to_openai_responses(
+/// 4. lux_response_to_responses — 响应编码
+pub fn lux_response_to_responses(
   resp : @lux.LucentResponse,
 ) -> Result[@lux.ConversionResult[String], String] {
   if resp.choices.length() == 0 {
@@ -1000,14 +1000,14 @@ pub fn lux_response_to_openai_responses(
 }
 
 ///|
-/// 5. openai_responses_sse_to_events — 流解码
+/// 5. responses_sse_to_events — 流解码
 ///
 /// 使用逐行状态机解析 SSE 流，正确处理：
 /// - 多行 data: 字段（SSE 规范：用换行符合并）
 /// - 心跳注释行（: keep-alive 等）
 /// - data: 值内含换行符的 JSON（pretty-printed）
 /// - CRLF 行尾
-pub fn openai_responses_sse_to_events(
+pub fn responses_sse_to_events(
   sse_str : String,
 ) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String] {
   let events : Array[@lux.LucentStreamEvent] = []
@@ -1285,8 +1285,8 @@ pub fn openai_responses_sse_to_events(
 }
 
 ///|
-/// 6. lux_events_to_openai_responses_sse — 流编码
-pub fn lux_events_to_openai_responses_sse(
+/// 6. lux_events_to_responses_sse — 流编码
+pub fn lux_events_to_responses_sse(
   events : Array[@lux.LucentStreamEvent],
 ) -> Result[@lux.ConversionResult[String], String] {
   let lines : Array[String] = []

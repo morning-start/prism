@@ -2,7 +2,7 @@
 /// Provider 名称匹配失败时，允许用模型名匹配最具体的注册项。
 test "match_provider_name falls back to model pattern" {
   match match_provider_name("gpt-5.3-codex") {
-    Some(reg) => assert_eq(reg.name, "openai-codex")
+    Some(reg) => assert_eq(reg.name, "responses")
     None => fail("expected model pattern fallback")
   }
 }
@@ -12,7 +12,7 @@ test "match_provider_name falls back to model pattern" {
 
 ///|
 test "registry - request_decode returns ConversionResult" {
-  match match_provider_name("openai-chat") {
+  match match_provider_name("openai") {
     Some(reg) =>
       match
         (reg.request_decode)(

@@ -7,9 +7,9 @@
 /// === wasm_to_lux_request（解码请求）===
 
 ///|
-test "wasm_to_lux_request - openai_chat decode" {
+test "wasm_to_lux_request - openai decode" {
   let json_str = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"Hi\"}]}"
-  let result = wasm_to_lux_request("openai-chat", json_str)
+  let result = wasm_to_lux_request("openai", json_str)
   // 成功时应返回 LucentRequest JSON
   assert_true(result.contains("model"))
   assert_true(result.contains("conversation"))
@@ -24,7 +24,7 @@ test "wasm_to_lux_request - unknown provider returns error" {
 
 ///|
 test "wasm_to_lux_request - invalid JSON returns error" {
-  let result = wasm_to_lux_request("openai-chat", "{invalid}")
+  let result = wasm_to_lux_request("openai", "{invalid}")
   assert_true(result.contains("error"))
 }
 
@@ -32,7 +32,7 @@ test "wasm_to_lux_request - invalid JSON returns error" {
 /// === wasm_lux_request_to_provider（编码请求）===
 
 ///|
-test "wasm_lux_request_to_provider - openai_chat encode" {
+test "wasm_lux_request_to_provider - openai encode" {
   let msg = @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hello")])
   let req = @lux.LucentRequest::from_messages(
     "gpt-4o",
@@ -47,7 +47,7 @@ test "wasm_lux_request_to_provider - openai_chat encode" {
     None,
   )
   let json_str = req.to_json().stringify()
-  let result = wasm_lux_request_to_provider("openai-chat", json_str)
+  let result = wasm_lux_request_to_provider("openai", json_str)
   assert_true(result.contains("model"))
   assert_true(result.contains("messages"))
 }
@@ -75,7 +75,7 @@ test "wasm_lux_request_to_provider - unknown provider returns error" {
 
 ///|
 test "wasm_lux_request_to_provider - invalid JSON returns parse error" {
-  let result = wasm_lux_request_to_provider("openai-chat", "not json")
+  let result = wasm_lux_request_to_provider("openai", "not json")
   assert_true(result.contains("json parse error"))
 }
 
@@ -83,9 +83,9 @@ test "wasm_lux_request_to_provider - invalid JSON returns parse error" {
 /// === wasm_to_lux_response（解码响应）===
 
 ///|
-test "wasm_to_lux_response - openai_chat decode" {
+test "wasm_to_lux_response - openai decode" {
   let resp_json = "{\"id\":\"chatcmpl-1\",\"object\":\"chat.completion\",\"created\":123,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello!\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":3,\"total_tokens\":8}}"
-  let result = wasm_to_lux_response("openai-chat", resp_json)
+  let result = wasm_to_lux_response("openai", resp_json)
   // 成功时应返回 LucentResponse JSON
   assert_true(result.contains("id"))
 }
@@ -100,7 +100,7 @@ test "wasm_to_lux_response - unknown provider returns error" {
 /// === wasm_lux_response_to_provider（编码响应）===
 
 ///|
-test "wasm_lux_response_to_provider - openai_chat encode" {
+test "wasm_lux_response_to_provider - openai encode" {
   let content = [@lux.LucentContent::text("Hi")]
   let msg = @lux.LucentMessage::new(Assistant, content)
   let choice = @lux.LucentChoice::new(0, msg, Stop, None)
@@ -113,7 +113,7 @@ test "wasm_lux_response_to_provider - openai_chat encode" {
     None,
   )
   let json_str = resp.to_json().stringify()
-  let result = wasm_lux_response_to_provider("openai-chat", json_str)
+  let result = wasm_lux_response_to_provider("openai", json_str)
   assert_true(result.contains("choices"))
 }
 
@@ -131,7 +131,7 @@ test "wasm_lux_response_to_provider - unknown provider returns error" {
 
 ///|
 test "wasm_lux_response_to_provider - invalid JSON" {
-  let result = wasm_lux_response_to_provider("openai-chat", "bad")
+  let result = wasm_lux_response_to_provider("openai", "bad")
   assert_true(result.contains("json parse error"))
 }
 
@@ -139,9 +139,9 @@ test "wasm_lux_response_to_provider - invalid JSON" {
 /// === wasm_sse_to_events（解码流式）===
 
 ///|
-test "wasm_sse_to_events - openai_chat SSE" {
+test "wasm_sse_to_events - openai SSE" {
   let sse = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n\ndata: [DONE]\n"
-  let result = wasm_sse_to_events("openai-chat", sse)
+  let result = wasm_sse_to_events("openai", sse)
   // 成功时应返回带 value 的信封 JSON
   assert_true(result.contains("\"value\""))
   assert_true(result.contains("\"diagnostics\""))
@@ -157,7 +157,7 @@ test "wasm_sse_to_events - unknown provider returns error" {
 /// === wasm_events_to_sse（编码流式）===
 
 ///|
-test "wasm_events_to_sse - openai_chat SSE encode" {
+test "wasm_events_to_sse - openai SSE encode" {
   let meta = @lux.LucentConversationMeta::new(Some("r1"), Some("gpt-4o"), None)
   let bt = @lux.LucentBlockType::text()
   let events = [
@@ -170,7 +170,7 @@ test "wasm_events_to_sse - openai_chat SSE encode" {
   ]
   let json_arr = events.map(fn(ev) { ev.to_json() })
   let json_str = "[" + json_arr.map(fn(j) { j.stringify() }).join(",") + "]"
-  let result = wasm_events_to_sse("openai-chat", json_str)
+  let result = wasm_events_to_sse("openai", json_str)
   assert_true(result.contains("data:"))
 }
 
@@ -183,7 +183,7 @@ test "wasm_events_to_sse - unknown provider returns error" {
 
 ///|
 test "wasm_events_to_sse - invalid JSON returns parse error" {
-  let result = wasm_events_to_sse("openai-chat", "not-array")
+  let result = wasm_events_to_sse("openai", "not-array")
   assert_true(result.contains("error"))
 }
 
@@ -191,8 +191,8 @@ test "wasm_events_to_sse - invalid JSON returns parse error" {
 /// === wasm_sdk_encode_request ===
 
 ///|
-test "wasm_sdk_encode_request - openai_chat returns JSON" {
-  let result = wasm_sdk_encode_request("openai-chat", "Hello")
+test "wasm_sdk_encode_request - openai returns JSON" {
+  let result = wasm_sdk_encode_request("openai", "Hello")
   assert_true(result.contains("model"))
   assert_true(result.contains("messages"))
 }
@@ -209,7 +209,7 @@ test "wasm_sdk_encode_request - unknown provider returns error" {
 ///|
 test "wasm_sdk_decode_response - extracts text" {
   let resp = "{\"id\":\"1\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hi\"},\"finish_reason\":\"stop\"}],\"usage\":null}"
-  let result = wasm_sdk_decode_response("openai-chat", resp)
+  let result = wasm_sdk_decode_response("openai", resp)
   // Task 2: 结果必须是信封，value 为纯文本
   let jv = @json.parse(result) catch { _ => Json::null() }
   match jv {
@@ -233,7 +233,7 @@ test "wasm_sdk_decode_response - unknown provider returns error" {
 
 ///|
 test "wasm_sdk_encode_stream - returns JSON with stream" {
-  let result = wasm_sdk_encode_stream("openai-chat", "Hi")
+  let result = wasm_sdk_encode_stream("openai", "Hi")
   assert_true(result.contains("stream"))
 }
 
@@ -249,7 +249,7 @@ test "wasm_sdk_encode_stream - unknown provider returns error" {
 ///|
 test "wasm_sdk_decode_sse - returns event JSON array" {
   let sse = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hi\"},\"finish_reason\":null}]}\n\ndata: [DONE]\n"
-  let result = wasm_sdk_decode_sse("openai-chat", sse)
+  let result = wasm_sdk_decode_sse("openai", sse)
   // Task 2: 结果必须是信封，value 为事件数组
   let jv = @json.parse(result) catch { _ => Json::null() }
   match jv {
@@ -266,7 +266,7 @@ test "wasm_sdk_decode_sse - returns event JSON array" {
 /// 事件字段级断言：确认事件对象由结构化字段构成，而非仅信封形状
 test "wasm_sdk_decode_sse - event objects carry typed fields" {
   let sse = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hi\"},\"finish_reason\":null}]}\n\ndata: [DONE]\n"
-  let result = wasm_sdk_decode_sse("openai-chat", sse)
+  let result = wasm_sdk_decode_sse("openai", sse)
   let jv = @json.parse(result) catch { _ => Json::null() }
   let events = match jv {
     Object(map) =>
@@ -310,7 +310,7 @@ test "wasm_sdk_decode_sse - unknown provider returns error" {
 
 ///|
 test "wasm_sdk_capability - known provider returns JSON" {
-  let result = wasm_sdk_capability("openai")
+  let result = wasm_sdk_capability("responses")
   assert_true(result.contains("provider"))
   assert_true(result.contains("openai"))
   assert_true(result.contains("model_pattern"))
@@ -334,7 +334,7 @@ test "empty provider name returns error" {
 
 ///|
 test "empty JSON string for request decode" {
-  let result = wasm_to_lux_request("openai-chat", "")
+  let result = wasm_to_lux_request("openai", "")
   assert_true(result.contains("error"))
 }
 
@@ -342,7 +342,7 @@ test "empty JSON string for request decode" {
 /// === wasm_convert_*（中转站协议转发）===
 
 ///|
-/// 标准请求经 openai_chat 编码得到 source JSON（IR 构造器 → 适配器编码，不手写 JSON）
+/// 标准请求经 openai 编码得到 source JSON（IR 构造器 → 适配器编码，不手写 JSON）
 fn convert_source_req_json() -> Result[String, String] {
   let req = @lux.LucentRequest::new(
     "gpt-4o",
@@ -360,14 +360,14 @@ fn convert_source_req_json() -> Result[String, String] {
     None,
     None,
   )
-  match @openai_chat.lux_request_to_openai_chat(req) {
+  match @openai.lux_request_to_openai(req) {
     Ok(cr) => Ok(cr.value())
     Err(e) => Err(e)
   }
 }
 
 ///|
-/// 标准响应经 openai_chat 编码得到 source JSON
+/// 标准响应经 openai 编码得到 source JSON
 fn convert_source_resp_json() -> Result[String, String] {
   let resp = @lux.LucentResponse::new(
     "resp-1",
@@ -384,14 +384,14 @@ fn convert_source_resp_json() -> Result[String, String] {
     Some(@lux.LucentUsage::new(10, 5, 15)),
     None,
   )
-  match @openai_chat.lux_response_to_openai_chat(resp) {
+  match @openai.lux_response_to_openai(resp) {
     Ok(cr) => Ok(cr.value())
     Err(e) => Err(e)
   }
 }
 
 ///|
-/// 标准事件流经 openai_chat 编码得到 source SSE
+/// 标准事件流经 openai 编码得到 source SSE
 fn convert_source_sse() -> Result[String, String] {
   let events : Array[@lux.LucentStreamEvent] = [
     ConversationStart(@lux.LucentConversationMeta::new(None, None, None)),
@@ -401,24 +401,24 @@ fn convert_source_sse() -> Result[String, String] {
     Finish(Stop),
     Done,
   ]
-  match @openai_chat.lux_events_to_openai_chat_sse(events) {
+  match @openai.lux_events_to_openai_sse(events) {
     Ok(cr) => Ok(cr.value())
     Err(e) => Err(e)
   }
 }
 
 ///|
-test "wasm_convert_request - openai-chat to anthropic" {
+test "wasm_convert_request - openai to messages" {
   match convert_source_req_json() {
     Ok(json) => {
-      let result = wasm_convert_request("openai-chat", json, "anthropic")
-      // 信封：value 为可被 anthropic 解码的目标 JSON 字符串
+      let result = wasm_convert_request("openai", json, "messages")
+      // 信封：value 为可被 messages 解码的目标 JSON 字符串
       let jv = @json.parse(result) catch { _ => Json::null() }
       match jv {
         Object(map) =>
           match map.get("value") {
             Some(String(target_json)) =>
-              match @anthropic.anthropic_to_lux_request(target_json) {
+              match @messages.messages_to_lux_request(target_json) {
                 Ok(cr) => {
                   let req = cr.value()
                   assert_eq(req.model, "gpt-4o")
@@ -437,22 +437,22 @@ test "wasm_convert_request - openai-chat to anthropic" {
 
 ///|
 test "wasm_convert_request - unknown provider returns error json" {
-  let result = wasm_convert_request("nope", "{}", "anthropic")
+  let result = wasm_convert_request("nope", "{}", "messages")
   assert_true(result.contains("error"))
   assert_true(result.contains("unknown provider"))
 }
 
 ///|
-test "wasm_convert_response - openai-chat to anthropic" {
+test "wasm_convert_response - openai to messages" {
   match convert_source_resp_json() {
     Ok(json) => {
-      let result = wasm_convert_response("openai-chat", json, "anthropic")
+      let result = wasm_convert_response("openai", json, "messages")
       let jv = @json.parse(result) catch { _ => Json::null() }
       match jv {
         Object(map) =>
           match map.get("value") {
             Some(String(target_json)) =>
-              match @anthropic.anthropic_to_lux_response(target_json) {
+              match @messages.messages_to_lux_response(target_json) {
                 Ok(cr) => {
                   let resp = cr.value()
                   assert_eq(resp.id, "resp-1")
@@ -471,16 +471,16 @@ test "wasm_convert_response - openai-chat to anthropic" {
 }
 
 ///|
-test "wasm_convert_stream - openai-chat to anthropic" {
+test "wasm_convert_stream - openai to messages" {
   match convert_source_sse() {
     Ok(sse) => {
-      let result = wasm_convert_stream("openai-chat", sse, "anthropic")
+      let result = wasm_convert_stream("openai", sse, "messages")
       let jv = @json.parse(result) catch { _ => Json::null() }
       match jv {
         Object(map) =>
           match map.get("value") {
             Some(String(target_sse)) =>
-              match @anthropic.anthropic_sse_to_events(target_sse) {
+              match @messages.messages_sse_to_events(target_sse) {
                 Ok(cr) => assert_true(cr.value().length() > 0)
                 Err(e) => fail("target sse decode failed: \{e}")
               }
@@ -497,10 +497,10 @@ test "wasm_convert_stream - openai-chat to anthropic" {
 /// === wasm_convert_stream_event（单事件流转换）===
 
 ///|
-test "wasm_convert_stream_event - single openai-chat event to anthropic" {
+test "wasm_convert_stream_event - single openai event to messages" {
   // 单个 OpenAI Chat SSE 事件
   let sse_event = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n"
-  let result = wasm_convert_stream_event("openai-chat", sse_event, "anthropic")
+  let result = wasm_convert_stream_event("openai", sse_event, "messages")
   // 应返回信封格式
   assert_true(result.contains("\"value\""))
   assert_true(result.contains("\"diagnostics\""))
@@ -519,10 +519,10 @@ test "wasm_convert_stream_event - single openai-chat event to anthropic" {
 }
 
 ///|
-test "wasm_convert_stream_event - [DONE] event to anthropic" {
+test "wasm_convert_stream_event - [DONE] event to messages" {
   // OpenAI Chat 的流结束事件
   let sse_event = "data: [DONE]\n\n"
-  let result = wasm_convert_stream_event("openai-chat", sse_event, "anthropic")
+  let result = wasm_convert_stream_event("openai", sse_event, "messages")
   // 应返回信封格式
   assert_true(result.contains("\"value\""))
   let jv = @json.parse(result) catch { _ => Json::null() }
@@ -542,9 +542,7 @@ test "wasm_convert_stream_event - [DONE] event to anthropic" {
 test "wasm_convert_stream_event - same protocol passthrough" {
   // 同协议转换应返回等价内容
   let sse_event = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n\n"
-  let result = wasm_convert_stream_event(
-    "openai-chat", sse_event, "openai-chat",
-  )
+  let result = wasm_convert_stream_event("openai", sse_event, "openai")
   assert_true(result.contains("\"value\""))
   let jv = @json.parse(result) catch { _ => Json::null() }
   match jv {
@@ -561,16 +559,14 @@ test "wasm_convert_stream_event - same protocol passthrough" {
 
 ///|
 test "wasm_convert_stream_event - unknown provider returns error" {
-  let result = wasm_convert_stream_event("unknown", "data: {}\n\n", "anthropic")
+  let result = wasm_convert_stream_event("unknown", "data: {}\n\n", "messages")
   assert_true(result.contains("error"))
   assert_true(result.contains("unknown provider"))
 }
 
 ///|
 test "wasm_convert_stream_event - invalid target returns error" {
-  let result = wasm_convert_stream_event(
-    "openai-chat", "data: {}\n\n", "invalid",
-  )
+  let result = wasm_convert_stream_event("openai", "data: {}\n\n", "invalid")
   assert_true(result.contains("error"))
   assert_true(result.contains("unknown provider"))
 }
@@ -581,7 +577,7 @@ test "wasm_convert_stream_event - invalid target returns error" {
 ///|
 test "wasm_to_lux_request - returns envelope with value and diagnostics" {
   let json_str = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"Hi\"}]}"
-  let result = wasm_to_lux_request("openai-chat", json_str)
+  let result = wasm_to_lux_request("openai", json_str)
   // 信封：{"value":<payload>,"diagnostics":[...]}
   assert_true(result.contains("\"value\""))
   assert_true(result.contains("\"diagnostics\""))
@@ -589,7 +585,7 @@ test "wasm_to_lux_request - returns envelope with value and diagnostics" {
 
 ///|
 test "wasm_to_lux_request - invalid json returns error envelope with diagnostics" {
-  let result = wasm_to_lux_request("openai-chat", "{invalid}")
+  let result = wasm_to_lux_request("openai", "{invalid}")
   assert_true(result.contains("\"error\""))
   assert_true(result.contains("\"diagnostics\""))
 }
@@ -597,7 +593,7 @@ test "wasm_to_lux_request - invalid json returns error envelope with diagnostics
 ///|
 test "wasm_to_lux_response - returns envelope with value and diagnostics" {
   let resp_json = "{\"id\":\"chatcmpl-1\",\"object\":\"chat.completion\",\"created\":123,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello!\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":3,\"total_tokens\":8}}"
-  let result = wasm_to_lux_response("openai-chat", resp_json)
+  let result = wasm_to_lux_response("openai", resp_json)
   assert_true(result.contains("\"value\""))
   assert_true(result.contains("\"diagnostics\""))
 }
@@ -605,7 +601,7 @@ test "wasm_to_lux_response - returns envelope with value and diagnostics" {
 ///|
 test "wasm_sse_to_events - returns envelope with value and diagnostics" {
   let sse = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n\ndata: [DONE]\n"
-  let result = wasm_sse_to_events("openai-chat", sse)
+  let result = wasm_sse_to_events("openai", sse)
   assert_true(result.contains("\"value\""))
   assert_true(result.contains("\"diagnostics\""))
 }
@@ -614,7 +610,7 @@ test "wasm_sse_to_events - returns envelope with value and diagnostics" {
 test "wasm_convert_request - returns envelope with value and diagnostics" {
   match convert_source_req_json() {
     Ok(json) => {
-      let result = wasm_convert_request("openai-chat", json, "anthropic")
+      let result = wasm_convert_request("openai", json, "messages")
       assert_true(result.contains("\"value\""))
       assert_true(result.contains("\"diagnostics\""))
     }
@@ -627,7 +623,7 @@ test "wasm_convert_request - returns envelope with value and diagnostics" {
 
 ///|
 test "wasm_sdk_encode_request - returns envelope with value and diagnostics" {
-  let result = wasm_sdk_encode_request("openai-chat", "Hello")
+  let result = wasm_sdk_encode_request("openai", "Hello")
   assert_true(result.contains("\"value\""))
   assert_true(result.contains("\"diagnostics\""))
 }
@@ -635,14 +631,14 @@ test "wasm_sdk_encode_request - returns envelope with value and diagnostics" {
 ///|
 test "wasm_sdk_decode_response - returns envelope with value and diagnostics" {
   let resp = "{\"id\":\"1\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hi\"},\"finish_reason\":\"stop\"}],\"usage\":null}"
-  let result = wasm_sdk_decode_response("openai-chat", resp)
+  let result = wasm_sdk_decode_response("openai", resp)
   assert_true(result.contains("\"value\""))
   assert_true(result.contains("\"diagnostics\""))
 }
 
 ///|
 test "wasm_sdk_encode_stream - returns envelope with value and diagnostics" {
-  let result = wasm_sdk_encode_stream("openai-chat", "Hi")
+  let result = wasm_sdk_encode_stream("openai", "Hi")
   assert_true(result.contains("\"value\""))
   assert_true(result.contains("\"diagnostics\""))
 }
@@ -650,14 +646,14 @@ test "wasm_sdk_encode_stream - returns envelope with value and diagnostics" {
 ///|
 test "wasm_sdk_decode_sse - returns envelope with value and diagnostics" {
   let sse = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hi\"},\"finish_reason\":null}]}\n\ndata: [DONE]\n"
-  let result = wasm_sdk_decode_sse("openai-chat", sse)
+  let result = wasm_sdk_decode_sse("openai", sse)
   assert_true(result.contains("\"value\""))
   assert_true(result.contains("\"diagnostics\""))
 }
 
 ///|
 test "wasm_sdk_capability - returns envelope with value and diagnostics" {
-  let result = wasm_sdk_capability("openai")
+  let result = wasm_sdk_capability("responses")
   assert_true(result.contains("\"value\""))
   assert_true(result.contains("\"diagnostics\""))
 }

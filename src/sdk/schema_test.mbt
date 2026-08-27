@@ -7,7 +7,7 @@
 ///|
 test "DIAGNOSTIC - pattern_specificity of claude-*" {
   match match_by_model("claude-sonnet-4-20250514") {
-    Some(reg) => assert_eq(reg.name, "anthropic")
+    Some(reg) => assert_eq(reg.name, "messages")
     None => fail("DIAGNOSTIC: match_by_model returned None for claude-sonnet")
   }
 }
@@ -19,18 +19,22 @@ test "get_schema - openai variants" {
     Some(s) => assert_eq(s.provider_name, "openai")
     None => fail("expected Some for openai")
   }
-  match get_schema("openai-chat") {
+  match get_schema("openai") {
     Some(s) => assert_eq(s.provider_name, "openai")
     None => fail("expected Some for openai-chat")
   }
-  match get_schema("openai-codex") {
+  match get_schema("responses") {
     Some(s) => assert_eq(s.provider_name, "openai")
-    None => fail("expected Some for openai-codex")
+    None => fail("expected Some for responses")
   }
 }
 
 ///|
 test "get_schema - anthropic variants" {
+  match get_schema("messages") {
+    Some(s) => assert_eq(s.provider_name, "anthropic")
+    None => fail("expected Some for messages")
+  }
   match get_schema("anthropic") {
     Some(s) => assert_eq(s.provider_name, "anthropic")
     None => fail("expected Some for anthropic")
@@ -43,19 +47,9 @@ test "get_schema - anthropic variants" {
 
 ///|
 test "get_schema - gemini variants" {
-  for name in ["gemini", "google", "google-vertex"] {
+  for name in ["gemini", "google"] {
     match get_schema(name) {
       Some(s) => assert_eq(s.provider_name, "gemini")
-      None => fail("expected Some for " + name)
-    }
-  }
-}
-
-///|
-test "get_schema - azure variants" {
-  for name in ["azure-openai", "azure"] {
-    match get_schema(name) {
-      Some(s) => assert_eq(s.provider_name, "openai")
       None => fail("expected Some for " + name)
     }
   }
@@ -69,7 +63,7 @@ test "get_schema - unknown returns None" {
 ///|
 test "get_schema - alias names resolve via registry" {
   // 别名（注册表 aliases）也应能解析到 schema
-  for name in ["oai-responses", "chat", "vertex", "claude-messages"] {
+  for name in ["openai-responses", "chat", "claude-messages"] {
     match get_schema(name) {
       Some(_) => ()
       None => fail("expected Some for alias " + name)
@@ -79,7 +73,7 @@ test "get_schema - alias names resolve via registry" {
 
 ///|
 test "get_schema - model name falls back to registry matching" {
-  // 模型名经 match_by_model 回退到 openai-codex，schema 归 openai
+  // 模型名经 match_by_model 回退到 responses（原 openai-codex），schema 归 openai
   match get_schema("gpt-5.3-codex") {
     Some(s) => assert_eq(s.provider_name, "openai")
     None => fail("expected Some for model name gpt-5.3-codex")
@@ -538,16 +532,16 @@ test "validate_response - includes base validation errors" {
 /// === match_by_model 通配符匹配 ===
 test "match_by_model - prefix match claude-*" {
   match match_by_model("claude-sonnet-4-20250514") {
-    Some(reg) => assert_eq(reg.name, "anthropic")
-    None => fail("expected anthropic for claude-sonnet")
+    Some(reg) => assert_eq(reg.name, "messages")
+    None => fail("expected messages for claude-sonnet")
   }
 }
 
 ///|
 test "match_by_model - prefix match gpt-*" {
   match match_by_model("gpt-4o") {
-    Some(reg) => assert_eq(reg.name, "openai")
-    None => fail("expected openai for gpt-4o")
+    Some(reg) => assert_eq(reg.name, "responses")
+    None => fail("expected responses for gpt-4o")
   }
 }
 
@@ -562,20 +556,21 @@ test "match_by_model - prefix match gemini-*" {
 ///|
 test "match_by_model - prefix match o*" {
   match match_by_model("o3") {
-    Some(reg) => assert_eq(reg.name, "openai")
-    None => fail("expected openai for o3")
+    Some(reg) => assert_eq(reg.name, "responses")
+    None => fail("expected responses for o3")
   }
 }
 
 ///|
-test "match_by_model - double-star pattern gpt-*-codex" {
+test "match_by_model - prefix match gpt-*-codex" {
+  // openai-codex 已移除，gpt-*-codex 不再有专属 pattern，回退到 gpt-* 前缀
   match match_by_model("gpt-4o-codex") {
-    Some(reg) => assert_eq(reg.name, "openai-codex")
-    None => fail("expected openai-codex for gpt-4o-codex")
+    Some(reg) => assert_eq(reg.name, "responses")
+    None => fail("expected responses for gpt-4o-codex")
   }
   match match_by_model("gpt-5.5-codex") {
-    Some(reg) => assert_eq(reg.name, "openai-codex")
-    None => fail("expected openai-codex for gpt-5.5-codex")
+    Some(reg) => assert_eq(reg.name, "responses")
+    None => fail("expected responses for gpt-5.5-codex")
   }
 }
 

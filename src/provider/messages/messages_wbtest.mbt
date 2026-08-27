@@ -5,9 +5,9 @@
 /// === 1. 请求解码 ===
 
 ///|
-test "anthropic_to_lux_request - simple user message" {
+test "messages_to_lux_request - simple user message" {
   let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Hello\"}]}]}"
-  match anthropic_to_lux_request(json) {
+  match messages_to_lux_request(json) {
     Ok(cr) => {
       let req = cr.value()
       assert_eq(req.model, "claude-sonnet-4")
@@ -30,9 +30,9 @@ test "anthropic_to_lux_request - simple user message" {
 }
 
 ///|
-test "anthropic_to_lux_request - system instruction extracted" {
+test "messages_to_lux_request - system instruction extracted" {
   let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"system\":\"You are helpful\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}]}"
-  match anthropic_to_lux_request(json) {
+  match messages_to_lux_request(json) {
     Ok(cr) =>
       match cr.value().instructions {
         Some(instrs) => assert_eq(instrs.length(), 1)
@@ -43,9 +43,9 @@ test "anthropic_to_lux_request - system instruction extracted" {
 }
 
 ///|
-test "anthropic_to_lux_request - system array of text blocks" {
+test "messages_to_lux_request - system array of text blocks" {
   let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"system\":[{\"type\":\"text\",\"text\":\"You are\"},{\"type\":\"text\",\"text\":\"helpful\"}],\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}]}"
-  match anthropic_to_lux_request(json) {
+  match messages_to_lux_request(json) {
     Ok(cr) =>
       match cr.value().instructions {
         Some(instrs) => assert_eq(instrs.length(), 2)
@@ -56,9 +56,9 @@ test "anthropic_to_lux_request - system array of text blocks" {
 }
 
 ///|
-test "anthropic_to_lux_request - assistant with tool_use and thinking" {
+test "messages_to_lux_request - assistant with tool_use and thinking" {
   let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"weather?\"}]},{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"Let me check...\",\"signature\":\"sig-1\"},{\"type\":\"text\",\"text\":\"Sure\"},{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"get_weather\",\"input\":{\"city\":\"Beijing\"}}]}]}"
-  match anthropic_to_lux_request(json) {
+  match messages_to_lux_request(json) {
     Ok(cr) => {
       let req = cr.value()
       assert_eq(req.conversation.length(), 2)
@@ -88,9 +88,9 @@ test "anthropic_to_lux_request - assistant with tool_use and thinking" {
 }
 
 ///|
-test "anthropic_to_lux_request - tool_result in user message" {
+test "messages_to_lux_request - tool_result in user message" {
   let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"toolu_1\",\"content\":[{\"type\":\"text\",\"text\":\"{\\\"temp\\\":25}\"}],\"is_error\":false}]}]}"
-  match anthropic_to_lux_request(json) {
+  match messages_to_lux_request(json) {
     Ok(cr) => {
       let req = cr.value()
       assert_eq(req.conversation.length(), 1)
@@ -108,9 +108,9 @@ test "anthropic_to_lux_request - tool_result in user message" {
 }
 
 ///|
-test "anthropic_to_lux_request - tools with input_schema" {
+test "messages_to_lux_request - tools with input_schema" {
   let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}],\"tools\":[{\"name\":\"get_weather\",\"description\":\"Get weather\",\"input_schema\":{\"type\":\"object\",\"properties\":{}}}]}"
-  match anthropic_to_lux_request(json) {
+  match messages_to_lux_request(json) {
     Ok(cr) =>
       match cr.value().tools {
         Some(tools) => {
@@ -124,9 +124,9 @@ test "anthropic_to_lux_request - tools with input_schema" {
 }
 
 ///|
-test "anthropic_to_lux_request - tool types mapped to kinds" {
+test "messages_to_lux_request - tool types mapped to kinds" {
   let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}],\"tools\":[{\"type\":\"custom\",\"name\":\"f\",\"input_schema\":{\"type\":\"object\"}},{\"type\":\"code_execution_20250522\"},{\"type\":\"bash_20250124\",\"name\":\"bash\",\"description\":\"Run shell\"}]}"
-  match anthropic_to_lux_request(json) {
+  match messages_to_lux_request(json) {
     Ok(cr) =>
       match cr.value().tools {
         Some(tools) => {
@@ -142,18 +142,18 @@ test "anthropic_to_lux_request - tool types mapped to kinds" {
 }
 
 ///|
-test "anthropic_to_lux_request - tool_choice auto" {
+test "messages_to_lux_request - tool_choice auto" {
   let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}],\"tool_choice\":{\"type\":\"auto\"}}"
-  match anthropic_to_lux_request(json) {
+  match messages_to_lux_request(json) {
     Ok(cr) => assert_eq(cr.value().tool_choice, Some(Auto))
     Err(_) => assert_true(false)
   }
 }
 
 ///|
-test "anthropic_to_lux_request - options mapping" {
+test "messages_to_lux_request - options mapping" {
   let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}],\"temperature\":0.5,\"top_p\":0.9,\"top_k\":10,\"stop_sequences\":[\"END\"],\"stream\":true}"
-  match anthropic_to_lux_request(json) {
+  match messages_to_lux_request(json) {
     Ok(cr) => {
       let req = cr.value()
       match req.options.temperature {
@@ -176,9 +176,9 @@ test "anthropic_to_lux_request - options mapping" {
 }
 
 ///|
-test "anthropic_to_lux_request - thinking config" {
+test "messages_to_lux_request - thinking config" {
   let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}],\"thinking\":{\"type\":\"enabled\",\"budget_tokens\":2048}}"
-  match anthropic_to_lux_request(json) {
+  match messages_to_lux_request(json) {
     Ok(cr) =>
       match cr.value().reasoning {
         Some(rc) => {
@@ -192,9 +192,9 @@ test "anthropic_to_lux_request - thinking config" {
 }
 
 ///|
-test "anthropic_to_lux_request - redacted_thinking" {
+test "messages_to_lux_request - redacted_thinking" {
   let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"messages\":[{\"role\":\"assistant\",\"content\":[{\"type\":\"redacted_thinking\",\"signature\":\"sig-redacted\"},{\"type\":\"text\",\"text\":\"ok\"}]}]}"
-  match anthropic_to_lux_request(json) {
+  match messages_to_lux_request(json) {
     Ok(cr) =>
       match cr.value().conversation[0] {
         Message(m) =>
@@ -212,17 +212,17 @@ test "anthropic_to_lux_request - redacted_thinking" {
 }
 
 ///|
-test "anthropic_to_lux_request - invalid json" {
-  match anthropic_to_lux_request("not json") {
+test "messages_to_lux_request - invalid json" {
+  match messages_to_lux_request("not json") {
     Ok(_) => assert_true(false)
     Err(_) => ()
   }
 }
 
 ///|
-test "anthropic_to_lux_request - metadata" {
+test "messages_to_lux_request - metadata" {
   let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}],\"metadata\":{\"user_id\":\"user_123\"}}"
-  match anthropic_to_lux_request(json) {
+  match messages_to_lux_request(json) {
     Ok(cr) =>
       match cr.value().metadata {
         Some(m) =>
@@ -240,7 +240,7 @@ test "anthropic_to_lux_request - metadata" {
 /// === 2. 请求编码 ===
 
 ///|
-test "lux_request_to_anthropic - simple user message" {
+test "lux_request_to_messages - simple user message" {
   let req = @lux.LucentRequest::from_messages(
     "claude-sonnet-4",
     None,
@@ -264,7 +264,7 @@ test "lux_request_to_anthropic - simple user message" {
     None,
     None,
   )
-  match lux_request_to_anthropic(req) {
+  match lux_request_to_messages(req) {
     Ok(cr) => {
       let s = cr.value()
       assert_true(s.contains("\"model\":\"claude-sonnet-4\""))
@@ -276,7 +276,7 @@ test "lux_request_to_anthropic - simple user message" {
 }
 
 ///|
-test "lux_request_to_anthropic - instructions as system" {
+test "lux_request_to_messages - instructions as system" {
   let req = @lux.LucentRequest::from_messages(
     "claude-sonnet-4",
     Some([@lux.LucentContent::text("You are helpful")]),
@@ -300,14 +300,14 @@ test "lux_request_to_anthropic - instructions as system" {
     None,
     None,
   )
-  match lux_request_to_anthropic(req) {
+  match lux_request_to_messages(req) {
     Ok(cr) => assert_true(cr.value().contains("\"system\":\"You are helpful\""))
     Err(_) => assert_true(false)
   }
 }
 
 ///|
-test "lux_request_to_anthropic - tool_use encoded" {
+test "lux_request_to_messages - tool_use encoded" {
   let req = @lux.LucentRequest::from_messages(
     "claude-sonnet-4",
     None,
@@ -341,7 +341,7 @@ test "lux_request_to_anthropic - tool_use encoded" {
     None,
     None,
   )
-  match lux_request_to_anthropic(req) {
+  match lux_request_to_messages(req) {
     Ok(cr) => {
       let s = cr.value()
       assert_true(s.contains("\"type\":\"tool_use\""))
@@ -352,7 +352,7 @@ test "lux_request_to_anthropic - tool_use encoded" {
 }
 
 ///|
-test "lux_request_to_anthropic - tool_result encoded" {
+test "lux_request_to_messages - tool_result encoded" {
   let req = @lux.LucentRequest::new(
     "claude-sonnet-4",
     None,
@@ -380,14 +380,14 @@ test "lux_request_to_anthropic - tool_result encoded" {
     None,
     None,
   )
-  match lux_request_to_anthropic(req) {
+  match lux_request_to_messages(req) {
     Ok(cr) => assert_true(cr.value().contains("\"type\":\"tool_result\""))
     Err(_) => assert_true(false)
   }
 }
 
 ///|
-test "lux_request_to_anthropic - thinking encoded" {
+test "lux_request_to_messages - thinking encoded" {
   let req = @lux.LucentRequest::new(
     "claude-sonnet-4",
     None,
@@ -415,14 +415,14 @@ test "lux_request_to_anthropic - thinking encoded" {
     None,
     None,
   )
-  match lux_request_to_anthropic(req) {
+  match lux_request_to_messages(req) {
     Ok(cr) => assert_true(cr.value().contains("\"type\":\"thinking\""))
     Err(_) => assert_true(false)
   }
 }
 
 ///|
-test "lux_request_to_anthropic - tools with input_schema" {
+test "lux_request_to_messages - tools with input_schema" {
   let req = @lux.LucentRequest::from_messages(
     "claude-sonnet-4",
     None,
@@ -450,14 +450,14 @@ test "lux_request_to_anthropic - tools with input_schema" {
     None,
     None,
   )
-  match lux_request_to_anthropic(req) {
+  match lux_request_to_messages(req) {
     Ok(cr) => assert_true(cr.value().contains("\"input_schema\":"))
     Err(_) => assert_true(false)
   }
 }
 
 ///|
-test "lux_request_to_anthropic - tool kinds encoded" {
+test "lux_request_to_messages - tool kinds encoded" {
   let req = @lux.LucentRequest::from_messages(
     "claude-sonnet-4",
     None,
@@ -480,7 +480,7 @@ test "lux_request_to_anthropic - tool kinds encoded" {
     None,
     None,
   )
-  match lux_request_to_anthropic(req) {
+  match lux_request_to_messages(req) {
     Ok(cr) => {
       let s = cr.value()
       // custom 工具保持 name + input_schema，无 type 字段
@@ -495,7 +495,7 @@ test "lux_request_to_anthropic - tool kinds encoded" {
 }
 
 ///|
-test "lux_request_to_anthropic - thinking config" {
+test "lux_request_to_messages - thinking config" {
   let req = @lux.LucentRequest::from_messages(
     "claude-sonnet-4",
     None,
@@ -519,7 +519,7 @@ test "lux_request_to_anthropic - thinking config" {
     None,
     None,
   )
-  match lux_request_to_anthropic(req) {
+  match lux_request_to_messages(req) {
     Ok(cr) => assert_true(cr.value().contains("\"budget_tokens\":2048"))
     Err(_) => assert_true(false)
   }
@@ -529,9 +529,9 @@ test "lux_request_to_anthropic - thinking config" {
 /// === 3. 响应解码 ===
 
 ///|
-test "anthropic_to_lux_response - text and thinking" {
+test "messages_to_lux_response - text and thinking" {
   let json = "{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"Let me think\",\"signature\":\"sig-1\"},{\"type\":\"text\",\"text\":\"Hello!\"}],\"stop_reason\":\"end_turn\",\"usage\":{\"input_tokens\":10,\"output_tokens\":20}}"
-  match anthropic_to_lux_response(json) {
+  match messages_to_lux_response(json) {
     Ok(cr) => {
       let resp = cr.value()
       assert_eq(resp.id, "msg_1")
@@ -565,9 +565,9 @@ test "anthropic_to_lux_response - text and thinking" {
 }
 
 ///|
-test "anthropic_to_lux_response - tool_use response" {
+test "messages_to_lux_response - tool_use response" {
   let json = "{\"id\":\"msg_2\",\"model\":\"claude-sonnet-4\",\"content\":[{\"type\":\"tool_use\",\"id\":\"tu_1\",\"name\":\"get_weather\",\"input\":{\"city\":\"Beijing\"}}],\"stop_reason\":\"tool_use\",\"usage\":{\"input_tokens\":5,\"output_tokens\":10}}"
-  match anthropic_to_lux_response(json) {
+  match messages_to_lux_response(json) {
     Ok(cr) => {
       let resp = cr.value()
       assert_eq(resp.choices[0].finish_reason, ToolCalls)
@@ -586,17 +586,17 @@ test "anthropic_to_lux_response - tool_use response" {
 }
 
 ///|
-test "anthropic_to_lux_response - max_tokens stop" {
+test "messages_to_lux_response - max_tokens stop" {
   let json = "{\"id\":\"msg_3\",\"model\":\"claude-sonnet-4\",\"content\":[{\"type\":\"text\",\"text\":\"partial\"}],\"stop_reason\":\"max_tokens\",\"usage\":{\"input_tokens\":5,\"output_tokens\":50}}"
-  match anthropic_to_lux_response(json) {
+  match messages_to_lux_response(json) {
     Ok(cr) => assert_eq(cr.value().choices[0].finish_reason, Length)
     Err(_) => assert_true(false)
   }
 }
 
 ///|
-test "anthropic_to_lux_response - invalid json" {
-  match anthropic_to_lux_response("not json") {
+test "messages_to_lux_response - invalid json" {
+  match messages_to_lux_response("not json") {
     Ok(_) => assert_true(false)
     Err(_) => ()
   }
@@ -606,7 +606,7 @@ test "anthropic_to_lux_response - invalid json" {
 /// === 4. 响应编码 ===
 
 ///|
-test "lux_response_to_anthropic - text response" {
+test "lux_response_to_messages - text response" {
   let content = @lux.LucentContent::text("Hello!")
   let msg = @lux.LucentMessage::new(Assistant, [content])
   let choice = @lux.LucentChoice::new(0, msg, Stop, None)
@@ -618,7 +618,7 @@ test "lux_response_to_anthropic - text response" {
     Some(@lux.LucentUsage::new(10, 20, 30)),
     None,
   )
-  match lux_response_to_anthropic(resp) {
+  match lux_response_to_messages(resp) {
     Ok(cr) => {
       let s = cr.value()
       assert_true(s.contains("\"id\":\"msg_1\""))
@@ -633,7 +633,7 @@ test "lux_response_to_anthropic - text response" {
 }
 
 ///|
-test "lux_response_to_anthropic - with tool_use" {
+test "lux_response_to_messages - with tool_use" {
   let tu = @lux.LucentContent::tool_use(
     "tu_1",
     "get_weather",
@@ -650,7 +650,7 @@ test "lux_response_to_anthropic - with tool_use" {
     None,
     None,
   )
-  match lux_response_to_anthropic(resp) {
+  match lux_response_to_messages(resp) {
     Ok(cr) => {
       let s = cr.value()
       assert_true(s.contains("\"stop_reason\":\"tool_use\""))
@@ -663,9 +663,9 @@ test "lux_response_to_anthropic - with tool_use" {
 }
 
 ///|
-test "lux_response_to_anthropic - empty choices returns error" {
+test "lux_response_to_messages - empty choices returns error" {
   let resp = @lux.LucentResponse::new("msg_0", "model", None, [], None, None)
-  match lux_response_to_anthropic(resp) {
+  match lux_response_to_messages(resp) {
     Ok(_) => assert_true(false)
     Err(e) => assert_eq(e, "response has no choices")
   }
@@ -673,7 +673,7 @@ test "lux_response_to_anthropic - empty choices returns error" {
 
 ///|
 /// 跨协议链路：vLLM 消息级 reasoning → IR → Anthropic 出站 → thinking block
-test "lux_response_to_anthropic - message-level reasoning emits thinking block" {
+test "lux_response_to_messages - message-level reasoning emits thinking block" {
   let th = @lux.LucentThinking::visible("step by step", None)
   let msg = @lux.LucentMessage::with_reasoning(
     Assistant,
@@ -688,7 +688,7 @@ test "lux_response_to_anthropic - message-level reasoning emits thinking block" 
     None,
     None,
   )
-  match lux_response_to_anthropic(resp) {
+  match lux_response_to_messages(resp) {
     Ok(cr) => {
       let s = cr.value()
       // 消息级 reasoning 前置为 thinking block
@@ -704,7 +704,7 @@ test "lux_response_to_anthropic - message-level reasoning emits thinking block" 
 
 ///|
 /// 跨协议链路：signature 保留（Anthropic 原生承载，非 Degraded）
-test "lux_response_to_anthropic - message-level reasoning keeps signature" {
+test "lux_response_to_messages - message-level reasoning keeps signature" {
   let th = @lux.LucentThinking::visible("thought", Some("sig-abc"))
   let msg = @lux.LucentMessage::with_reasoning(
     Assistant,
@@ -719,7 +719,7 @@ test "lux_response_to_anthropic - message-level reasoning keeps signature" {
     None,
     None,
   )
-  match lux_response_to_anthropic(resp) {
+  match lux_response_to_messages(resp) {
     Ok(cr) => {
       let s = cr.value()
       assert_true(s.contains("\"signature\":\"sig-abc\""))
@@ -738,7 +738,7 @@ test "lux_response_to_anthropic - message-level reasoning keeps signature" {
 
 ///|
 /// 双载体并存：message.reasoning 优先，content Thinking 跳过 → Degraded
-test "lux_response_to_anthropic - dual carrier yields Degraded" {
+test "lux_response_to_messages - dual carrier yields Degraded" {
   let th = @lux.LucentThinking::visible("msg reasoning", None)
   let msg = @lux.LucentMessage::with_reasoning(
     Assistant,
@@ -753,7 +753,7 @@ test "lux_response_to_anthropic - dual carrier yields Degraded" {
     None,
     None,
   )
-  match lux_response_to_anthropic(resp) {
+  match lux_response_to_messages(resp) {
     Ok(cr) => {
       let mut has_dual = false
       for d in cr.diagnostics() {
@@ -775,9 +775,9 @@ test "lux_response_to_anthropic - dual carrier yields Degraded" {
 /// === 5. 流解码 ===
 
 ///|
-test "anthropic_sse_to_events - text sequence" {
+test "messages_sse_to_events - text sequence" {
   let sse = "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"model\":\"claude-sonnet-4\"}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"Hello\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":5}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
-  match anthropic_sse_to_events(sse) {
+  match messages_sse_to_events(sse) {
     Ok(cr) => {
       let events = cr.value()
       assert_true(events.length() >= 4)
@@ -792,9 +792,9 @@ test "anthropic_sse_to_events - text sequence" {
 }
 
 ///|
-test "anthropic_sse_to_events - tool call with thinking" {
+test "messages_sse_to_events - tool call with thinking" {
   let sse = "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_2\",\"model\":\"claude-sonnet-4\"}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"Let me check\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"signature_delta\",\"signature\":\"sig_abc\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"tu_1\",\"name\":\"get_weather\",\"input\":{}}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"city\\\":\\\"Beijing\\\"}\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":1}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\"}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
-  match anthropic_sse_to_events(sse) {
+  match messages_sse_to_events(sse) {
     Ok(cr) => {
       let events = cr.value()
       assert_true(events.length() >= 10)
@@ -840,9 +840,9 @@ test "anthropic_sse_to_events - tool call with thinking" {
 }
 
 ///|
-test "anthropic_sse_to_events - done event" {
+test "messages_sse_to_events - done event" {
   let sse = "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"m\",\"model\":\"m\"}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
-  match anthropic_sse_to_events(sse) {
+  match messages_sse_to_events(sse) {
     Ok(cr) => {
       let events = cr.value()
       assert_true(events[events.length() - 1] is Done)
@@ -855,7 +855,7 @@ test "anthropic_sse_to_events - done event" {
 /// === 6. 流式编码 ===
 
 ///|
-test "lux_events_to_anthropic_sse - text sequence" {
+test "lux_events_to_messages_sse - text sequence" {
   let events : Array[@lux.LucentStreamEvent] = [
     ConversationStart(
       @lux.LucentConversationMeta::new(
@@ -870,7 +870,7 @@ test "lux_events_to_anthropic_sse - text sequence" {
     Finish(Stop),
     Done,
   ]
-  match lux_events_to_anthropic_sse(events) {
+  match lux_events_to_messages_sse(events) {
     Ok(cr) => {
       let sse = cr.value()
       assert_true(sse.contains("event: message_start"))
@@ -887,7 +887,7 @@ test "lux_events_to_anthropic_sse - text sequence" {
 }
 
 ///|
-test "lux_events_to_anthropic_sse - tool call with thinking" {
+test "lux_events_to_messages_sse - tool call with thinking" {
   let events : Array[@lux.LucentStreamEvent] = [
     ConversationStart(
       @lux.LucentConversationMeta::new(
@@ -909,7 +909,7 @@ test "lux_events_to_anthropic_sse - tool call with thinking" {
     Finish(ToolCalls),
     Done,
   ]
-  match lux_events_to_anthropic_sse(events) {
+  match lux_events_to_messages_sse(events) {
     Ok(cr) => {
       let sse = cr.value()
       assert_true(sse.contains("thinking_delta"))
@@ -949,7 +949,7 @@ test "encode - native media yields Unsupported diagnostic not empty string" {
     None,
     None,
   )
-  match lux_request_to_anthropic(req) {
+  match lux_request_to_messages(req) {
     Ok(cr) => {
       // 不得输出空字符串 content 块
       assert_true(!cr.value().contains("\"type\":\"text\",\"text\":\"\""))
@@ -986,7 +986,7 @@ test "encode - image url maps to anthropic image block" {
     None,
     None,
   )
-  match lux_request_to_anthropic(req) {
+  match lux_request_to_messages(req) {
     Ok(cr) => {
       // 图片应映射为 anthropic image block
       assert_true(cr.value().contains("\"type\":\"image\""))
@@ -1015,7 +1015,7 @@ test "anthropic store unsupported diagnostic" {
     None,
     None,
   )
-  match lux_request_to_anthropic(req) {
+  match lux_request_to_messages(req) {
     Ok(cr) => {
       // 必须携带 Unsupported 诊断
       assert_true(cr.diagnostics().length() > 0)
@@ -1047,10 +1047,10 @@ test "anthropic extras round-trip" {
     None,
     None,
   )
-  match lux_request_to_anthropic(req) {
+  match lux_request_to_messages(req) {
     Ok(cr) => {
       assert_true(cr.value().contains("\"extra_field\":\"v1\""))
-      match anthropic_to_lux_request(cr.value()) {
+      match messages_to_lux_request(cr.value()) {
         Ok(cr2) =>
           match cr2.value().options.extras {
             Some(m) => assert_true(m.contains("extra_field"))
@@ -1066,7 +1066,7 @@ test "anthropic extras round-trip" {
 ///|
 test "decode - image url block maps to image multimedia" {
   let json = "{\"model\":\"claude\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"image\",\"source\":{\"type\":\"url\",\"url\":\"https://x.com/a.png\"}}]}]}"
-  match anthropic_to_lux_request(json) {
+  match messages_to_lux_request(json) {
     Ok(cr) =>
       match cr.value().conversation[0] {
         Message(m) =>
@@ -1086,7 +1086,7 @@ test "decode - image url block maps to image multimedia" {
 ///|
 test "decode - image base64 block maps to inline multimedia" {
   let json = "{\"model\":\"claude\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"image\",\"source\":{\"type\":\"base64\",\"media_type\":\"image/jpeg\",\"data\":\"abc123\"}}]}]}"
-  match anthropic_to_lux_request(json) {
+  match messages_to_lux_request(json) {
     Ok(cr) =>
       match cr.value().conversation[0] {
         Message(m) =>
@@ -1126,7 +1126,7 @@ test "encode - file url maps to anthropic document block" {
     None,
     None,
   )
-  match lux_request_to_anthropic(req) {
+  match lux_request_to_messages(req) {
     Ok(cr) => {
       assert_true(cr.value().contains("\"type\":\"document\""))
       assert_true(cr.value().contains("https://x.com/a.pdf"))
@@ -1138,7 +1138,7 @@ test "encode - file url maps to anthropic document block" {
 ///|
 test "decode - document block maps to file multimedia" {
   let json = "{\"model\":\"claude\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"document\",\"source\":{\"type\":\"url\",\"url\":\"https://x.com/a.pdf\"},\"media_type\":\"application/pdf\"}]}]}"
-  match anthropic_to_lux_request(json) {
+  match messages_to_lux_request(json) {
     Ok(cr) =>
       match cr.value().conversation[0] {
         Message(m) =>

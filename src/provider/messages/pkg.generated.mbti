@@ -1,24 +1,24 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "morning-start/prism/provider/anthropic"
+package "morning-start/prism/provider/messages"
 
 import {
   "morning-start/prism/lux",
 }
 
 // Values
-pub fn anthropic_sse_to_events(String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String]
-
-pub fn anthropic_to_lux_request(String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String]
-
-pub fn anthropic_to_lux_response(String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String]
-
 pub fn capability() -> @lux.ProviderCapability
 
-pub fn lux_events_to_anthropic_sse(Array[@lux.LucentStreamEvent]) -> Result[@lux.ConversionResult[String], String]
+pub fn lux_events_to_messages_sse(Array[@lux.LucentStreamEvent]) -> Result[@lux.ConversionResult[String], String]
 
-pub fn lux_request_to_anthropic(@lux.LucentRequest) -> Result[@lux.ConversionResult[String], String]
+pub fn lux_request_to_messages(@lux.LucentRequest) -> Result[@lux.ConversionResult[String], String]
 
-pub fn lux_response_to_anthropic(@lux.LucentResponse) -> Result[@lux.ConversionResult[String], String]
+pub fn lux_response_to_messages(@lux.LucentResponse) -> Result[@lux.ConversionResult[String], String]
+
+pub fn messages_sse_to_events(String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String]
+
+pub fn messages_to_lux_request(String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String]
+
+pub fn messages_to_lux_response(String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String]
 
 // Errors
 

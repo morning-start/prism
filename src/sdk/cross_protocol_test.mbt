@@ -49,9 +49,9 @@ let base_req : @lux.LucentRequest = @lux.LucentRequest::new(
 ///|
 /// === 测试：OpenAI Chat 往返 ===
 test "consistency - openai_chat roundtrip" {
-  match @openai_chat.lux_request_to_openai_chat(base_req) {
+  match @openai.lux_request_to_openai(base_req) {
     Ok(cr) =>
-      match @openai_chat.openai_chat_to_lux_request(cr.value()) {
+      match @openai.openai_to_lux_request(cr.value()) {
         Ok(cr2) => {
           let req = cr2.value()
           assert_eq(req.model, base_req.model)
@@ -75,9 +75,9 @@ test "consistency - openai_chat roundtrip" {
 ///|
 /// === 测试：Anthropic 往返 ===
 test "consistency - anthropic roundtrip" {
-  match @anthropic.lux_request_to_anthropic(base_req) {
+  match @messages.lux_request_to_messages(base_req) {
     Ok(cr) =>
-      match @anthropic.anthropic_to_lux_request(cr.value()) {
+      match @messages.messages_to_lux_request(cr.value()) {
         Ok(cr2) => {
           let req = cr2.value()
           assert_eq(req.model, base_req.model)
@@ -101,9 +101,9 @@ test "consistency - anthropic roundtrip" {
 ///|
 /// === 测试：OpenAI Responses 往返 ===
 test "consistency - openai_responses roundtrip" {
-  match @openai_responses.lux_request_to_openai_responses(base_req) {
+  match @responses.lux_request_to_responses(base_req) {
     Ok(cr) =>
-      match @openai_responses.openai_responses_to_lux_request(cr.value()) {
+      match @responses.responses_to_lux_request(cr.value()) {
         Ok(cr2) => {
           let req = cr2.value()
           assert_eq(req.model, base_req.model)
@@ -157,13 +157,12 @@ test "consistency - gemini roundtrip" {
 /// === 测试：跨协议 model 一致性 ===
 test "consistency - model preserved across all providers" {
   let providers = [
-    ("openai_chat", @openai_chat.lux_request_to_openai_chat(base_req)),
-    ("anthropic", @anthropic.lux_request_to_anthropic(base_req)),
-    ("responses", @openai_responses.lux_request_to_openai_responses(base_req)),
+    ("openai", @openai.lux_request_to_openai(base_req)),
+    ("messages", @messages.lux_request_to_messages(base_req)),
+    ("responses", @responses.lux_request_to_responses(base_req)),
   ]
   let decoders = [
-    @openai_chat.openai_chat_to_lux_request, @anthropic.anthropic_to_lux_request,
-    @openai_responses.openai_responses_to_lux_request,
+    @openai.openai_to_lux_request, @messages.messages_to_lux_request, @responses.responses_to_lux_request,
   ]
   let mut i = 0
   while i < providers.length() {
@@ -224,10 +223,10 @@ fn req_with_opts(
 ///|
 test "params - openai_chat temperature preserved" {
   let req = req_with_opts(Some(0.7), None, None, None, None)
-  let json = @openai_chat.lux_request_to_openai_chat(req)
+  let json = @openai.lux_request_to_openai(req)
   match json {
     Ok(cr) =>
-      match @openai_chat.openai_chat_to_lux_request(cr.value()) {
+      match @openai.openai_to_lux_request(cr.value()) {
         Ok(cr2) =>
           match cr2.value().options.temperature {
             Some(t) => assert_true(t > 0.6 && t < 0.8)
@@ -242,10 +241,10 @@ test "params - openai_chat temperature preserved" {
 ///|
 test "params - anthropic temperature preserved" {
   let req = req_with_opts(Some(0.7), None, None, None, None)
-  let json = @anthropic.lux_request_to_anthropic(req)
+  let json = @messages.lux_request_to_messages(req)
   match json {
     Ok(cr) =>
-      match @anthropic.anthropic_to_lux_request(cr.value()) {
+      match @messages.messages_to_lux_request(cr.value()) {
         Ok(cr2) =>
           match cr2.value().options.temperature {
             Some(t) => assert_true(t > 0.6 && t < 0.8)
@@ -260,10 +259,10 @@ test "params - anthropic temperature preserved" {
 ///|
 test "params - responses temperature preserved" {
   let req = req_with_opts(Some(0.7), None, None, None, None)
-  let json = @openai_responses.lux_request_to_openai_responses(req)
+  let json = @responses.lux_request_to_responses(req)
   match json {
     Ok(cr) =>
-      match @openai_responses.openai_responses_to_lux_request(cr.value()) {
+      match @responses.responses_to_lux_request(cr.value()) {
         Ok(cr2) =>
           match cr2.value().options.temperature {
             Some(t) => assert_true(t > 0.6 && t < 0.8)
@@ -278,10 +277,10 @@ test "params - responses temperature preserved" {
 ///|
 test "params - openai_chat max_tokens preserved" {
   let req = req_with_opts(None, None, None, Some(2048), None)
-  let json = @openai_chat.lux_request_to_openai_chat(req)
+  let json = @openai.lux_request_to_openai(req)
   match json {
     Ok(cr) =>
-      match @openai_chat.openai_chat_to_lux_request(cr.value()) {
+      match @openai.openai_to_lux_request(cr.value()) {
         Ok(cr2) => assert_eq(cr2.value().options.max_output_tokens, Some(2048))
         Err(e) => fail("decode: " + e)
       }
@@ -292,10 +291,10 @@ test "params - openai_chat max_tokens preserved" {
 ///|
 test "params - anthropic max_tokens preserved" {
   let req = req_with_opts(None, None, None, Some(2048), None)
-  let json = @anthropic.lux_request_to_anthropic(req)
+  let json = @messages.lux_request_to_messages(req)
   match json {
     Ok(cr) =>
-      match @anthropic.anthropic_to_lux_request(cr.value()) {
+      match @messages.messages_to_lux_request(cr.value()) {
         Ok(cr2) => assert_eq(cr2.value().options.max_output_tokens, Some(2048))
         Err(e) => fail("decode: " + e)
       }
@@ -357,7 +356,7 @@ fn check_sse_roundtrip(
 test "sse - openai_chat roundtrip" {
   match
     check_sse_roundtrip(
-      @openai_chat.lux_events_to_openai_chat_sse, @openai_chat.openai_chat_sse_to_events,
+      @openai.lux_events_to_openai_sse, @openai.openai_sse_to_events,
     ) {
     Ok(_count) => assert_true(true) // 编解码成功
     Err(e) => fail(e)
@@ -368,7 +367,7 @@ test "sse - openai_chat roundtrip" {
 test "sse - anthropic roundtrip" {
   match
     check_sse_roundtrip(
-      @anthropic.lux_events_to_anthropic_sse, @anthropic.anthropic_sse_to_events,
+      @messages.lux_events_to_messages_sse, @messages.messages_sse_to_events,
     ) {
     Ok(_count) => assert_true(true)
     Err(e) => fail(e)
@@ -379,7 +378,7 @@ test "sse - anthropic roundtrip" {
 test "sse - openai_responses roundtrip" {
   match
     check_sse_roundtrip(
-      @openai_responses.lux_events_to_openai_responses_sse, @openai_responses.openai_responses_sse_to_events,
+      @responses.lux_events_to_responses_sse, @responses.responses_sse_to_events,
     ) {
     Ok(_count) => assert_true(true)
     Err(e) => fail(e)
@@ -428,20 +427,20 @@ test "multi - three messages roundtrip" {
   let mut i = 0
   while i < 3 {
     let json = if i == 0 {
-      @openai_chat.lux_request_to_openai_chat(multi_req)
+      @openai.lux_request_to_openai(multi_req)
     } else if i == 1 {
-      @anthropic.lux_request_to_anthropic(multi_req)
+      @messages.lux_request_to_messages(multi_req)
     } else {
-      @openai_responses.lux_request_to_openai_responses(multi_req)
+      @responses.lux_request_to_responses(multi_req)
     }
     match json {
       Ok(cr) => {
         let decoder = if i == 0 {
-          @openai_chat.openai_chat_to_lux_request
+          @openai.openai_to_lux_request
         } else if i == 1 {
-          @anthropic.anthropic_to_lux_request
+          @messages.messages_to_lux_request
         } else {
-          @openai_responses.openai_responses_to_lux_request
+          @responses.responses_to_lux_request
         }
         match decoder(cr.value()) {
           Ok(cr2) => assert_eq(cr2.value().conversation.length(), 3)
@@ -476,20 +475,20 @@ test "multi - system instruction preserved" {
   let mut i = 0
   while i < 3 {
     let json = if i == 0 {
-      @openai_chat.lux_request_to_openai_chat(sys_req)
+      @openai.lux_request_to_openai(sys_req)
     } else if i == 1 {
-      @anthropic.lux_request_to_anthropic(sys_req)
+      @messages.lux_request_to_messages(sys_req)
     } else {
-      @openai_responses.lux_request_to_openai_responses(sys_req)
+      @responses.lux_request_to_responses(sys_req)
     }
     match json {
       Ok(cr) => {
         let decoder = if i == 0 {
-          @openai_chat.openai_chat_to_lux_request
+          @openai.openai_to_lux_request
         } else if i == 1 {
-          @anthropic.anthropic_to_lux_request
+          @messages.messages_to_lux_request
         } else {
-          @openai_responses.openai_responses_to_lux_request
+          @responses.responses_to_lux_request
         }
         match decoder(cr.value()) {
           Ok(cr2) => assert_eq(cr2.value().instructions is Some(_), true)
@@ -531,20 +530,20 @@ test "multi - two tools preserved" {
   let mut i = 0
   while i < 3 {
     let json = if i == 0 {
-      @openai_chat.lux_request_to_openai_chat(tools_req)
+      @openai.lux_request_to_openai(tools_req)
     } else if i == 1 {
-      @anthropic.lux_request_to_anthropic(tools_req)
+      @messages.lux_request_to_messages(tools_req)
     } else {
-      @openai_responses.lux_request_to_openai_responses(tools_req)
+      @responses.lux_request_to_responses(tools_req)
     }
     match json {
       Ok(cr) => {
         let decoder = if i == 0 {
-          @openai_chat.openai_chat_to_lux_request
+          @openai.openai_to_lux_request
         } else if i == 1 {
-          @anthropic.anthropic_to_lux_request
+          @messages.messages_to_lux_request
         } else {
-          @openai_responses.openai_responses_to_lux_request
+          @responses.responses_to_lux_request
         }
         match decoder(cr.value()) {
           Ok(cr2) =>
@@ -669,23 +668,6 @@ test "sub - phase absent defaults to none" {
 }
 
 ///|
-/// Azure content_filters 提取（通过 openai_azure 适配器验证）
-test "sub - azure content_filters extraction" {
-  let azure_json = "{\"id\":\"resp-1\",\"model\":\"gpt-4o\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hello\",\"annotations\":[]}],\"id\":\"msg_1\"}],\"content_filters\":[{\"filtered\":false}]}"
-  match @openai_azure.azure_to_lux_response(azure_json) {
-    Ok(cr) => {
-      let resp = cr.value()
-      assert_eq(resp.id, "resp-1")
-      match resp.provider_payload {
-        Some(_) => () // content_filters 已提取到 provider_payload
-        None => fail("provider_payload should contain content_filters")
-      }
-    }
-    Err(e) => fail("azure decode: " + e)
-  }
-}
-
-///|
 /// === 契约矩阵：形状字段静默丢失必须携带诊断 ===
 
 ///|
@@ -715,7 +697,7 @@ test "fidelity - openai_chat native content yields Unsupported diagnostic" {
     None,
     None,
   )
-  match @openai_chat.lux_request_to_openai_chat(req) {
+  match @openai.lux_request_to_openai(req) {
     Ok(cr) => {
       // 不阻断成功
       assert_true(cr.value().contains("model"))

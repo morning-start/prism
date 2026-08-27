@@ -3,20 +3,20 @@
 ///
 /// 依据：docs/lux-ir-design.md §10
 /// 覆盖：
-///   1. openai_chat_to_lux_request      请求解码
-///   2. lux_request_to_openai_chat      请求编码
-///   3. openai_chat_to_lux_response     响应解码
-///   4. lux_response_to_openai_chat     响应编码
-///   5. openai_chat_sse_to_events       流解码
-///   6. lux_events_to_openai_chat_sse   流编码
+///   1. openai_to_lux_request      请求解码
+///   2. lux_request_to_openai      请求编码
+///   3. openai_to_lux_response     响应解码
+///   4. lux_response_to_openai     响应编码
+///   5. openai_sse_to_events       流解码
+///   6. lux_events_to_openai_sse   流编码
 
 ///|
 /// === 1. 请求解码 ===
 
 ///|
-test "openai_chat_to_lux_request - simple user message" {
+test "openai_to_lux_request - simple user message" {
   let json = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}],\"stream\":false}"
-  match openai_chat_to_lux_request(json) {
+  match openai_to_lux_request(json) {
     Ok(cr) => {
       let req = cr.value()
       assert_eq(req.model, "gpt-4o")
@@ -40,9 +40,9 @@ test "openai_chat_to_lux_request - simple user message" {
 }
 
 ///|
-test "openai_chat_to_lux_request - system instruction extracted" {
+test "openai_to_lux_request - system instruction extracted" {
   let json = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"system\",\"content\":\"You are helpful\"},{\"role\":\"user\",\"content\":\"hi\"}]}"
-  match openai_chat_to_lux_request(json) {
+  match openai_to_lux_request(json) {
     Ok(cr) => {
       let req = cr.value()
       // system 抽出为 instructions，不入 conversation
@@ -57,9 +57,9 @@ test "openai_chat_to_lux_request - system instruction extracted" {
 }
 
 ///|
-test "openai_chat_to_lux_request - assistant with tool_calls" {
+test "openai_to_lux_request - assistant with tool_calls" {
   let json = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"weather?\"},{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Beijing\\\"}\"}}]},{\"role\":\"tool\",\"tool_call_id\":\"call_1\",\"content\":\"{\\\"temp\\\":25}\"}]}"
-  match openai_chat_to_lux_request(json) {
+  match openai_to_lux_request(json) {
     Ok(cr) => {
       let req = cr.value()
       assert_eq(req.conversation.length(), 3)
@@ -90,9 +90,9 @@ test "openai_chat_to_lux_request - assistant with tool_calls" {
 }
 
 ///|
-test "openai_chat_to_lux_request - tools parsed" {
+test "openai_to_lux_request - tools parsed" {
   let json = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"f\",\"description\":\"d\",\"parameters\":{\"type\":\"object\"}}}]}"
-  match openai_chat_to_lux_request(json) {
+  match openai_to_lux_request(json) {
     Ok(cr) =>
       match cr.value().tools {
         Some(tools) => {
@@ -106,23 +106,23 @@ test "openai_chat_to_lux_request - tools parsed" {
 }
 
 ///|
-test "openai_chat_to_lux_request - tool_choice variants" {
+test "openai_to_lux_request - tool_choice variants" {
   let json_tc_auto = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"tool_choice\":\"auto\"}"
-  match openai_chat_to_lux_request(json_tc_auto) {
+  match openai_to_lux_request(json_tc_auto) {
     Ok(cr) => assert_eq(cr.value().tool_choice, Some(Auto))
     Err(_) => assert_true(false)
   }
   let json_tc_req = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"tool_choice\":{\"type\":\"function\",\"function\":{\"name\":\"f\"}}}"
-  match openai_chat_to_lux_request(json_tc_req) {
+  match openai_to_lux_request(json_tc_req) {
     Ok(cr) => assert_eq(cr.value().tool_choice, Some(SpecificTool("f")))
     Err(_) => assert_true(false)
   }
 }
 
 ///|
-test "openai_chat_to_lux_request - options mapping" {
+test "openai_to_lux_request - options mapping" {
   let json = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"temperature\":0.7,\"max_tokens\":1024,\"stream\":true,\"stop\":\"\\n\\n\",\"seed\":42}"
-  match openai_chat_to_lux_request(json) {
+  match openai_to_lux_request(json) {
     Ok(cr) => {
       let req = cr.value()
       match req.options.temperature {
@@ -145,26 +145,26 @@ test "openai_chat_to_lux_request - options mapping" {
 }
 
 ///|
-test "openai_chat_to_lux_request - response_format json_object" {
+test "openai_to_lux_request - response_format json_object" {
   let json = "{\"model\":\"gpt-4o\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"response_format\":{\"type\":\"json_object\"}}"
-  match openai_chat_to_lux_request(json) {
+  match openai_to_lux_request(json) {
     Ok(cr) => assert_eq(cr.value().options.structured_output, Some(JsonObject))
     Err(_) => assert_true(false)
   }
 }
 
 ///|
-test "openai_chat_to_lux_request - invalid json returns error" {
-  match openai_chat_to_lux_request("not json") {
+test "openai_to_lux_request - invalid json returns error" {
+  match openai_to_lux_request("not json") {
     Ok(_) => assert_true(false)
     Err(_) => ()
   }
 }
 
 ///|
-test "openai_chat_to_lux_request - empty messages" {
+test "openai_to_lux_request - empty messages" {
   let json = "{\"model\":\"gpt-4o\",\"messages\":[]}"
-  match openai_chat_to_lux_request(json) {
+  match openai_to_lux_request(json) {
     Ok(cr) => assert_eq(cr.value().conversation.length(), 0)
     Err(_) => assert_true(false)
   }
@@ -174,7 +174,7 @@ test "openai_chat_to_lux_request - empty messages" {
 /// === 2. 请求编码 ===
 
 ///|
-test "lux_request_to_openai_chat - simple user message" {
+test "lux_request_to_openai - simple user message" {
   let req = @lux.LucentRequest::from_messages(
     "gpt-4o",
     None,
@@ -187,7 +187,7 @@ test "lux_request_to_openai_chat - simple user message" {
     None,
     None,
   )
-  match lux_request_to_openai_chat(req) {
+  match lux_request_to_openai(req) {
     Ok(cr) => {
       let s = cr.value()
       let jv = @json.parse(s)
@@ -205,7 +205,7 @@ test "lux_request_to_openai_chat - simple user message" {
 }
 
 ///|
-test "lux_request_to_openai_chat - instructions prepended as system message" {
+test "lux_request_to_openai - instructions prepended as system message" {
   let req = @lux.LucentRequest::from_messages(
     "gpt-4o",
     Some([@lux.LucentContent::text("You are helpful")]),
@@ -218,7 +218,7 @@ test "lux_request_to_openai_chat - instructions prepended as system message" {
     None,
     None,
   )
-  match lux_request_to_openai_chat(req) {
+  match lux_request_to_openai(req) {
     Ok(cr) => {
       let s = cr.value()
       let jv = @json.parse(s)
@@ -238,7 +238,7 @@ test "lux_request_to_openai_chat - instructions prepended as system message" {
 }
 
 ///|
-test "lux_request_to_openai_chat - tool_use encoded as tool_calls" {
+test "lux_request_to_openai - tool_use encoded as tool_calls" {
   let req = @lux.LucentRequest::from_messages(
     "gpt-4o",
     None,
@@ -256,7 +256,7 @@ test "lux_request_to_openai_chat - tool_use encoded as tool_calls" {
     None,
     None,
   )
-  match lux_request_to_openai_chat(req) {
+  match lux_request_to_openai(req) {
     Ok(cr) => {
       let s = cr.value()
       let jv = @json.parse(s)
@@ -274,7 +274,7 @@ test "lux_request_to_openai_chat - tool_use encoded as tool_calls" {
 }
 
 ///|
-test "lux_request_to_openai_chat - tool_result encoded as tool role" {
+test "lux_request_to_openai - tool_result encoded as tool role" {
   let req = @lux.LucentRequest::from_messages(
     "gpt-4o",
     None,
@@ -293,7 +293,7 @@ test "lux_request_to_openai_chat - tool_result encoded as tool role" {
     None,
     None,
   )
-  match lux_request_to_openai_chat(req) {
+  match lux_request_to_openai(req) {
     Ok(cr) => {
       let s = cr.value()
       let jv = @json.parse(s)
@@ -311,7 +311,7 @@ test "lux_request_to_openai_chat - tool_result encoded as tool role" {
 }
 
 ///|
-test "lux_request_to_openai_chat - tools encoded" {
+test "lux_request_to_openai - tools encoded" {
   let req = @lux.LucentRequest::from_messages(
     "gpt-4o",
     None,
@@ -324,7 +324,7 @@ test "lux_request_to_openai_chat - tools encoded" {
     None,
     None,
   )
-  match lux_request_to_openai_chat(req) {
+  match lux_request_to_openai(req) {
     Ok(cr) => {
       let s = cr.value()
       let jv = @json.parse(s)
@@ -338,7 +338,7 @@ test "lux_request_to_openai_chat - tools encoded" {
 }
 
 ///|
-test "lux_request_to_openai_chat - non-function tool kind unsupported" {
+test "lux_request_to_openai - non-function tool kind unsupported" {
   let req = @lux.LucentRequest::from_messages(
     "gpt-4o",
     None,
@@ -351,7 +351,7 @@ test "lux_request_to_openai_chat - non-function tool kind unsupported" {
     None,
     None,
   )
-  match lux_request_to_openai_chat(req) {
+  match lux_request_to_openai(req) {
     Ok(cr) => {
       // 必须携带 Unsupported 诊断（不静默降级为 function）
       let mut has_unsupported = false
@@ -372,9 +372,9 @@ test "lux_request_to_openai_chat - non-function tool kind unsupported" {
 /// === 3. 响应解码 ===
 
 ///|
-test "openai_chat_to_lux_response - text + usage" {
+test "openai_to_lux_response - text + usage" {
   let json = "{\"id\":\"chatcmpl-1\",\"object\":\"chat.completion\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello!\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5,\"total_tokens\":15}}"
-  match openai_chat_to_lux_response(json) {
+  match openai_to_lux_response(json) {
     Ok(cr) => {
       let resp = cr.value()
       assert_eq(resp.id, "chatcmpl-1")
@@ -395,9 +395,9 @@ test "openai_chat_to_lux_response - text + usage" {
 }
 
 ///|
-test "openai_chat_to_lux_response - assistant with tool_calls" {
+test "openai_to_lux_response - assistant with tool_calls" {
   let json = "{\"id\":\"c-1\",\"object\":\"chat.completion\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"c1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},\"finish_reason\":\"tool_calls\"}]}"
-  match openai_chat_to_lux_response(json) {
+  match openai_to_lux_response(json) {
     Ok(cr) => {
       let resp = cr.value()
       assert_eq(resp.choices[0].finish_reason, ToolCalls)
@@ -413,7 +413,7 @@ test "openai_chat_to_lux_response - assistant with tool_calls" {
 ///|
 test "ai_chat_to_lux_response - refusal decoded" {
   let json = "{\"id\":\"c-1\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":null,\"refusal\":\"cannot\"},\"finish_reason\":\"stop\"}]}"
-  match openai_chat_to_lux_response(json) {
+  match openai_to_lux_response(json) {
     Ok(cr) =>
       match cr.value().choices[0].message.content[0] {
         Refusal(s) => assert_eq(s, "cannot")
@@ -424,8 +424,8 @@ test "ai_chat_to_lux_response - refusal decoded" {
 }
 
 ///|
-test "openai_chat_to_lux_response - invalid json" {
-  match openai_chat_to_lux_response("not json") {
+test "openai_to_lux_response - invalid json" {
+  match openai_to_lux_response("not json") {
     Ok(_) => assert_true(false)
     Err(_) => ()
   }
@@ -435,7 +435,7 @@ test "openai_chat_to_lux_response - invalid json" {
 /// === 4. 响应编码 ===
 
 ///|
-test "lux_response_to_openai_chat - text response" {
+test "lux_response_to_openai - text response" {
   let resp = @lux.LucentResponse::new(
     "r-1",
     "gpt-4o",
@@ -451,7 +451,7 @@ test "lux_response_to_openai_chat - text response" {
     Some(@lux.LucentUsage::new(10, 5, 15)),
     None,
   )
-  match lux_response_to_openai_chat(resp) {
+  match lux_response_to_openai(resp) {
     Ok(cr) => {
       let s = cr.value()
       let jv = @json.parse(s)
@@ -473,7 +473,7 @@ test "lux_response_to_openai_chat - text response" {
 }
 
 ///|
-test "lux_response_to_openai_chat - tool_calls encoded" {
+test "lux_response_to_openai - tool_calls encoded" {
   let resp = @lux.LucentResponse::new(
     "r-1",
     "gpt-4o",
@@ -491,7 +491,7 @@ test "lux_response_to_openai_chat - tool_calls encoded" {
     None,
     None,
   )
-  match lux_response_to_openai_chat(resp) {
+  match lux_response_to_openai(resp) {
     Ok(cr) => {
       let s = cr.value()
       let jv = @json.parse(s)
@@ -513,7 +513,7 @@ test "lux_response_to_openai_chat - tool_calls encoded" {
 }
 
 ///|
-test "lux_response_to_openai_chat - refusal encoded" {
+test "lux_response_to_openai - refusal encoded" {
   let resp = @lux.LucentResponse::new(
     "r-1",
     "gpt-4o",
@@ -529,7 +529,7 @@ test "lux_response_to_openai_chat - refusal encoded" {
     None,
     None,
   )
-  match lux_response_to_openai_chat(resp) {
+  match lux_response_to_openai(resp) {
     Ok(cr) => {
       let s = cr.value()
       let jv = @json.parse(s)
@@ -554,9 +554,9 @@ test "lux_response_to_openai_chat - refusal encoded" {
 /// === 5. 流解码 ===
 
 ///|
-test "openai_chat_sse_to_events - text chunks" {
+test "openai_sse_to_events - text chunks" {
   let sse = "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\" world\"}}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
-  match openai_chat_sse_to_events(sse) {
+  match openai_sse_to_events(sse) {
     Ok(cr) => {
       let events = cr.value()
       // 应有：ConversationStart + BlockStart + BlockDelta×2 + BlockEnd + Finish + Done
@@ -571,9 +571,9 @@ test "openai_chat_sse_to_events - text chunks" {
 }
 
 ///|
-test "openai_chat_sse_to_events - tool call stream" {
+test "openai_sse_to_events - tool call stream" {
   let sse = "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{\"}}]}}]}\n\ndata: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\"x\\\":\"}}]}}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\ndata: [DONE]\n\n"
-  match openai_chat_sse_to_events(sse) {
+  match openai_sse_to_events(sse) {
     Ok(cr) => {
       let events = cr.value()
       // 应有 BlockStart(0, ToolCall) + BlockDelta(ToolArgumentsDelta)×2 + BlockEnd + Finish(ToolCalls) + Done
@@ -596,9 +596,9 @@ test "openai_chat_sse_to_events - tool call stream" {
 }
 
 ///|
-test "openai_chat_sse_to_events - usage frame" {
+test "openai_sse_to_events - usage frame" {
   let sse = "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\ndata: {\"choices\":[],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":2,\"total_tokens\":12}}\n\ndata: [DONE]\n\n"
-  match openai_chat_sse_to_events(sse) {
+  match openai_sse_to_events(sse) {
     Ok(cr) => {
       let events = cr.value()
       let has_usage = {
@@ -621,7 +621,7 @@ test "openai_chat_sse_to_events - usage frame" {
 /// === 6. 流编码 ===
 
 ///|
-test "lux_events_to_openai_chat_sse - text sequence" {
+test "lux_events_to_openai_sse - text sequence" {
   let events : Array[@lux.LucentStreamEvent] = [
     ConversationStart(@lux.LucentConversationMeta::new(None, None, None)),
     BlockStart(0, Text),
@@ -630,7 +630,7 @@ test "lux_events_to_openai_chat_sse - text sequence" {
     Finish(Stop),
     Done,
   ]
-  match lux_events_to_openai_chat_sse(events) {
+  match lux_events_to_openai_sse(events) {
     Ok(cr) => {
       let sse = cr.value()
       // 应含 role:assistant、content:Hello、finish_reason:stop、[DONE]
@@ -644,14 +644,14 @@ test "lux_events_to_openai_chat_sse - text sequence" {
 }
 
 ///|
-test "lux_events_to_openai_chat_sse - tool call sequence" {
+test "lux_events_to_openai_sse - tool call sequence" {
   let events : Array[@lux.LucentStreamEvent] = [
     BlockStart(0, @lux.LucentBlockType::tool_call("c1", "f")),
     BlockDelta(0, @lux.LucentBlockDelta::tool_arguments_delta("{}")),
     Finish(ToolCalls),
     Done,
   ]
-  match lux_events_to_openai_chat_sse(events) {
+  match lux_events_to_openai_sse(events) {
     Ok(cr) => {
       let sse = cr.value()
       // 应含 tool_calls 首帧（id + name）和 arguments 增量
@@ -664,13 +664,13 @@ test "lux_events_to_openai_chat_sse - tool call sequence" {
 }
 
 ///|
-test "lux_events_to_openai_chat_sse - usage frame" {
+test "lux_events_to_openai_sse - usage frame" {
   let events : Array[@lux.LucentStreamEvent] = [
     Finish(Stop),
     Usage(@lux.LucentUsage::new(10, 2, 12)),
     Done,
   ]
-  match lux_events_to_openai_chat_sse(events) {
+  match lux_events_to_openai_sse(events) {
     Ok(cr) => assert_true(cr.value().contains("\"total_tokens\":12"))
     Err(_) => assert_true(false)
   }
@@ -693,9 +693,9 @@ test "round trip - request encode then decode preserves semantics" {
     None,
     None,
   )
-  match lux_request_to_openai_chat(original) {
+  match lux_request_to_openai(original) {
     Ok(cr1) =>
-      match openai_chat_to_lux_request(cr1.value()) {
+      match openai_to_lux_request(cr1.value()) {
         Ok(cr2) => {
           let round = cr2.value()
           assert_eq(round.model, "gpt-4o")
@@ -715,9 +715,9 @@ test "round trip - request encode then decode preserves semantics" {
 ///|
 test "round trip - response decode then encode preserves id" {
   let json = "{\"id\":\"c-1\",\"object\":\"chat.completion\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"hi\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1,\"total_tokens\":2}}"
-  match openai_chat_to_lux_response(json) {
+  match openai_to_lux_response(json) {
     Ok(cr1) =>
-      match lux_response_to_openai_chat(cr1.value()) {
+      match lux_response_to_openai(cr1.value()) {
         Ok(cr2) => {
           let jv = @json.parse(cr2.value())
           match @internal.field_str(jv, "id") {
@@ -752,7 +752,7 @@ test "encode - Reasoning item yields Unsupported diagnostic" {
     None,
     None,
   )
-  match lux_request_to_openai_chat(req) {
+  match lux_request_to_openai(req) {
     Ok(cr) => {
       // 不阻断成功
       assert_true(cr.value().contains("model"))
@@ -795,7 +795,7 @@ test "encode - AgentAction item yields Unsupported diagnostic" {
     None,
     None,
   )
-  match lux_request_to_openai_chat(req) {
+  match lux_request_to_openai(req) {
     Ok(cr) => {
       assert_true(cr.value().contains("model"))
       let mut has_unsupported = false
@@ -831,11 +831,11 @@ test "chat store/extras round-trip" {
     None,
     None,
   )
-  match lux_request_to_openai_chat(req) {
+  match lux_request_to_openai(req) {
     Ok(cr) => {
       assert_true(cr.value().contains("\"store\":true"))
       assert_true(cr.value().contains("\"extra_field\":\"v1\""))
-      match openai_chat_to_lux_request(cr.value()) {
+      match openai_to_lux_request(cr.value()) {
         Ok(cr2) => {
           assert_eq(cr2.value().options.store, Some(true))
           match cr2.value().options.extras {
@@ -852,7 +852,7 @@ test "chat store/extras round-trip" {
 
 ///|
 /// 请求侧 reasoning 配置：enabled + effort → reasoning_effort 参数（o-series 标准）
-test "lux_request_to_openai_chat - reasoning config emits reasoning_effort" {
+test "lux_request_to_openai - reasoning config emits reasoning_effort" {
   let req = @lux.LucentRequest::new(
     "o3",
     None,
@@ -869,7 +869,7 @@ test "lux_request_to_openai_chat - reasoning config emits reasoning_effort" {
     None,
     None,
   )
-  match lux_request_to_openai_chat(req) {
+  match lux_request_to_openai(req) {
     Ok(cr) => {
       let jv = @json.parse(cr.value())
       assert_eq(@internal.field_str(jv, "reasoning_effort"), Some("high"))
@@ -899,7 +899,7 @@ test "encode - image url maps to image_url array content" {
     None,
     None,
   )
-  match lux_request_to_openai_chat(req) {
+  match lux_request_to_openai(req) {
     Ok(cr) => {
       assert_true(cr.value().contains("\"type\":\"image_url\""))
       assert_true(cr.value().contains("https://x.com/a.png"))
@@ -929,7 +929,7 @@ test "encode - image inline maps to data uri image_url" {
     None,
     None,
   )
-  match lux_request_to_openai_chat(req) {
+  match lux_request_to_openai(req) {
     Ok(cr) =>
       assert_true(cr.value().contains("data:image/png;base64,iVBORw0KGgo"))
     Err(e) => fail("encode: \{e}")
@@ -956,7 +956,7 @@ test "encode - image file_uri yields unsupported diagnostic" {
     None,
     None,
   )
-  match lux_request_to_openai_chat(req) {
+  match lux_request_to_openai(req) {
     Ok(cr) => {
       let mut has_unsupported = false
       for d in cr.diagnostics() {
@@ -975,9 +975,9 @@ test "encode - image file_uri yields unsupported diagnostic" {
 
 ///|
 /// 入站：vLLM message.reasoning → LucentMessage.reasoning
-test "openai_chat_to_lux_response - vLLM reasoning captured" {
+test "openai_to_lux_response - vLLM reasoning captured" {
   let json = "{\"id\":\"c-1\",\"model\":\"qwen\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Final answer\",\"reasoning\":\"step by step\"},\"finish_reason\":\"stop\"}]}"
-  match openai_chat_to_lux_response(json) {
+  match openai_to_lux_response(json) {
     Ok(cr) =>
       match cr.value().choices[0].message.reasoning {
         Some(r) => assert_eq(r.text, "step by step")
@@ -989,9 +989,9 @@ test "openai_chat_to_lux_response - vLLM reasoning captured" {
 
 ///|
 /// 入站：DeepSeek reasoning_content → LucentMessage.reasoning
-test "openai_chat_to_lux_response - DeepSeek reasoning_content captured" {
+test "openai_to_lux_response - DeepSeek reasoning_content captured" {
   let json = "{\"id\":\"c-1\",\"model\":\"deepseek\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Final\",\"reasoning_content\":\"chain of thought\"},\"finish_reason\":\"stop\"}]}"
-  match openai_chat_to_lux_response(json) {
+  match openai_to_lux_response(json) {
     Ok(cr) =>
       match cr.value().choices[0].message.reasoning {
         Some(r) => assert_eq(r.text, "chain of thought")
@@ -1003,9 +1003,9 @@ test "openai_chat_to_lux_response - DeepSeek reasoning_content captured" {
 
 ///|
 /// 入站：无 reasoning 字段 → message.reasoning 为 None
-test "openai_chat_to_lux_response - no reasoning yields None" {
+test "openai_to_lux_response - no reasoning yields None" {
   let json = "{\"id\":\"c-1\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello\"},\"finish_reason\":\"stop\"}]}"
-  match openai_chat_to_lux_response(json) {
+  match openai_to_lux_response(json) {
     Ok(cr) => assert_eq(cr.value().choices[0].message.reasoning, None)
     Err(e) => fail("decode: \{e}")
   }
@@ -1013,7 +1013,7 @@ test "openai_chat_to_lux_response - no reasoning yields None" {
 
 ///|
 /// 出站：LucentMessage.reasoning → message.reasoning（默认字段名）
-test "lux_response_to_openai_chat - reasoning emitted as message.reasoning" {
+test "lux_response_to_openai - reasoning emitted as message.reasoning" {
   let th = @lux.LucentThinking::visible("thought", None)
   let msg = @lux.LucentMessage::with_reasoning(
     Assistant,
@@ -1028,7 +1028,7 @@ test "lux_response_to_openai_chat - reasoning emitted as message.reasoning" {
     None,
     None,
   )
-  match lux_response_to_openai_chat(resp) {
+  match lux_response_to_openai(resp) {
     Ok(cr) => {
       let jv = @json.parse(cr.value())
       match @internal.obj_get(jv, "choices") {
@@ -1047,7 +1047,7 @@ test "lux_response_to_openai_chat - reasoning emitted as message.reasoning" {
 
 ///|
 /// 出站：provider_payload.reasoning_field 切换为 reasoning_content
-test "lux_response_to_openai_chat - reasoning_field switches to reasoning_content" {
+test "lux_response_to_openai - reasoning_field switches to reasoning_content" {
   let th = @lux.LucentThinking::visible("thought", None)
   let msg = @lux.LucentMessage::with_reasoning(
     Assistant,
@@ -1062,7 +1062,7 @@ test "lux_response_to_openai_chat - reasoning_field switches to reasoning_conten
     None,
     Some({ "reasoning_field": @json.parse("\"reasoning_content\"") }),
   )
-  match lux_response_to_openai_chat(resp) {
+  match lux_response_to_openai(resp) {
     Ok(cr) => {
       let jv = @json.parse(cr.value())
       match @internal.obj_get(jv, "choices") {
@@ -1084,7 +1084,7 @@ test "lux_response_to_openai_chat - reasoning_field switches to reasoning_conten
 
 ///|
 /// 出站：无 reasoning 时 message 不含 reasoning 字段
-test "lux_response_to_openai_chat - no reasoning yields plain message" {
+test "lux_response_to_openai - no reasoning yields plain message" {
   let msg = @lux.LucentMessage::new(Assistant, [
     @lux.LucentContent::text("answer"),
   ])
@@ -1096,7 +1096,7 @@ test "lux_response_to_openai_chat - no reasoning yields plain message" {
     None,
     None,
   )
-  match lux_response_to_openai_chat(resp) {
+  match lux_response_to_openai(resp) {
     Ok(cr) => {
       let jv = @json.parse(cr.value())
       match @internal.obj_get(jv, "choices") {
@@ -1116,9 +1116,9 @@ test "lux_response_to_openai_chat - no reasoning yields plain message" {
 /// round-trip：vLLM 入站 → IR → openai_chat 出站，reasoning 不丢
 test "openai_chat round-trip preserves vLLM reasoning" {
   let inbound = "{\"id\":\"c-1\",\"model\":\"qwen\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Final\",\"reasoning\":\"thought\"},\"finish_reason\":\"stop\"}]}"
-  match openai_chat_to_lux_response(inbound) {
+  match openai_to_lux_response(inbound) {
     Ok(cr) =>
-      match lux_response_to_openai_chat(cr.value()) {
+      match lux_response_to_openai(cr.value()) {
         Ok(out) => {
           let jv = @json.parse(out.value())
           match @internal.obj_get(jv, "choices") {

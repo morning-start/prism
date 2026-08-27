@@ -5,12 +5,12 @@
 /// 依据：docs/protocols/01-openai-completions.md（协议映射）
 ///
 /// 6 函数：
-///   1. openai_chat_to_lux_request      请求解码
-///   2. lux_request_to_openai_chat      请求编码
-///   3. openai_chat_to_lux_response     响应解码
-///   4. lux_response_to_openai_chat     响应编码
-///   5. openai_chat_sse_to_events       流解码
-///   6. lux_events_to_openai_chat_sse   流编码
+///   1. openai_to_lux_request      请求解码
+///   2. lux_request_to_openai      请求编码
+///   3. openai_to_lux_response     响应解码
+///   4. lux_response_to_openai     响应编码
+///   5. openai_sse_to_events       流解码
+///   6. lux_events_to_openai_sse   流编码
 
 ///|
 
@@ -209,8 +209,8 @@ fn parse_tool_choice(jv : Json) -> @lux.LucentToolChoice? {
 }
 
 ///|
-/// 1. openai_chat_to_lux_request — 请求解码
-pub fn openai_chat_to_lux_request(
+/// 1. openai_to_lux_request — 请求解码
+pub fn openai_to_lux_request(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentRequest], String] {
   let jv = match @internal.parse_protocol_json(json_str) {
@@ -581,8 +581,8 @@ fn message_to_json(
 }
 
 ///|
-/// 2. lux_request_to_openai_chat — 请求编码
-pub fn lux_request_to_openai_chat(
+/// 2. lux_request_to_openai — 请求编码
+pub fn lux_request_to_openai(
   req : @lux.LucentRequest,
 ) -> Result[@lux.ConversionResult[String], String] {
   let parts : Array[String] = []
@@ -854,8 +854,8 @@ fn parse_choices(jv : Json) -> Array[@lux.LucentChoice] {
 }
 
 ///|
-/// 3. openai_chat_to_lux_response — 响应解码
-pub fn openai_chat_to_lux_response(
+/// 3. openai_to_lux_response — 响应解码
+pub fn openai_to_lux_response(
   json_str : String,
 ) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
   let jv = match @internal.parse_protocol_json(json_str) {
@@ -889,8 +889,8 @@ pub fn openai_chat_to_lux_response(
 /// === 响应编码：LucentResponse → OpenAI Chat JSON ===
 
 ///|
-/// 4. lux_response_to_openai_chat — 响应编码
-pub fn lux_response_to_openai_chat(
+/// 4. lux_response_to_openai — 响应编码
+pub fn lux_response_to_openai(
   resp : @lux.LucentResponse,
 ) -> Result[@lux.ConversionResult[String], String] {
   let choices_json : Array[String] = []
@@ -986,7 +986,7 @@ pub fn lux_response_to_openai_chat(
 /// === 流解码：OpenAI Chat SSE → LucentStreamEvent[] ===
 
 ///|
-/// 5. openai_chat_sse_to_events — 流解码
+/// 5. openai_sse_to_events — 流解码
 ///
 /// OpenAI Chat SSE 格式：
 ///   data: {"choices":[{"delta":{"role":"assistant"|"content":"..."|"tool_calls":[...]},"finish_reason":null|"stop"|...}]}
@@ -999,7 +999,7 @@ pub fn lux_response_to_openai_chat(
 /// - finish_reason → Finish
 /// - usage → Usage（最后一帧）
 /// - [DONE] → Done
-pub fn openai_chat_sse_to_events(
+pub fn openai_sse_to_events(
   sse_str : String,
 ) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String] {
   let events : Array[@lux.LucentStreamEvent] = []
@@ -1186,7 +1186,7 @@ pub fn openai_chat_sse_to_events(
 /// === 流编码：LucentStreamEvent[] → OpenAI Chat SSE ===
 
 ///|
-/// 6. lux_events_to_openai_chat_sse — 流编码
+/// 6. lux_events_to_openai_sse — 流编码
 ///
 /// 把 Lux 事件流编码为 OpenAI Chat SSE 格式：
 /// - ConversationStart → data: {"choices":[{"delta":{"role":"assistant"}}]}
@@ -1210,7 +1210,7 @@ fn chunk_prefix(id : String, model : String, created : Int) -> String {
 }
 
 ///|
-pub fn lux_events_to_openai_chat_sse(
+pub fn lux_events_to_openai_sse(
   events : Array[@lux.LucentStreamEvent],
 ) -> Result[@lux.ConversionResult[String], String] {
   let out : Array[String] = []
@@ -1312,7 +1312,7 @@ pub fn lux_events_to_openai_chat_sse(
 pub fn capability() -> @lux.ProviderCapability {
   @lux.ProviderCapability::new(
     "gpt-*,o*",
-    "openai-chat",
+    "openai",
     @lux.LucentCapabilities::create(
       Full,
       Absent,

@@ -5,9 +5,9 @@
 /// === 1. 请求解码 ===
 
 ///|
-test "openai_responses_to_lux_request - simple user message" {
+test "responses_to_lux_request - simple user message" {
   let json = "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"Hello\"}]}]}"
-  match openai_responses_to_lux_request(json) {
+  match responses_to_lux_request(json) {
     Ok(cr) => {
       let req = cr.value()
       assert_eq(req.model, "gpt-5")
@@ -28,9 +28,9 @@ test "openai_responses_to_lux_request - simple user message" {
 }
 
 ///|
-test "openai_responses_to_lux_request - instructions extracted" {
+test "responses_to_lux_request - instructions extracted" {
   let json = "{\"model\":\"gpt-5\",\"instructions\":\"Be helpful\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hi\"}]}]}"
-  match openai_responses_to_lux_request(json) {
+  match responses_to_lux_request(json) {
     Ok(cr) =>
       match cr.value().instructions {
         Some(instrs) => assert_eq(instrs.length(), 1)
@@ -41,9 +41,9 @@ test "openai_responses_to_lux_request - instructions extracted" {
 }
 
 ///|
-test "openai_responses_to_lux_request - function_call and function_call_output" {
+test "responses_to_lux_request - function_call and function_call_output" {
   let json = "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"function_call\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"search\",\"arguments\":\"{\\\"q\\\":\\\"x\\\"}\"},{\"type\":\"function_call_output\",\"call_id\":\"call_1\",\"output\":\"result\"}]}"
-  match openai_responses_to_lux_request(json) {
+  match responses_to_lux_request(json) {
     Ok(cr) => {
       let req = cr.value()
       assert_eq(req.conversation.length(), 2)
@@ -64,9 +64,9 @@ test "openai_responses_to_lux_request - function_call and function_call_output" 
 }
 
 ///|
-test "openai_responses_to_lux_request - reasoning item" {
+test "responses_to_lux_request - reasoning item" {
   let json = "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"thinking step\"}],\"signature\":\"sig_1\"}]}"
-  match openai_responses_to_lux_request(json) {
+  match responses_to_lux_request(json) {
     Ok(cr) =>
       match cr.value().conversation[0] {
         Reasoning(th) => assert_eq(th.signature, Some("sig_1"))
@@ -77,9 +77,9 @@ test "openai_responses_to_lux_request - reasoning item" {
 }
 
 ///|
-test "openai_responses_to_lux_request - tool types mapped to kinds" {
+test "responses_to_lux_request - tool types mapped to kinds" {
   let json = "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hi\"}]}],\"tools\":[{\"type\":\"function\",\"name\":\"f\",\"description\":\"d\",\"parameters\":{\"type\":\"object\"}},{\"type\":\"web_search\",\"name\":\"ws\"},{\"type\":\"mcp\",\"name\":\"mt\"}]}"
-  match openai_responses_to_lux_request(json) {
+  match responses_to_lux_request(json) {
     Ok(cr) =>
       match cr.value().tools {
         Some(tools) => {
@@ -98,7 +98,7 @@ test "openai_responses_to_lux_request - tool types mapped to kinds" {
 /// === 2. 请求编码 ===
 
 ///|
-test "lux_request_to_openai_responses - simple user message" {
+test "lux_request_to_responses - simple user message" {
   let req = @lux.LucentRequest::from_messages(
     "gpt-5",
     None,
@@ -111,7 +111,7 @@ test "lux_request_to_openai_responses - simple user message" {
     None,
     None,
   )
-  match lux_request_to_openai_responses(req) {
+  match lux_request_to_responses(req) {
     Ok(cr) => {
       let s = cr.value()
       assert_true(s.contains("\"model\":\"gpt-5\""))
@@ -123,7 +123,7 @@ test "lux_request_to_openai_responses - simple user message" {
 }
 
 ///|
-test "lux_request_to_openai_responses - tool kinds encoded" {
+test "lux_request_to_responses - tool kinds encoded" {
   let req = @lux.LucentRequest::from_messages(
     "gpt-5",
     None,
@@ -146,7 +146,7 @@ test "lux_request_to_openai_responses - tool kinds encoded" {
     None,
     None,
   )
-  match lux_request_to_openai_responses(req) {
+  match lux_request_to_responses(req) {
     Ok(cr) => {
       let s = cr.value()
       assert_true(s.contains("\"type\":\"function\""))
@@ -169,9 +169,9 @@ test "lux_request_to_openai_responses - tool kinds encoded" {
 /// === 3. 响应解码 ===
 
 ///|
-test "openai_responses_to_lux_response - text + usage" {
+test "responses_to_lux_response - text + usage" {
   let json = "{\"id\":\"resp_1\",\"object\":\"response\",\"status\":\"completed\",\"model\":\"gpt-5\",\"created_at\":1700000000,\"output\":[{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hello!\",\"annotations\":[]}]}],\"usage\":{\"input_tokens\":10,\"output_tokens\":5,\"total_tokens\":15}}"
-  match openai_responses_to_lux_response(json) {
+  match responses_to_lux_response(json) {
     Ok(cr) => {
       let resp = cr.value()
       assert_eq(resp.id, "resp_1")
@@ -194,9 +194,9 @@ test "openai_responses_to_lux_response - text + usage" {
 }
 
 ///|
-test "openai_responses_to_lux_response - function_call output" {
+test "responses_to_lux_response - function_call output" {
   let json = "{\"id\":\"resp_2\",\"model\":\"gpt-5\",\"output\":[{\"type\":\"function_call\",\"id\":\"fc_1\",\"call_id\":\"call_1\",\"name\":\"search\",\"arguments\":\"{}\",\"status\":\"completed\"}],\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2}}"
-  match openai_responses_to_lux_response(json) {
+  match responses_to_lux_response(json) {
     Ok(cr) =>
       match cr.value().choices[0].message.content[0] {
         ToolUse(tu) => assert_eq(tu.name, "search")
@@ -210,7 +210,7 @@ test "openai_responses_to_lux_response - function_call output" {
 /// === 4. 响应编码 ===
 
 ///|
-test "lux_response_to_openai_responses - text response" {
+test "lux_response_to_responses - text response" {
   let msg = @lux.LucentMessage::new(Assistant, [
     @lux.LucentContent::text("Hello"),
   ])
@@ -223,7 +223,7 @@ test "lux_response_to_openai_responses - text response" {
     Some(@lux.LucentUsage::new(10, 5, 15)),
     None,
   )
-  match lux_response_to_openai_responses(resp) {
+  match lux_response_to_responses(resp) {
     Ok(cr) => {
       let s = cr.value()
       assert_true(s.contains("\"id\":\"resp_1\""))
@@ -235,9 +235,9 @@ test "lux_response_to_openai_responses - text response" {
 }
 
 ///|
-test "lux_response_to_openai_responses - empty choices error" {
+test "lux_response_to_responses - empty choices error" {
   let resp = @lux.LucentResponse::new("r", "m", None, [], None, None)
-  match lux_response_to_openai_responses(resp) {
+  match lux_response_to_responses(resp) {
     Ok(_) => assert_true(false)
     Err(e) => assert_eq(e, "response has no choices")
   }
@@ -247,9 +247,9 @@ test "lux_response_to_openai_responses - empty choices error" {
 /// === 5. 流解码 ===
 
 ///|
-test "openai_responses_sse_to_events - text stream" {
+test "responses_sse_to_events - text stream" {
   let sse = "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"r_1\",\"model\":\"gpt-5\"}}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"input_text\",\"text\":\"\"}]}}\n\nevent: response.content_part.added\ndata: {\"type\":\"response.content_part.added\",\"output_index\":0,\"content_index\":0,\"part\":{\"type\":\"output_text\",\"text\":\"\"}}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"content_index\":0,\"delta\":\"Hello\"}\n\nevent: response.output_text.done\ndata: {\"type\":\"response.output_text.done\",\"output_index\":0,\"content_index\":0}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2}}}\n\n"
-  match openai_responses_sse_to_events(sse) {
+  match responses_sse_to_events(sse) {
     Ok(cr) => {
       let events = cr.value()
       assert_true(events.length() >= 5)
@@ -263,9 +263,9 @@ test "openai_responses_sse_to_events - text stream" {
 }
 
 ///|
-test "openai_responses_sse_to_events - function_call stream" {
+test "responses_sse_to_events - function_call stream" {
   let sse = "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"r_2\",\"model\":\"gpt-5\"}}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"type\":\"function_call\",\"id\":\"fc_1\",\"name\":\"search\"}}\n\nevent: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"output_index\":0,\"delta\":\"{\\\"q\\\":\\\"x\\\"}\"}\n\nevent: response.function_call_arguments.done\ndata: {\"type\":\"response.function_call_arguments.done\",\"output_index\":0}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\"}}\n\n"
-  match openai_responses_sse_to_events(sse) {
+  match responses_sse_to_events(sse) {
     Ok(cr) => {
       let events = cr.value()
       assert_true(events.length() >= 3)
@@ -289,7 +289,7 @@ test "openai_responses_sse_to_events - function_call stream" {
 /// === 6. 流编码 ===
 
 ///|
-test "lux_events_to_openai_responses_sse - text sequence" {
+test "lux_events_to_responses_sse - text sequence" {
   let events : Array[@lux.LucentStreamEvent] = [
     ConversationStart(
       @lux.LucentConversationMeta::new(Some("r_1"), Some("gpt-5"), None),
@@ -306,7 +306,7 @@ test "lux_events_to_openai_responses_sse - text sequence" {
     Finish(Stop),
     Done,
   ]
-  match lux_events_to_openai_responses_sse(events) {
+  match lux_events_to_responses_sse(events) {
     Ok(cr) => {
       let sse = cr.value()
       assert_true(sse.contains("event: response.created"))
@@ -341,10 +341,10 @@ test "decode - reasoning config yields Unsupported diagnostic" {
     None,
     None,
   )
-  match lux_request_to_openai_responses(req) {
+  match lux_request_to_responses(req) {
     Ok(cr) => {
       let json = cr.value()
-      match openai_responses_to_lux_request(json) {
+      match responses_to_lux_request(json) {
         Ok(cr2) => {
           // reasoning 空实现：必须携带 Unsupported 诊断
           let mut has_unsupported = false
@@ -365,7 +365,7 @@ test "decode - reasoning config yields Unsupported diagnostic" {
 ///|
 test "decode - input_image maps to image multimedia (url)" {
   let json = "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_image\",\"image_url\":\"https://x.com/a.png\"}]}]}"
-  match openai_responses_to_lux_request(json) {
+  match responses_to_lux_request(json) {
     Ok(cr) => {
       let msg = cr.value().conversation[0]
       match msg {
@@ -384,7 +384,7 @@ test "decode - input_image maps to image multimedia (url)" {
 ///|
 test "decode - input_image data uri maps to inline multimedia" {
   let json = "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_image\",\"image_url\":\"data:image/png;base64,iVBORw0KGgo\"}]}]}"
-  match openai_responses_to_lux_request(json) {
+  match responses_to_lux_request(json) {
     Ok(cr) => {
       let msg = cr.value().conversation[0]
       match msg {
@@ -406,7 +406,7 @@ test "decode - input_image data uri maps to inline multimedia" {
 ///|
 test "sse - invalid data yields Invalid diagnostic" {
   let sse = "data: {not-valid-json}\n\n"
-  match openai_responses_sse_to_events(sse) {
+  match responses_sse_to_events(sse) {
     Ok(cr) => {
       let mut has_invalid = false
       for d in cr.diagnostics() {
@@ -441,11 +441,11 @@ test "responses store/extras round-trip" {
     None,
     None,
   )
-  match lux_request_to_openai_responses(req) {
+  match lux_request_to_responses(req) {
     Ok(cr) => {
       assert_true(cr.value().contains("\"store\":true"))
       assert_true(cr.value().contains("\"extra_field\":\"v1\""))
-      match openai_responses_to_lux_request(cr.value()) {
+      match responses_to_lux_request(cr.value()) {
         Ok(cr2) => {
           assert_eq(cr2.value().options.store, Some(true))
           match cr2.value().options.extras {
@@ -462,7 +462,7 @@ test "responses store/extras round-trip" {
 
 ///|
 /// 跨协议链路：vLLM 消息级 reasoning → IR → openai-responses 出站 → reasoning item
-test "lux_response_to_openai_responses - message-level reasoning emits reasoning item" {
+test "lux_response_to_responses - message-level reasoning emits reasoning item" {
   let th = @lux.LucentThinking::visible("step by step", None)
   let msg = @lux.LucentMessage::with_reasoning(
     Assistant,
@@ -477,7 +477,7 @@ test "lux_response_to_openai_responses - message-level reasoning emits reasoning
     None,
     None,
   )
-  match lux_response_to_openai_responses(resp) {
+  match lux_response_to_responses(resp) {
     Ok(cr) => {
       let s = cr.value()
       // 消息级 reasoning 前置为 reasoning item
@@ -492,7 +492,7 @@ test "lux_response_to_openai_responses - message-level reasoning emits reasoning
 
 ///|
 /// 双载体并存：message.reasoning 优先，content Thinking item 跳过 → Degraded
-test "lux_response_to_openai_responses - dual carrier yields Degraded" {
+test "lux_response_to_responses - dual carrier yields Degraded" {
   let th = @lux.LucentThinking::visible("msg reasoning", None)
   let msg = @lux.LucentMessage::with_reasoning(
     Assistant,
@@ -507,7 +507,7 @@ test "lux_response_to_openai_responses - dual carrier yields Degraded" {
     None,
     None,
   )
-  match lux_response_to_openai_responses(resp) {
+  match lux_response_to_responses(resp) {
     Ok(cr) => {
       let mut has_dual = false
       for d in cr.diagnostics() {
@@ -545,7 +545,7 @@ test "encode - image url maps to input_image" {
     None,
     None,
   )
-  match lux_request_to_openai_responses(req) {
+  match lux_request_to_responses(req) {
     Ok(cr) => {
       assert_true(cr.value().contains("\"type\":\"input_image\""))
       assert_true(cr.value().contains("https://x.com/a.png"))
@@ -574,7 +574,7 @@ test "encode - image inline maps to data uri input_image" {
     None,
     None,
   )
-  match lux_request_to_openai_responses(req) {
+  match lux_request_to_responses(req) {
     Ok(cr) =>
       assert_true(cr.value().contains("data:image/png;base64,iVBORw0KGgo"))
     Err(e) => fail("encode: \{e}")
@@ -601,7 +601,7 @@ test "encode - image file_uri yields unsupported diagnostic" {
     None,
     None,
   )
-  match lux_request_to_openai_responses(req) {
+  match lux_request_to_responses(req) {
     Ok(cr) => {
       let mut has_unsupported = false
       for d in cr.diagnostics() {
@@ -618,7 +618,7 @@ test "encode - image file_uri yields unsupported diagnostic" {
 ///|
 test "decode - input_file data uri maps to file multimedia" {
   let json = "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_file\",\"file_data\":\"data:application/pdf;base64,JVBERi0xLjQ\"}]}]}"
-  match openai_responses_to_lux_request(json) {
+  match responses_to_lux_request(json) {
     Ok(cr) =>
       match cr.value().conversation[0] {
         Message(m) =>
@@ -655,7 +655,7 @@ test "encode - file inline maps to input_file file_data" {
     None,
     None,
   )
-  match lux_request_to_openai_responses(req) {
+  match lux_request_to_responses(req) {
     Ok(cr) => {
       assert_true(cr.value().contains("\"type\":\"input_file\""))
       assert_true(
@@ -667,11 +667,11 @@ test "encode - file inline maps to input_file file_data" {
 }
 
 ///|
-test "openai_responses_sse_to_events - heartbeat merged into JSON payload (\\:)" {
+test "responses_sse_to_events - heartbeat merged into JSON payload (\\:)" {
   // 真实场景：SSE data 行内 instructions 字段末尾混入 ": keep-alive."，
   // 被错误合并成 "\: keep-alive."（无效转义），clean_sse_heartbeat 必须剥离
   let sse = "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\",\"created_at\":1787722850,\"instructions\":\"You are opencode.\\n\\nIMPORTANT:\\: keep-alive.\"}}\n\n"
-  match openai_responses_sse_to_events(sse) {
+  match responses_sse_to_events(sse) {
     Ok(cr) => {
       let diags = cr.diagnostics()
       assert_eq(diags.length(), 0)
@@ -696,10 +696,10 @@ test "openai_responses_sse_to_events - heartbeat merged into JSON payload (\\:)"
 }
 
 ///|
-test "openai_responses_sse_to_events - heartbeat line merged as data: : keep-alive row" {
+test "responses_sse_to_events - heartbeat line merged as data: : keep-alive row" {
   // 心跳行以 "data: : keep-alive." 形式混入 data 行序列（带句点变体）
   let sse = "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\",\"created_at\":1787722850,\"instructions\":\"You are opencode.\\n\"}}\n\ndata: : keep-alive.\n\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\"}}\n\n"
-  match openai_responses_sse_to_events(sse) {
+  match responses_sse_to_events(sse) {
     Ok(cr) => {
       let diags = cr.diagnostics()
       assert_eq(diags.length(), 0)

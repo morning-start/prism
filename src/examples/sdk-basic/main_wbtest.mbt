@@ -12,7 +12,7 @@ test "L1 - encode request returns valid JSON" {
     Ok(json) => {
       assert_true(json.length() > 0)
       assert_true(json.contains("model"))
-      assert_true(json.contains("input"))
+      assert_true(json.contains("messages"))
     }
     Err(e) => fail("encode failed: " + e)
   }
@@ -20,8 +20,8 @@ test "L1 - encode request returns valid JSON" {
 
 ///|
 test "L1 - switch provider changes format" {
-  let openai = @sdk.Prism::new().with_provider("openai")
-  let anthropic = @sdk.Prism::new().with_provider("anthropic")
+  let openai = @sdk.Prism::new().with_provider("responses")
+  let anthropic = @sdk.Prism::new().with_provider("messages")
 
   let openai_result = openai.encode_request(
     "Hello",
@@ -44,7 +44,7 @@ test "L1 - switch provider changes format" {
 
 ///|
 test "L1 - complete with mock transport" {
-  let prism = @sdk.Prism::new().with_provider("openai-chat")
+  let prism = @sdk.Prism::new().with_provider("openai")
 
   fn mock_send(_req : String) -> Result[String, String] {
     Ok(
@@ -119,7 +119,7 @@ test "L2 - tool result injection" {
 
 ///|
 test "L2 - stream decode returns events" {
-  let prism = @sdk.Prism::new().with_provider("openai-chat")
+  let prism = @sdk.Prism::new().with_provider("openai")
 
   let sse = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hi\"},\"finish_reason\":null}]}\n\ndata: [DONE]\n"
 

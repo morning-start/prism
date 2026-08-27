@@ -65,18 +65,18 @@ fn std_events() -> Array[@lux.LucentStreamEvent] {
 /// source 协议请求编码
 fn source_req_json(proto : String) -> Result[String, String] {
   match proto {
-    "anthropic" =>
-      match @anthropic.lux_request_to_anthropic(std_req()) {
+    "messages" =>
+      match @messages.lux_request_to_messages(std_req()) {
+        Ok(cr) => Ok(cr.value())
+        Err(e) => Err(e)
+      }
+    "responses" =>
+      match @responses.lux_request_to_responses(std_req()) {
         Ok(cr) => Ok(cr.value())
         Err(e) => Err(e)
       }
     "openai" =>
-      match @openai_responses.lux_request_to_openai_responses(std_req()) {
-        Ok(cr) => Ok(cr.value())
-        Err(e) => Err(e)
-      }
-    "openai-chat" =>
-      match @openai_chat.lux_request_to_openai_chat(std_req()) {
+      match @openai.lux_request_to_openai(std_req()) {
         Ok(cr) => Ok(cr.value())
         Err(e) => Err(e)
       }
@@ -88,18 +88,18 @@ fn source_req_json(proto : String) -> Result[String, String] {
 /// source 协议响应编码
 fn source_resp_json(proto : String) -> Result[String, String] {
   match proto {
-    "anthropic" =>
-      match @anthropic.lux_response_to_anthropic(std_resp()) {
+    "messages" =>
+      match @messages.lux_response_to_messages(std_resp()) {
+        Ok(cr) => Ok(cr.value())
+        Err(e) => Err(e)
+      }
+    "responses" =>
+      match @responses.lux_response_to_responses(std_resp()) {
         Ok(cr) => Ok(cr.value())
         Err(e) => Err(e)
       }
     "openai" =>
-      match @openai_responses.lux_response_to_openai_responses(std_resp()) {
-        Ok(cr) => Ok(cr.value())
-        Err(e) => Err(e)
-      }
-    "openai-chat" =>
-      match @openai_chat.lux_response_to_openai_chat(std_resp()) {
+      match @openai.lux_response_to_openai(std_resp()) {
         Ok(cr) => Ok(cr.value())
         Err(e) => Err(e)
       }
@@ -111,18 +111,18 @@ fn source_resp_json(proto : String) -> Result[String, String] {
 /// source 协议流式 SSE 编码
 fn source_sse(proto : String) -> Result[String, String] {
   match proto {
-    "anthropic" =>
-      match @anthropic.lux_events_to_anthropic_sse(std_events()) {
+    "messages" =>
+      match @messages.lux_events_to_messages_sse(std_events()) {
+        Ok(cr) => Ok(cr.value())
+        Err(e) => Err(e)
+      }
+    "responses" =>
+      match @responses.lux_events_to_responses_sse(std_events()) {
         Ok(cr) => Ok(cr.value())
         Err(e) => Err(e)
       }
     "openai" =>
-      match @openai_responses.lux_events_to_openai_responses_sse(std_events()) {
-        Ok(cr) => Ok(cr.value())
-        Err(e) => Err(e)
-      }
-    "openai-chat" =>
-      match @openai_chat.lux_events_to_openai_chat_sse(std_events()) {
+      match @openai.lux_events_to_openai_sse(std_events()) {
         Ok(cr) => Ok(cr.value())
         Err(e) => Err(e)
       }
@@ -137,18 +137,18 @@ fn target_decode_req(
   json : String,
 ) -> Result[@lux.LucentRequest, String] {
   match proto {
-    "anthropic" =>
-      match @anthropic.anthropic_to_lux_request(json) {
+    "messages" =>
+      match @messages.messages_to_lux_request(json) {
+        Ok(cr) => Ok(cr.value())
+        Err(e) => Err(e)
+      }
+    "responses" =>
+      match @responses.responses_to_lux_request(json) {
         Ok(cr) => Ok(cr.value())
         Err(e) => Err(e)
       }
     "openai" =>
-      match @openai_responses.openai_responses_to_lux_request(json) {
-        Ok(cr) => Ok(cr.value())
-        Err(e) => Err(e)
-      }
-    "openai-chat" =>
-      match @openai_chat.openai_chat_to_lux_request(json) {
+      match @openai.openai_to_lux_request(json) {
         Ok(cr) => Ok(cr.value())
         Err(e) => Err(e)
       }
@@ -163,18 +163,18 @@ fn target_decode_resp(
   json : String,
 ) -> Result[@lux.LucentResponse, String] {
   match proto {
-    "anthropic" =>
-      match @anthropic.anthropic_to_lux_response(json) {
+    "messages" =>
+      match @messages.messages_to_lux_response(json) {
+        Ok(cr) => Ok(cr.value())
+        Err(e) => Err(e)
+      }
+    "responses" =>
+      match @responses.responses_to_lux_response(json) {
         Ok(cr) => Ok(cr.value())
         Err(e) => Err(e)
       }
     "openai" =>
-      match @openai_responses.openai_responses_to_lux_response(json) {
-        Ok(cr) => Ok(cr.value())
-        Err(e) => Err(e)
-      }
-    "openai-chat" =>
-      match @openai_chat.openai_chat_to_lux_response(json) {
+      match @openai.openai_to_lux_response(json) {
         Ok(cr) => Ok(cr.value())
         Err(e) => Err(e)
       }
@@ -189,18 +189,18 @@ fn target_decode_sse(
   sse : String,
 ) -> Result[Array[@lux.LucentStreamEvent], String] {
   match proto {
-    "anthropic" =>
-      match @anthropic.anthropic_sse_to_events(sse) {
+    "messages" =>
+      match @messages.messages_sse_to_events(sse) {
+        Ok(cr) => Ok(cr.value())
+        Err(e) => Err(e)
+      }
+    "responses" =>
+      match @responses.responses_sse_to_events(sse) {
         Ok(cr) => Ok(cr.value())
         Err(e) => Err(e)
       }
     "openai" =>
-      match @openai_responses.openai_responses_sse_to_events(sse) {
-        Ok(cr) => Ok(cr.value())
-        Err(e) => Err(e)
-      }
-    "openai-chat" =>
-      match @openai_chat.openai_chat_sse_to_events(sse) {
+      match @openai.openai_sse_to_events(sse) {
         Ok(cr) => Ok(cr.value())
         Err(e) => Err(e)
       }
@@ -296,7 +296,7 @@ fn verify_stream_forward(
 
 ///|
 test "convert_request - anthropic to openai-chat" {
-  match verify_request_forward("anthropic", "openai-chat") {
+  match verify_request_forward("messages", "openai") {
     Ok(_) => ()
     Err(e) => fail(e)
   }
@@ -304,7 +304,7 @@ test "convert_request - anthropic to openai-chat" {
 
 ///|
 test "convert_request - anthropic to openai" {
-  match verify_request_forward("anthropic", "openai") {
+  match verify_request_forward("messages", "responses") {
     Ok(_) => ()
     Err(e) => fail(e)
   }
@@ -312,7 +312,7 @@ test "convert_request - anthropic to openai" {
 
 ///|
 test "convert_request - openai to anthropic" {
-  match verify_request_forward("openai", "anthropic") {
+  match verify_request_forward("responses", "messages") {
     Ok(_) => ()
     Err(e) => fail(e)
   }
@@ -320,7 +320,7 @@ test "convert_request - openai to anthropic" {
 
 ///|
 test "convert_request - openai to openai-chat" {
-  match verify_request_forward("openai", "openai-chat") {
+  match verify_request_forward("responses", "openai") {
     Ok(_) => ()
     Err(e) => fail(e)
   }
@@ -328,7 +328,7 @@ test "convert_request - openai to openai-chat" {
 
 ///|
 test "convert_request - openai-chat to openai" {
-  match verify_request_forward("openai-chat", "openai") {
+  match verify_request_forward("openai", "responses") {
     Ok(_) => ()
     Err(e) => fail(e)
   }
@@ -339,7 +339,7 @@ test "convert_request - openai-chat to openai" {
 
 ///|
 test "convert_response - anthropic to openai-chat" {
-  match verify_response_forward("anthropic", "openai-chat") {
+  match verify_response_forward("messages", "openai") {
     Ok(_) => ()
     Err(e) => fail(e)
   }
@@ -347,7 +347,7 @@ test "convert_response - anthropic to openai-chat" {
 
 ///|
 test "convert_response - anthropic to openai" {
-  match verify_response_forward("anthropic", "openai") {
+  match verify_response_forward("messages", "responses") {
     Ok(_) => ()
     Err(e) => fail(e)
   }
@@ -355,7 +355,7 @@ test "convert_response - anthropic to openai" {
 
 ///|
 test "convert_response - openai to anthropic" {
-  match verify_response_forward("openai", "anthropic") {
+  match verify_response_forward("responses", "messages") {
     Ok(_) => ()
     Err(e) => fail(e)
   }
@@ -363,7 +363,7 @@ test "convert_response - openai to anthropic" {
 
 ///|
 test "convert_response - openai to openai-chat" {
-  match verify_response_forward("openai", "openai-chat") {
+  match verify_response_forward("responses", "openai") {
     Ok(_) => ()
     Err(e) => fail(e)
   }
@@ -371,7 +371,7 @@ test "convert_response - openai to openai-chat" {
 
 ///|
 test "convert_response - openai-chat to openai" {
-  match verify_response_forward("openai-chat", "openai") {
+  match verify_response_forward("openai", "responses") {
     Ok(_) => ()
     Err(e) => fail(e)
   }
@@ -382,7 +382,7 @@ test "convert_response - openai-chat to openai" {
 
 ///|
 test "convert_stream - anthropic to openai-chat" {
-  match verify_stream_forward("anthropic", "openai-chat") {
+  match verify_stream_forward("messages", "openai") {
     Ok(_) => ()
     Err(e) => fail(e)
   }
@@ -390,7 +390,7 @@ test "convert_stream - anthropic to openai-chat" {
 
 ///|
 test "convert_stream - anthropic to openai" {
-  match verify_stream_forward("anthropic", "openai") {
+  match verify_stream_forward("messages", "responses") {
     Ok(_) => ()
     Err(e) => fail(e)
   }
@@ -398,7 +398,7 @@ test "convert_stream - anthropic to openai" {
 
 ///|
 test "convert_stream - openai to anthropic" {
-  match verify_stream_forward("openai", "anthropic") {
+  match verify_stream_forward("responses", "messages") {
     Ok(_) => ()
     Err(e) => fail(e)
   }
@@ -406,7 +406,7 @@ test "convert_stream - openai to anthropic" {
 
 ///|
 test "convert_stream - openai to openai-chat" {
-  match verify_stream_forward("openai", "openai-chat") {
+  match verify_stream_forward("responses", "openai") {
     Ok(_) => ()
     Err(e) => fail(e)
   }
@@ -414,7 +414,7 @@ test "convert_stream - openai to openai-chat" {
 
 ///|
 test "convert_stream - openai-chat to openai" {
-  match verify_stream_forward("openai-chat", "openai") {
+  match verify_stream_forward("openai", "responses") {
     Ok(_) => ()
     Err(e) => fail(e)
   }
@@ -462,7 +462,7 @@ fn verify_response_meta_forward(
 
 ///|
 test "convert_response_with_meta - anthropic to openai-chat" {
-  match verify_response_meta_forward("anthropic", "openai-chat") {
+  match verify_response_meta_forward("messages", "openai") {
     Ok(_) => ()
     Err(e) => fail(e)
   }
@@ -470,7 +470,7 @@ test "convert_response_with_meta - anthropic to openai-chat" {
 
 ///|
 test "convert_response_with_meta - anthropic to openai" {
-  match verify_response_meta_forward("anthropic", "openai") {
+  match verify_response_meta_forward("messages", "responses") {
     Ok(_) => ()
     Err(e) => fail(e)
   }
@@ -478,7 +478,7 @@ test "convert_response_with_meta - anthropic to openai" {
 
 ///|
 test "convert_response_with_meta - openai to anthropic" {
-  match verify_response_meta_forward("openai", "anthropic") {
+  match verify_response_meta_forward("responses", "messages") {
     Ok(_) => ()
     Err(e) => fail(e)
   }
@@ -486,7 +486,7 @@ test "convert_response_with_meta - openai to anthropic" {
 
 ///|
 test "convert_response_with_meta - openai to openai-chat" {
-  match verify_response_meta_forward("openai", "openai-chat") {
+  match verify_response_meta_forward("responses", "openai") {
     Ok(_) => ()
     Err(e) => fail(e)
   }
@@ -494,7 +494,7 @@ test "convert_response_with_meta - openai to openai-chat" {
 
 ///|
 test "convert_response_with_meta - openai-chat to openai" {
-  match verify_response_meta_forward("openai-chat", "openai") {
+  match verify_response_meta_forward("openai", "responses") {
     Ok(_) => ()
     Err(e) => fail(e)
   }
@@ -526,18 +526,18 @@ fn verify_image_forward(
     None,
   )
   let json = match source {
-    "openai-chat" =>
-      match @openai_chat.lux_request_to_openai_chat(req) {
-        Ok(cr) => cr.value()
-        Err(e) => return Err("source encode (\{source}): \{e}")
-      }
     "openai" =>
-      match @openai_responses.lux_request_to_openai_responses(req) {
+      match @openai.lux_request_to_openai(req) {
         Ok(cr) => cr.value()
         Err(e) => return Err("source encode (\{source}): \{e}")
       }
-    "anthropic" =>
-      match @anthropic.lux_request_to_anthropic(req) {
+    "responses" =>
+      match @responses.lux_request_to_responses(req) {
+        Ok(cr) => cr.value()
+        Err(e) => return Err("source encode (\{source}): \{e}")
+      }
+    "messages" =>
+      match @messages.lux_request_to_messages(req) {
         Ok(cr) => cr.value()
         Err(e) => return Err("source encode (\{source}): \{e}")
       }
@@ -576,7 +576,7 @@ fn verify_image_forward(
 
 ///|
 test "image forward - openai-chat to anthropic preserves image" {
-  match verify_image_forward("openai-chat", "anthropic") {
+  match verify_image_forward("openai", "messages") {
     Ok(_) => ()
     Err(e) => fail(e)
   }
@@ -584,7 +584,7 @@ test "image forward - openai-chat to anthropic preserves image" {
 
 ///|
 test "image forward - openai to anthropic preserves image" {
-  match verify_image_forward("openai", "anthropic") {
+  match verify_image_forward("responses", "messages") {
     Ok(_) => ()
     Err(e) => fail(e)
   }
@@ -592,7 +592,7 @@ test "image forward - openai to anthropic preserves image" {
 
 ///|
 test "image forward - anthropic to openai-chat preserves image" {
-  match verify_image_forward("anthropic", "openai-chat") {
+  match verify_image_forward("messages", "openai") {
     Ok(_) => ()
     Err(e) => fail(e)
   }
@@ -600,7 +600,7 @@ test "image forward - anthropic to openai-chat preserves image" {
 
 ///|
 test "image forward - anthropic to openai preserves image" {
-  match verify_image_forward("anthropic", "openai") {
+  match verify_image_forward("messages", "responses") {
     Ok(_) => ()
     Err(e) => fail(e)
   }

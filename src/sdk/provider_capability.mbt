@@ -7,7 +7,7 @@
 ///|
 /// 单个 Provider 注册条目
 pub struct ProviderRegistration {
-  /// 主名称（如 "openai" "anthropic"）
+  /// 主名称（如 "openai" "messages"）
   name : String
   /// 别名列表（如 "google" "openai-responses"）
   aliases : Array[String]
@@ -117,44 +117,44 @@ let providers_cache : Array[ProviderRegistration] = build_providers()
 /// 注册表构造 — 唯一的 Provider 清单来源
 fn build_providers() -> Array[ProviderRegistration] {
   [
-    ///| OpenAI Responses（主）
+    ///| OpenAI Responses
     ProviderRegistration::new(
-      "openai",
-      ["openai-responses", "oai-responses"],
-      @openai_responses.capability(),
+      "responses",
+      ["openai-responses"],
+      @responses.capability(),
       "gpt-*,o*",
-      @openai_responses.openai_responses_to_lux_request,
-      @openai_responses.lux_request_to_openai_responses,
-      @openai_responses.openai_responses_to_lux_response,
-      @openai_responses.lux_response_to_openai_responses,
-      @openai_responses.openai_responses_sse_to_events,
-      @openai_responses.lux_events_to_openai_responses_sse,
+      @responses.responses_to_lux_request,
+      @responses.lux_request_to_responses,
+      @responses.responses_to_lux_response,
+      @responses.lux_response_to_responses,
+      @responses.responses_sse_to_events,
+      @responses.lux_events_to_responses_sse,
     ),
     ///| OpenAI Chat Completions
     ProviderRegistration::new(
-      "openai-chat",
-      ["openai_chat", "oai-chat", "chat"],
-      @openai_chat.capability(),
+      "openai",
+      ["openai-chat", "openai_chat", "oai-chat", "chat"],
+      @openai.capability(),
       "gpt-*,o*",
-      @openai_chat.openai_chat_to_lux_request,
-      @openai_chat.lux_request_to_openai_chat,
-      @openai_chat.openai_chat_to_lux_response,
-      @openai_chat.lux_response_to_openai_chat,
-      @openai_chat.openai_chat_sse_to_events,
-      @openai_chat.lux_events_to_openai_chat_sse,
+      @openai.openai_to_lux_request,
+      @openai.lux_request_to_openai,
+      @openai.openai_to_lux_response,
+      @openai.lux_response_to_openai,
+      @openai.openai_sse_to_events,
+      @openai.lux_events_to_openai_sse,
     ),
     ///| Anthropic Messages
     ProviderRegistration::new(
-      "anthropic",
-      ["claude", "claude-messages"],
-      @anthropic.capability(),
+      "messages",
+      ["anthropic", "claude", "claude-messages"],
+      @messages.capability(),
       "claude-*",
-      @anthropic.anthropic_to_lux_request,
-      @anthropic.lux_request_to_anthropic,
-      @anthropic.anthropic_to_lux_response,
-      @anthropic.lux_response_to_anthropic,
-      @anthropic.anthropic_sse_to_events,
-      @anthropic.lux_events_to_anthropic_sse,
+      @messages.messages_to_lux_request,
+      @messages.lux_request_to_messages,
+      @messages.messages_to_lux_response,
+      @messages.lux_response_to_messages,
+      @messages.messages_sse_to_events,
+      @messages.lux_events_to_messages_sse,
     ),
     ///| Google Gemini（REST API）
     ProviderRegistration::new(
@@ -168,58 +168,6 @@ fn build_providers() -> Array[ProviderRegistration] {
       @gemini.lux_response_to_gemini,
       @gemini.gemini_sse_to_events,
       @gemini.lux_events_to_gemini_sse,
-    ),
-    ///| Google Vertex AI Gemini
-    ProviderRegistration::new(
-      "google-vertex",
-      ["vertex", "gemini-vertex"],
-      @gemini_vertex.capability(),
-      "gemini-*",
-      @gemini_vertex.vertex_to_lux_request,
-      @gemini_vertex.lux_request_to_vertex,
-      @gemini_vertex.vertex_to_lux_response,
-      @gemini_vertex.lux_response_to_vertex,
-      @gemini_vertex.vertex_sse_to_events,
-      @gemini_vertex.lux_events_to_vertex_sse,
-    ),
-    ///| Azure OpenAI Responses
-    ProviderRegistration::new(
-      "azure-openai",
-      ["azure", "azure-openai-responses"],
-      @openai_azure.capability(),
-      "azure-*",
-      @openai_azure.azure_to_lux_request,
-      @openai_azure.lux_request_to_azure,
-      @openai_azure.azure_to_lux_response,
-      @openai_azure.lux_response_to_azure,
-      @openai_azure.azure_sse_to_events,
-      @openai_azure.lux_events_to_azure_sse,
-    ),
-    ///| OpenAI Codex（Responses 子协议）
-    ProviderRegistration::new(
-      "openai-codex",
-      ["codex", "gpt-codex"],
-      @openai_codex.capability(),
-      "gpt-*-codex",
-      @openai_codex.codex_to_lux_request,
-      @openai_codex.lux_request_to_codex,
-      @openai_codex.codex_to_lux_response,
-      @openai_codex.lux_response_to_codex,
-      @openai_codex.codex_sse_to_events,
-      @openai_codex.lux_events_to_codex_sse,
-    ),
-    ///| OpenAI vLLM（Chat 兼容子协议，承载 message.reasoning / delta.reasoning）
-    ProviderRegistration::new(
-      "openai-vllm",
-      ["vllm", "vllm-chat"],
-      @openai_vllm.capability(),
-      "qwen-*,deepseek-*,glm-*,yi-*",
-      @openai_vllm.vllm_to_lux_request,
-      @openai_vllm.lux_request_to_vllm,
-      @openai_vllm.vllm_to_lux_response,
-      @openai_vllm.lux_response_to_vllm,
-      @openai_vllm.vllm_sse_to_events,
-      @openai_vllm.lux_events_to_vllm_sse,
     ),
   ]
 }

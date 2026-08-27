@@ -190,10 +190,9 @@ pub fn get_schema(provider : String) -> ProviderSchema? {
 /// provider 名（主名/别名）→ schema
 fn schema_for_provider_name(name : String) -> ProviderSchema? {
   match name {
-    "openai" | "openai-chat" | "openai-codex" => Some(ProviderSchema::openai())
-    "anthropic" | "claude" => Some(ProviderSchema::anthropic())
-    "gemini" | "google" | "google-vertex" => Some(ProviderSchema::gemini())
-    "azure-openai" | "azure" => Some(ProviderSchema::azure())
+    "openai" | "openai-chat" | "responses" => Some(ProviderSchema::openai())
+    "messages" | "anthropic" | "claude" => Some(ProviderSchema::anthropic())
+    "gemini" | "google" => Some(ProviderSchema::gemini())
     _ => None
   }
 }
