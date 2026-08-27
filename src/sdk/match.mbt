@@ -9,20 +9,19 @@
 ///
 /// 匹配策略：
 ///   1. 精确匹配 name
-///   2. 匹配 aliases 中的别名
-///   3. 均未命中时，把输入当作模型名走 `match_by_model` 回退
+///   2. 均未命中时，把输入当作模型名走 `match_by_model` 回退
 ///
-/// 若只想按模型名匹配（不做名称/别名命中），直接调用 `match_by_model`。
+/// 若只想按模型名匹配，直接调用 `match_by_model`。
 pub fn match_provider_name(provider_name : String) -> ProviderRegistration? {
   let providers = providers_cache
   let mut i = 0
   while i < providers.length() {
     let reg = providers[i]
-    // 1. 精确匹配
+    // 1. 精确匹配主名称
     if reg.name == provider_name {
       return Some(reg)
     }
-    // 2. 别名匹配
+    // 2. 匹配别名
     let mut j = 0
     while j < reg.aliases.length() {
       if reg.aliases[j] == provider_name {

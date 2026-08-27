@@ -9,7 +9,7 @@
 pub struct ProviderRegistration {
   /// 主名称（如 "openai" "messages"）
   name : String
-  /// 别名列表（如 "google" "openai-responses"）
+  /// 别名（如 "chat"、"google"、"claude-messages"）
   aliases : Array[String]
   /// 能力声明
   capability : @lux.ProviderCapability
@@ -133,7 +133,7 @@ fn build_providers() -> Array[ProviderRegistration] {
     ///| OpenAI Chat Completions
     ProviderRegistration::new(
       "openai",
-      ["openai-chat", "openai_chat", "oai-chat", "chat"],
+      ["chat"],
       @openai.capability(),
       "gpt-*,o*",
       @openai.openai_to_lux_request,
@@ -146,7 +146,7 @@ fn build_providers() -> Array[ProviderRegistration] {
     ///| Anthropic Messages
     ProviderRegistration::new(
       "messages",
-      ["anthropic", "claude", "claude-messages"],
+      ["claude-messages", "anthropic"],
       @messages.capability(),
       "claude-*",
       @messages.messages_to_lux_request,
@@ -159,7 +159,7 @@ fn build_providers() -> Array[ProviderRegistration] {
     ///| Google Gemini（REST API）
     ProviderRegistration::new(
       "gemini",
-      ["google", "google-gemini"],
+      ["google"],
       @gemini.capability(),
       "gemini-*",
       @gemini.gemini_to_lux_request,

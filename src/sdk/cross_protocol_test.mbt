@@ -48,7 +48,7 @@ let base_req : @lux.LucentRequest = @lux.LucentRequest::new(
 
 ///|
 /// === 测试：OpenAI Chat 往返 ===
-test "consistency - openai_chat roundtrip" {
+test "consistency - openai roundtrip" {
   match @openai.lux_request_to_openai(base_req) {
     Ok(cr) =>
       match @openai.openai_to_lux_request(cr.value()) {
@@ -66,15 +66,15 @@ test "consistency - openai_chat roundtrip" {
           }
           // tool_choice 部分协议不保留，不作为一致性断言
         }
-        Err(e) => fail("openai_chat decode failed: \{e}")
+        Err(e) => fail("openai decode failed: \{e}")
       }
-    Err(e) => fail("openai_chat encode failed: \{e}")
+    Err(e) => fail("openai encode failed: \{e}")
   }
 }
 
 ///|
 /// === 测试：Anthropic 往返 ===
-test "consistency - anthropic roundtrip" {
+test "consistency - messages roundtrip" {
   match @messages.lux_request_to_messages(base_req) {
     Ok(cr) =>
       match @messages.messages_to_lux_request(cr.value()) {
@@ -92,15 +92,15 @@ test "consistency - anthropic roundtrip" {
             None => assert_true(false)
           }
         }
-        Err(e) => fail("anthropic decode failed: \{e}")
+        Err(e) => fail("messages decode failed: \{e}")
       }
-    Err(e) => fail("anthropic encode failed: \{e}")
+    Err(e) => fail("messages encode failed: \{e}")
   }
 }
 
 ///|
 /// === 测试：OpenAI Responses 往返 ===
-test "consistency - openai_responses roundtrip" {
+test "consistency - responses roundtrip" {
   match @responses.lux_request_to_responses(base_req) {
     Ok(cr) =>
       match @responses.responses_to_lux_request(cr.value()) {
@@ -221,7 +221,7 @@ fn req_with_opts(
 }
 
 ///|
-test "params - openai_chat temperature preserved" {
+test "params - openai temperature preserved" {
   let req = req_with_opts(Some(0.7), None, None, None, None)
   let json = @openai.lux_request_to_openai(req)
   match json {
@@ -239,7 +239,7 @@ test "params - openai_chat temperature preserved" {
 }
 
 ///|
-test "params - anthropic temperature preserved" {
+test "params - messages temperature preserved" {
   let req = req_with_opts(Some(0.7), None, None, None, None)
   let json = @messages.lux_request_to_messages(req)
   match json {
@@ -275,7 +275,7 @@ test "params - responses temperature preserved" {
 }
 
 ///|
-test "params - openai_chat max_tokens preserved" {
+test "params - openai max_tokens preserved" {
   let req = req_with_opts(None, None, None, Some(2048), None)
   let json = @openai.lux_request_to_openai(req)
   match json {
@@ -289,7 +289,7 @@ test "params - openai_chat max_tokens preserved" {
 }
 
 ///|
-test "params - anthropic max_tokens preserved" {
+test "params - messages max_tokens preserved" {
   let req = req_with_opts(None, None, None, Some(2048), None)
   let json = @messages.lux_request_to_messages(req)
   match json {
@@ -353,7 +353,7 @@ fn check_sse_roundtrip(
 }
 
 ///|
-test "sse - openai_chat roundtrip" {
+test "sse - openai roundtrip" {
   match
     check_sse_roundtrip(
       @openai.lux_events_to_openai_sse, @openai.openai_sse_to_events,
@@ -364,7 +364,7 @@ test "sse - openai_chat roundtrip" {
 }
 
 ///|
-test "sse - anthropic roundtrip" {
+test "sse - messages roundtrip" {
   match
     check_sse_roundtrip(
       @messages.lux_events_to_messages_sse, @messages.messages_sse_to_events,
@@ -375,7 +375,7 @@ test "sse - anthropic roundtrip" {
 }
 
 ///|
-test "sse - openai_responses roundtrip" {
+test "sse - responses roundtrip" {
   match
     check_sse_roundtrip(
       @responses.lux_events_to_responses_sse, @responses.responses_sse_to_events,
@@ -671,9 +671,9 @@ test "sub - phase absent defaults to none" {
 /// === 契约矩阵：形状字段静默丢失必须携带诊断 ===
 
 ///|
-/// openai_chat 对消息内容中的 Native 媒体静默丢弃（无原生载体）——
+/// openai 对消息内容中的 Native 媒体静默丢弃（无原生载体）——
 /// 编码不阻断成功，但必须携带 Unsupported 诊断
-test "fidelity - openai_chat native content yields Unsupported diagnostic" {
+test "fidelity - openai native content yields Unsupported diagnostic" {
   let req = @lux.LucentRequest::new(
     "test-model",
     None,

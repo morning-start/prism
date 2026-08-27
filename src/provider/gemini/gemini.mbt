@@ -1011,182 +1011,157 @@ pub fn gemini_sse_to_events(
   sse_str : String,
 ) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String] {
   let events : Array[@lux.LucentStreamEvent] = []
-  let lines = sse_str.split("\n").to_array()
+  // Gemini 流式用单 \n 分隔消息（非标准 SSE），归一化为 \n\n
+  // 先将 \n\n 压为 \n，再将 \n 展开为 \n\n，保证每个 data: 行独占一个消息块
+  let normalized = sse_str
+    .replace(old="\r\n", new="\n")
+    .replace(old="\n\n", new="\n")
+    .replace(old="\n", new="\n\n")
+  let messages = @internal.parse_sse_messages(normalized)
   let mut has_text_block = false
   let mut current_text = ""
   let mut text_block_index = 0
   let mut i = 0
-  while i < lines.length() {
-    let l_str = lines[i].to_owned()
-    // 跳过注释行（以 : 开头，如心跳 : keep-alive）
-    if l_str.length() > 0 && l_str[0] == ':' {
+  while i < messages.length() {
+    let payload_raw = messages[i].data.trim().to_owned()
+    if payload_raw == "" {
       i = i + 1
       continue
     }
-    let is_data = l_str.length() >= 6 &&
-      l_str[0] == 'd' &&
-      l_str[1] == 'a' &&
-      l_str[2] == 't' &&
-      l_str[3] == 'a' &&
-      l_str[4] == ':' &&
-      l_str[5] == ' '
-    if is_data {
-      let mut payload_str = ""
-      let mut k = 6
-      while k < l_str.length() {
-        let ch = Int::unsafe_to_char(l_str[k].to_int())
-        payload_str = payload_str + "\{ch}"
-        k = k + 1
-      }
-      let mut payload = payload_str.trim().to_owned()
-      if payload == "" {
+    // 清理心跳、截断检测、转义清理
+    let payload = @internal.sanitize_json_escapes(
+      @internal.clean_sse_heartbeat(payload_raw),
+    )
+    if @internal.is_json_truncated(payload) {
+      i = i + 1
+      continue
+    }
+    let jv = @json.parse(payload) catch {
+      _ => {
         i = i + 1
         continue
       }
-      // 清理 SSE 心跳标记（如 : keep-alive）
-      payload = @internal.clean_sse_heartbeat(payload)
-      // 检测截断的 JSON（字符串未闭合、括号不匹配）
-      if @internal.is_json_truncated(payload) {
-        // 截断的事件，跳过
-        i = i + 1
-        continue
-      }
-      // 清理无效转义序列（某些 API 可能包含非标准转义）
-      payload = @internal.sanitize_json_escapes(payload)
-      let jv = @json.parse(payload) catch {
-        _ => {
-          i = i + 1
-          continue
-        }
-      }
-      // 每一帧都是完整 candidates 数组
-      // 对 text 部分做简单 diff：检测新文本增量
-      match @internal.field_arr(jv, "candidates") {
-        Some(cands) =>
-          if cands.length() > 0 {
-            match @internal.obj_get(cands[0], "content") {
-              Some(content) =>
-                match @internal.field_arr(content, "parts") {
-                  Some(parts) => {
-                    let mut j = 0
-                    while j < parts.length() {
-                      match @internal.field_str(parts[j], "text") {
-                        Some(t) => {
-                          if !has_text_block {
-                            events.push(BlockStart(text_block_index, Text))
-                            has_text_block = true
-                          }
-                          // Gemini 每帧是完整文本，非增量
-                          // 简单方式：丢弃旧文本，发新文本
-                          if current_text != "" {
-                            events.push(BlockDiscard(text_block_index))
-                          }
-                          current_text = t
-                          events.push(
-                            BlockDelta(
-                              text_block_index,
-                              @lux.LucentBlockDelta::text_delta(t),
-                            ),
-                          )
+    }
+    // 每一帧都是完整 candidates 数组
+    // 对 text 部分做简单 diff：检测新文本增量
+    match @internal.field_arr(jv, "candidates") {
+      Some(cands) =>
+        if cands.length() > 0 {
+          match @internal.obj_get(cands[0], "content") {
+            Some(content) =>
+              match @internal.field_arr(content, "parts") {
+                Some(parts) => {
+                  let mut j = 0
+                  while j < parts.length() {
+                    match @internal.field_str(parts[j], "text") {
+                      Some(t) => {
+                        if !has_text_block {
+                          events.push(BlockStart(text_block_index, Text))
+                          has_text_block = true
                         }
-                        None => ()
-                      }
-                      // functionCall（全量返回，一次性完成）
-                      match @internal.obj_get(parts[j], "functionCall") {
-                        Some(fc) => {
-                          let name = @internal.field_str(fc, "name").unwrap_or(
-                            "",
-                          )
-                          let args = match @internal.obj_get(fc, "args") {
-                            Some(a) => a.stringify()
-                            None => "{}"
-                          }
-                          if has_text_block {
-                            events.push(BlockEnd(text_block_index))
-                            has_text_block = false
-                          }
-                          text_block_index = text_block_index + 1
-                          events.push(
-                            BlockStart(
-                              text_block_index,
-                              @lux.LucentBlockType::tool_call(
-                                "fc_" +
-                                name +
-                                "_" +
-                                text_block_index.to_string(),
-                                name,
-                              ),
-                            ),
-                          )
-                          events.push(
-                            BlockDelta(
-                              text_block_index,
-                              @lux.LucentBlockDelta::tool_arguments_delta(args),
-                            ),
-                          )
-                          events.push(BlockEnd(text_block_index))
-                          text_block_index = text_block_index + 1
+                        // Gemini 每帧是完整文本，非增量
+                        // 简单方式：丢弃旧文本，发新文本
+                        if current_text != "" {
+                          events.push(BlockDiscard(text_block_index))
                         }
-                        None => ()
+                        current_text = t
+                        events.push(
+                          BlockDelta(
+                            text_block_index,
+                            @lux.LucentBlockDelta::text_delta(t),
+                          ),
+                        )
                       }
-                      // thought part → 独立 Thinking 块（不静默丢弃，不伪装成 Text）
-                      match @internal.obj_get(parts[j], "thought") {
-                        Some(True) =>
-                          match @internal.field_str(parts[j], "text") {
-                            Some(t) => {
-                              if has_text_block {
-                                events.push(BlockEnd(text_block_index))
-                                has_text_block = false
-                              }
-                              text_block_index = text_block_index + 1
-                              events.push(
-                                BlockStart(text_block_index, Thinking),
-                              )
-                              events.push(
-                                BlockDelta(
-                                  text_block_index,
-                                  @lux.LucentBlockDelta::thinking_delta(t),
-                                ),
-                              )
-                              events.push(BlockEnd(text_block_index))
-                              text_block_index = text_block_index + 1
-                            }
-                            None => ()
-                          }
-                        _ => ()
-                      }
-                      j = j + 1
+                      None => ()
                     }
+                    // functionCall（全量返回，一次性完成）
+                    match @internal.obj_get(parts[j], "functionCall") {
+                      Some(fc) => {
+                        let name = @internal.field_str(fc, "name").unwrap_or("")
+                        let args = match @internal.obj_get(fc, "args") {
+                          Some(a) => a.stringify()
+                          None => "{}"
+                        }
+                        if has_text_block {
+                          events.push(BlockEnd(text_block_index))
+                          has_text_block = false
+                        }
+                        text_block_index = text_block_index + 1
+                        events.push(
+                          BlockStart(
+                            text_block_index,
+                            @lux.LucentBlockType::tool_call(
+                              "fc_" + name + "_" + text_block_index.to_string(),
+                              name,
+                            ),
+                          ),
+                        )
+                        events.push(
+                          BlockDelta(
+                            text_block_index,
+                            @lux.LucentBlockDelta::tool_arguments_delta(args),
+                          ),
+                        )
+                        events.push(BlockEnd(text_block_index))
+                        text_block_index = text_block_index + 1
+                      }
+                      None => ()
+                    }
+                    // thought part → 独立 Thinking 块（不静默丢弃，不伪装成 Text）
+                    match @internal.obj_get(parts[j], "thought") {
+                      Some(True) =>
+                        match @internal.field_str(parts[j], "text") {
+                          Some(t) => {
+                            if has_text_block {
+                              events.push(BlockEnd(text_block_index))
+                              has_text_block = false
+                            }
+                            text_block_index = text_block_index + 1
+                            events.push(BlockStart(text_block_index, Thinking))
+                            events.push(
+                              BlockDelta(
+                                text_block_index,
+                                @lux.LucentBlockDelta::thinking_delta(t),
+                              ),
+                            )
+                            events.push(BlockEnd(text_block_index))
+                            text_block_index = text_block_index + 1
+                          }
+                          None => ()
+                        }
+                      _ => ()
+                    }
+                    j = j + 1
                   }
-                  None => ()
                 }
-              None => ()
-            }
-            // finishReason
-            match @internal.field_str(cands[0], "finishReason") {
-              Some(fr) => {
-                if has_text_block {
-                  events.push(BlockEnd(text_block_index))
-                  has_text_block = false
-                }
-                events.push(Finish(@lux.LucentFinishReason::from_string(fr)))
+                None => ()
               }
-              None => ()
-            }
+            None => ()
           }
-        None => ()
-      }
-      // usageMetadata（最后一帧含 finishReason）
-      match @internal.obj_get(jv, "usageMetadata") {
-        Some(u) => {
-          let pt = @internal.field_int(u, "promptTokenCount").unwrap_or(0)
-          let ct = @internal.field_int(u, "candidatesTokenCount").unwrap_or(0)
-          let tt = @internal.field_int(u, "totalTokenCount").unwrap_or(pt + ct)
-          events.push(Usage(@lux.LucentUsage::new(pt, ct, tt)))
-          events.push(Done)
+          // finishReason
+          match @internal.field_str(cands[0], "finishReason") {
+            Some(fr) => {
+              if has_text_block {
+                events.push(BlockEnd(text_block_index))
+                has_text_block = false
+              }
+              events.push(Finish(@lux.LucentFinishReason::from_string(fr)))
+            }
+            None => ()
+          }
         }
-        None => ()
+      None => ()
+    }
+    // usageMetadata（最后一帧含 finishReason）
+    match @internal.obj_get(jv, "usageMetadata") {
+      Some(u) => {
+        let pt = @internal.field_int(u, "promptTokenCount").unwrap_or(0)
+        let ct = @internal.field_int(u, "candidatesTokenCount").unwrap_or(0)
+        let tt = @internal.field_int(u, "totalTokenCount").unwrap_or(pt + ct)
+        events.push(Usage(@lux.LucentUsage::new(pt, ct, tt)))
+        events.push(Done)
       }
+      None => ()
     }
     i = i + 1
   }

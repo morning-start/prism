@@ -138,7 +138,7 @@ test "context_to_lux_request - with options" {
 /// === Prism::encode_request ===
 
 ///|
-test "encode_request - openai_chat returns valid JSON" {
+test "encode_request - openai returns valid JSON" {
   let p = Prism::new().with_provider("openai")
   match p.encode_request("Hello", PrismOptions::default()) {
     Ok(json) => {
@@ -150,14 +150,14 @@ test "encode_request - openai_chat returns valid JSON" {
 }
 
 ///|
-test "encode_request - anthropic returns valid JSON" {
+test "encode_request - messages returns valid JSON" {
   let p = Prism::new().with_provider("messages")
   match p.encode_request("Hello", PrismOptions::default()) {
     Ok(json) => {
       assert_true(json.contains("model"))
       assert_true(json.contains("messages"))
     }
-    Err(e) => fail("anthropic encode failed: " + e)
+    Err(e) => fail("messages encode failed: " + e)
   }
 }
 
@@ -192,7 +192,7 @@ test "encode_request - unknown provider returns error" {
 /// === Prism::encode_stream_request ===
 
 ///|
-test "encode_stream_request - openai_chat includes stream field" {
+test "encode_stream_request - openai includes stream field" {
   let p = Prism::new().with_provider("openai")
   match p.encode_stream_request("Hello", PrismOptions::default()) {
     Ok(json) => assert_true(json.contains("stream"))
@@ -213,7 +213,7 @@ test "encode_stream_request - unknown provider returns error" {
 /// === Prism::decode_response ===
 
 ///|
-test "decode_response - openai_chat extracts text" {
+test "decode_response - openai extracts text" {
   let resp_json = "{\"id\":\"chatcmpl-123\",\"object\":\"chat.completion\",\"created\":123,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello!\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":3,\"total_tokens\":8}}"
   let p = Prism::new().with_provider("openai")
   match p.decode_response(resp_json) {
@@ -235,7 +235,7 @@ test "decode_response - unknown provider returns error" {
 /// === Prism::decode_sse ===
 
 ///|
-test "decode_sse - openai_chat returns events with text content" {
+test "decode_sse - openai returns events with text content" {
   let p = Prism::new().with_provider("openai")
   let sse = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n"
   match p.decode_sse(sse) {
@@ -469,7 +469,7 @@ test "meta - decode_response_with_meta carries source_provider" {
 }
 
 ///|
-test "meta - anthropic source tag" {
+test "meta - messages source tag" {
   let prism = Prism::new().with_provider("messages")
   let resp = @lux.LucentResponse::new(
     "msg_1",
@@ -555,8 +555,8 @@ fn meta_chat_resp_json() -> Result[String, String] {
 }
 
 ///|
-/// 构造 anthropic 响应 JSON（经适配器编码产生）
-fn anthropic_resp_json() -> Result[String, String] {
+/// 构造 messages 响应 JSON（经适配器编码产生）
+fn messages_resp_json() -> Result[String, String] {
   let resp = @lux.LucentResponse::new(
     "msg-1",
     "claude-sonnet-4",
@@ -565,7 +565,7 @@ fn anthropic_resp_json() -> Result[String, String] {
       @lux.LucentChoice::new(
         0,
         @lux.LucentMessage::new(Assistant, [
-          @lux.LucentContent::text("Hello from anthropic"),
+          @lux.LucentContent::text("Hello from messages"),
         ]),
         Stop,
         None,
@@ -608,15 +608,15 @@ fn gemini_resp_json() -> Result[String, String] {
 
 ///|
 test "meta - mixed-flow sources are distinguishable" {
-  // openai-chat 响应
+  // openai 响应
   let chat_json = match meta_chat_resp_json() {
     Ok(j) => j
-    Err(e) => fail("openai_chat encode failed: \{e}")
+    Err(e) => fail("openai encode failed: \{e}")
   }
-  // anthropic 响应
-  let anth_json = match anthropic_resp_json() {
+  // messages 响应
+  let anth_json = match messages_resp_json() {
     Ok(j) => j
-    Err(e) => fail("anthropic encode failed: \{e}")
+    Err(e) => fail("messages encode failed: \{e}")
   }
   // gemini 响应
   let gem_json = match gemini_resp_json() {
@@ -627,12 +627,12 @@ test "meta - mixed-flow sources are distinguishable" {
   let chat = match
     Prism::new().with_provider("openai").decode_response_with_meta(chat_json) {
     Ok(d) => d
-    Err(e) => fail("openai-chat meta decode failed: \{e}")
+    Err(e) => fail("openai meta decode failed: \{e}")
   }
   let anth = match
     Prism::new().with_provider("messages").decode_response_with_meta(anth_json) {
     Ok(d) => d
-    Err(e) => fail("anthropic meta decode failed: \{e}")
+    Err(e) => fail("messages meta decode failed: \{e}")
   }
   let gem = match
     Prism::new().with_provider("gemini").decode_response_with_meta(gem_json) {
@@ -646,7 +646,7 @@ test "meta - mixed-flow sources are distinguishable" {
   assert_eq(gem.meta.source_provider, "gemini")
   // 文本各自正确
   assert_eq(chat.text, "Hi back")
-  assert_eq(anth.text, "Hello from anthropic")
+  assert_eq(anth.text, "Hello from messages")
   assert_eq(gem.text, "Hi from gemini")
 }
 
@@ -664,7 +664,7 @@ test "meta - special field handling via if branch" {
   // 普通来源 → 分支不触发
   let chat_json = match meta_chat_resp_json() {
     Ok(j) => j
-    Err(e) => fail("openai_chat encode failed: \{e}")
+    Err(e) => fail("openai encode failed: \{e}")
   }
   let chat = match
     Prism::new().with_provider("openai").decode_response_with_meta(chat_json) {

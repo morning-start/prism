@@ -967,7 +967,7 @@ test "encode - native media yields Unsupported diagnostic not empty string" {
 }
 
 ///|
-test "encode - image url maps to anthropic image block" {
+test "encode - image url maps to messages image block" {
   let req = @lux.LucentRequest::new(
     "claude",
     None,
@@ -988,7 +988,7 @@ test "encode - image url maps to anthropic image block" {
   )
   match lux_request_to_messages(req) {
     Ok(cr) => {
-      // 图片应映射为 anthropic image block
+      // 图片应映射为 messages image block
       assert_true(cr.value().contains("\"type\":\"image\""))
       assert_true(cr.value().contains("https://x.com/a.png"))
     }
@@ -997,7 +997,7 @@ test "encode - image url maps to anthropic image block" {
 }
 
 ///|
-test "anthropic store unsupported diagnostic" {
+test "messages store unsupported diagnostic" {
   let opts = @lux.LucentOptions::default().with_store(Some(true))
   let req = @lux.LucentRequest::new(
     "claude-4",
@@ -1027,7 +1027,7 @@ test "anthropic store unsupported diagnostic" {
 }
 
 ///|
-test "anthropic extras round-trip" {
+test "messages extras round-trip" {
   let opts = @lux.LucentOptions::default().with_extras(
     Some({ "extra_field": Json::string("v1") }),
   )

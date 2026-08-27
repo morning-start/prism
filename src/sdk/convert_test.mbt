@@ -75,7 +75,7 @@ fn openai_sse() -> Result[String, String] {
 /// === convert_request ===
 
 ///|
-test "convert_request - openai-chat to anthropic" {
+test "convert_request - openai to messages" {
   match openai_req_json() {
     Ok(json) =>
       match convert_request("openai", json, "messages") {
@@ -120,7 +120,7 @@ test "convert_request - unknown target returns error" {
 /// === convert_response ===
 
 ///|
-test "convert_response - openai-chat to anthropic" {
+test "convert_response - openai to messages" {
   match openai_resp_json() {
     Ok(json) =>
       match convert_response("openai", json, "messages") {
@@ -154,7 +154,7 @@ test "convert_response - unknown provider returns error" {
 /// === convert_stream ===
 
 ///|
-test "convert_stream - openai-chat to anthropic" {
+test "convert_stream - openai to messages" {
   match openai_sse() {
     Ok(sse) =>
       match convert_stream("openai", sse, "messages") {

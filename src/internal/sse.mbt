@@ -141,3 +141,84 @@ pub fn extract_sse_events(sse_str : String) -> Array[String] {
   }
   events
 }
+
+///|
+/// SseMessage — 解析后的 SSE 消息（event 类型 + data 内容）
+///
+/// SSE 规范中一个消息由多行组成：
+///   event: <type>    （可选）
+///   data: <payload>  （可多行，用换行符连接）
+///   空行             （消息边界）
+pub struct SseMessage {
+  event_type : String?
+  data : String
+} derive(Eq, Debug)
+
+///|
+/// 解析单个 SSE 消息块为 SseMessage
+///
+/// 输入为一个消息块的文本（不含尾部空行），例如：
+///   "event: content_block_delta\ndata: {\"type\":\"text_delta\",\"text\":\"hello\"}"
+///
+/// 返回 None 表示空块或纯注释块。
+pub fn parse_sse_message(msg_block : String) -> SseMessage? {
+  let lines = msg_block.split("\n").to_array()
+  let mut event_type : String? = None
+  let data_parts : Array[String] = []
+  let mut i = 0
+  while i < lines.length() {
+    let line = lines[i].to_owned()
+    // 跳过空行和注释行
+    if line.length() == 0 {
+      i = i + 1
+      continue
+    }
+    if line[0] == ':' {
+      i = i + 1
+      continue
+    }
+    // 解析 event: 行
+    let parsed = parse_sse_line(line.view())
+    match parsed {
+      Some(sl) =>
+        match sl.event {
+          Some(e) => event_type = Some(e)
+          None =>
+            match sl.data {
+              Some(d) => data_parts.push(d)
+              None => ()
+            }
+        }
+      None => ()
+    }
+    i = i + 1
+  }
+  if data_parts.length() == 0 {
+    return None
+  }
+  Some({ event_type, data: data_parts.join("\n") })
+}
+
+///|
+/// 从 SSE 流中解析所有消息
+///
+/// 按 `\n\n` 分割消息块，逐块解析为 SseMessage。
+/// 跳过空块和纯注释块。
+pub fn parse_sse_messages(sse_str : String) -> Array[SseMessage] {
+  let messages : Array[SseMessage] = []
+  let blocks = sse_str.split("\n\n").to_array()
+  let mut i = 0
+  while i < blocks.length() {
+    let block = blocks[i].to_owned()
+    if block.trim() == "" {
+      i = i + 1
+      continue
+    }
+    match parse_sse_message(block) {
+      Some(msg) => messages.push(msg)
+      None => ()
+    }
+    i = i + 1
+  }
+  messages
+}

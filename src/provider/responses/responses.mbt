@@ -1012,273 +1012,176 @@ pub fn responses_sse_to_events(
 ) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String] {
   let events : Array[@lux.LucentStreamEvent] = []
   let diagnostics : Array[@lux.ConversionDiagnostic] = []
-  // 统一换行符：CRLF → LF
+  // 统一换行符：CRLF → LF，再用统一 SSE 解析
   let normalized = sse_str
     .replace(old="\r\n", new="\n")
     .replace(old="\r", new="\n")
-  let all_lines = normalized.split("\n").to_array()
-  let mut event_type = ""
-  let mut data_lines : Array[String] = []
+  let messages = @internal.parse_sse_messages(normalized)
   let mut i = 0
-  while i < all_lines.length() {
-    let line = all_lines[i]
-    // 空行 = 事件边界：处理已缓存的事件数据
-    if line.trim() == "" {
-      if data_lines.length() > 0 {
-        // SSE 规范：多个 data: 行用换行符连接
-        let data_str_raw = data_lines.join("\n")
-        data_lines = []
-        // 先清理心跳脏字符（含 \: keep-alive. 等无效转义），再修复其余无效转义
-        let data_str = @internal.sanitize_json_escapes(
-          @internal.clean_sse_heartbeat(data_str_raw.trim().to_owned()),
+  while i < messages.length() {
+    let event_type_raw = messages[i].event_type.unwrap_or("")
+    let data_raw = messages[i].data.trim().to_owned()
+    if data_raw == "" {
+      i = i + 1
+      continue
+    }
+    // 清理心跳、截断检测、转义清理
+    let data_str = @internal.sanitize_json_escapes(
+      @internal.clean_sse_heartbeat(data_raw),
+    )
+    if data_str == "" {
+      i = i + 1
+      continue
+    }
+    if @internal.is_json_truncated(data_str) {
+      diagnostics.push(
+        @lux.ConversionDiagnostic::new(
+          "sse.data",
+          Invalid,
+          Some(
+            "truncated JSON in SSE data (stream may be incomplete): " + data_str,
+          ),
+        ),
+      )
+      i = i + 1
+      continue
+    }
+    let jv = @json.parse(data_str) catch {
+      _ => {
+        diagnostics.push(
+          @lux.ConversionDiagnostic::new(
+            "sse.data",
+            Invalid,
+            Some("invalid JSON in SSE data: " + data_str),
+          ),
         )
-        if data_str != "" {
-          // 检测截断的 JSON（字符串未闭合、括号不匹配）
-          if @internal.is_json_truncated(data_str) {
-            diagnostics.push(
-              @lux.ConversionDiagnostic::new(
-                "sse.data",
-                Invalid,
-                Some(
-                  "truncated JSON in SSE data (stream may be incomplete): " +
-                  data_str,
+        i = i + 1
+        continue
+      }
+    }
+    // event: 行缺失时，从 JSON 的 type 字段回退推断事件类型
+    let event_type = if event_type_raw == "" {
+      @internal.field_str(jv, "type").unwrap_or(event_type_raw)
+    } else {
+      event_type_raw
+    }
+    match event_type {
+      "response.created" =>
+        match @internal.obj_get(jv, "response") {
+          Some(r) => {
+            let rid = @internal.field_str(r, "id")
+            let rmodel = @internal.field_str(r, "model")
+            let created_at = @internal.field_int(r, "created_at")
+            let extra = build_extra(r, ["id", "model", "created_at"])
+            events.push(
+              ConversationStart(
+                @lux.LucentConversationMeta::new_full(
+                  rid,
+                  rmodel,
+                  None,
+                  created_at,
+                  extra,
                 ),
               ),
             )
-          } else {
-            let jv = @json.parse(data_str) catch {
-              _ => {
-                diagnostics.push(
-                  @lux.ConversionDiagnostic::new(
-                    "sse.data",
-                    Invalid,
-                    Some("invalid JSON in SSE data: " + data_str),
-                  ),
-                )
-                Json::null()
-              }
+          }
+          None => ()
+        }
+      "response.output_item.added" => {
+        let idx = @internal.field_int(jv, "output_index").unwrap_or(0)
+        match @internal.obj_get(jv, "item") {
+          Some(item) =>
+            match parse_input_item(item, diagnostics) {
+              Some(ci) => events.push(ItemStart(idx, ci))
+              None => ()
             }
-            // event: 行缺失时，从 JSON 的 type 字段回退推断事件类型
-            let effective_type = if event_type == "" {
-              @internal.field_str(jv, "type").unwrap_or(event_type)
-            } else {
-              event_type
-            }
-            match effective_type {
-              "response.created" =>
-                match @internal.obj_get(jv, "response") {
-                  Some(r) => {
-                    let rid = @internal.field_str(r, "id")
-                    let rmodel = @internal.field_str(r, "model")
-                    let created_at = @internal.field_int(r, "created_at")
-                    let extra = build_extra(r, ["id", "model", "created_at"])
-                    events.push(
-                      ConversationStart(
-                        @lux.LucentConversationMeta::new_full(
-                          rid,
-                          rmodel,
-                          None,
-                          created_at,
-                          extra,
-                        ),
-                      ),
-                    )
-                  }
-                  None => ()
-                }
-              "response.output_item.added" => {
-                let idx = @internal.field_int(jv, "output_index").unwrap_or(0)
-                match @internal.obj_get(jv, "item") {
-                  Some(item) =>
-                    match parse_input_item(item, diagnostics) {
-                      Some(ci) => events.push(ItemStart(idx, ci))
-                      None => ()
-                    }
-                  None => ()
-                }
-              }
-              "response.content_part.added" => {
-                let idx = @internal.field_int(jv, "content_index").unwrap_or(0)
-                match @internal.obj_get(jv, "part") {
-                  Some(part) =>
-                    match @internal.field_str(part, "type") {
-                      Some("output_text") => events.push(BlockStart(idx, Text))
-                      Some("refusal") => events.push(BlockStart(idx, Refusal))
-                      _ => ()
-                    }
-                  None => ()
-                }
-              }
-              "response.output_text.delta" => {
-                let idx = @internal.field_int(jv, "content_index").unwrap_or(0)
-                match @internal.field_str(jv, "delta") {
-                  Some(t) =>
-                    events.push(
-                      BlockDelta(idx, @lux.LucentBlockDelta::text_delta(t)),
-                    )
-                  None => ()
-                }
-              }
-              "response.output_text.done" => {
-                let idx = @internal.field_int(jv, "content_index").unwrap_or(0)
-                events.push(BlockEnd(idx))
-              }
-              "response.reasoning_summary_text.delta" => {
-                let idx = @internal.field_int(jv, "content_index").unwrap_or(0)
-                match @internal.field_str(jv, "delta") {
-                  Some(t) =>
-                    events.push(
-                      BlockDelta(idx, @lux.LucentBlockDelta::thinking_delta(t)),
-                    )
-                  None => ()
-                }
-              }
-              "response.reasoning_summary_text.done" => {
-                let idx = @internal.field_int(jv, "content_index").unwrap_or(0)
-                events.push(BlockEnd(idx))
-              }
-              "response.function_call_arguments.delta" => {
-                let idx = @internal.field_int(jv, "output_index").unwrap_or(0)
-                match @internal.field_str(jv, "delta") {
-                  Some(a) =>
-                    events.push(
-                      BlockDelta(
-                        idx,
-                        @lux.LucentBlockDelta::tool_arguments_delta(a),
-                      ),
-                    )
-                  None => ()
-                }
-              }
-              "response.function_call_arguments.done" => {
-                let idx = @internal.field_int(jv, "output_index").unwrap_or(0)
-                events.push(BlockEnd(idx))
-              }
-              "response.completed" => {
-                match @internal.obj_get(jv, "response") {
-                  Some(r) => {
-                    match @internal.field_str(r, "status") {
-                      Some(s) =>
-                        events.push(
-                          Finish(@lux.LucentFinishReason::from_string(s)),
-                        )
-                      None => ()
-                    }
-                    match @internal.obj_get(r, "usage") {
-                      Some(u) => {
-                        let pt = @internal.field_int(u, "input_tokens").unwrap_or(
-                          0,
-                        )
-                        let ct = @internal.field_int(u, "output_tokens").unwrap_or(
-                          0,
-                        )
-                        let tt = @internal.field_int(u, "total_tokens").unwrap_or(
-                          pt + ct,
-                        )
-                        events.push(Usage(@lux.LucentUsage::new(pt, ct, tt)))
-                      }
-                      None => ()
-                    }
-                  }
-                  None => ()
-                }
-                events.push(Done)
-              }
-              "error" =>
-                match @internal.field_str(jv, "error") {
-                  Some(err_msg) =>
-                    events.push(Error(@lux.LucentError::simple(err_msg)))
-                  None => ()
-                }
+          None => ()
+        }
+      }
+      "response.content_part.added" => {
+        let idx = @internal.field_int(jv, "content_index").unwrap_or(0)
+        match @internal.obj_get(jv, "part") {
+          Some(part) =>
+            match @internal.field_str(part, "type") {
+              Some("output_text") => events.push(BlockStart(idx, Text))
+              Some("refusal") => events.push(BlockStart(idx, Refusal))
               _ => ()
             }
-          }
+          None => ()
         }
-        event_type = ""
       }
-      i = i + 1
-      continue
-    }
-    // 跳过注释行（以 : 开头，如心跳 : keep-alive）
-    if line.length() > 0 && line[0] == ':' {
-      i = i + 1
-      continue
-    }
-    // 解析 event: 行
-    if line.length() >= 7 &&
-      line[0] == 'e' &&
-      line[1] == 'v' &&
-      line[2] == 'e' &&
-      line[3] == 'n' &&
-      line[4] == 't' &&
-      line[5] == ':' &&
-      line[6] == ' ' {
-      event_type = ""
-      let mut k = 7
-      while k < line.length() {
-        let ch = Int::unsafe_to_char(line[k].to_int())
-        event_type = event_type + "\{ch}"
-        k = k + 1
+      "response.output_text.delta" => {
+        let idx = @internal.field_int(jv, "content_index").unwrap_or(0)
+        match @internal.field_str(jv, "delta") {
+          Some(t) =>
+            events.push(BlockDelta(idx, @lux.LucentBlockDelta::text_delta(t)))
+          None => ()
+        }
       }
-      i = i + 1
-      continue
-    }
-    // 解析 data: 行（收集内容，多行合并）
-    if line.length() >= 6 &&
-      line[0] == 'd' &&
-      line[1] == 'a' &&
-      line[2] == 't' &&
-      line[3] == 'a' &&
-      line[4] == ':' &&
-      line[5] == ' ' {
-      let mut line_data = ""
-      let mut k = 6
-      while k < line.length() {
-        let ch = Int::unsafe_to_char(line[k].to_int())
-        line_data = line_data + "\{ch}"
-        k = k + 1
+      "response.output_text.done" => {
+        let idx = @internal.field_int(jv, "content_index").unwrap_or(0)
+        events.push(BlockEnd(idx))
       }
-      data_lines.push(line_data)
+      "response.reasoning_summary_text.delta" => {
+        let idx = @internal.field_int(jv, "content_index").unwrap_or(0)
+        match @internal.field_str(jv, "delta") {
+          Some(t) =>
+            events.push(
+              BlockDelta(idx, @lux.LucentBlockDelta::thinking_delta(t)),
+            )
+          None => ()
+        }
+      }
+      "response.reasoning_summary_text.done" => {
+        let idx = @internal.field_int(jv, "content_index").unwrap_or(0)
+        events.push(BlockEnd(idx))
+      }
+      "response.function_call_arguments.delta" => {
+        let idx = @internal.field_int(jv, "output_index").unwrap_or(0)
+        match @internal.field_str(jv, "delta") {
+          Some(a) =>
+            events.push(
+              BlockDelta(idx, @lux.LucentBlockDelta::tool_arguments_delta(a)),
+            )
+          None => ()
+        }
+      }
+      "response.function_call_arguments.done" => {
+        let idx = @internal.field_int(jv, "output_index").unwrap_or(0)
+        events.push(BlockEnd(idx))
+      }
+      "response.completed" => {
+        match @internal.obj_get(jv, "response") {
+          Some(r) => {
+            match @internal.field_str(r, "status") {
+              Some(s) =>
+                events.push(Finish(@lux.LucentFinishReason::from_string(s)))
+              None => ()
+            }
+            match @internal.obj_get(r, "usage") {
+              Some(u) => {
+                let pt = @internal.field_int(u, "input_tokens").unwrap_or(0)
+                let ct = @internal.field_int(u, "output_tokens").unwrap_or(0)
+                let tt = @internal.field_int(u, "total_tokens").unwrap_or(
+                  pt + ct,
+                )
+                events.push(Usage(@lux.LucentUsage::new(pt, ct, tt)))
+              }
+              None => ()
+            }
+          }
+          None => ()
+        }
+        events.push(Done)
+      }
+      "error" =>
+        match @internal.field_str(jv, "error") {
+          Some(err_msg) => events.push(Error(@lux.LucentError::simple(err_msg)))
+          None => ()
+        }
+      _ => ()
     }
     i = i + 1
-  }
-  // 处理流末尾未以空行结束的最后一个事件
-  if data_lines.length() > 0 {
-    let data_str_raw = data_lines.join("\n")
-    // 先清理心跳脏字符，再修复其余无效转义
-    let data_str = @internal.sanitize_json_escapes(
-      @internal.clean_sse_heartbeat(data_str_raw.trim().to_owned()),
-    )
-    if data_str != "" && !@internal.is_json_truncated(data_str) {
-      let jv = @json.parse(data_str) catch { _ => Json::null() }
-      match event_type {
-        "response.completed" => {
-          match @internal.obj_get(jv, "response") {
-            Some(r) => {
-              match @internal.field_str(r, "status") {
-                Some(s) =>
-                  events.push(Finish(@lux.LucentFinishReason::from_string(s)))
-                None => ()
-              }
-              match @internal.obj_get(r, "usage") {
-                Some(u) => {
-                  let pt = @internal.field_int(u, "input_tokens").unwrap_or(0)
-                  let ct = @internal.field_int(u, "output_tokens").unwrap_or(0)
-                  let tt = @internal.field_int(u, "total_tokens").unwrap_or(
-                    pt + ct,
-                  )
-                  events.push(Usage(@lux.LucentUsage::new(pt, ct, tt)))
-                }
-                None => ()
-              }
-            }
-            None => ()
-          }
-          events.push(Done)
-        }
-        _ => ()
-      }
-    }
   }
   let result = @lux.ConversionResult::new(events)
   Ok(result.with_diagnostics(diagnostics))

@@ -1003,179 +1003,145 @@ pub fn openai_sse_to_events(
   sse_str : String,
 ) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String] {
   let events : Array[@lux.LucentStreamEvent] = []
-  let lines = sse_str.split("\n").to_array()
+  let messages = @internal.parse_sse_messages(sse_str)
   let mut text_block_open = false // 是否有未闭合的文本块
   let mut current_tool_block = -1 // 当前工具调用块索引（-1 表示无）
   let mut i = 0
-  while i < lines.length() {
-    let line = lines[i]
-    let line_str = line.to_owned()
-    // 跳过注释行（以 : 开头，如心跳 : keep-alive）
-    if line_str.length() > 0 && line_str[0] == ':' {
+  while i < messages.length() {
+    let payload_raw = messages[i].data.trim().to_owned()
+    // [DONE] 终止信号
+    if payload_raw == "[DONE]" {
+      if text_block_open {
+        events.push(BlockEnd(0))
+        text_block_open = false
+      }
+      if current_tool_block >= 0 {
+        events.push(BlockEnd(current_tool_block))
+        current_tool_block = -1
+      }
+      events.push(Done)
       i = i + 1
       continue
     }
-    // 检查是否为 data: 行（逐字符比较，因为 MoonBit String 无 startsWith 方法）
-    let is_data = if line_str.length() >= 5 {
-      line_str[0] == 'd' &&
-      line_str[1] == 'a' &&
-      line_str[2] == 't' &&
-      line_str[3] == 'a' &&
-      line_str[4] == ':'
-    } else {
-      false
+    // 清理心跳、截断检测、转义清理
+    let payload = @internal.sanitize_json_escapes(
+      @internal.clean_sse_heartbeat(payload_raw),
+    )
+    if @internal.is_json_truncated(payload) {
+      i = i + 1
+      continue
     }
-    if is_data {
-      // 提取 data: 后的内容
-      let mut payload = ""
-      let mut p = 5
-      while p < line_str.length() {
-        let ch = Int::unsafe_to_char(line_str[p].to_int())
-        payload = payload + "\{ch}"
-        p = p + 1
-      }
-      payload = payload.trim().to_owned()
-      if payload == "[DONE]" {
-        // 闭合未关闭的块
-        if text_block_open {
-          events.push(BlockEnd(0))
-          text_block_open = false
-        }
-        if current_tool_block >= 0 {
-          events.push(BlockEnd(current_tool_block))
-          current_tool_block = -1
-        }
-        events.push(Done)
+    let jv = @json.parse(payload) catch {
+      _ => {
         i = i + 1
         continue
       }
-      // 清理 SSE 心跳标记（如 : keep-alive）
-      payload = @internal.clean_sse_heartbeat(payload)
-      // 检测截断的 JSON（字符串未闭合、括号不匹配）
-      if @internal.is_json_truncated(payload) {
-        i = i + 1
-        continue
+    }
+    // usage 帧（choices 空的最后一帧）
+    match @internal.obj_get(jv, "usage") {
+      Some(u) => {
+        let pt = @internal.field_int(u, "prompt_tokens").unwrap_or(0)
+        let ct = @internal.field_int(u, "completion_tokens").unwrap_or(0)
+        let tt = @internal.field_int(u, "total_tokens").unwrap_or(0)
+        events.push(Usage(@lux.LucentUsage::new(pt, ct, tt)))
       }
-      // 清理无效转义序列（某些 API 可能包含 \: 等非标准转义）
-      payload = @internal.sanitize_json_escapes(payload)
-      let jv = @json.parse(payload) catch {
-        _ => {
-          i = i + 1
-          continue
-        }
-      }
-      // usage 帧（choices 空的最后一帧）
-      match @internal.obj_get(jv, "usage") {
-        Some(u) => {
-          let pt = @internal.field_int(u, "prompt_tokens").unwrap_or(0)
-          let ct = @internal.field_int(u, "completion_tokens").unwrap_or(0)
-          let tt = @internal.field_int(u, "total_tokens").unwrap_or(0)
-          events.push(Usage(@lux.LucentUsage::new(pt, ct, tt)))
-        }
-        None => ()
-      }
-      // choices[0].delta
-      match @internal.field_arr(jv, "choices") {
-        Some(choices) =>
-          if choices.length() > 0 {
-            match @internal.obj_get(choices[0], "delta") {
-              Some(delta) => {
-                // role
-                match @internal.field_str(delta, "role") {
-                  Some("assistant") =>
-                    events.push(
-                      ConversationStart(
-                        @lux.LucentConversationMeta::new(None, None, None),
-                      ),
-                    )
-                  _ => ()
-                }
-                // content
-                match @internal.field_str(delta, "content") {
-                  Some(s) => {
-                    if !text_block_open {
-                      events.push(BlockStart(0, Text))
-                      text_block_open = true
-                    }
-                    events.push(
-                      BlockDelta(0, @lux.LucentBlockDelta::text_delta(s)),
-                    )
+      None => ()
+    }
+    // choices[0].delta
+    match @internal.field_arr(jv, "choices") {
+      Some(choices) =>
+        if choices.length() > 0 {
+          match @internal.obj_get(choices[0], "delta") {
+            Some(delta) => {
+              // role
+              match @internal.field_str(delta, "role") {
+                Some("assistant") =>
+                  events.push(
+                    ConversationStart(
+                      @lux.LucentConversationMeta::new(None, None, None),
+                    ),
+                  )
+                _ => ()
+              }
+              // content
+              match @internal.field_str(delta, "content") {
+                Some(s) => {
+                  if !text_block_open {
+                    events.push(BlockStart(0, Text))
+                    text_block_open = true
                   }
-                  None => ()
+                  events.push(
+                    BlockDelta(0, @lux.LucentBlockDelta::text_delta(s)),
+                  )
                 }
-                // 标准 OpenAI Chat 流无 delta.reasoning 字段（vLLM/DeepSeek 扩展由
-                // openai_vllm 子协议承载，见 provider/openai_vllm）
-                // tool_calls
-                match @internal.field_arr(delta, "tool_calls") {
-                  Some(tcs) => {
-                    let mut k = 0
-                    while k < tcs.length() {
-                      let tc = tcs[k]
-                      let idx = @internal.field_int(tc, "index").unwrap_or(0)
-                      // 切换块：若旧块未关闭，先关旧块
-                      if current_tool_block >= 0 && current_tool_block != idx {
-                        events.push(BlockEnd(current_tool_block))
-                      }
-                      if current_tool_block != idx {
-                        // 新工具调用块开始：id + function.name（首帧）
-                        let id = @internal.field_str(tc, "id").unwrap_or("")
-                        let name = match @internal.obj_get(tc, "function") {
-                          Some(fn_obj) =>
-                            @internal.field_str(fn_obj, "name").unwrap_or("")
-                          None => ""
-                        }
-                        events.push(
-                          BlockStart(
-                            idx,
-                            @lux.LucentBlockType::tool_call(id, name),
-                          ),
-                        )
-                        current_tool_block = idx
-                      }
-                      // arguments 增量
-                      match @internal.obj_get(tc, "function") {
+                None => ()
+              }
+              // tool_calls
+              match @internal.field_arr(delta, "tool_calls") {
+                Some(tcs) => {
+                  let mut k = 0
+                  while k < tcs.length() {
+                    let tc = tcs[k]
+                    let idx = @internal.field_int(tc, "index").unwrap_or(0)
+                    if current_tool_block >= 0 && current_tool_block != idx {
+                      events.push(BlockEnd(current_tool_block))
+                    }
+                    if current_tool_block != idx {
+                      let id = @internal.field_str(tc, "id").unwrap_or("")
+                      let name = match @internal.obj_get(tc, "function") {
                         Some(fn_obj) =>
-                          match @internal.field_str(fn_obj, "arguments") {
-                            Some(args) =>
-                              events.push(
-                                BlockDelta(
-                                  idx,
-                                  @lux.LucentBlockDelta::tool_arguments_delta(
-                                    args,
-                                  ),
-                                ),
-                              )
-                            None => ()
-                          }
-                        None => ()
+                          @internal.field_str(fn_obj, "name").unwrap_or("")
+                        None => ""
                       }
-                      k = k + 1
+                      events.push(
+                        BlockStart(
+                          idx,
+                          @lux.LucentBlockType::tool_call(id, name),
+                        ),
+                      )
+                      current_tool_block = idx
                     }
+                    match @internal.obj_get(tc, "function") {
+                      Some(fn_obj) =>
+                        match @internal.field_str(fn_obj, "arguments") {
+                          Some(args) =>
+                            events.push(
+                              BlockDelta(
+                                idx,
+                                @lux.LucentBlockDelta::tool_arguments_delta(
+                                  args,
+                                ),
+                              ),
+                            )
+                          None => ()
+                        }
+                      None => ()
+                    }
+                    k = k + 1
                   }
-                  None => ()
                 }
+                None => ()
               }
-              None => ()
             }
-            // finish_reason
-            match @internal.field_str(choices[0], "finish_reason") {
-              Some(fr) => {
-                // 闭合未关闭的块
-                if text_block_open {
-                  events.push(BlockEnd(0))
-                  text_block_open = false
-                }
-                if current_tool_block >= 0 {
-                  events.push(BlockEnd(current_tool_block))
-                  current_tool_block = -1
-                }
-                events.push(Finish(@lux.LucentFinishReason::from_string(fr)))
-              }
-              None => ()
-            }
+            None => ()
           }
-        None => ()
-      }
+          // finish_reason
+          match @internal.field_str(choices[0], "finish_reason") {
+            Some(fr) => {
+              if text_block_open {
+                events.push(BlockEnd(0))
+                text_block_open = false
+              }
+              if current_tool_block >= 0 {
+                events.push(BlockEnd(current_tool_block))
+                current_tool_block = -1
+              }
+              events.push(Finish(@lux.LucentFinishReason::from_string(fr)))
+            }
+            None => ()
+          }
+        }
+      None => ()
     }
     i = i + 1
   }

@@ -1,12 +1,18 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "morning-start/prism/internal"
 
+import {
+  "moonbitlang/core/debug",
+}
+
 // Values
 pub fn clean_sse_heartbeat(String) -> String
 
 pub fn collect_extra_fields(Json, Array[String]) -> Map[String, Json]?
 
 pub fn extract_sse_events(String) -> Array[String]
+
+pub fn extract_text_content(Json, String) -> Array[String]
 
 pub fn field_arr(Json, String) -> Array[Json]?
 
@@ -30,13 +36,21 @@ pub fn obj_get(Json, String) -> Json?
 
 pub fn obj_set(Json, String, Json) -> Json
 
+pub fn parse_content_polymorphic(Json, String, (Json) -> Array[Json]) -> Array[Json]
+
 pub fn parse_json_opt(String) -> Json?
 
 pub fn parse_protocol_json(String) -> Result[Json, String]
 
 pub fn parse_sse_line(StringView) -> SseLine?
 
+pub fn parse_sse_message(String) -> SseMessage?
+
+pub fn parse_sse_messages(String) -> Array[SseMessage]
+
 pub fn sanitize_json_escapes(String) -> String
+
+pub fn[T] serialize_content_with_text_optimization(Array[T], (T) -> Bool, (T) -> String, (Array[T]) -> String) -> String
 
 // Errors
 
@@ -45,6 +59,11 @@ pub struct SseLine {
   event : String?
   data : String?
 }
+
+pub struct SseMessage {
+  event_type : String?
+  data : String
+} derive(Eq, @debug.Debug)
 
 // Type aliases
 

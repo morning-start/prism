@@ -292,3 +292,101 @@ pub fn collect_extra_fields(
     _ => None
   }
 }
+
+///|
+/// Polymorphic content 解析辅助
+///
+/// LLM API 的 content 字段有三种形态：
+///   - string → 单个文本内容
+///   - array  → 多个内容块
+///   - null / 缺失 → 空
+///
+/// 此函数统一处理这三种形态，对 array 中的每个元素调用 `parse_item` 回调。
+///
+/// 典型用法：
+/// ```
+/// let parts = @internal.parse_content_polymorphic(
+///   msg_jv,
+///   "content",
+///   parse_content_block,
+/// )
+/// ```
+pub fn parse_content_polymorphic(
+  jv : Json,
+  field : String,
+  parse_item : (Json) -> Array[Json],
+) -> Array[Json] {
+  match obj_get(jv, field) {
+    Some(String(s)) => [Json::string(s)]
+    Some(Array(arr)) => {
+      let result : Array[Json] = []
+      let mut i = 0
+      while i < arr.length() {
+        let items = parse_item(arr[i])
+        let mut j = 0
+        while j < items.length() {
+          result.push(items[j])
+          j = j + 1
+        }
+        i = i + 1
+      }
+      result
+    }
+    _ => []
+  }
+}
+
+///|
+/// 从 JSON 对象中提取 content 字段为字符串数组（简化版）
+///
+/// 处理 content 的 string/array/null 三态，返回纯文本片段数组。
+/// 适用于只关心文本内容、不需要结构化解析的场景。
+pub fn extract_text_content(jv : Json, field : String) -> Array[String] {
+  match obj_get(jv, field) {
+    Some(String(s)) => [s]
+    Some(Array(arr)) => {
+      let result : Array[String] = []
+      let mut i = 0
+      while i < arr.length() {
+        match arr[i] {
+          String(s) => result.push(s)
+          Object(_) =>
+            match field_str(arr[i], "text") {
+              Some(t) => result.push(t)
+              None => ()
+            }
+          _ => ()
+        }
+        i = i + 1
+      }
+      result
+    }
+    _ => []
+  }
+}
+
+///|
+/// 内容块序列化辅助 — 单 text part 快速路径
+///
+/// LLM API 的 content 字段常见优化：当只有一个 text 类型的内容块时，
+/// 直接序列化为字符串而非数组。此函数封装该逻辑。
+///
+/// 参数：
+///   - `parts`：内容块数组
+///   - `is_text`：判断某个 part 是否为 text 类型
+///   - `get_text`：从 text part 提取文本
+///   - `serialize_array`：多 part 时的数组序列化回调
+///
+/// 返回：序列化后的字符串（单 text 时为纯字符串，否则为数组 JSON）
+pub fn[T] serialize_content_with_text_optimization(
+  parts : Array[T],
+  is_text : (T) -> Bool,
+  get_text : (T) -> String,
+  serialize_array : (Array[T]) -> String,
+) -> String {
+  if parts.length() == 1 && is_text(parts[0]) {
+    get_text(parts[0])
+  } else {
+    serialize_array(parts)
+  }
+}

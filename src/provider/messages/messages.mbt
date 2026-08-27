@@ -1028,78 +1028,23 @@ pub fn messages_sse_to_events(
   sse_str : String,
 ) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String] {
   let events : Array[@lux.LucentStreamEvent] = []
-  let messages = sse_str.split("\n\n").to_array()
+  let messages = @internal.parse_sse_messages(sse_str)
   let mut i = 0
   while i < messages.length() {
-    let msg = messages[i].to_owned()
-    if msg == "" {
+    let event_type = messages[i].event_type.unwrap_or("")
+    let data_raw = messages[i].data.trim().to_owned()
+    if data_raw == "" {
       i = i + 1
       continue
     }
-    let lines = msg.split("\n").to_array()
-    let mut event_type = ""
-    let mut data_str = ""
-    let mut j = 0
-    while j < lines.length() {
-      let l_str = lines[j].to_owned()
-      // 跳过注释行（以 : 开头，如心跳 : keep-alive）
-      if l_str.length() > 0 && l_str[0] == ':' {
-        j = j + 1
-        continue
-      }
-      // 检查 "event: " 前缀（前 7 个字符）
-      let is_event = l_str.length() >= 7 &&
-        l_str[0] == 'e' &&
-        l_str[1] == 'v' &&
-        l_str[2] == 'e' &&
-        l_str[3] == 'n' &&
-        l_str[4] == 't' &&
-        l_str[5] == ':' &&
-        l_str[6] == ' '
-      // 检查 "data: " 前缀（前 6 个字符，含空格）
-      let is_data = l_str.length() >= 6 &&
-        l_str[0] == 'd' &&
-        l_str[1] == 'a' &&
-        l_str[2] == 't' &&
-        l_str[3] == 'a' &&
-        l_str[4] == ':' &&
-        l_str[5] == ' '
-      if is_event {
-        // 提取 "event: " 后的内容（从第 7 个字符开始）
-        event_type = ""
-        let mut k = 7
-        while k < l_str.length() {
-          let ch = Int::unsafe_to_char(l_str[k].to_int())
-          event_type = event_type + "\{ch}"
-          k = k + 1
-        }
-      } else if is_data {
-        // 提取 "data: " 后的内容（从第 6 个字符开始）
-        data_str = ""
-        let mut k = 6
-        while k < l_str.length() {
-          let ch = Int::unsafe_to_char(l_str[k].to_int())
-          data_str = data_str + "\{ch}"
-          k = k + 1
-        }
-      }
-      j = j + 1
-    }
-    data_str = data_str.trim().to_owned()
-    if data_str == "" {
-      i = i + 1
-      continue
-    }
-    // 清理 SSE 心跳标记（如 : keep-alive）
-    data_str = @internal.clean_sse_heartbeat(data_str)
-    // 检测截断的 JSON（字符串未闭合、括号不匹配）
+    // 清理心跳、截断检测、转义清理
+    let data_str = @internal.sanitize_json_escapes(
+      @internal.clean_sse_heartbeat(data_raw),
+    )
     if @internal.is_json_truncated(data_str) {
-      // 截断的事件，跳过
       i = i + 1
       continue
     }
-    // 清理无效转义序列（某些 API 可能包含非标准转义）
-    data_str = @internal.sanitize_json_escapes(data_str)
     let jv = @json.parse(data_str) catch {
       _ => {
         i = i + 1

@@ -1,8 +1,8 @@
 ///|
-/// 三基础协议（anthropic / openai-responses / openai-chat）互相转发矩阵测试。
+/// 三基础协议（messages / responses / openai）互相转发矩阵测试。
 ///
 /// 覆盖 5 个新方向 × request/response/stream = 15 条链路；
-/// openai-chat → anthropic 方向已由 convert_test.mbt 覆盖，此处不重复。
+/// openai → messages 方向已由 convert_test.mbt 覆盖，此处不重复。
 /// 原则（遵循项目约定）：
 ///   1. 样本统一由 IR 构造器 + 各协议 lux_*_to_* 编码产生，不手写 JSON
 ///   2. 断言方式：convert_* 输出 → target 协议 *_to_lux_* 解码回 IR → 语义保持
@@ -292,10 +292,10 @@ fn verify_stream_forward(
 }
 
 ///|
-/// === convert_request：5 个新方向（openai-chat→anthropic 见 convert_test.mbt）===
+/// === convert_request：5 个新方向（openai→messages 见 convert_test.mbt）===
 
 ///|
-test "convert_request - anthropic to openai-chat" {
+test "convert_request - messages to openai" {
   match verify_request_forward("messages", "openai") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -303,7 +303,7 @@ test "convert_request - anthropic to openai-chat" {
 }
 
 ///|
-test "convert_request - anthropic to openai" {
+test "convert_request - messages to responses" {
   match verify_request_forward("messages", "responses") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -311,7 +311,7 @@ test "convert_request - anthropic to openai" {
 }
 
 ///|
-test "convert_request - openai to anthropic" {
+test "convert_request - responses to messages" {
   match verify_request_forward("responses", "messages") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -319,7 +319,7 @@ test "convert_request - openai to anthropic" {
 }
 
 ///|
-test "convert_request - openai to openai-chat" {
+test "convert_request - responses to openai" {
   match verify_request_forward("responses", "openai") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -327,7 +327,7 @@ test "convert_request - openai to openai-chat" {
 }
 
 ///|
-test "convert_request - openai-chat to openai" {
+test "convert_request - openai to responses" {
   match verify_request_forward("openai", "responses") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -338,7 +338,7 @@ test "convert_request - openai-chat to openai" {
 /// === convert_response：5 个新方向 ===
 
 ///|
-test "convert_response - anthropic to openai-chat" {
+test "convert_response - messages to openai" {
   match verify_response_forward("messages", "openai") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -346,7 +346,7 @@ test "convert_response - anthropic to openai-chat" {
 }
 
 ///|
-test "convert_response - anthropic to openai" {
+test "convert_response - messages to responses" {
   match verify_response_forward("messages", "responses") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -354,7 +354,7 @@ test "convert_response - anthropic to openai" {
 }
 
 ///|
-test "convert_response - openai to anthropic" {
+test "convert_response - responses to messages" {
   match verify_response_forward("responses", "messages") {
     Ok(_) => ()
     Err(e) => fail(e)
