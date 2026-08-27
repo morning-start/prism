@@ -1058,7 +1058,13 @@ pub fn openai_responses_sse_to_events(
                 Json::null()
               }
             }
-            match event_type {
+            // event: 行缺失时，从 JSON 的 type 字段回退推断事件类型
+            let effective_type = if event_type == "" {
+              @internal.field_str(jv, "type").unwrap_or(event_type)
+            } else {
+              event_type
+            }
+            match effective_type {
               "response.created" =>
                 match @internal.obj_get(jv, "response") {
                   Some(r) => {

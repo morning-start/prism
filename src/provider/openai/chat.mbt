@@ -1196,15 +1196,40 @@ pub fn openai_chat_sse_to_events(
 /// - Finish(reason) → data: {"choices":[{"delta":{},"finish_reason":"..."}]}
 /// - Usage(u) → data: {"usage":{...}}
 /// - Done → data: [DONE]
+
+///|
+/// 每个 chunk 的公共前缀：id / object / created / model
+fn chunk_prefix(id : String, model : String, created : Int) -> String {
+  "data: {\"id\":\"" +
+  @internal.json_escape(id) +
+  "\",\"object\":\"chat.completion.chunk\",\"created\":" +
+  created.to_string() +
+  ",\"model\":\"" +
+  @internal.json_escape(model) +
+  "\","
+}
+
+///|
 pub fn lux_events_to_openai_chat_sse(
   events : Array[@lux.LucentStreamEvent],
 ) -> Result[@lux.ConversionResult[String], String] {
   let out : Array[String] = []
   let mut i = 0
+  // 从 ConversationStart 提取，注入每个 chunk
+  let mut chat_id = ""
+  let mut chat_model = ""
+  let mut chat_created : Int = 0
   while i < events.length() {
     match events[i] {
-      ConversationStart(_) =>
-        out.push("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}")
+      ConversationStart(meta) => {
+        chat_id = meta.id.unwrap_or("chatcmpl-0")
+        chat_model = meta.model.unwrap_or("")
+        chat_created = meta.created_at.unwrap_or(0)
+        out.push(
+          chunk_prefix(chat_id, chat_model, chat_created) +
+          "\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}",
+        )
+      }
       ItemStart(_, _) | ItemEnd(_) | BlockDiscard(_) | Annotations(_, _) => ()
       // 块边界在 OpenAI Chat 流中不显式（无 BlockStart/BlockEnd 对应）
       // 但 ToolCall 的 BlockStart 携带 id/name，需编码为 tool_calls 首帧
@@ -1212,7 +1237,8 @@ pub fn lux_events_to_openai_chat_sse(
         match bt {
           ToolCall(id, name) =>
             out.push(
-              "data: {\"choices\":[{\"delta\":{\"tool_calls\":[" +
+              chunk_prefix(chat_id, chat_model, chat_created) +
+              "\"choices\":[{\"delta\":{\"tool_calls\":[" +
               "{\"index\":" +
               idx.to_string() +
               ",\"id\":\"" +
@@ -1228,13 +1254,15 @@ pub fn lux_events_to_openai_chat_sse(
         match delta {
           TextDelta(s) =>
             out.push(
-              "data: {\"choices\":[{\"delta\":{\"content\":\"" +
+              chunk_prefix(chat_id, chat_model, chat_created) +
+              "\"choices\":[{\"delta\":{\"content\":\"" +
               @internal.json_escape(s) +
               "\"}}]}",
             )
           ToolArgumentsDelta(s) =>
             out.push(
-              "data: {\"choices\":[{\"delta\":{\"tool_calls\":[" +
+              chunk_prefix(chat_id, chat_model, chat_created) +
+              "\"choices\":[{\"delta\":{\"tool_calls\":[" +
               "{\"index\":" +
               idx.to_string() +
               ",\"function\":{\"arguments\":\"" +
@@ -1248,13 +1276,16 @@ pub fn lux_events_to_openai_chat_sse(
         }
       Finish(fr) =>
         out.push(
-          "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"" +
+          chunk_prefix(chat_id, chat_model, chat_created) +
+          "\"choices\":[{\"delta\":{},\"finish_reason\":\"" +
           @internal.json_escape(fr.to_string()) +
           "\"}]}",
         )
       Usage(u) =>
+        // 附带空 choices 保证 Chat Completions 格式合法
         out.push(
-          "data: {\"usage\":{\"prompt_tokens\":" +
+          chunk_prefix(chat_id, chat_model, chat_created) +
+          "\"choices\":[],\"usage\":{\"prompt_tokens\":" +
           u.prompt_tokens.to_string() +
           ",\"completion_tokens\":" +
           u.completion_tokens.to_string() +
@@ -1264,7 +1295,8 @@ pub fn lux_events_to_openai_chat_sse(
         )
       Error(e) =>
         out.push(
-          "data: {\"error\":{\"message\":\"" +
+          chunk_prefix(chat_id, chat_model, chat_created) +
+          "\"error\":{\"message\":\"" +
           @internal.json_escape(e.message) +
           "\"}}",
         )
