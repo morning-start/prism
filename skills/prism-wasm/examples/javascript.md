@@ -1,257 +1,344 @@
-# JavaScript/Node.js Examples
+# JavaScript 集成示例
 
-Direct prism.wasm usage without wrappers.
+本示例展示如何在 JavaScript/Node.js 中直接使用 `prism.wasm` 进行协议转换。
 
-## Helper Functions
-
-```javascript
-const fs = require('fs');
-
-function writeString(memory, ptr, str) {
-  const byteLen = str.length * 2;
-  new DataView(memory.buffer).setUint32(ptr - 4, byteLen, true);
-  const view = new Uint16Array(memory.buffer, ptr, str.length);
-  for (let i = 0; i < str.length; i++) view[i] = str.charCodeAt(i);
-}
-
-function readString(memory, ptr) {
-  const byteLen = new DataView(memory.buffer).getUint32(ptr - 4, true);
-  const view = new Uint16Array(memory.buffer, ptr, byteLen / 2);
-  return String.fromCharCode(...view);
-}
-
-function parseResult(result) {
-  if (result.includes('"error"')) {
-    throw new Error(JSON.parse(result).error);
-  }
-  return JSON.parse(result).value;
-}
-```
-
-## Load WASM
-
-```javascript
-async function loadPrism() {
-  const wasmBytes = fs.readFileSync('prism.wasm');
-  const { instance } = await WebAssembly.instantiate(wasmBytes);
-  return instance;
-}
-```
-
-## Gateway Pattern
-
-### Complete Gateway Class
+## 完整 Gateway 实现
 
 ```javascript
 class PrismGateway {
-  constructor(instance) {
+  constructor() {
+    this.instance = null;
+    this.memory = null;
+  }
+
+  /**
+   * 初始化 WASM 实例
+   * @param {string} wasmPath - wasm 文件路径
+   */
+  async init(wasmPath = 'prism.wasm') {
+    const wasmBytes = await fetch(wasmPath).then(r => r.arrayBuffer());
+    this.memory = new WebAssembly.Memory({ initial: 256, maximum: 65536 });
+    const { instance } = await WebAssembly.instantiate(wasmBytes, {
+      env: { memory: this.memory }
+    });
     this.instance = instance;
-    this.memory = instance.exports.memory;
-    this.bufPtr = instance.exports.wasm_init_scratch(24576);
-    this.logPtr = instance.exports.wasm_log_init(16384);
+    return this;
   }
 
-  _writeArgs(...args) {
-    for (let i = 0; i < args.length; i++) {
-      writeString(this.memory, this.bufPtr + i * 8192, args[i]);
-    }
+  /**
+   * 写入字符串到 WASM 内存
+   * @param {string} str - 要写入的字符串
+   * @returns {{ ptr: number, len: number }}
+   */
+  _writeString(str) {
+    const bytes = new TextEncoder().encode(str);
+    const len = bytes.length;
+    const ptr = this.instance.exports.wasm_init_scratch(len + 4);
+    new DataView(this.memory.buffer).setUint32(ptr - 4, len, true);
+    new Uint8Array(this.memory.buffer, ptr, len).set(bytes);
+    return { ptr, len };
   }
 
-  _readArgs(count) {
-    return Array.from({ length: count }, (_, i) =>
-      this.instance.exports.wasm_read_scratch_arg(this.bufPtr, i * 8192)
-    );
-  }
-
-  // Request: Client Protocol → Server Protocol
-  convertRequest(clientProtocol, requestJSON, serverProtocol) {
-    this._writeArgs(clientProtocol, requestJSON, serverProtocol);
-    const [src, json, tgt] = this._readArgs(3);
-    const resultPtr = this.instance.exports.wasm_convert_req(src, json, tgt);
-    return parseResult(readString(this.memory, resultPtr));
-  }
-
-  // Response: Server Protocol → Client Protocol
-  convertResponse(serverProtocol, responseJSON, clientProtocol) {
-    this._writeArgs(serverProtocol, responseJSON, clientProtocol);
-    const [src, json, tgt] = this._readArgs(3);
-    const resultPtr = this.instance.exports.wasm_convert_resp(src, json, tgt);
-    return parseResult(readString(this.memory, resultPtr));
-  }
-
-  // Single Stream Event: Server Protocol → Client Protocol
-  convertStreamEvent(serverProtocol, sseEvent, clientProtocol) {
-    this._writeArgs(serverProtocol, sseEvent, clientProtocol);
-    const [src, evt, tgt] = this._readArgs(3);
-    const resultPtr = this.instance.exports.wasm_convert_stream_event(src, evt, tgt);
-    return parseResult(readString(this.memory, resultPtr));
-  }
-
-  // Full Stream: Server Protocol → Client Protocol
-  convertStream(serverProtocol, sseText, clientProtocol) {
-    this._writeArgs(serverProtocol, sseText, clientProtocol);
-    const [src, sse, tgt] = this._readArgs(3);
-    const resultPtr = this.instance.exports.wasm_convert_stream(src, sse, tgt);
-    return parseResult(readString(this.memory, resultPtr));
-  }
-
-  // With logging
-  convertRequestTrace(clientProtocol, requestJSON, serverProtocol) {
-    this._writeArgs(clientProtocol, requestJSON, serverProtocol);
-    const [src, json, tgt] = this._readArgs(3);
-    const resultPtr = this.instance.exports.wasm_convert_req_trace(
-      src, json, tgt, this.logPtr, 16384
-    );
-    const result = parseResult(readString(this.memory, resultPtr));
-    const logs = this._readLogs();
-    return { result, logs };
-  }
-
-  _readLogs() {
-    const pos = this.instance.exports.wasm_log_pos(this.logPtr);
-    const bytes = new Uint8Array(this.memory.buffer, this.logPtr + 4, pos - 4);
+  /**
+   * 从 WASM 内存读取字符串
+   * @param {number} ptr - 字符串指针
+   * @returns {string}
+   */
+  _readString(ptr) {
+    const len = new DataView(this.memory.buffer).getUint32(ptr - 4, true);
+    const bytes = new Uint8Array(this.memory.buffer, ptr, len);
     return new TextDecoder().decode(bytes);
   }
 
+  /**
+   * 转换请求
+   * @param {string} clientProto - 客户端协议 (openai/anthropic/gemini)
+   * @param {object} request - 请求体
+   * @param {string} serverProto - 服务端协议
+   * @returns {object} 转换后的请求
+   */
+  convertRequest(clientProto, request, serverProto) {
+    const reqJson = JSON.stringify(request);
+    const resultPtr = this.instance.exports.wasm_convert_req(
+      clientProto, reqJson, serverProto
+    );
+    return JSON.parse(this._readString(resultPtr));
+  }
+
+  /**
+   * 转换响应
+   * @param {string} serverProto - 服务端协议
+   * @param {object} response - 响应体
+   * @param {string} clientProto - 客户端协议
+   * @returns {object} 转换后的响应
+   */
+  convertResponse(serverProto, response, clientProto) {
+    const respJson = JSON.stringify(response);
+    const resultPtr = this.instance.exports.wasm_convert_resp(
+      serverProto, respJson, clientProto
+    );
+    return JSON.parse(this._readString(resultPtr));
+  }
+
+  /**
+   * 转换流式事件
+   * @param {string} serverProto - 服务端协议
+   * @param {object} event - SSE 事件
+   * @param {string} clientProto - 客户端协议
+   * @returns {object} 转换后的事件
+   */
+  convertStreamEvent(serverProto, event, clientProto) {
+    const eventJson = JSON.stringify(event);
+    const resultPtr = this.instance.exports.wasm_convert_stream_event(
+      serverProto, eventJson, clientProto
+    );
+    return JSON.parse(this._readString(resultPtr));
+  }
+
+  /**
+   * 转换完整流
+   * @param {string} serverProto - 服务端协议
+   * @param {object[]} events - SSE 事件数组
+   * @param {string} clientProto - 客户端协议
+   * @returns {object} 转换后的事件数组
+   */
+  convertStream(serverProto, events, clientProto) {
+    const eventsJson = JSON.stringify(events);
+    const resultPtr = this.instance.exports.wasm_convert_stream(
+      serverProto, eventsJson, clientProto
+    );
+    return JSON.parse(this._readString(resultPtr));
+  }
+
+  /**
+   * 带 trace 的请求转换
+   * @param {string} clientProto - 客户端协议
+   * @param {object} request - 请求体
+   * @param {string} serverProto - 服务端协议
+   * @returns {object} 包含 trace 的转换结果
+   */
+  convertRequestTrace(clientProto, request, serverProto) {
+    const reqJson = JSON.stringify(request);
+    const resultPtr = this.instance.exports.wasm_convert_req_trace(
+      clientProto, reqJson, serverProto
+    );
+    return JSON.parse(this._readString(resultPtr));
+  }
+
+  /**
+   * 列出支持的 Provider
+   * @returns {string[]} Provider ID 列表
+   */
   listProviders() {
     const resultPtr = this.instance.exports.wasm_list_providers();
-    return JSON.parse(readString(this.memory, resultPtr));
+    return JSON.parse(this._readString(resultPtr));
   }
 }
+
+export default PrismGateway;
 ```
 
-### Express Gateway Server
+## Express 网关服务器
 
 ```javascript
-const express = require('express');
+import express from 'express';
+import PrismGateway from './prism-gateway.js';
 
-async function main() {
-  const instance = await loadPrism();
-  const gateway = new PrismGateway(instance);
-  const app = express();
-  app.use(express.json());
+const app = express();
+app.use(express.json());
 
-  // OpenAI → Anthropic proxy
-  app.post('/v1/chat/completions', async (req, res) => {
-    try {
-      // Convert request: OpenAI → Anthropic
-      const anthropicReq = gateway.convertRequest(
-        'openai',
-        JSON.stringify(req.body),
-        'anthropic'
-      );
+// 初始化 Gateway
+const gateway = new PrismGateway();
+await gateway.init('prism.wasm');
 
-      // Forward to Anthropic API
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': process.env.ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify(anthropicReq),
-      });
-      const anthropicResp = await resp.json();
+console.log('Supported providers:', gateway.listProviders());
 
-      // Convert response: Anthropic → OpenAI
-      const openaiResp = gateway.convertResponse(
-        'anthropic',
-        JSON.stringify(anthropicResp),
-        'openai'
-      );
+/**
+ * 通用协议转换端点
+ * POST /convert
+ * Body: { clientProto, serverProto, request }
+ */
+app.post('/convert', async (req, res) => {
+  try {
+    const { clientProto, serverProto, request } = req.body;
+    const converted = gateway.convertRequest(clientProto, request, serverProto);
+    res.json({ success: true, data: converted });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
 
-      res.json(openaiResp);
-    } catch (err) {
-      res.status(500).json({ error: err.message });
-    }
-  });
+/**
+ * OpenAI -> Anthropic 代理
+ * POST /v1/chat/completions
+ */
+app.post('/v1/chat/completions', async (req, res) => {
+  try {
+    // 转换请求: OpenAI -> Anthropic
+    const anthropicReq = gateway.convertRequest('openai', req.body, 'anthropic');
 
-  app.listen(3000, () => console.log('Gateway on :3000'));
-}
+    // 发送到 Anthropic API
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify(anthropicReq)
+    });
 
-main();
-```
+    const anthropicResp = await response.json();
 
-### Streaming Gateway
+    // 转换响应: Anthropic -> OpenAI
+    const openaiResp = gateway.convertResponse('anthropic', anthropicResp, 'openai');
+    res.json(openaiResp);
+  } catch (error) {
+    res.status(500).json({ error: { message: error.message, type: 'server_error' } });
+  }
+});
 
-```javascript
+/**
+ * 流式代理端点
+ * POST /v1/chat/completions/stream
+ */
 app.post('/v1/chat/completions/stream', async (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
+  try {
+    // 转换请求
+    const anthropicReq = gateway.convertRequest('openai', req.body, 'anthropic');
 
-  // Convert request
-  const anthropicReq = gateway.convertRequest('openai', JSON.stringify(req.body), 'anthropic');
+    // 设置 SSE
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive'
+    });
 
-  // Stream from Anthropic
-  const resp = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({ ...anthropicReq, stream: true }),
-  });
+    // 发送到 Anthropic (流式)
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({ ...anthropicReq, stream: true })
+    });
 
-  const reader = resp.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
+    // 处理 SSE 流
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    buffer += decoder.decode(value, { stream: true });
-    const events = buffer.split('\n\n');
-    buffer = events.pop();
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
 
-    for (const event of events) {
-      if (event.trim() && event.includes('data:')) {
-        // Convert each SSE event: Anthropic → OpenAI
-        const openaiEvent = gateway.convertStreamEvent('anthropic', event + '\n\n', 'openai');
-        res.write(`data: ${JSON.stringify(openaiEvent)}\n\n`);
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (data === '[DONE]') {
+            res.write('data: [DONE]\n\n');
+            continue;
+          }
+
+          try {
+            const event = JSON.parse(data);
+            // 转换事件: Anthropic -> OpenAI
+            const converted = gateway.convertStreamEvent('anthropic', event, 'openai');
+            res.write(`data: ${JSON.stringify(converted)}\n\n`);
+          } catch (e) {
+            // 忽略解析错误
+          }
+        }
       }
     }
+
+    res.end();
+  } catch (error) {
+    res.status(500).json({ error: { message: error.message, type: 'server_error' } });
+  }
+});
+
+// 启动服务器
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Prism Gateway running on port ${PORT}`);
+});
+```
+
+## 纯 WASM 调用示例
+
+```javascript
+// 不使用 Gateway 包装器，直接调用 WASM
+async function directWasmCall() {
+  // 加载 WASM
+  const wasmBytes = await fetch('prism.wasm').then(r => r.arrayBuffer());
+  const memory = new WebAssembly.Memory({ initial: 256, maximum: 65536 });
+  const { instance } = await WebAssembly.instantiate(wasmBytes, {
+    env: { memory }
+  });
+
+  // 辅助函数
+  function writeString(str) {
+    const bytes = new TextEncoder().encode(str);
+    const len = bytes.length;
+    const ptr = instance.exports.wasm_init_scratch(len + 4);
+    new DataView(memory.buffer).setUint32(ptr - 4, len, true);
+    new Uint8Array(memory.buffer, ptr, len).set(bytes);
+    return ptr;
   }
 
-  res.write('data: [DONE]\n\n');
-  res.end();
-});
+  function readString(ptr) {
+    const len = new DataView(memory.buffer).getUint32(ptr - 4, true);
+    const bytes = new Uint8Array(memory.buffer, ptr, len);
+    return new TextDecoder().decode(bytes);
+  }
+
+  // OpenAI 请求
+  const openaiRequest = {
+    model: 'gpt-4',
+    messages: [
+      { role: 'user', content: 'Hello!' }
+    ],
+    temperature: 0.7
+  };
+
+  // 转换: OpenAI -> Anthropic
+  const reqJson = JSON.stringify(openaiRequest);
+  const resultPtr = instance.exports.wasm_convert_req('openai', reqJson, 'anthropic');
+  const anthropicRequest = JSON.parse(readString(resultPtr));
+
+  console.log('Converted request:', anthropicRequest);
+
+  // 假设收到 Anthropic 响应
+  const anthropicResponse = {
+    id: 'msg_123',
+    type: 'message',
+    role: 'assistant',
+    content: [{ type: 'text', text: 'Hello! How can I help you?' }],
+    model: 'claude-3-opus-20240229',
+    stop_reason: 'end_turn'
+  };
+
+  // 转换: Anthropic -> OpenAI
+  const respJson = JSON.stringify(anthropicResponse);
+  const respPtr = instance.exports.wasm_convert_resp('anthropic', respJson, 'openai');
+  const openaiResponse = JSON.parse(readString(respPtr));
+
+  console.log('Converted response:', openaiResponse);
+}
+
+directWasmCall().catch(console.error);
 ```
 
-## Simple Examples
+## 使用说明
 
-### Convert Request
-
-```javascript
-const instance = await loadPrism();
-const gateway = new PrismGateway(instance);
-
-const openaiReq = JSON.stringify({
-  model: 'gpt-4o',
-  messages: [{ role: 'user', content: 'Hello' }]
-});
-
-const anthropicReq = gateway.convertRequest('openai', openaiReq, 'anthropic');
-console.log(anthropicReq);
-```
-
-### List Providers
-
-```javascript
-const providers = gateway.listProviders();
-console.log(providers);
-// ['openai', 'anthropic', 'gemini', ...]
-```
-
-### With Logging
-
-```javascript
-const { result, logs } = gateway.convertRequestTrace('openai', openaiReq, 'anthropic');
-console.log('Result:', result);
-console.log('Logs:', logs);
-// [INFO] convert_req: start: openai → anthropic
-// [DEBUG] convert_req: input length: 123 chars
-// [INFO] convert_req: success: 456 chars
-```
+1. 确保 `prism.wasm` 文件在可访问的路径
+2. Gateway 类封装了字符串 ABI 的复杂性
+3. Express 示例展示了完整的代理服务器实现
+4. 流式处理使用 SSE (Server-Sent Events) 协议

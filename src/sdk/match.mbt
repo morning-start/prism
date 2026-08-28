@@ -236,3 +236,18 @@ fn contains_after(s : String, skip_prefix : String, needle : String) -> Bool {
   let rest = substring(s, skip_prefix.length(), s.length())
   rest.contains(needle)
 }
+
+///|
+/// Resolve a provider name or model to one registry entry.
+///
+/// Centralizes normalization and the stable unknown-provider error used by
+/// request, response, and stream conversion paths.
+fn resolve_provider(
+  provider_name : String,
+) -> Result[ProviderRegistration, String] {
+  let provider_key = normalize_provider_key(provider_name)
+  match match_provider_name(provider_key) {
+    Some(reg) => Ok(reg)
+    None => Err("unknown provider: " + provider_key)
+  }
+}

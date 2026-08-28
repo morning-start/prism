@@ -56,3 +56,19 @@ test "registry - request_encode returns ConversionResult" {
     None => fail("provider not found")
   }
 }
+
+///|
+test "resolve_provider normalizes aliases" {
+  match resolve_provider("  google  ") {
+    Ok(reg) => assert_eq(reg.name, "gemini")
+    Err(e) => fail("resolve failed: \{e}")
+  }
+}
+
+///|
+test "resolve_provider returns normalized unknown-provider error" {
+  match resolve_provider("  not-a-provider  ") {
+    Ok(_) => fail("expected unknown provider error")
+    Err(e) => assert_eq(e, "unknown provider: not-a-provider")
+  }
+}
