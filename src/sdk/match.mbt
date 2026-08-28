@@ -5,6 +5,12 @@
 /// Go 最佳实践：小文件、单一职责，匹配逻辑与注册表解耦。
 
 ///|
+/// 去除输入两端空白，保证 ABI/HTTP 边界上的路由一致。
+fn normalize_provider_key(value : String) -> String {
+  value.trim().to_owned()
+}
+
+///|
 /// 根据名称匹配 Provider
 ///
 /// 匹配策略：
@@ -13,18 +19,19 @@
 ///
 /// 若只想按模型名匹配，直接调用 `match_by_model`。
 pub fn match_provider_name(provider_name : String) -> ProviderRegistration? {
+  let provider_key = normalize_provider_key(provider_name)
   let providers = providers_cache
   let mut i = 0
   while i < providers.length() {
     let reg = providers[i]
     // 1. 精确匹配主名称
-    if reg.name == provider_name {
+    if reg.name == provider_key {
       return Some(reg)
     }
     // 2. 匹配别名
     let mut j = 0
     while j < reg.aliases.length() {
-      if reg.aliases[j] == provider_name {
+      if reg.aliases[j] == provider_key {
         return Some(reg)
       }
       j = j + 1
@@ -32,7 +39,7 @@ pub fn match_provider_name(provider_name : String) -> ProviderRegistration? {
     i = i + 1
   }
   // 3. 未命中名称时，把输入当作模型名匹配最具体的注册项
-  match_by_model(provider_name)
+  match_by_model(provider_key)
 }
 
 ///|
@@ -40,6 +47,7 @@ pub fn match_provider_name(provider_name : String) -> ProviderRegistration? {
 ///
 /// 返回最具体的匹配（字面约束越多、通配符越少越优先），或 None。
 pub fn match_by_model(model_name : String) -> ProviderRegistration? {
+  let model_key = normalize_provider_key(model_name)
   let providers = providers_cache
   let mut best : ProviderRegistration? = None
   let mut best_score = 0
@@ -49,7 +57,7 @@ pub fn match_by_model(model_name : String) -> ProviderRegistration? {
     let score = pattern_specificity(reg.model_pattern)
     if score > 0 &&
       score > best_score &&
-      model_pattern_matches(reg.model_pattern, model_name) {
+      model_pattern_matches(reg.model_pattern, model_key) {
       best = Some(reg)
       best_score = score
     }
