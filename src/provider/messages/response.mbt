@@ -1,0 +1,118 @@
+///|
+/// 3. messages_to_lux_response — 响应解码
+pub fn messages_to_lux_response(
+  json_str : String,
+) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
+  let jv = match @internal.parse_protocol_json(json_str) {
+    Ok(v) => v
+    Err(e) => return Err(e)
+  }
+  let id = @internal.field_str(jv, "id").unwrap_or("")
+  let model = @internal.field_str(jv, "model").unwrap_or("")
+  // content blocks → assistant message content
+  let content = match @internal.field_arr(jv, "content") {
+    Some(blocks) => parse_content_blocks(blocks)
+    None => []
+  }
+  let msg = @lux.LucentMessage::new(Assistant, content)
+  // stop_reason → finish_reason
+  let finish = match @internal.field_str(jv, "stop_reason") {
+    Some("end_turn") => @lux.Stop
+    Some("max_tokens") => Length
+    Some("tool_use") => ToolCalls
+    Some("stop_sequence") => Stop
+    Some(other) => @lux.LucentFinishReason::from_string(other)
+    None => Stop
+  }
+  let choice = @lux.LucentChoice::new(0, msg, finish, None)
+  // usage（cached_tokens / cache_creation_tokens 可选，暂不传）
+  let usage = match @internal.obj_get(jv, "usage") {
+    Some(u) => {
+      let (pt, ct, tt) = @internal.parse_usage_json(
+        u,
+        "input_tokens",
+        "output_tokens",
+        None,
+      )
+      Some(@lux.LucentUsage::new(pt, ct, tt))
+    }
+    None => None
+  }
+  Ok(
+    @lux.ConversionResult::new(
+      @lux.LucentResponse::new(id, model, None, [choice], usage, None),
+    ),
+  )
+}
+
+///|
+/// 4. lux_response_to_messages — 响应编码
+pub fn lux_response_to_messages(
+  resp : @lux.LucentResponse,
+) -> Result[@lux.ConversionResult[String], String] {
+  if resp.choices.length() == 0 {
+    return Err("response has no choices")
+  }
+  let diagnostics : Array[@lux.ConversionDiagnostic] = []
+  let choice = resp.choices[0]
+  // content blocks
+  let content_blocks : Array[String] = []
+  // 消息级 reasoning 优先（vLLM/DeepSeek 入站 → IR → Anthropic 出站），前置为 thinking block
+  match choice.message.reasoning {
+    Some(th) => content_blocks.push(thinking_to_block(th))
+    None => ()
+  }
+  let mut i = 0
+  while i < choice.message.content.length() {
+    // 双载体并存：消息级 reasoning 已输出，content 中 Thinking block 跳过 → Degraded
+    if @lux.skip_thinking_when_dual_carrier(
+        choice.message.content[i],
+        choice.message.reasoning,
+        diagnostics,
+      ) {
+      i = i + 1
+      continue
+    }
+    let block = content_to_block(choice.message.content[i], diagnostics)
+    if block != "" {
+      content_blocks.push(block)
+    }
+    i = i + 1
+  }
+  let content_json = "[" + content_blocks.join(",") + "]"
+  // stop_reason
+  let stop_reason = match choice.finish_reason {
+    Stop => "\"end_turn\""
+    Length => "\"max_tokens\""
+    ToolCalls => "\"tool_use\""
+    ContentFilter => "\"content_filter\""
+    Safety => "\"end_turn\""
+    Recitation => "\"end_turn\""
+    MalformedToolCall => "\"end_turn\""
+    Error => "\"end_turn\""
+    Native(s) => "\"" + @internal.json_escape(s) + "\""
+  }
+  // usage
+  let usage_json = match resp.usage {
+    Some(u) =>
+      ",\"usage\":{\"input_tokens\":" +
+      u.prompt_tokens.to_string() +
+      ",\"output_tokens\":" +
+      u.completion_tokens.to_string() +
+      "}"
+    None => ""
+  }
+  let body = "{\"id\":\"" +
+    @internal.json_escape(resp.id) +
+    "\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"" +
+    @internal.json_escape(resp.model) +
+    "\",\"content\":" +
+    content_json +
+    ",\"stop_reason\":" +
+    stop_reason +
+    ",\"stop_sequence\":null" +
+    usage_json +
+    "}"
+  let result = @lux.ConversionResult::new(body)
+  Ok(result.with_diagnostics(diagnostics))
+}

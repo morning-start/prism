@@ -38,7 +38,7 @@ pub fn match_provider_name(provider_name : String) -> ProviderRegistration? {
 ///|
 /// 根据 model_name 匹配 Provider（通过 model_pattern 子串匹配）
 ///
-/// 返回最具体的匹配（pattern 中 * 越多越优先），或 None。
+/// 返回最具体的匹配（字面约束越多、通配符越少越优先），或 None。
 pub fn match_by_model(model_name : String) -> ProviderRegistration? {
   let providers = providers_cache
   let mut best : ProviderRegistration? = None
@@ -175,8 +175,9 @@ fn pattern_specificity(pattern : String) -> Int {
   let mut best = 0
   let mut i = 0
   while i < parts.length() {
-    let count = count_star(parts[i])
-    let score = count * 1000 + parts[i].length()
+    let stars = count_star(parts[i])
+    let literals = parts[i].length() - stars
+    let score = literals * 1000 - stars
     if score > best {
       best = score
     }
