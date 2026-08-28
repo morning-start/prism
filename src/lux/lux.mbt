@@ -1242,3 +1242,84 @@ pub fn lucent_content_to_text(parts : Array[LucentContent]) -> String {
   }
   buf.join("")
 }
+
+///|
+/// 检测并处理 reasoning dual_carrier 场景
+///
+/// 当消息级 reasoning（vLLM/DeepSeek）与 content 中的 Thinking 块并存时，
+/// 优先使用消息级 reasoning，跳过 content Thinking 块，并记录 Degraded 诊断。
+///
+/// 用法：在适配器编码循环中，对每个 content 块调用此函数：
+/// ```
+/// if skip_thinking_when_dual_carrier(content[i], reasoning, diagnostics) {
+///   i = i + 1
+///   continue
+/// }
+/// ```
+///
+/// 返回 `true` 表示当前块应跳过（Thinking 块 + reasoning 已存在）。
+pub fn skip_thinking_when_dual_carrier(
+  content : LucentContent,
+  reasoning : LucentThinking?,
+  diagnostics : Array[ConversionDiagnostic],
+) -> Bool {
+  match content {
+    Thinking(_) =>
+      match reasoning {
+        Some(_) => {
+          diagnostics.push(
+            ConversionDiagnostic::degraded(
+              "reasoning.dual_carrier",
+              Some(
+                "both message.reasoning and content Thinking present; using message.reasoning",
+              ),
+            ),
+          )
+          true
+        }
+        None => false
+      }
+    _ => false
+  }
+}
+
+///|
+/// 构造 unsupported content 诊断并推入诊断数组
+///
+/// 统一 `ConversionDiagnostic::unsupported("content.xxx", Some("..."))` 模式。
+/// 适配器编码循环中遇到不支持的内容类型时调用。
+///
+/// 用法：
+/// ```
+/// push_unsupported_content("audio", "openai-chat", diagnostics)
+/// // 生成: unsupported("content.audio", "audio content not supported by openai-chat")
+/// ```
+pub fn push_unsupported_content(
+  type_name : String,
+  adapter : String,
+  diagnostics : Array[ConversionDiagnostic],
+) -> Unit {
+  diagnostics.push(
+    ConversionDiagnostic::unsupported(
+      "content." + type_name,
+      Some(type_name + " content not supported by " + adapter),
+    ),
+  )
+}
+
+///|
+/// 构造 unsupported feature 诊断并推入诊断数组
+///
+/// 更通用的版本，用于非 content 类型的 unsupported 诊断（如 tools.kind, options.store 等）。
+///
+/// 用法：
+/// ```
+/// push_unsupported("tools.kind", "tool kind not supported by gemini", diagnostics)
+/// ```
+pub fn push_unsupported(
+  field : String,
+  detail : String,
+  diagnostics : Array[ConversionDiagnostic],
+) -> Unit {
+  diagnostics.push(ConversionDiagnostic::unsupported(field, Some(detail)))
+}

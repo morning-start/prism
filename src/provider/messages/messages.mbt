@@ -539,39 +539,25 @@ fn content_to_block(
           @internal.json_escape(data) +
           "\"}}"
         FileUri(_) => {
-          diagnostics.push(
-            @lux.ConversionDiagnostic::unsupported(
-              "content.file",
-              Some("file_uri file source not supported by anthropic"),
-            ),
+          @lux.push_unsupported(
+            "content.file", "file_uri file source not supported by anthropic", diagnostics,
           )
           ""
         }
       }
     Audio(_) => {
-      diagnostics.push(
-        @lux.ConversionDiagnostic::unsupported(
-          "content.audio",
-          Some("audio content not supported by anthropic"),
-        ),
-      )
+      @lux.push_unsupported_content("audio", "anthropic", diagnostics)
       ""
     }
     Video(_) => {
-      diagnostics.push(
-        @lux.ConversionDiagnostic::unsupported(
-          "content.video",
-          Some("video content not supported by anthropic"),
-        ),
-      )
+      @lux.push_unsupported_content("video", "anthropic", diagnostics)
       ""
     }
     Native(tag, _) => {
-      diagnostics.push(
-        @lux.ConversionDiagnostic::unsupported(
-          "content.native",
-          Some("native content (" + tag + ") not supported by anthropic"),
-        ),
+      @lux.push_unsupported(
+        "content.native",
+        "native content (" + tag + ") not supported by anthropic",
+        diagnostics,
       )
       ""
     }
@@ -919,9 +905,12 @@ pub fn messages_to_lux_response(
   // usage（cached_tokens / cache_creation_tokens 可选，暂不传）
   let usage = match @internal.obj_get(jv, "usage") {
     Some(u) => {
-      let pt = @internal.field_int(u, "input_tokens").unwrap_or(0)
-      let ct = @internal.field_int(u, "output_tokens").unwrap_or(0)
-      let tt = pt + ct
+      let (pt, ct, tt) = @internal.parse_usage_json(
+        u,
+        "input_tokens",
+        "output_tokens",
+        None,
+      )
       Some(@lux.LucentUsage::new(pt, ct, tt))
     }
     None => None
@@ -953,24 +942,13 @@ pub fn lux_response_to_messages(
   let mut i = 0
   while i < choice.message.content.length() {
     // 双载体并存：消息级 reasoning 已输出，content 中 Thinking block 跳过 → Degraded
-    match choice.message.content[i] {
-      Thinking(_) =>
-        match choice.message.reasoning {
-          Some(_) => {
-            diagnostics.push(
-              @lux.ConversionDiagnostic::degraded(
-                "reasoning.dual_carrier",
-                Some(
-                  "both message.reasoning and content Thinking present; using message.reasoning",
-                ),
-              ),
-            )
-            i = i + 1
-            continue
-          }
-          None => ()
-        }
-      _ => ()
+    if @lux.skip_thinking_when_dual_carrier(
+        choice.message.content[i],
+        choice.message.reasoning,
+        diagnostics,
+      ) {
+      i = i + 1
+      continue
     }
     let block = content_to_block(choice.message.content[i], diagnostics)
     if block != "" {
@@ -1154,7 +1132,12 @@ pub fn messages_sse_to_events(
         }
         match @internal.obj_get(jv, "usage") {
           Some(u) => {
-            let ot = @internal.field_int(u, "output_tokens").unwrap_or(0)
+            let (_, ot, _) = @internal.parse_usage_json(
+              u,
+              "input_tokens",
+              "output_tokens",
+              None,
+            )
             events.push(Usage(@lux.LucentUsage::new(0, ot, ot)))
           }
           None => ()

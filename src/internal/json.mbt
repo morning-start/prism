@@ -390,3 +390,28 @@ pub fn[T] serialize_content_with_text_optimization(
     serialize_array(parts)
   }
 }
+
+///|
+/// 从 JSON 对象中解析 token 用量
+///
+/// 统一四个适配器的 usage 解析模式。每个协议的字段名不同：
+/// - OpenAI: `prompt_tokens` / `completion_tokens` / `total_tokens`
+/// - Anthropic: `input_tokens` / `output_tokens`（无 total，需计算）
+/// - Responses: `input_tokens` / `output_tokens` / `total_tokens`
+/// - Gemini: `promptTokenCount` / `candidatesTokenCount` / `totalTokenCount`
+///
+/// `tt_key` 为 None 时，total = pt + ct。
+pub fn parse_usage_json(
+  u : Json,
+  pt_key : String,
+  ct_key : String,
+  tt_key : String?,
+) -> (Int, Int, Int) {
+  let pt = field_int(u, pt_key).unwrap_or(0)
+  let ct = field_int(u, ct_key).unwrap_or(0)
+  let tt = match tt_key {
+    Some(key) => field_int(u, key).unwrap_or(pt + ct)
+    None => pt + ct
+  }
+  (pt, ct, tt)
+}

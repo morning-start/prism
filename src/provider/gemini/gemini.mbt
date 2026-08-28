@@ -854,9 +854,12 @@ pub fn gemini_to_lux_response(
   // usage
   let usage = match @internal.obj_get(jv, "usageMetadata") {
     Some(u) => {
-      let pt = @internal.field_int(u, "promptTokenCount").unwrap_or(0)
-      let ct = @internal.field_int(u, "candidatesTokenCount").unwrap_or(0)
-      let tt = @internal.field_int(u, "totalTokenCount").unwrap_or(pt + ct)
+      let (pt, ct, tt) = @internal.parse_usage_json(
+        u,
+        "promptTokenCount",
+        "candidatesTokenCount",
+        Some("totalTokenCount"),
+      )
       @lux.LucentUsage::new(pt, ct, tt)
     }
     None => @lux.LucentUsage::new(0, 0, 0)
@@ -894,24 +897,13 @@ pub fn lux_response_to_gemini(
     let mut j = 0
     while j < c.message.content.length() {
       // 双载体并存：消息级 reasoning 已输出，content 中 Thinking part 跳过 → Degraded
-      match c.message.content[j] {
-        Thinking(_) =>
-          match c.message.reasoning {
-            Some(_) => {
-              diagnostics.push(
-                @lux.ConversionDiagnostic::degraded(
-                  "reasoning.dual_carrier",
-                  Some(
-                    "both message.reasoning and content Thinking present; using message.reasoning",
-                  ),
-                ),
-              )
-              j = j + 1
-              continue
-            }
-            None => ()
-          }
-        _ => ()
+      if @lux.skip_thinking_when_dual_carrier(
+          c.message.content[j],
+          c.message.reasoning,
+          diagnostics,
+        ) {
+        j = j + 1
+        continue
       }
       match c.message.content[j] {
         Text(s, _) =>
@@ -1155,9 +1147,12 @@ pub fn gemini_sse_to_events(
     // usageMetadata（最后一帧含 finishReason）
     match @internal.obj_get(jv, "usageMetadata") {
       Some(u) => {
-        let pt = @internal.field_int(u, "promptTokenCount").unwrap_or(0)
-        let ct = @internal.field_int(u, "candidatesTokenCount").unwrap_or(0)
-        let tt = @internal.field_int(u, "totalTokenCount").unwrap_or(pt + ct)
+        let (pt, ct, tt) = @internal.parse_usage_json(
+          u,
+          "promptTokenCount",
+          "candidatesTokenCount",
+          Some("totalTokenCount"),
+        )
         events.push(Usage(@lux.LucentUsage::new(pt, ct, tt)))
         events.push(Done)
       }

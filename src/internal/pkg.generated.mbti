@@ -48,6 +48,8 @@ pub fn parse_sse_message(String) -> SseMessage?
 
 pub fn parse_sse_messages(String) -> Array[SseMessage]
 
+pub fn parse_usage_json(Json, String, String, String?) -> (Int, Int, Int)
+
 pub fn sanitize_json_escapes(String) -> String
 
 pub fn[T] serialize_content_with_text_optimization(Array[T], (T) -> Bool, (T) -> String, (Array[T]) -> String) -> String

@@ -241,3 +241,24 @@ test "extract_sse_events - multi-line data with heartbeat" {
   assert_eq(events.length(), 1)
   assert_eq(events[0], "line1\nline2")
 }
+
+///|
+test "parse_sse_messages - accepts CRLF boundaries" {
+  let messages = @internal.parse_sse_messages(
+    "data: {\"x\":1}\r\n\r\ndata: {\"x\":2}\r\n\r\n",
+  )
+  assert_eq(messages.length(), 2)
+  assert_eq(messages[0].data, "{\"x\":1}")
+  assert_eq(messages[1].data, "{\"x\":2}")
+}
+
+///|
+test "parse_sse_message - strips CR from event and data" {
+  match @internal.parse_sse_message("event: done\r\ndata: ok\r\n") {
+    Some(message) => {
+      assert_eq(message.event_type, Some("done"))
+      assert_eq(message.data, "ok")
+    }
+    None => fail("expected SSE message")
+  }
+}

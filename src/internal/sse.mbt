@@ -162,7 +162,10 @@ pub struct SseMessage {
 ///
 /// 返回 None 表示空块或纯注释块。
 pub fn parse_sse_message(msg_block : String) -> SseMessage? {
-  let lines = msg_block.split("\n").to_array()
+  let normalized = msg_block
+    .replace(old="\r\n", new="\n")
+    .replace(old="\r", new="\n")
+  let lines = normalized.split("\n").to_array()
   let mut event_type : String? = None
   let data_parts : Array[String] = []
   let mut i = 0
@@ -206,7 +209,11 @@ pub fn parse_sse_message(msg_block : String) -> SseMessage? {
 /// 跳过空块和纯注释块。
 pub fn parse_sse_messages(sse_str : String) -> Array[SseMessage] {
   let messages : Array[SseMessage] = []
-  let blocks = sse_str.split("\n\n").to_array()
+  // HTTP/SSE streams commonly use CRLF; normalize all line endings first.
+  let normalized = sse_str
+    .replace(old="\r\n", new="\n")
+    .replace(old="\r", new="\n")
+  let blocks = normalized.split("\n\n").to_array()
   let mut i = 0
   while i < blocks.length() {
     let block = blocks[i].to_owned()

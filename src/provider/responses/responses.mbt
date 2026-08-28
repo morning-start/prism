@@ -293,11 +293,8 @@ fn parse_reasoning(
 ) -> @lux.LucentReasoningConfig? {
   match @internal.obj_get(jv, "reasoning") {
     Some(_) => {
-      diagnostics.push(
-        @lux.ConversionDiagnostic::unsupported(
-          "reasoning.config",
-          Some("reasoning config not parsed by openai-responses"),
-        ),
+      @lux.push_unsupported(
+        "reasoning.config", "reasoning config not parsed by openai-responses", diagnostics,
       )
       None
     }
@@ -470,22 +467,16 @@ pub fn lux_request_to_responses(
                     "\"}",
                   )
                 Url(url) => {
-                  diagnostics.push(
-                    @lux.ConversionDiagnostic::unsupported(
-                      "content.file",
-                      Some("url file source not supported by openai-responses"),
-                    ),
+                  @lux.push_unsupported(
+                    "content.file", "url file source not supported by openai-responses",
+                    diagnostics,
                   )
                   let _ = url
                 }
                 FileUri(_) =>
-                  diagnostics.push(
-                    @lux.ConversionDiagnostic::unsupported(
-                      "content.file",
-                      Some(
-                        "file_uri file source not supported by openai-responses",
-                      ),
-                    ),
+                  @lux.push_unsupported(
+                    "content.file", "file_uri file source not supported by openai-responses",
+                    diagnostics,
                   )
               }
             _ => ()
@@ -641,11 +632,8 @@ pub fn lux_request_to_responses(
             )
           CodeExecution | Shell | ApplyPatch =>
             // Responses 无对应原生工具类型：不静默降级为 function，显式 Unsupported
-            diagnostics.push(
-              @lux.ConversionDiagnostic::unsupported(
-                "tools.kind",
-                Some("tool kind not supported by openai-responses"),
-              ),
+            @lux.push_unsupported(
+              "tools.kind", "tool kind not supported by openai-responses", diagnostics,
             )
         }
         j = j + 1
@@ -837,9 +825,12 @@ pub fn responses_json_to_lux_response(
   // usage
   let usage = match @internal.obj_get(jv, "usage") {
     Some(u) => {
-      let pt = @internal.field_int(u, "input_tokens").unwrap_or(0)
-      let ct = @internal.field_int(u, "output_tokens").unwrap_or(0)
-      let tt = @internal.field_int(u, "total_tokens").unwrap_or(pt + ct)
+      let (pt, ct, tt) = @internal.parse_usage_json(
+        u,
+        "input_tokens",
+        "output_tokens",
+        Some("total_tokens"),
+      )
       @lux.LucentUsage::new(pt, ct, tt)
     }
     None => @lux.LucentUsage::new(0, 0, 0)
@@ -906,24 +897,13 @@ pub fn lux_response_to_responses(
   let mut i = 0
   while i < choice.message.content.length() {
     // 双载体并存：消息级 reasoning 已输出，content 中 Thinking block 跳过 → Degraded
-    match choice.message.content[i] {
-      Thinking(_) =>
-        match choice.message.reasoning {
-          Some(_) => {
-            diagnostics.push(
-              @lux.ConversionDiagnostic::degraded(
-                "reasoning.dual_carrier",
-                Some(
-                  "both message.reasoning and content Thinking present; using message.reasoning",
-                ),
-              ),
-            )
-            i = i + 1
-            continue
-          }
-          None => ()
-        }
-      _ => ()
+    if @lux.skip_thinking_when_dual_carrier(
+        choice.message.content[i],
+        choice.message.reasoning,
+        diagnostics,
+      ) {
+      i = i + 1
+      continue
     }
     match choice.message.content[i] {
       Text(s, _) =>

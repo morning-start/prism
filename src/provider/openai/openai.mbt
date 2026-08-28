@@ -404,27 +404,15 @@ fn content_field_to_json(
                 "\"}}",
               )
             FileUri(_) =>
-              diagnostics.push(
-                @lux.ConversionDiagnostic::unsupported(
-                  "content.image",
-                  Some("file_uri image source not supported by openai-chat"),
-                ),
+              @lux.push_unsupported(
+                "content.image", "file_uri image source not supported by openai-chat",
+                diagnostics,
               )
           }
         Audio(_) =>
-          diagnostics.push(
-            @lux.ConversionDiagnostic::unsupported(
-              "content.audio",
-              Some("audio content not supported by openai-chat"),
-            ),
-          )
+          @lux.push_unsupported_content("audio", "openai-chat", diagnostics)
         Video(_) =>
-          diagnostics.push(
-            @lux.ConversionDiagnostic::unsupported(
-              "content.video",
-              Some("video content not supported by openai-chat"),
-            ),
-          )
+          @lux.push_unsupported_content("video", "openai-chat", diagnostics)
         _ => ()
       }
       j = j + 1
@@ -477,39 +465,22 @@ fn content_part_to_json(
     }
     Image(_) => None // 图片由 content_field_to_json 以数组形式（image_url）编码
     File(_) => {
-      // OpenAI Chat 无文件载体（仅图片 image_url 与工具），显式 Unsupported 诊断
-      diagnostics.push(
-        @lux.ConversionDiagnostic::unsupported(
-          "content.file",
-          Some("file content not supported by openai-chat"),
-        ),
-      )
+      @lux.push_unsupported_content("file", "openai-chat", diagnostics)
       None
     }
     Audio(_) => {
-      diagnostics.push(
-        @lux.ConversionDiagnostic::unsupported(
-          "content.audio",
-          Some("audio content not supported by openai-chat"),
-        ),
-      )
+      @lux.push_unsupported_content("audio", "openai-chat", diagnostics)
       None
     }
     Video(_) => {
-      diagnostics.push(
-        @lux.ConversionDiagnostic::unsupported(
-          "content.video",
-          Some("video content not supported by openai-chat"),
-        ),
-      )
+      @lux.push_unsupported_content("video", "openai-chat", diagnostics)
       None
     }
     Native(tag, _) => {
-      diagnostics.push(
-        @lux.ConversionDiagnostic::unsupported(
-          "content.native",
-          Some("native content (" + tag + ") not supported by openai-chat"),
-        ),
+      @lux.push_unsupported(
+        "content.native",
+        "native content (" + tag + ") not supported by openai-chat",
+        diagnostics,
       )
       None
     }
@@ -868,14 +839,15 @@ pub fn openai_to_lux_response(
   let choices = parse_choices(jv)
   // usage
   let usage = match @internal.obj_get(jv, "usage") {
-    Some(u) =>
-      Some(
-        @lux.LucentUsage::new(
-          @internal.field_int(u, "prompt_tokens").unwrap_or(0),
-          @internal.field_int(u, "completion_tokens").unwrap_or(0),
-          @internal.field_int(u, "total_tokens").unwrap_or(0),
-        ),
+    Some(u) => {
+      let (pt, ct, tt) = @internal.parse_usage_json(
+        u,
+        "prompt_tokens",
+        "completion_tokens",
+        Some("total_tokens"),
       )
+      Some(@lux.LucentUsage::new(pt, ct, tt))
+    }
     None => None
   }
   Ok(
@@ -1040,9 +1012,12 @@ pub fn openai_sse_to_events(
     // usage 帧（choices 空的最后一帧）
     match @internal.obj_get(jv, "usage") {
       Some(u) => {
-        let pt = @internal.field_int(u, "prompt_tokens").unwrap_or(0)
-        let ct = @internal.field_int(u, "completion_tokens").unwrap_or(0)
-        let tt = @internal.field_int(u, "total_tokens").unwrap_or(0)
+        let (pt, ct, tt) = @internal.parse_usage_json(
+          u,
+          "prompt_tokens",
+          "completion_tokens",
+          Some("total_tokens"),
+        )
         events.push(Usage(@lux.LucentUsage::new(pt, ct, tt)))
       }
       None => ()
