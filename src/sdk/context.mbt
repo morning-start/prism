@@ -98,6 +98,8 @@ fn Context::push_msg(self : Context, msg : SdkMessage) -> Context {
   new_msgs.push(msg)
   { ..self, messages: new_msgs }
 }
+
+///|
 /// 注入工具执行结果（Agent 循环：执行工具后继续对话）
 pub fn Context::add_tool_result(
   self : Context,

@@ -143,7 +143,6 @@ fn single_pattern_matches(pattern : String, model_name : String) -> Bool {
 ///|
 /// 逗号分隔 pattern 拆分为数组（如 "gpt-*,o*" -> ["gpt-*" "o*"]）
 fn pattern_parts(pattern : String) -> Array[String] {
-  
   let result : Array[String] = []
   for part in pattern.split(",") {
     result.push(part.to_owned())

@@ -89,8 +89,8 @@ pub fn clean_sse_heartbeat(s : String) -> String {
   }
   // 第二类：无反斜杠心跳标记，仅移除字符串末尾
   let trailing_patterns = [
-    ": keep-alive.", ": keep-alive", ":keep-alive.", ":keep-alive",
-    ": heartbeat.", ": heartbeat", ":heartbeat.", ":heartbeat",
+    ": keep-alive.", ": keep-alive", ":keep-alive.", ":keep-alive", ": heartbeat.",
+    ": heartbeat", ":heartbeat.", ":heartbeat",
   ]
   for pattern in trailing_patterns {
     if result.length() >= pattern.length() {

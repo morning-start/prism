@@ -478,4 +478,3 @@ pub fn LucentOptions::with_extras(
 ) -> LucentOptions {
   { ..self, extras, }
 }
-

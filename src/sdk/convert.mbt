@@ -37,11 +37,11 @@ fn resolve_pair(
 ) -> Result[(ProviderRegistration, ProviderRegistration), String] {
   let src = match match_provider_name(source) {
     Some(reg) => reg
-    None => { return Err("unknown provider: " + source) }
+    None => return Err("unknown provider: " + source)
   }
   let dst = match match_provider_name(target) {
     Some(reg) => reg
-    None => { return Err("unknown provider: " + target) }
+    None => return Err("unknown provider: " + target)
   }
   Ok((src, dst))
 }
@@ -99,11 +99,7 @@ pub fn convert_response(
 ) -> Result[@lux.ConversionResult[String], String] {
   match resolve_pair(source, target) {
     Ok((src, dst)) =>
-      decode_encode_response(
-        json_str,
-        src.response_decode,
-        dst.response_encode,
-      )
+      decode_encode_response(json_str, src.response_decode, dst.response_encode)
     Err(e) => Err(e)
   }
 }

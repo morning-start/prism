@@ -1,9 +1,12 @@
+///|
 /// SDK 默认 provider 名称（Prism::new() 使用）
 pub const DEFAULT_PROVIDER : String = "openai"
 
 ///|
 /// SDK 默认模型名称（请求编码时的 fallback）
 pub const DEFAULT_MODEL : String = "gpt-4o"
+
+///|
 /// ConversionMeta — 转换来源元信息（D8）
 ///
 /// 回答"这个 LUX 值是从哪个协议解码来的"，并附带转换损失诊断
@@ -90,6 +93,7 @@ pub fn Prism::with_provider(_self : Prism, name : String) -> Prism {
   { provider: name }
 }
 
+///|
 /// 从文本和选项构建 LucentRequest（消除 3 处重复的 Context→model→request 样板）
 fn build_request_from_text(
   text : String,
@@ -206,7 +210,9 @@ fn Prism::decode_to_lux(
   self : Prism,
   json_str : String,
 ) -> Result[@lux.LucentResponse, String] {
-  dispatch_provider(self.provider, fn(reg) -> Result[@lux.LucentResponse, String] {
+  dispatch_provider(self.provider, fn(
+    reg,
+  ) -> Result[@lux.LucentResponse, String] {
     match (reg.response_decode)(json_str) {
       Ok(cr) => Ok(cr.value())
       Err(e) => Err(e)
@@ -300,7 +306,9 @@ fn decode_sse_inner(
   provider : String,
   sse_str : String,
 ) -> Result[Array[@lux.LucentStreamEvent], String] {
-  dispatch_provider(provider, fn(reg) -> Result[Array[@lux.LucentStreamEvent], String] {
+  dispatch_provider(provider, fn(
+    reg,
+  ) -> Result[Array[@lux.LucentStreamEvent], String] {
     match (reg.events_decode)(sse_str) {
       Ok(cr) => Ok(cr.value())
       Err(e) => Err(e)
