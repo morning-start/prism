@@ -673,3 +673,15 @@ test "meta - special field handling via if branch" {
   }
   assert_eq(handle_special_if_any(chat), "normal")
 }
+
+///|
+test "provider matching - trims boundary whitespace" {
+  match match_provider_name(" google ") {
+    Some(r) => assert_eq(r.name, "gemini")
+    None => fail("whitespace should not affect provider alias matching")
+  }
+  match match_by_model(" claude-sonnet-4 ") {
+    Some(r) => assert_eq(r.name, "messages")
+    None => fail("whitespace should not affect model matching")
+  }
+}

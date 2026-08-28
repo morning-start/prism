@@ -101,7 +101,7 @@ pub fn ProviderRegistration::new(
 /// 每次调用返回独立数组，调用方可安全修改；内部匹配路径改用
 /// `providers_cache` 避免重复构造。
 pub fn all_providers() -> Array[ProviderRegistration] {
-  build_providers()
+  providers_cache.copy()
 }
 
 ///|

@@ -72,9 +72,5 @@ fn merge_diagnostics(
   main : @lux.ConversionResult[String],
   other_diags : Array[@lux.ConversionDiagnostic],
 ) -> @lux.ConversionResult[String] {
-  let mut merged = main
-  for d in other_diags {
-    merged = merged.with_diagnostic(d)
-  }
-  merged
+  main.with_diagnostics(other_diags)
 }
