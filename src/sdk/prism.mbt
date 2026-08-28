@@ -90,8 +90,15 @@ pub fn Prism::with_provider(_self : Prism, name : String) -> Prism {
   { provider: name }
 }
 
-///|
-/// === 请求编码 / 响应解码 ===
+/// 从文本和选项构建 LucentRequest（消除 3 处重复的 Context→model→request 样板）
+fn build_request_from_text(
+  text : String,
+  opts : PrismOptions,
+) -> @lux.LucentRequest {
+  let ctx = Context::new().add_user(text)
+  let model = opts.model.unwrap_or(DEFAULT_MODEL)
+  context_to_lux_request(ctx, model, opts)
+}
 
 ///|
 /// 将文本请求编码为提供商 JSON（L1：文本进，JSON 出）
@@ -100,14 +107,7 @@ pub fn Prism::encode_request(
   text : String,
   opts : PrismOptions,
 ) -> Result[String, String] {
-  let ctx = Context::new()
-  let ctx = ctx.add_user(text)
-  let model = match opts.model {
-    Some(m) => m
-    None => DEFAULT_MODEL
-  }
-  let req = context_to_lux_request(ctx, model, opts)
-  self.encode_lux_request(req)
+  self.encode_lux_request(build_request_from_text(text, opts))
 }
 
 ///|
@@ -177,13 +177,7 @@ pub fn Prism::encode_request_with_diagnostics(
   text : String,
   opts : PrismOptions,
 ) -> Result[@lux.ConversionResult[String], String] {
-  let ctx = Context::new()
-  let ctx = ctx.add_user(text)
-  let model = match opts.model {
-    Some(m) => m
-    None => DEFAULT_MODEL
-  }
-  let req = context_to_lux_request(ctx, model, opts)
+  let req = build_request_from_text(text, opts)
   let mut result = @lux.ConversionResult::new(req)
   match get_schema(self.provider) {
     Some(schema) =>
@@ -212,15 +206,12 @@ fn Prism::decode_to_lux(
   self : Prism,
   json_str : String,
 ) -> Result[@lux.LucentResponse, String] {
-  let provider = self.provider
-  match resolve_provider(provider) {
-    Ok(reg) =>
-      match (reg.response_decode)(json_str) {
-        Ok(cr) => Ok(cr.value())
-        Err(e) => Err(e)
-      }
-    Err(e) => Err(e)
-  }
+  dispatch_provider(self.provider, fn(reg) -> Result[@lux.LucentResponse, String] {
+    match (reg.response_decode)(json_str) {
+      Ok(cr) => Ok(cr.value())
+      Err(e) => Err(e)
+    }
+  })
 }
 
 ///|
@@ -229,15 +220,12 @@ fn Prism::encode_lux_request(
   self : Prism,
   req : @lux.LucentRequest,
 ) -> Result[String, String] {
-  let provider = self.provider
-  match resolve_provider(provider) {
-    Ok(reg) =>
-      match (reg.request_encode)(req) {
-        Ok(cr) => Ok(cr.value())
-        Err(e) => Err(e)
-      }
-    Err(e) => Err(e)
-  }
+  dispatch_provider(self.provider, fn(reg) -> Result[String, String] {
+    match (reg.request_encode)(req) {
+      Ok(cr) => Ok(cr.value())
+      Err(e) => Err(e)
+    }
+  })
 }
 
 ///|
@@ -250,13 +238,7 @@ pub fn Prism::encode_stream_request(
   text : String,
   opts : PrismOptions,
 ) -> Result[String, String] {
-  let ctx = Context::new()
-  let ctx = ctx.add_user(text)
-  let model = match opts.model {
-    Some(m) => m
-    None => DEFAULT_MODEL
-  }
-  let mut req = context_to_lux_request(ctx, model, opts)
+  let mut req = build_request_from_text(text, opts)
   req = @lux.LucentRequest::with_stream(req, true)
   self.encode_lux_request(req)
 }
@@ -318,14 +300,12 @@ fn decode_sse_inner(
   provider : String,
   sse_str : String,
 ) -> Result[Array[@lux.LucentStreamEvent], String] {
-  match resolve_provider(provider) {
-    Ok(reg) =>
-      match (reg.events_decode)(sse_str) {
-        Ok(cr) => Ok(cr.value())
-        Err(e) => Err(e)
-      }
-    Err(e) => Err(e)
-  }
+  dispatch_provider(provider, fn(reg) -> Result[Array[@lux.LucentStreamEvent], String] {
+    match (reg.events_decode)(sse_str) {
+      Ok(cr) => Ok(cr.value())
+      Err(e) => Err(e)
+    }
+  })
 }
 
 ///|

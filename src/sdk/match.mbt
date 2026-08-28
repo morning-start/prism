@@ -143,31 +143,12 @@ fn single_pattern_matches(pattern : String, model_name : String) -> Bool {
 ///|
 /// 逗号分隔 pattern 拆分为数组（如 "gpt-*,o*" -> ["gpt-*" "o*"]）
 fn pattern_parts(pattern : String) -> Array[String] {
+  
   let result : Array[String] = []
-  let mut pos = 0
-  while pos < pattern.length() {
-    let comma = find_comma(pattern, pos)
-    if comma == -1 {
-      result.push(pattern[pos:pattern.length()].to_owned())
-      pos = pattern.length()
-    } else {
-      result.push(pattern[pos:comma].to_owned())
-      pos = comma + 1
-    }
+  for part in pattern.split(",") {
+    result.push(part.to_owned())
   }
   result
-}
-
-///|
-fn find_comma(s : String, start : Int) -> Int {
-  let mut i = start
-  while i < s.length() {
-    if s[i] == ',' {
-      return i
-    }
-    i = i + 1
-  }
-  -1
 }
 
 ///|
@@ -195,15 +176,7 @@ fn pattern_specificity(pattern : String) -> Int {
 ///|
 /// 统计字符串中 * 的个数
 fn count_star(s : String) -> Int {
-  let mut total = 0
-  let mut i = 0
-  while i < s.length() {
-    if s[i] == '*' {
-      total = total + 1
-    }
-    i = i + 1
-  }
-  total
+  s.length() - s.replace(old="*", new="").length()
 }
 
 ///|
@@ -247,5 +220,18 @@ fn resolve_provider(
   match match_provider_name(provider_key) {
     Some(reg) => Ok(reg)
     None => Err("unknown provider: " + provider_key)
+  }
+}
+
+///|
+/// 通用 provider 分发：resolve → 调用函数指针 → 返回结果。
+/// 消除 prism.mbt 中 3 处重复的 resolve→call→Ok/Err 样板。
+fn[T] dispatch_provider(
+  provider : String,
+  apply : (ProviderRegistration) -> Result[T, String],
+) -> Result[T, String] {
+  match resolve_provider(provider) {
+    Ok(reg) => apply(reg)
+    Err(e) => Err(e)
   }
 }

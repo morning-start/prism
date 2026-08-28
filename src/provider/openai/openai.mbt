@@ -18,6 +18,54 @@
 /// === 请求解码：OpenAI Chat JSON → LucentRequest ===
 
 ///|
+/// 解析 data URI：data:image/png;base64,xxx → (media_type, base64_data)
+fn parse_data_uri(url : String) -> (String, String)? {
+  if url.length() < 5 || url[0] != 'd' || url[4] != ':' {
+    return None
+  }
+  let segs = url.split(";").to_array()
+  if segs.length() < 2 {
+    return None
+  }
+  let media_type_parts = segs[0].split(":").to_array()
+  let body_parts = segs[1].split(",").to_array()
+  let media_type = if media_type_parts.length() >= 2 {
+    media_type_parts[1].to_owned()
+  } else {
+    "image/png"
+  }
+  let data = if body_parts.length() >= 2 {
+    body_parts[1].to_owned()
+  } else {
+    ""
+  }
+  if data == "" { None } else { Some((media_type, data)) }
+}
+
+///|
+/// 解析 image_url 类型的 content part → LucentContent::Image
+fn parse_image_url_part(part : Json) -> @lux.LucentContent? {
+  match @internal.obj_get(part, "image_url") {
+    Some(url_obj) =>
+      match @internal.field_str(url_obj, "url") {
+        Some(u) =>
+          if u == "" {
+            None
+          } else {
+            match parse_data_uri(u) {
+              Some((media_type, data)) =>
+                Some(@lux.LucentContent::image(media_type, @lux.LucentMediaSource::inline(data)))
+              None =>
+                Some(@lux.LucentContent::image("image/png", @lux.LucentMediaSource::url(u)))
+            }
+          }
+        None => None
+      }
+    None => None
+  }
+}
+
+///|
 /// 解析 content：string → [Text]；array → content parts（text/image_url）
 fn parse_content_parts(msg_jv : Json) -> Array[@lux.LucentContent] {
   match @internal.obj_get(msg_jv, "content") {
@@ -34,48 +82,8 @@ fn parse_content_parts(msg_jv : Json) -> Array[@lux.LucentContent] {
               _ => ()
             }
           Some("image_url") =>
-            // stub：简化处理，仅当 url 以 data: 开头时识别为 inline，否则为 url
-            match @internal.obj_get(part, "image_url") {
-              Some(url_obj) =>
-                match @internal.field_str(url_obj, "url") {
-                  Some(u) =>
-                    if u == "" {
-                      ()
-                    } else if u[0] == 'd' && u.length() > 5 && u[4] == ':' {
-                      // data:image/png;base64,xxx → 拆出 media_type + 纯 base64 存 Inline
-                      let segs = u.split(";").to_array()
-                      if segs.length() >= 2 {
-                        let media_type_parts = segs[0].split(":").to_array()
-                        let body_parts = segs[1].split(",").to_array()
-                        let media_type = if media_type_parts.length() >= 2 {
-                          media_type_parts[1].to_owned()
-                        } else {
-                          "image/png"
-                        }
-                        let data = if body_parts.length() >= 2 {
-                          body_parts[1].to_owned()
-                        } else {
-                          ""
-                        }
-                        if data != "" {
-                          result.push(
-                            @lux.LucentContent::image(
-                              media_type,
-                              @lux.LucentMediaSource::inline(data),
-                            ),
-                          )
-                        }
-                      }
-                    } else {
-                      result.push(
-                        @lux.LucentContent::image(
-                          "image/png",
-                          @lux.LucentMediaSource::url(u),
-                        ),
-                      )
-                    }
-                  None => ()
-                }
+            match parse_image_url_part(part) {
+              Some(img) => result.push(img)
               None => ()
             }
           _ => ()

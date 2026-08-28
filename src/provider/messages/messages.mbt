@@ -673,28 +673,10 @@ pub fn lux_request_to_messages(
           "}]}",
         )
       Reasoning(th) =>
-        // Reasoning → assistant 消息含 thinking block
-        if th.redacted {
-          msgs_json.push(
-            "{\"role\":\"assistant\",\"content\":[{\"type\":\"redacted_thinking\"" +
-            (match th.signature {
-              Some(s) => ",\"signature\":\"" + @internal.json_escape(s) + "\""
-              None => ""
-            }) +
-            "}]}",
-          )
-        } else {
-          msgs_json.push(
-            "{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"" +
-            @internal.json_escape(th.text) +
-            "\"" +
-            (match th.signature {
-              Some(s) => ",\"signature\":\"" + @internal.json_escape(s) + "\""
-              None => ""
-            }) +
-            "}]}",
-          )
-        }
+        // Reasoning → assistant 消息含 thinking block（复用 thinking_to_block）
+        msgs_json.push(
+          "{\"role\":\"assistant\",\"content\":[" + thinking_to_block(th) + "]}",
+        )
       AgentAction(_) => ()
     }
     i = i + 1
@@ -799,7 +781,7 @@ pub fn lux_request_to_messages(
       parts.push(
         "\"output_config\":{\"format\":{\"type\":\"json_schema\",\"schema\":" +
         schema +
-        "}",
+        "}}",
       )
     _ => ()
   }

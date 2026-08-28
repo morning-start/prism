@@ -76,39 +76,29 @@ pub fn field_int_exact(jv : Json, key : String) -> Int? {
 
 ///|
 /// 清理 JSON 字符串中的 SSE 心跳标记
-///
-/// 某些 SSE 实现会在数据后附加心跳标记（如 `: keep-alive`），
-/// 或把心跳注释行错误合并进 JSON payload（产生 `\: keep-alive.` 等
-/// 无效转义序列），导致 JSON 字符串中混入非法内容。此函数移除这些标记。
 pub fn clean_sse_heartbeat(s : String) -> String {
   let mut result = s.trim_end().to_owned()
-  // 第一类：带反斜杠的心跳片段（`\:` 是非法 JSON 转义，正常数据中不会出现，
-  // 只可能来自心跳行被错误合并进 payload，可安全全局移除）
-  let escaped_patterns = [
-    "\\: keep-alive.", "\\: keep-alive", "\\:keep-alive.", "\\:keep-alive", "\\: heartbeat.",
-    "\\: heartbeat", "\\:heartbeat.", "\\:heartbeat",
-  ]
-  let mut k = 0
-  while k < escaped_patterns.length() {
-    result = result.replace(old=escaped_patterns[k], new="")
-    k = k + 1
+  // 第一类：带反斜杠的心跳片段（`\:` 是非法 JSON 转义，全局移除）
+  let escaped_prefixes = ["\\: ", "\\:"]
+  let heartbeat_words = ["keep-alive", "heartbeat"]
+  for prefix in escaped_prefixes {
+    for word in heartbeat_words {
+      result = result.replace(old=prefix + word + ".", new="")
+      result = result.replace(old=prefix + word, new="")
+    }
   }
-  // 第二类：无反斜杠心跳标记（可能带句点），仅移除字符串末尾的标记
-  let heartbeat_patterns = [
-    ": keep-alive.", ": keep-alive", ":keep-alive.", ":keep-alive", ": heartbeat.",
-    ": heartbeat", ":heartbeat.", ":heartbeat",
+  // 第二类：无反斜杠心跳标记，仅移除字符串末尾
+  let trailing_patterns = [
+    ": keep-alive.", ": keep-alive", ":keep-alive.", ":keep-alive",
+    ": heartbeat.", ": heartbeat", ":heartbeat.", ":heartbeat",
   ]
-  let mut j = 0
-  while j < heartbeat_patterns.length() {
-    let pattern = heartbeat_patterns[j]
-    // 允许 result 恰好等于 pattern（纯心跳行）
+  for pattern in trailing_patterns {
     if result.length() >= pattern.length() {
       let suffix = result[result.length() - pattern.length():result.length()].to_owned()
       if suffix == pattern {
         result = result[0:result.length() - pattern.length()].to_owned()
       }
     }
-    j = j + 1
   }
   result
 }

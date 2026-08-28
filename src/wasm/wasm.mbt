@@ -102,6 +102,26 @@ fn fixed_bytes_ptr_to_int(b : FixedArray[Byte]) -> Int = "%identity"
 fn int_to_fixed_bytes(ptr : Int) -> FixedArray[Byte] = "%identity"
 
 ///|
+/// 从 FixedArray[Byte] 读取 u32 LE 值（4 字节）
+fn read_le32(buf : FixedArray[Byte], offset : Int) -> Int {
+  buf[offset]
+    .to_int()
+    .land(0xFF)
+    .lor(buf[offset + 1].to_int().land(0xFF) << 8)
+    .lor(buf[offset + 2].to_int().land(0xFF) << 16)
+    .lor(buf[offset + 3].to_int().land(0xFF) << 24)
+}
+
+///|
+/// 向 FixedArray[Byte] 写入 u32 LE 值（4 字节）
+fn write_le32(buf : FixedArray[Byte], offset : Int, value : Int) -> Unit {
+  buf[offset] = value.land(0xFF).to_byte()
+  buf[offset + 1] = (value >> 8).land(0xFF).to_byte()
+  buf[offset + 2] = (value >> 16).land(0xFF).to_byte()
+  buf[offset + 3] = (value >> 24).land(0xFF).to_byte()
+}
+
+///|
 /// 初始化日志缓冲区。返回缓冲区线性内存地址。
 /// 缓冲区前 4 字节存储当前写入位置（u32 LE），日志内容从第 5 字节开始。
 pub fn wasm_log_init(size : Int) -> Int {
@@ -114,12 +134,7 @@ pub fn wasm_log_init(size : Int) -> Int {
 /// 宿主通过比较位置变化来判断是否有新日志。
 pub fn wasm_log_pos(buf_ptr : Int) -> Int {
   let buf = int_to_fixed_bytes(buf_ptr)
-  buf[0]
-  .to_int()
-  .land(0xFF)
-  .lor(buf[1].to_int().land(0xFF) << 8)
-  .lor(buf[2].to_int().land(0xFF) << 16)
-  .lor(buf[3].to_int().land(0xFF) << 24)
+  read_le32(buf, 0)
 }
 
 ///|
@@ -139,12 +154,7 @@ fn log_write(
 ) -> Unit {
   let buf = int_to_fixed_bytes(buf_ptr)
   // 读取当前写入位置（前 4 字节）
-  let mut pos = buf[0]
-    .to_int()
-    .land(0xFF)
-    .lor(buf[1].to_int().land(0xFF) << 8)
-    .lor(buf[2].to_int().land(0xFF) << 16)
-    .lor(buf[3].to_int().land(0xFF) << 24)
+  let mut pos = read_le32(buf, 0)
   // 如果位置为 0，从第 5 字节开始写
   if pos == 0 {
     pos = 4
@@ -206,15 +216,37 @@ fn log_write(
     i = i + 1
   }
   // 写回位置到头部
-  buf[0] = pos.land(0xFF).to_byte()
-  buf[1] = (pos >> 8).land(0xFF).to_byte()
-  buf[2] = (pos >> 16).land(0xFF).to_byte()
-  buf[3] = (pos >> 24).land(0xFF).to_byte()
+  write_le32(buf, 0, pos)
+}
+
+
+///|
+/// 带追踪的通用转换：执行转换 + 日志记录。
+/// 消除 3 个 trace 函数的重复样板。
+fn trace_convert(
+  source : String,
+  input : String,
+  target : String,
+  step : String,
+  convert : (String, String, String) -> String,
+  log_ptr : Int,
+  log_size : Int,
+) -> String {
+  log_write(log_ptr, log_size, 2, step, "start: " + source + " → " + target)
+  log_write(log_ptr, log_size, 1, step, "input length: " + input.length().to_string() + " chars")
+  let result = convert(source, input, target)
+  // 结构化错误检测：检查 JSON 是否以 {"error": 开头
+  let is_err = result.length() > 9 && result[0:9] == "{\"error\":"
+  if is_err {
+    log_write(log_ptr, log_size, 4, step, "failed: " + result)
+  } else {
+    log_write(log_ptr, log_size, 2, step, "success: " + result.length().to_string() + " chars")
+  }
+  result
 }
 
 ///|
-/// 带追踪的请求转换：source 协议 JSON → target 协议 JSON。
-/// 每一步写入日志到 `log_ptr` 缓冲区。
+/// 带追踪的请求转换
 pub fn wasm_convert_req_trace(
   source : String,
   json_str : String,
@@ -222,37 +254,11 @@ pub fn wasm_convert_req_trace(
   log_ptr : Int,
   log_size : Int,
 ) -> String {
-  log_write(
-    log_ptr,
-    log_size,
-    2,
-    "convert_req",
-    "start: " + source + " → " + target,
-  )
-  log_write(
-    log_ptr,
-    log_size,
-    1,
-    "convert_req",
-    "input length: " + json_str.length().to_string() + " chars",
-  )
-  let result = wasm_convert_request(source, json_str, target)
-  if result.contains("\"error\"") {
-    log_write(log_ptr, log_size, 4, "convert_req", "failed: " + result)
-  } else {
-    log_write(
-      log_ptr,
-      log_size,
-      2,
-      "convert_req",
-      "success: " + result.length().to_string() + " chars",
-    )
-  }
-  result
+  trace_convert(source, json_str, target, "convert_req", wasm_convert_request, log_ptr, log_size)
 }
 
 ///|
-/// 带追踪的响应转换：source 协议 JSON → target 协议 JSON。
+/// 带追踪的响应转换
 pub fn wasm_convert_resp_trace(
   source : String,
   json_str : String,
@@ -260,37 +266,11 @@ pub fn wasm_convert_resp_trace(
   log_ptr : Int,
   log_size : Int,
 ) -> String {
-  log_write(
-    log_ptr,
-    log_size,
-    2,
-    "convert_resp",
-    "start: " + source + " → " + target,
-  )
-  log_write(
-    log_ptr,
-    log_size,
-    1,
-    "convert_resp",
-    "input length: " + json_str.length().to_string() + " chars",
-  )
-  let result = wasm_convert_response(source, json_str, target)
-  if result.contains("\"error\"") {
-    log_write(log_ptr, log_size, 4, "convert_resp", "failed: " + result)
-  } else {
-    log_write(
-      log_ptr,
-      log_size,
-      2,
-      "convert_resp",
-      "success: " + result.length().to_string() + " chars",
-    )
-  }
-  result
+  trace_convert(source, json_str, target, "convert_resp", wasm_convert_response, log_ptr, log_size)
 }
 
 ///|
-/// 带追踪的流式转换：source 协议 SSE → target 协议 SSE。
+/// 带追踪的流式转换
 pub fn wasm_convert_stream_trace(
   source : String,
   sse_str : String,
@@ -298,33 +278,7 @@ pub fn wasm_convert_stream_trace(
   log_ptr : Int,
   log_size : Int,
 ) -> String {
-  log_write(
-    log_ptr,
-    log_size,
-    2,
-    "convert_stream",
-    "start: " + source + " → " + target,
-  )
-  log_write(
-    log_ptr,
-    log_size,
-    1,
-    "convert_stream",
-    "input length: " + sse_str.length().to_string() + " chars",
-  )
-  let result = wasm_convert_stream(source, sse_str, target)
-  if result.contains("\"error\"") {
-    log_write(log_ptr, log_size, 4, "convert_stream", "failed: " + result)
-  } else {
-    log_write(
-      log_ptr,
-      log_size,
-      2,
-      "convert_stream",
-      "success: " + result.length().to_string() + " chars",
-    )
-  }
-  result
+  trace_convert(source, sse_str, target, "convert_stream", wasm_convert_stream, log_ptr, log_size)
 }
 
 ///|
