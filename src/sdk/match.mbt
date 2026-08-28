@@ -71,10 +71,8 @@ pub fn match_by_model(model_name : String) -> ProviderRegistration? {
 pub fn list_provider_names() -> Array[String] {
   let providers = providers_cache
   let result : Array[String] = []
-  let mut i = 0
-  while i < providers.length() {
-    result.push(providers[i].name)
-    i = i + 1
+  for reg in providers {
+    result.push(reg.name)
   }
   result
 }

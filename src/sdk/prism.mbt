@@ -1,15 +1,9 @@
-///|
-/// Prism — SDK 主入口
-///
-/// 使用方式（L1 应用开发者）：
-/// ```
-/// let prism = Prism::new().with_provider("openai")
-/// let json = prism.encode_request("Hello", PrismOptions::default())
-/// // json 是提供商 JSON 请求体，Host 发送 HTTP 请求
-/// // Host 收到响应后调用 prism.decode_response(json)
-/// ```
+/// SDK 默认 provider 名称（Prism::new() 使用）
+pub const DEFAULT_PROVIDER : String = "openai"
 
 ///|
+/// SDK 默认模型名称（请求编码时的 fallback）
+pub const DEFAULT_MODEL : String = "gpt-4o"
 /// ConversionMeta — 转换来源元信息（D8）
 ///
 /// 回答"这个 LUX 值是从哪个协议解码来的"，并附带转换损失诊断
@@ -87,7 +81,7 @@ pub struct Prism {
 
 ///|
 pub fn Prism::new() -> Prism {
-  { provider: "openai" }
+  { provider: DEFAULT_PROVIDER }
 }
 
 ///|
@@ -110,7 +104,7 @@ pub fn Prism::encode_request(
   let ctx = ctx.add_user(text)
   let model = match opts.model {
     Some(m) => m
-    None => "gpt-4o"
+    None => DEFAULT_MODEL
   }
   let req = context_to_lux_request(ctx, model, opts)
   self.encode_lux_request(req)
@@ -187,7 +181,7 @@ pub fn Prism::encode_request_with_diagnostics(
   let ctx = ctx.add_user(text)
   let model = match opts.model {
     Some(m) => m
-    None => "gpt-4o"
+    None => DEFAULT_MODEL
   }
   let req = context_to_lux_request(ctx, model, opts)
   let mut result = @lux.ConversionResult::new(req)
@@ -260,7 +254,7 @@ pub fn Prism::encode_stream_request(
   let ctx = ctx.add_user(text)
   let model = match opts.model {
     Some(m) => m
-    None => "gpt-4o"
+    None => DEFAULT_MODEL
   }
   let mut req = context_to_lux_request(ctx, model, opts)
   req = @lux.LucentRequest::with_stream(req, true)
@@ -305,7 +299,7 @@ pub fn Prism::stream(
   ctx : Context,
   send : (String) -> Result[String, String],
 ) -> Result[Array[PrismEvent], String] {
-  let model = "gpt-4o"
+  let model = DEFAULT_MODEL
   let mut req = context_to_lux_request(ctx, model, PrismOptions::default())
   req = @lux.LucentRequest::with_stream(req, true)
   match self.encode_lux_request(req) {
