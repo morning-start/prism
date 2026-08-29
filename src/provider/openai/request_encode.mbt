@@ -399,13 +399,7 @@ pub fn lux_request_to_openai(
     Some(b) => parts.push("\"store\":" + b.to_string())
     None => ()
   }
-  match opts.extras {
-    Some(m) =>
-      for k, v in m {
-        parts.push("\"" + @internal.json_escape(k) + "\":" + v.stringify())
-      }
-    None => ()
-  }
+  @internal.merge_extras_json(parts, opts.extras)
   let result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
   Ok(result.with_diagnostics(diagnostics))
 }

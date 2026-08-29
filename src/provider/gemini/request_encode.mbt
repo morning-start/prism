@@ -284,13 +284,7 @@ pub fn lux_request_to_gemini(
     None => ()
   }
   // extras：合并进 generationConfig
-  match opts.extras {
-    Some(m) =>
-      for k, v in m {
-        gc_parts.push("\"" + @internal.json_escape(k) + "\":" + v.stringify())
-      }
-    None => ()
-  }
+  @internal.merge_extras_json(gc_parts, opts.extras)
   if gc_parts.length() > 0 {
     parts.push("\"generationConfig\":{" + gc_parts.join(",") + "}")
   }

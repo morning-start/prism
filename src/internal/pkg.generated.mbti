@@ -30,6 +30,8 @@ pub fn is_json_truncated(String) -> Bool
 
 pub fn json_escape(String) -> String
 
+pub fn merge_extras_json(Array[String], Map[String, Json]?) -> Unit
+
 pub fn obj_delete(Json, String) -> Json
 
 pub fn obj_get(Json, String) -> Json?

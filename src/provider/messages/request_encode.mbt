@@ -400,13 +400,7 @@ pub fn lux_request_to_messages(
     None => ()
   }
   // extras：合并进请求 JSON 顶层
-  match opts.extras {
-    Some(m) =>
-      for k, v in m {
-        parts.push("\"" + @internal.json_escape(k) + "\":" + v.stringify())
-      }
-    None => ()
-  }
+  @internal.merge_extras_json(parts, opts.extras)
   let result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
   Ok(result.with_diagnostics(diagnostics))
 }

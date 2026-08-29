@@ -437,3 +437,27 @@ pub fn parse_string_array(jv : Json, field : String) -> Array[String]? {
     _ => None
   }
 }
+
+///|
+/// 将 extras Map 合并到 JSON 编码的 parts 数组中
+///
+/// 四个 provider 的 request_encode 中都有相同的 extras 合并逻辑：
+/// ```
+/// match opts.extras {
+///   Some(m) => for k, v in m { parts.push("\"" + json_escape(k) + "\":" + v.stringify()) }
+///   None => ()
+/// }
+/// ```
+/// 此 helper 封装该模式，接收 parts 数组（引用语义）和 extras（可选 Map）。
+pub fn merge_extras_json(
+  parts : Array[String],
+  extras : Map[String, Json]?,
+) -> Unit {
+  match extras {
+    Some(m) =>
+      for k, v in m {
+        parts.push("\"" + json_escape(k) + "\":" + v.stringify())
+      }
+    None => ()
+  }
+}
