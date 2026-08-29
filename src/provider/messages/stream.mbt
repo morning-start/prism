@@ -135,7 +135,17 @@ pub fn messages_sse_to_events(
           None => ()
         }
       }
-      "message_stop" => events.push(Done)
+      "message_stop" => {
+        // 如果没有 Finish 事件，补一个默认的 Finish(Stop)
+        let has_finish = events.any(fn(e) { match e {
+          Finish(_) => true
+          _ => false
+        }})
+        if !has_finish {
+          events.push(Finish(@lux.LucentFinishReason::Stop))
+        }
+        events.push(Done)
+      }
       "error" =>
         match @internal.field_str(jv, "error") {
           Some(e_msg) => events.push(Error(@lux.LucentError::simple(e_msg)))

@@ -88,6 +88,14 @@ pub fn openai_sse_to_events(
                 }
                 None => ()
               }
+              // reasoning_content（DeepSeek/vLLM thinking 内容）
+              match @internal.field_str(delta, "reasoning_content") {
+                Some(s) =>
+                  events.push(
+                    BlockDelta(0, @lux.LucentBlockDelta::thinking_delta(s)),
+                  )
+                None => ()
+              }
               // tool_calls
               match @internal.field_arr(delta, "tool_calls") {
                 Some(tcs) => {
@@ -247,8 +255,15 @@ pub fn lux_events_to_openai_sse(
               @internal.json_escape(s) +
               "\"}}]}}]}",
             )
-          ThinkingDelta(_) | SignatureDelta(_) | RefusalDelta(_) => ()
-          // 标准 OpenAI Chat 流无原生 thinking/refusal 增量（vLLM 扩展由 openai_vllm 子协议承载）
+          ThinkingDelta(s) =>
+            // DeepSeek/vLLM 使用 reasoning_content 字段传递 thinking 内容
+            out.push(
+              chunk_prefix(chat_id, chat_model, chat_created) +
+              "\"choices\":[{\"delta\":{\"reasoning_content\":\"" +
+              @internal.json_escape(s) +
+              "\"}}]}",
+            )
+          SignatureDelta(_) | RefusalDelta(_) => ()
           // OpenAI Chat 流无原生 signature/refusal 增量，编码时忽略
           NativeDelta(_, _) => ()
         }
