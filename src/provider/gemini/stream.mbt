@@ -19,21 +19,9 @@ pub fn gemini_sse_to_events(
   let mut text_block_index = 0
   let mut i = 0
   while i < messages.length() {
-    let payload_raw = messages[i].data.trim().to_owned()
-    if payload_raw == "" {
-      i = i + 1
-      continue
-    }
-    // 清理心跳、截断检测、转义清理
-    let payload = @internal.sanitize_json_escapes(
-      @internal.clean_sse_heartbeat(payload_raw),
-    )
-    if @internal.is_json_truncated(payload) {
-      i = i + 1
-      continue
-    }
-    let jv = @json.parse(payload) catch {
-      _ => {
+    let jv = match @internal.parse_sse_frame(messages[i].data) {
+      Some(v) => v
+      None => {
         i = i + 1
         continue
       }

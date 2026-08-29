@@ -42,6 +42,8 @@ pub fn parse_json_opt(String) -> Json?
 
 pub fn parse_protocol_json(String) -> Result[Json, String]
 
+pub fn parse_sse_frame(String) -> Json?
+
 pub fn parse_sse_line(StringView) -> SseLine?
 
 pub fn parse_sse_message(String) -> SseMessage?

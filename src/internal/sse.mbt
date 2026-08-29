@@ -160,3 +160,27 @@ pub fn parse_sse_messages(sse_str : String) -> Array[SseMessage] {
   }
   messages
 }
+
+///|
+/// SSE 帧预处理流水线 — 四个 provider 共用的标准化管线
+///
+/// 将原始 SSE data 行内容经过：
+///   1. trim
+///   2. 心跳清理（clean_sse_heartbeat）
+///   3. 转义修复（sanitize_json_escapes）
+///   4. 截断检测（is_json_truncated）
+///   5. JSON 解析
+///
+/// 返回 `Some(jv)` 表示成功，`None` 表示该帧应跳过（空、心跳、截断、非法 JSON）。
+pub fn parse_sse_frame(data_raw : String) -> Json? {
+  let trimmed = data_raw.trim().to_owned()
+  if trimmed == "" {
+    return None
+  }
+  let cleaned = sanitize_json_escapes(clean_sse_heartbeat(trimmed))
+  if is_json_truncated(cleaned) {
+    return None
+  }
+  let jv = @json.parse(cleaned) catch { _ => return None }
+  Some(jv)
+}

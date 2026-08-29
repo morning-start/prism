@@ -14,21 +14,9 @@ pub fn messages_sse_to_events(
   let mut i = 0
   while i < messages.length() {
     let event_type = messages[i].event_type.unwrap_or("")
-    let data_raw = messages[i].data.trim().to_owned()
-    if data_raw == "" {
-      i = i + 1
-      continue
-    }
-    // 清理心跳、截断检测、转义清理
-    let data_str = @internal.sanitize_json_escapes(
-      @internal.clean_sse_heartbeat(data_raw),
-    )
-    if @internal.is_json_truncated(data_str) {
-      i = i + 1
-      continue
-    }
-    let jv = @json.parse(data_str) catch {
-      _ => {
+    let jv = match @internal.parse_sse_frame(messages[i].data) {
+      Some(v) => v
+      None => {
         i = i + 1
         continue
       }

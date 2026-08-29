@@ -39,16 +39,9 @@ pub fn openai_sse_to_events(
       i = i + 1
       continue
     }
-    // 清理心跳、截断检测、转义清理
-    let payload = @internal.sanitize_json_escapes(
-      @internal.clean_sse_heartbeat(payload_raw),
-    )
-    if @internal.is_json_truncated(payload) {
-      i = i + 1
-      continue
-    }
-    let jv = @json.parse(payload) catch {
-      _ => {
+    let jv = match @internal.parse_sse_frame(messages[i].data) {
+      Some(v) => v
+      None => {
         i = i + 1
         continue
       }
