@@ -282,22 +282,7 @@ pub fn openai_to_lux_request(
     None => @internal.field_int(jv, "max_tokens")
   }
   let stream = @internal.field_bool(jv, "stream").unwrap_or(false)
-  let stop = match @internal.obj_get(jv, "stop") {
-    Some(String(s)) => Some([s])
-    Some(Array(arr)) => {
-      let stops : Array[String] = []
-      let mut i = 0
-      while i < arr.length() {
-        match arr[i] {
-          String(s) => stops.push(s)
-          _ => ()
-        }
-        i = i + 1
-      }
-      Some(stops)
-    }
-    _ => None
-  }
+  let stop = @internal.parse_string_array(jv, "stop")
   let store = @internal.field_bool(jv, "store")
   let extras = @internal.collect_extra_fields(jv, [
     "model", "messages", "tools", "tool_choice", "temperature", "top_p", "max_completion_tokens",

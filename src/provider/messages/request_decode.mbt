@@ -381,21 +381,7 @@ pub fn messages_to_lux_request(
   let top_k = @internal.field_int(jv, "top_k")
   let max_tokens = @internal.field_int(jv, "max_tokens")
   let stream = @internal.field_bool(jv, "stream").unwrap_or(false)
-  let stop = match @internal.field_arr(jv, "stop_sequences") {
-    Some(arr) => {
-      let stops : Array[String] = []
-      let mut i = 0
-      while i < arr.length() {
-        match arr[i] {
-          String(s) => stops.push(s)
-          _ => ()
-        }
-        i = i + 1
-      }
-      Some(stops)
-    }
-    None => None
-  }
+  let stop = @internal.parse_string_array(jv, "stop_sequences")
   // metadata
   let metadata = match @internal.obj_get(jv, "metadata") {
     Some(Object(m)) => {

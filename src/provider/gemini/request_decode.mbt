@@ -333,21 +333,7 @@ fn parse_generation_config(jv : Json) -> @lux.LucentOptions {
         @internal.field_num(gc, "topP"),
         @internal.field_int(gc, "topK"),
         @internal.field_int(gc, "maxOutputTokens"),
-        match @internal.field_arr(gc, "stopSequences") {
-          Some(arr) => {
-            let stops : Array[String] = []
-            let mut i = 0
-            while i < arr.length() {
-              match arr[i] {
-                String(s) => stops.push(s)
-                _ => ()
-              }
-              i = i + 1
-            }
-            Some(stops)
-          }
-          None => None
-        },
+        @internal.parse_string_array(gc, "stopSequences"),
         false, // stream
         @internal.field_int(gc, "candidateCount"),
         None,

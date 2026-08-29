@@ -405,3 +405,35 @@ pub fn parse_usage_json(
   }
   (pt, ct, tt)
 }
+
+///|
+/// 从 JSON 对象中提取指定字段的字符串数组
+///
+/// 支持两种 JSON 形态：
+///   - `"field": "single"` → `["single"]`（单字符串包装为数组）
+///   - `"field": ["a", "b"]` → `["a", "b"]`（数组逐个提取）
+///
+/// 字段缺失、非字符串元素等情况被安全跳过。
+/// 返回 `None` 表示字段不存在或为空数组。
+pub fn parse_string_array(jv : Json, field : String) -> Array[String]? {
+  match obj_get(jv, field) {
+    Some(String(s)) => Some([s])
+    Some(Array(arr)) => {
+      let result : Array[String] = []
+      let mut i = 0
+      while i < arr.length() {
+        match arr[i] {
+          String(s) => result.push(s)
+          _ => ()
+        }
+        i = i + 1
+      }
+      if result.length() > 0 {
+        Some(result)
+      } else {
+        None
+      }
+    }
+    _ => None
+  }
+}
