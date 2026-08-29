@@ -27,7 +27,7 @@
 | `messages` | Anthropic Messages API | ✅ | ✅ | ✅ | ✅ |
 | `gemini` | Google Gemini API | ✅ | ✅ | ✅ | ✅ |
 
-Provider aliases and model-pattern variants (codex, azure, vllm, gemini-vertex, gemini-interactions) are registered in `src/sdk/provider_capability.mbt`.
+Provider aliases and model-pattern variants (codex, azure, vllm, gemini-vertex, gemini-interactions) are registered in `src/sdk/registry.mbt`.
 
 ## Test Coverage
 
@@ -39,9 +39,11 @@ Provider aliases and model-pattern variants (codex, azure, vllm, gemini-vertex, 
 
 ## Known Limitations
 
-- `src/lux/lux.mbt` is a single 1325-line file; splitting into types/builders/helpers is deferred (see architecture.md migration plan)
-- Provider adapters' main `*.mbt` files still contain request encode/decode; full request/response/stream/capability split is partial
-- JSON Schema (`schemas/lux-ir-v1.json`) is maintained manually; no automated drift detection against code
+- `scripts/check_schema_drift.ps1` runs in report mode by default and can be used with `-Strict` in CI; its self-test covers version, required fields, enums, and stream events
+
+- `src/lux/lux.mbt` remains the type/model hub; codec implementations are split into request/response/stream/primitive files
+- Provider request codecs are split into dedicated request_decode/request_encode files; response/stream code remains co-located where further separation is not yet justified
+- JSON Schema (`schemas/lux-ir-v1.json`) remains manually authored, but `scripts/check_schema_drift.ps1` now reports version/required-field/enum/stream-event drift
 
 ## Build & Verify
 

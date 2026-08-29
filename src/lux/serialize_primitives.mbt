@@ -25,7 +25,6 @@ pub fn LucentRole::from_json(jv : Json) -> Result[LucentRole, String] {
 }
 
 ///|
-/// === LucentModality ===
 pub fn LucentModality::to_json(self : LucentModality) -> Json {
   match self {
     Text => Json::string("text")
@@ -38,7 +37,6 @@ pub fn LucentModality::to_json(self : LucentModality) -> Json {
 }
 
 ///|
-/// === LucentMediaSource ===
 pub fn LucentMediaSource::to_json(self : LucentMediaSource) -> Json {
   match self {
     Inline(data) =>
@@ -57,7 +55,6 @@ pub fn LucentMediaSource::to_json(self : LucentMediaSource) -> Json {
 }
 
 ///|
-/// === LucentMultimedia ===
 pub fn LucentMultimedia::to_json(self : LucentMultimedia) -> Json {
   Json::object({
     "media_type": Json::string(self.media_type),
@@ -66,7 +63,6 @@ pub fn LucentMultimedia::to_json(self : LucentMultimedia) -> Json {
 }
 
 ///|
-/// === LucentAnnotationKind ===
 pub fn LucentAnnotationKind::to_json(self : LucentAnnotationKind) -> String {
   match self {
     Url => "url"
@@ -77,7 +73,6 @@ pub fn LucentAnnotationKind::to_json(self : LucentAnnotationKind) -> String {
 }
 
 ///|
-/// === LucentAnnotation ===
 pub fn LucentAnnotation::to_json(self : LucentAnnotation) -> Json {
   let fields : Map[String, Json] = { "kind": Json::string(self.kind.to_json()) }
   match self.text {
@@ -100,7 +95,6 @@ pub fn LucentAnnotation::to_json(self : LucentAnnotation) -> Json {
 }
 
 ///|
-/// === LucentThinking ===
 pub fn LucentThinking::to_json(self : LucentThinking) -> Json {
   let fields : Map[String, Json] = {
     "text": Json::string(self.text),
@@ -118,7 +112,6 @@ pub fn LucentThinking::to_json(self : LucentThinking) -> Json {
 }
 
 ///|
-/// === LucentToolUse ===
 pub fn LucentToolUse::to_json(self : LucentToolUse) -> Json {
   Json::object({
     "id": Json::string(self.id),
@@ -128,7 +121,6 @@ pub fn LucentToolUse::to_json(self : LucentToolUse) -> Json {
 }
 
 ///|
-/// === LucentToolResult ===
 pub fn LucentToolResult::to_json(self : LucentToolResult) -> Json {
   Json::object({
     "tool_use_id": Json::string(self.tool_use_id),
@@ -138,7 +130,6 @@ pub fn LucentToolResult::to_json(self : LucentToolResult) -> Json {
 }
 
 ///|
-/// === LucentAgentAction ===
 pub fn LucentAgentAction::to_json(self : LucentAgentAction) -> Json {
   let fields : Map[String, Json] = {
     "kind": Json::string(self.kind),
@@ -168,7 +159,6 @@ pub fn LucentAgentAction::to_json(self : LucentAgentAction) -> Json {
 }
 
 ///|
-/// === LucentContent ===
 pub fn LucentContent::to_json(self : LucentContent) -> Json {
   match self {
     Text(s, anns) => {
@@ -221,7 +211,6 @@ pub fn LucentContent::to_json(self : LucentContent) -> Json {
 }
 
 ///|
-/// === LucentMessage ===
 pub fn LucentMessage::to_json(self : LucentMessage) -> Json {
   let fields : Map[String, Json] = {
     "role": self.role.to_json(),
@@ -239,7 +228,6 @@ pub fn LucentMessage::to_json(self : LucentMessage) -> Json {
 }
 
 ///|
-/// === LucentConversationItem ===
 pub fn LucentConversationItem::to_json(self : LucentConversationItem) -> Json {
   match self {
     Message(m) =>
@@ -268,7 +256,6 @@ pub fn LucentConversationItem::to_json(self : LucentConversationItem) -> Json {
 }
 
 ///|
-/// === LucentTool ===
 pub fn LucentTool::to_json(self : LucentTool) -> Json {
   let params = @json.parse(self.parameters_json) catch { _ => Json::null() }
   let kind_str = match self.kind {
@@ -300,7 +287,6 @@ pub fn LucentTool::to_json(self : LucentTool) -> Json {
 }
 
 ///|
-/// === LucentToolChoice ===
 pub fn LucentToolChoice::to_json(self : LucentToolChoice) -> Json {
   match self {
     Auto => Json::string("auto")
@@ -315,7 +301,6 @@ pub fn LucentToolChoice::to_json(self : LucentToolChoice) -> Json {
 }
 
 ///|
-/// === LucentStructuredOutput ===
 pub fn LucentStructuredOutput::to_json(self : LucentStructuredOutput) -> Json {
   match self {
     JsonObject => Json::string("json_object")
@@ -328,7 +313,6 @@ pub fn LucentStructuredOutput::to_json(self : LucentStructuredOutput) -> Json {
 }
 
 ///|
-/// === LucentOptions ===
 pub fn LucentOptions::to_json(self : LucentOptions) -> Json {
   let fields : Map[String, Json] = { "stream": self.stream.to_json() }
   match self.temperature {
@@ -372,7 +356,6 @@ pub fn LucentOptions::to_json(self : LucentOptions) -> Json {
 }
 
 ///|
-/// === LucentReasoningConfig ===
 pub fn LucentReasoningConfig::to_json(self : LucentReasoningConfig) -> Json {
   let fields : Map[String, Json] = { "enabled": self.enabled.to_json() }
   match self.budget_tokens {
@@ -402,13 +385,11 @@ pub fn LucentReasoningConfig::to_json(self : LucentReasoningConfig) -> Json {
 }
 
 ///|
-/// === SupportLevel ===
 pub fn SupportLevel::to_json(self : SupportLevel) -> Json {
   Json::string(self.to_string())
 }
 
 ///|
-/// === LucentCapabilities ===
 pub fn LucentCapabilities::to_json(self : LucentCapabilities) -> Json {
   Json::object({
     "tool_calling": self.tool_calling.to_json(),
@@ -423,347 +404,4 @@ pub fn LucentCapabilities::to_json(self : LucentCapabilities) -> Json {
       self.output_modalities.map(fn(m) { m.to_json() }),
     ),
   })
-}
-
-///|
-/// === LucentRequest ===
-pub fn LucentRequest::to_json(self : LucentRequest) -> Json {
-  let fields : Map[String, Json] = {
-    "schema_version": Json::string(self.schema_version),
-    "model": Json::string(self.model),
-    "conversation": Json::array(self.conversation.map(fn(ci) { ci.to_json() })),
-    "options": self.options.to_json(),
-  }
-  match self.instructions {
-    Some(instrs) =>
-      fields["instructions"] = Json::array(instrs.map(fn(c) { c.to_json() }))
-    None => ()
-  }
-  match self.tools {
-    Some(tools) =>
-      fields["tools"] = Json::array(tools.map(fn(t) { t.to_json() }))
-    None => ()
-  }
-  match self.tool_choice {
-    Some(tc) => fields["tool_choice"] = tc.to_json()
-    None => ()
-  }
-  match self.capabilities {
-    Some(cap) => fields["capabilities"] = cap.to_json()
-    None => ()
-  }
-  match self.reasoning {
-    Some(rc) => fields["reasoning"] = rc.to_json()
-    None => ()
-  }
-  match self.metadata {
-    Some(m) => {
-      let meta_fields : Map[String, Json] = Map([])
-      for entry in m {
-        match entry {
-          (k, v) => meta_fields[k] = Json::string(v)
-        }
-      }
-      if meta_fields.length() > 0 {
-        fields["metadata"] = Json::object(meta_fields)
-      }
-    }
-    None => ()
-  }
-  match self.extra {
-    Some(e) => {
-      let extra_fields : Map[String, Json] = Map([])
-      for entry in e {
-        match entry {
-          (k, v) => extra_fields[k] = v
-        }
-      }
-      if extra_fields.length() > 0 {
-        fields["extra"] = Json::object(extra_fields)
-      }
-    }
-    None => ()
-  }
-  Json::object(fields)
-}
-
-///|
-/// === LucentUsage ===
-pub fn LucentUsage::to_json(self : LucentUsage) -> Json {
-  let fields : Map[String, Json] = {
-    "prompt_tokens": self.prompt_tokens.to_json(),
-    "completion_tokens": self.completion_tokens.to_json(),
-    "total_tokens": self.total_tokens.to_json(),
-  }
-  match self.reasoning_tokens {
-    Some(n) => fields["reasoning_tokens"] = n.to_json()
-    None => ()
-  }
-  match self.cached_tokens {
-    Some(n) => fields["cached_tokens"] = n.to_json()
-    None => ()
-  }
-  match self.cache_creation_tokens {
-    Some(n) => fields["cache_creation_tokens"] = n.to_json()
-    None => ()
-  }
-  Json::object(fields)
-}
-
-///|
-/// === LucentFinishReason ===
-pub fn LucentFinishReason::to_json(self : LucentFinishReason) -> Json {
-  Json::string(self.to_string())
-}
-
-///|
-/// === LucentSafetyRating ===
-pub fn LucentSafetyRating::to_json(self : LucentSafetyRating) -> Json {
-  Json::object({
-    "category": Json::string(self.category),
-    "probability": Json::string(self.probability),
-  })
-}
-
-///|
-/// === LucentChoice ===
-pub fn LucentChoice::to_json(self : LucentChoice) -> Json {
-  let fields : Map[String, Json] = {
-    "index": self.index.to_json(),
-    "message": self.message.to_json(),
-    "finish_reason": self.finish_reason.to_json(),
-  }
-  match self.safety_ratings {
-    Some(arr) =>
-      fields["safety_ratings"] = Json::array(arr.map(fn(sr) { sr.to_json() }))
-    None => ()
-  }
-  Json::object(fields)
-}
-
-///|
-/// === LucentResponse ===
-pub fn LucentResponse::to_json(self : LucentResponse) -> Json {
-  let fields : Map[String, Json] = {
-    "schema_version": Json::string(self.schema_version),
-    "id": Json::string(self.id),
-    "model": Json::string(self.model),
-    "choices": Json::array(self.choices.map(fn(c) { c.to_json() })),
-  }
-  match self.created_at {
-    Some(n) => fields["created_at"] = n.to_json()
-    None => ()
-  }
-  match self.usage {
-    Some(u) => fields["usage"] = u.to_json()
-    None => ()
-  }
-  match self.provider_payload {
-    Some(p) => fields["provider_payload"] = p
-    None => ()
-  }
-  Json::object(fields)
-}
-
-///|
-/// === LucentError ===
-pub fn LucentError::to_json(self : LucentError) -> Json {
-  let fields : Map[String, Json] = {
-    "kind": self.kind.to_json(),
-    "message": Json::string(self.message),
-  }
-  match self.provider_code {
-    Some(c) => fields["provider_code"] = Json::string(c)
-    None => ()
-  }
-  Json::object(fields)
-}
-
-///|
-/// === LucentErrorKind ===
-pub fn LucentErrorKind::to_json(self : LucentErrorKind) -> Json {
-  match self {
-    RateLimit => Json::string("rate_limit")
-    InvalidRequest => Json::string("invalid_request")
-    Authentication => Json::string("authentication")
-    ServerError => Json::string("server_error")
-    ContentFilter => Json::string("content_filter")
-    Native(s) => Json::string(s)
-  }
-}
-
-///|
-/// === LucentConversationMeta ===
-pub fn LucentConversationMeta::to_json(self : LucentConversationMeta) -> Json {
-  let fields : Map[String, Json] = Map([])
-  match self.id {
-    Some(id) => fields["id"] = Json::string(id)
-    None => ()
-  }
-  match self.model {
-    Some(m) => fields["model"] = Json::string(m)
-    None => ()
-  }
-  match self.usage_input {
-    Some(n) => fields["usage_input"] = n.to_json()
-    None => ()
-  }
-  match self.created_at {
-    Some(ts) => fields["created_at"] = ts.to_json()
-    None => ()
-  }
-  match self.extra {
-    Some(ex) => fields["extra"] = ex
-    None => ()
-  }
-  Json::object(fields)
-}
-
-///|
-/// === LucentBlockType ===
-pub fn LucentBlockType::to_json(self : LucentBlockType) -> Json {
-  match self {
-    Text => Json::string("text")
-    ToolCall(id, name) =>
-      Json::object({
-        "type": Json::string("tool_call"),
-        "id": Json::string(id),
-        "name": Json::string(name),
-      })
-    Thinking => Json::string("thinking")
-    Refusal => Json::string("refusal")
-    Image => Json::string("image")
-    Audio => Json::string("audio")
-    Video => Json::string("video")
-    Native(tag) => Json::string(tag)
-  }
-}
-
-///|
-/// === LucentBlockDelta ===
-pub fn LucentBlockDelta::to_json(self : LucentBlockDelta) -> Json {
-  match self {
-    TextDelta(s) =>
-      Json::object({ "type": Json::string("text"), "text": Json::string(s) })
-    ThinkingDelta(s) =>
-      Json::object({ "type": Json::string("thinking"), "text": Json::string(s) })
-    SignatureDelta(s) =>
-      Json::object({
-        "type": Json::string("signature"),
-        "signature": Json::string(s),
-      })
-    ToolArgumentsDelta(s) =>
-      Json::object({
-        "type": Json::string("tool_arguments"),
-        "arguments": Json::string(s),
-      })
-    RefusalDelta(s) =>
-      Json::object({ "type": Json::string("refusal"), "text": Json::string(s) })
-    NativeDelta(tag, raw) =>
-      Json::object({
-        "type": Json::string("native"),
-        "native_tag": Json::string(tag),
-        "native_payload": raw,
-      })
-  }
-}
-
-///|
-/// === LucentStreamEvent ===
-pub fn LucentStreamEvent::to_json(self : LucentStreamEvent) -> Json {
-  match self {
-    ConversationStart(meta) =>
-      Json::object({
-        "event": Json::string("conversation_start"),
-        "meta": meta.to_json(),
-      })
-    ItemStart(idx, item) =>
-      Json::object({
-        "event": Json::string("item_start"),
-        "index": idx.to_json(),
-        "item": item.to_json(),
-      })
-    BlockStart(idx, bt) =>
-      Json::object({
-        "event": Json::string("block_start"),
-        "index": idx.to_json(),
-        "block_type": bt.to_json(),
-      })
-    BlockDelta(idx, delta) =>
-      Json::object({
-        "event": Json::string("block_delta"),
-        "index": idx.to_json(),
-        "delta": delta.to_json(),
-      })
-    BlockEnd(idx) =>
-      Json::object({
-        "event": Json::string("block_end"),
-        "index": idx.to_json(),
-      })
-    ItemEnd(idx) =>
-      Json::object({ "event": Json::string("item_end"), "index": idx.to_json() })
-    BlockDiscard(idx) =>
-      Json::object({
-        "event": Json::string("block_discard"),
-        "index": idx.to_json(),
-      })
-    Annotations(idx, anns) =>
-      Json::object({
-        "event": Json::string("annotations"),
-        "index": idx.to_json(),
-        "annotations": Json::array(anns.map(fn(a) { a.to_json() })),
-      })
-    Finish(fr) =>
-      Json::object({
-        "event": Json::string("finish"),
-        "finish_reason": fr.to_json(),
-      })
-    Usage(u) =>
-      Json::object({ "event": Json::string("usage"), "usage": u.to_json() })
-    Error(e) =>
-      Json::object({ "event": Json::string("error"), "error": e.to_json() })
-    Done => Json::object({ "event": Json::string("done") })
-  }
-}
-
-///|
-/// === ProviderCapability ===
-pub fn ProviderCapability::to_json(self : ProviderCapability) -> Json {
-  let fields : Map[String, Json] = {
-    "model_pattern": Json::string(self.model_pattern),
-    "provider": Json::string(self.provider),
-    "capabilities": self.capabilities.to_json(),
-  }
-  match self.extra_params {
-    Some(ep) => {
-      let ep_fields : Map[String, Json] = Map([])
-      for entry in ep {
-        match entry {
-          (k, v) => ep_fields[k] = v
-        }
-      }
-      if ep_fields.length() > 0 {
-        fields["extra_params"] = Json::object(ep_fields)
-      }
-    }
-    None => ()
-  }
-  Json::object(fields)
-}
-
-///|
-/// === LucentDiscovery ===
-pub fn LucentDiscovery::to_json(self : LucentDiscovery) -> Json {
-  Json::object({
-    "schema_version": Json::string(self.schema_version),
-    "protocol_version": Json::string(self.protocol_version),
-    "schema_url": Json::string(self.schema_url),
-    "providers": Json::array(self.providers.map(fn(p) { p.to_json() })),
-  })
-}
-
-///|
-/// === Helper: stringify a Lux type to JSON ===
-pub fn lux_to_json_string(jv : Json) -> String {
-  jv.stringify()
 }
