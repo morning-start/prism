@@ -5,12 +5,6 @@
 /// Go 最佳实践：小文件、单一职责，匹配逻辑与注册表解耦。
 
 ///|
-/// 去除输入两端空白，保证 ABI/HTTP 边界上的路由一致。
-fn normalize_provider_key(value : String) -> String {
-  value.trim().to_owned()
-}
-
-///|
 /// 根据名称匹配 Provider
 ///
 /// 匹配策略：
@@ -19,35 +13,25 @@ fn normalize_provider_key(value : String) -> String {
 ///
 /// 若只想按模型名匹配，直接调用 `match_by_model`。
 pub fn match_provider_name(provider_name : String) -> ProviderRegistration? {
-  let provider_key = normalize_provider_key(provider_name)
   let providers = providers_cache
   let mut i = 0
   while i < providers.length() {
     let reg = providers[i]
-    // 1. 精确匹配主名称
-    if reg.name == provider_key {
+    // 1. 精确匹配
+    if reg.name == provider_name {
       return Some(reg)
-    }
-    // 2. 匹配别名
-    let mut j = 0
-    while j < reg.aliases.length() {
-      if reg.aliases[j] == provider_key {
-        return Some(reg)
-      }
-      j = j + 1
     }
     i = i + 1
   }
   // 3. 未命中名称时，把输入当作模型名匹配最具体的注册项
-  match_by_model(provider_key)
+  match_by_model(provider_name)
 }
 
 ///|
 /// 根据 model_name 匹配 Provider（通过 model_pattern 子串匹配）
 ///
-/// 返回最具体的匹配（字面约束越多、通配符越少越优先），或 None。
+/// 返回最具体的匹配（pattern 中 * 越多越优先），或 None。
 pub fn match_by_model(model_name : String) -> ProviderRegistration? {
-  let model_key = normalize_provider_key(model_name)
   let providers = providers_cache
   let mut best : ProviderRegistration? = None
   let mut best_score = 0
@@ -57,7 +41,7 @@ pub fn match_by_model(model_name : String) -> ProviderRegistration? {
     let score = pattern_specificity(reg.model_pattern)
     if score > 0 &&
       score > best_score &&
-      model_pattern_matches(reg.model_pattern, model_key) {
+      model_pattern_matches(reg.model_pattern, model_name) {
       best = Some(reg)
       best_score = score
     }
@@ -71,8 +55,10 @@ pub fn match_by_model(model_name : String) -> ProviderRegistration? {
 pub fn list_provider_names() -> Array[String] {
   let providers = providers_cache
   let result : Array[String] = []
-  for reg in providers {
-    result.push(reg.name)
+  let mut i = 0
+  while i < providers.length() {
+    result.push(providers[i].name)
+    i = i + 1
   }
   result
 }
@@ -144,10 +130,30 @@ fn single_pattern_matches(pattern : String, model_name : String) -> Bool {
 /// 逗号分隔 pattern 拆分为数组（如 "gpt-*,o*" -> ["gpt-*" "o*"]）
 fn pattern_parts(pattern : String) -> Array[String] {
   let result : Array[String] = []
-  for part in pattern.split(",") {
-    result.push(part.to_owned())
+  let mut pos = 0
+  while pos < pattern.length() {
+    let comma = find_comma(pattern, pos)
+    if comma == -1 {
+      result.push(pattern[pos:pattern.length()].to_owned())
+      pos = pattern.length()
+    } else {
+      result.push(pattern[pos:comma].to_owned())
+      pos = comma + 1
+    }
   }
   result
+}
+
+///|
+fn find_comma(s : String, start : Int) -> Int {
+  let mut i = start
+  while i < s.length() {
+    if s[i] == ',' {
+      return i
+    }
+    i = i + 1
+  }
+  -1
 }
 
 ///|
@@ -161,9 +167,8 @@ fn pattern_specificity(pattern : String) -> Int {
   let mut best = 0
   let mut i = 0
   while i < parts.length() {
-    let stars = count_star(parts[i])
-    let literals = parts[i].length() - stars
-    let score = literals * 1000 - stars
+    let count = count_star(parts[i])
+    let score = count * 1000 + parts[i].length()
     if score > best {
       best = score
     }
@@ -175,7 +180,15 @@ fn pattern_specificity(pattern : String) -> Int {
 ///|
 /// 统计字符串中 * 的个数
 fn count_star(s : String) -> Int {
-  s.length() - s.replace(old="*", new="").length()
+  let mut total = 0
+  let mut i = 0
+  while i < s.length() {
+    if s[i] == '*' {
+      total = total + 1
+    }
+    i = i + 1
+  }
+  total
 }
 
 ///|
@@ -205,32 +218,4 @@ fn substring(s : String, start : Int, end : Int) -> String {
 fn contains_after(s : String, skip_prefix : String, needle : String) -> Bool {
   let rest = substring(s, skip_prefix.length(), s.length())
   rest.contains(needle)
-}
-
-///|
-/// Resolve a provider name or model to one registry entry.
-///
-/// Centralizes normalization and the stable unknown-provider error used by
-/// request, response, and stream conversion paths.
-fn resolve_provider(
-  provider_name : String,
-) -> Result[ProviderRegistration, String] {
-  let provider_key = normalize_provider_key(provider_name)
-  match match_provider_name(provider_key) {
-    Some(reg) => Ok(reg)
-    None => Err("unknown provider: " + provider_key)
-  }
-}
-
-///|
-/// 通用 provider 分发：resolve → 调用函数指针 → 返回结果。
-/// 消除 prism.mbt 中 3 处重复的 resolve→call→Ok/Err 样板。
-fn[T] dispatch_provider(
-  provider : String,
-  apply : (ProviderRegistration) -> Result[T, String],
-) -> Result[T, String] {
-  match resolve_provider(provider) {
-    Ok(reg) => apply(reg)
-    Err(e) => Err(e)
-  }
 }
