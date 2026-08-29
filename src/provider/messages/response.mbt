@@ -9,9 +9,10 @@ pub fn messages_to_lux_response(
   }
   let id = @internal.field_str(jv, "id").unwrap_or("")
   let model = @internal.field_str(jv, "model").unwrap_or("")
+  let diagnostics : Array[@lux.ConversionDiagnostic] = []
   // content blocks → assistant message content
   let content = match @internal.field_arr(jv, "content") {
-    Some(blocks) => parse_content_blocks(blocks)
+    Some(blocks) => parse_content_blocks(blocks, diagnostics)
     None => []
   }
   let msg = @lux.LucentMessage::new(Assistant, content)
@@ -38,11 +39,10 @@ pub fn messages_to_lux_response(
     }
     None => None
   }
-  Ok(
-    @lux.ConversionResult::new(
-      @lux.LucentResponse::new(id, model, None, [choice], usage, None),
-    ),
+  let result = @lux.ConversionResult::new(
+    @lux.LucentResponse::new(id, model, None, [choice], usage, None),
   )
+  Ok(result.with_diagnostics(diagnostics))
 }
 
 ///|

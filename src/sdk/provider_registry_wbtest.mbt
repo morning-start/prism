@@ -58,17 +58,17 @@ test "registry - request_encode returns ConversionResult" {
 }
 
 ///|
-test "resolve_provider normalizes aliases" {
-  match resolve_provider("  google  ") {
-    Ok(reg) => assert_eq(reg.name, "gemini")
-    Err(e) => fail("resolve failed: \{e}")
+test "match_provider_name normalizes aliases" {
+  match match_provider_name("  google  ") {
+    Some(reg) => assert_eq(reg.name, "gemini")
+    None => fail("expected alias resolution")
   }
 }
 
 ///|
-test "resolve_provider returns normalized unknown-provider error" {
-  match resolve_provider("  not-a-provider  ") {
-    Ok(_) => fail("expected unknown provider error")
-    Err(e) => assert_eq(e, "unknown provider: not-a-provider")
+test "match_provider_name returns None for unknown provider" {
+  match match_provider_name("  not-a-provider  ") {
+    None => assert_true(true)
+    Some(_) => fail("expected unknown provider to be None")
   }
 }

@@ -61,6 +61,54 @@ first.
   `docs/rules/lucent-ir-evolution.md` as the mandatory governance process for
   evolving that specification. Do not change one without reconciling the other.
 
+## Field classification: standard vs extension
+
+Every IR field (request, response, stream event, capability, or payload) belongs to
+exactly one of two classes:
+
+- **Standard fields** — defined by the official spec (`docs/lux-ir-design.md`,
+  `schemas/lux-ir-v1.json`). Their required/optional status is fixed by the spec, and
+  every provider target must support them.
+- **Extension fields** — third-party / provider-specific (e.g. `extra`,
+  `Native`, `provider_payload`). They carry data outside the official spec and are
+  NOT guaranteed to be supported by any given target.
+
+Hard rules:
+
+- Extension fields MUST always be optional: nullable (`T?`) or an empty-by-default
+  map. Never introduce a required extension field — a target provider may not
+  support it.
+- Deserialization must never fail because an extension field is missing or unknown;
+  conversion must degrade gracefully (drop, or preserve via `extra` /
+  `provider_payload` / diagnostics) instead of erroring.
+- Changing a standard field's required status, or adding a new required standard
+  field, is a breaking change — follow `docs/rules/lucent-ir-evolution.md` first.
+- Preserve unknown extension data where practical instead of silently discarding it.
+
+## Protocol conversion (3-endpoint hub)
+
+Prism converts between the Lucent IR and three wire protocols — OpenAI
+`/v1/chat/completions`, OpenAI `/v1/responses`, and Anthropic `/v1/messages`.
+Each provider adapter is a MoonBit package under `src/provider/<name>/`
+implementing the 6-function encode/decode contract (see `docs/provider-guide.md`).
+
+Conversion rules (details: `api-protocol-converter/SKILL.md` + its `references/`):
+
+- Normalize into the IR first, then encode IR → target endpoint. Never write
+  pairwise converters between providers.
+- External side is always the client's expected format; internal side is always
+  the target API's native format.
+- Unsupported capabilities MUST fail explicitly (`Exact`/`Degraded`/`Unsupported`),
+  never silently drop data.
+- Implement the common intersection first (text, tool calls, streaming), then
+  extend advanced capabilities.
+- Streaming conversion must maintain: content block index, tool call index,
+  accumulated partial JSON arguments, and current stop reason.
+- Provider-specific experimental features (thinking, server tools, audio, ...)
+  are extension fields: optional, never required (see Field classification above).
+- Before claiming "3-endpoint interop", pass the 12-case minimum test matrix in
+  `api-protocol-converter/SKILL.md`.
+
 ## Tooling
 
 - `moon fmt` is used to format your code properly.

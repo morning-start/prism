@@ -358,7 +358,7 @@ pub fn responses_to_lux_request(
   let store = @internal.field_bool(jv, "store")
   let extras = @internal.collect_extra_fields(jv, [
     "model", "instructions", "input", "tools", "tool_choice", "temperature", "top_p",
-    "max_output_tokens", "stream", "reasoning", "text", "previous_response_id", "store",
+    "max_output_tokens", "stream", "reasoning", "text", "store",
   ])
   let opts = @lux.LucentOptions::new(
     temperature,
@@ -372,11 +372,9 @@ pub fn responses_to_lux_request(
     store,
     extras,
   )
-  // metadata: previous_response_id → extra
-  let extra = match @internal.field_str(jv, "previous_response_id") {
-    Some(_id) => None // previous_response_id → metadata, skip extra for now
-    None => None
-  }
+  // previous_response_id 保留在 extras 中（不再静默丢弃）：
+  // - responses → responses 原样透传（merge_extras）
+  // - responses → chat/messages 出站时由目标端编码器拒绝或降级（标准 §3.2）
   let result = @lux.ConversionResult::new(
     @lux.LucentRequest::new(
       model,
@@ -388,7 +386,7 @@ pub fn responses_to_lux_request(
       None,
       reasoning,
       None,
-      extra,
+      None,
     ),
   )
   Ok(result.with_diagnostics(diagnostics))

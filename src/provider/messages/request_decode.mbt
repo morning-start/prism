@@ -137,64 +137,69 @@ fn parse_content_block(block : Json) -> Result[@lux.LucentContent, String] {
 
 ///|
 /// 解析单条 Anthropic message → LucentConversationItem
-/// 注意：Anthropic 的 user 消息若含 tool_result block，本函数仅提取 tool_result 并
-/// 丢弃同消息中的其他 content blocks。这是已知的有损行为（Degraded），
-/// 因为 Anthropic 实际使用中 user 消息通常只有一个 tool_result。
-/// 若消费方需完整记录，应在外层使用 ConversionDiagnostic 记录该字段丢失。
-fn parse_message(msg_jv : Json) -> Result[@lux.LucentConversationItem, String] {
+///
+/// user 消息含 tool_result 时：若整条消息只有单个 tool_result，解码为
+/// Item::ToolResult（保持既有语义）；若 tool_result 与文本等其他块混合，
+/// 保留全部 content blocks 为 Message item，不静默丢弃文本（标准 §11.4）。
+fn parse_message(
+  msg_jv : Json,
+  diagnostics : Array[@lux.ConversionDiagnostic],
+) -> Result[@lux.LucentConversationItem, String] {
   let role = @internal.field_str(msg_jv, "role")
   match role {
     Some("user") => {
-      // 检查是否含 tool_result → 解码为 Item::ToolResult
       let content_arr = match @internal.field_arr(msg_jv, "content") {
         Some(arr) => arr
         None => return Err("message missing content array")
       }
-      let has_tool_result = {
-        let mut found = false
-        let mut i = 0
-        while i < content_arr.length() {
-          match @internal.field_str(content_arr[i], "type") {
-            Some("tool_result") => found = true
-            _ => ()
+      let parts = parse_content_blocks(content_arr, diagnostics)
+      // 统计 tool_result 块
+      let mut tool_count = 0
+      let mut single_tr : @lux.LucentToolResult? = None
+      let mut i = 0
+      while i < parts.length() {
+        match parts[i] {
+          ToolResult(tr) => {
+            tool_count = tool_count + 1
+            single_tr = Some(tr)
           }
-          i = i + 1
+          _ => ()
         }
-        found
+        i = i + 1
       }
-      if has_tool_result {
-        // 提取 tool_result block
-        let mut i = 0
-        while i < content_arr.length() {
-          match @internal.field_str(content_arr[i], "type") {
-            Some("tool_result") =>
-              match parse_content_block(content_arr[i]) {
-                Ok(tr) =>
-                  match tr {
-                    ToolResult(tr_data) =>
-                      return Ok(
-                        @lux.LucentConversationItem::tool_result(tr_data),
-                      )
-                    _ => ()
-                  }
-                Err(_) => ()
-              }
-            _ => ()
+      if tool_count == 1 && parts.length() == 1 {
+        // 单 tool_result：解码为独立 ToolResult item
+        match single_tr {
+          Some(tr) => Ok(@lux.LucentConversationItem::tool_result(tr))
+          None => {
+            let msg = @lux.LucentMessage::new(User, parts)
+            Ok(@lux.LucentConversationItem::message(msg))
           }
-          i = i + 1
         }
+      } else if tool_count > 0 {
+        // tool_result 与文本等其他块混合：保留全部 blocks，不静默丢弃文本
+        diagnostics.push(
+          @lux.ConversionDiagnostic::degraded(
+            "message.tool_result",
+            Some(
+              "tool_result mixed with other content preserved as message blocks",
+            ),
+          ),
+        )
+        let msg = @lux.LucentMessage::new(User, parts)
+        Ok(@lux.LucentConversationItem::message(msg))
+      } else {
+        // 普通 user 消息
+        let msg = @lux.LucentMessage::new(User, parts)
+        Ok(@lux.LucentConversationItem::message(msg))
       }
-      // 普通 user 消息：解析所有 content blocks
-      let parts = parse_content_blocks(content_arr)
-      let msg = @lux.LucentMessage::new(User, parts)
-      Ok(@lux.LucentConversationItem::message(msg))
     }
     Some("assistant") => {
       let content_arr = match @internal.field_arr(msg_jv, "content") {
         Some(arr) => arr
         None => return Err("assistant message missing content array")
       }
-      let parts = parse_content_blocks(content_arr)
+      let parts = parse_content_blocks(content_arr, diagnostics)
       let msg = @lux.LucentMessage::new(Assistant, parts)
       Ok(@lux.LucentConversationItem::message(msg))
     }
@@ -205,13 +210,20 @@ fn parse_message(msg_jv : Json) -> Result[@lux.LucentConversationItem, String] {
 
 ///|
 /// 解析 content blocks 数组 → Array[LucentContent]
-fn parse_content_blocks(arr : Array[Json]) -> Array[@lux.LucentContent] {
+/// 未知/无法解析的块类型不静默丢弃：产生 Degraded 诊断并跳过（标准 §11.5）。
+fn parse_content_blocks(
+  arr : Array[Json],
+  diagnostics : Array[@lux.ConversionDiagnostic],
+) -> Array[@lux.LucentContent] {
   let result : Array[@lux.LucentContent] = []
   let mut i = 0
   while i < arr.length() {
     match parse_content_block(arr[i]) {
       Ok(c) => result.push(c)
-      Err(_) => ()
+      Err(e) =>
+        diagnostics.push(
+          @lux.ConversionDiagnostic::degraded("content.block", Some(e)),
+        )
     }
     i = i + 1
   }
@@ -358,13 +370,17 @@ pub fn messages_to_lux_request(
   }
   // messages → conversation
   let conversation : Array[@lux.LucentConversationItem] = []
+  let diagnostics : Array[@lux.ConversionDiagnostic] = []
   match @internal.field_arr(jv, "messages") {
     Some(msgs) => {
       let mut i = 0
       while i < msgs.length() {
-        match parse_message(msgs[i]) {
+        match parse_message(msgs[i], diagnostics) {
           Ok(item) => conversation.push(item)
-          Err(_) => ()
+          Err(e) =>
+            diagnostics.push(
+              @lux.ConversionDiagnostic::degraded("message", Some(e)),
+            )
         }
         i = i + 1
       }
@@ -417,20 +433,19 @@ pub fn messages_to_lux_request(
     None,
     extras,
   )
-  Ok(
-    @lux.ConversionResult::new(
-      @lux.LucentRequest::new(
-        model,
-        instr_opt,
-        conversation,
-        tools,
-        tool_choice,
-        opts,
-        None,
-        reasoning,
-        metadata,
-        None,
-      ),
+  let result = @lux.ConversionResult::new(
+    @lux.LucentRequest::new(
+      model,
+      instr_opt,
+      conversation,
+      tools,
+      tool_choice,
+      opts,
+      None,
+      reasoning,
+      metadata,
+      None,
     ),
   )
+  Ok(result.with_diagnostics(diagnostics))
 }

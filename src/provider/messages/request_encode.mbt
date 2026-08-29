@@ -26,6 +26,52 @@ fn thinking_to_block(th : @lux.LucentThinking) -> String {
 }
 
 ///|
+/// 校验 tool_use 的 arguments_json 为合法 JSON，返回可内嵌的 input 片段。
+/// 非法 JSON → Invalid 诊断 + None（调用方跳过该块，不输出非法请求体，标准 §11.2）。
+fn tool_use_input_fragment(
+  tu : @lux.LucentToolUse,
+  diagnostics : Array[@lux.ConversionDiagnostic],
+) -> String? {
+  match @internal.parse_json_opt(tu.arguments_json) {
+    Some(v) => Some(v.stringify())
+    None => {
+      diagnostics.push(
+        @lux.ConversionDiagnostic::new(
+          "content.tool_use.input",
+          @lux.Invalid,
+          Some("invalid JSON arguments cannot be sent to anthropic"),
+        ),
+      )
+      None
+    }
+  }
+}
+
+///|
+/// 从 extras Map 中移除指定键（返回新 Map；移除后为空返回 None）
+fn extras_without(
+  extras : Map[String, Json]?,
+  key : String,
+) -> Map[String, Json]? {
+  match extras {
+    Some(m) => {
+      let nm : Map[String, Json] = Map([])
+      for k, v in m {
+        if k != key {
+          nm[k] = v
+        }
+      }
+      if nm.is_empty() {
+        None
+      } else {
+        Some(nm)
+      }
+    }
+    None => None
+  }
+}
+
+///|
 /// 单个 LucentContent → Anthropic content block JSON 片段
 /// 无法映射的媒体产生 Unsupported 诊断并返回空串（调用方跳过，不输出空块）
 fn content_to_block(
@@ -36,13 +82,17 @@ fn content_to_block(
     Text(s, _) =>
       "{\"type\":\"text\",\"text\":\"" + @internal.json_escape(s) + "\"}"
     ToolUse(tu) =>
-      "{\"type\":\"tool_use\",\"id\":\"" +
-      @internal.json_escape(tu.id) +
-      "\",\"name\":\"" +
-      @internal.json_escape(tu.name) +
-      "\",\"input\":" +
-      tu.arguments_json +
-      "}"
+      match tool_use_input_fragment(tu, diagnostics) {
+        Some(input_frag) =>
+          "{\"type\":\"tool_use\",\"id\":\"" +
+          @internal.json_escape(tu.id) +
+          "\",\"name\":\"" +
+          @internal.json_escape(tu.name) +
+          "\",\"input\":" +
+          input_frag +
+          "}"
+        None => ""
+      }
     ToolResult(tr) =>
       "{\"type\":\"tool_result\",\"tool_use_id\":\"" +
       @internal.json_escape(tr.tool_use_id) +
@@ -120,19 +170,57 @@ fn content_to_block(
 
 ///|
 /// LucentMessage → Anthropic message JSON
+///
+/// Claude 无 tool 角色（标准 §11.3/§11.4 硬规则）：
+/// - role=Tool 的消息必须输出为 role:"user" + tool_result block
+/// - 同一 user 消息中 tool_result 必须排在文本前面
 fn message_to_json(
   msg : @lux.LucentMessage,
   diagnostics : Array[@lux.ConversionDiagnostic],
 ) -> String {
-  let role_str = msg.role.to_string()
+  let is_user_like = match msg.role {
+    User | Tool => true
+    _ => false
+  }
+  let role_str = if is_user_like { "user" } else { msg.role.to_string() }
   let blocks : Array[String] = []
-  let mut i = 0
-  while i < msg.content.length() {
-    let block = content_to_block(msg.content[i], diagnostics)
-    if block != "" {
-      blocks.push(block)
+  if is_user_like {
+    // tool_result 块前置，其余块后置（Claude 顺序硬规则）
+    let mut i = 0
+    while i < msg.content.length() {
+      match msg.content[i] {
+        ToolResult(_) => {
+          let block = content_to_block(msg.content[i], diagnostics)
+          if block != "" {
+            blocks.push(block)
+          }
+        }
+        _ => ()
+      }
+      i = i + 1
     }
-    i = i + 1
+    let mut j = 0
+    while j < msg.content.length() {
+      match msg.content[j] {
+        ToolResult(_) => ()
+        _ => {
+          let block = content_to_block(msg.content[j], diagnostics)
+          if block != "" {
+            blocks.push(block)
+          }
+        }
+      }
+      j = j + 1
+    }
+  } else {
+    let mut k = 0
+    while k < msg.content.length() {
+      let block = content_to_block(msg.content[k], diagnostics)
+      if block != "" {
+        blocks.push(block)
+      }
+      k = k + 1
+    }
   }
   "{\"role\":\"" +
   @internal.json_escape(role_str) +
@@ -205,16 +293,20 @@ pub fn lux_request_to_messages(
     match items[i] {
       Message(m) => msgs_json.push(message_to_json(m, diagnostics))
       ToolCall(tu) =>
-        // 独立 ToolCall → assistant 消息含 tool_use
-        msgs_json.push(
-          "{\"role\":\"assistant\",\"content\":[{\"type\":\"tool_use\",\"id\":\"" +
-          @internal.json_escape(tu.id) +
-          "\",\"name\":\"" +
-          @internal.json_escape(tu.name) +
-          "\",\"input\":" +
-          tu.arguments_json +
-          "}]}",
-        )
+        // 独立 ToolCall → assistant 消息含 tool_use（arguments 须为合法 JSON）
+        match tool_use_input_fragment(tu, diagnostics) {
+          Some(input_frag) =>
+            msgs_json.push(
+              "{\"role\":\"assistant\",\"content\":[{\"type\":\"tool_use\",\"id\":\"" +
+              @internal.json_escape(tu.id) +
+              "\",\"name\":\"" +
+              @internal.json_escape(tu.name) +
+              "\",\"input\":" +
+              input_frag +
+              "}]}",
+            )
+          None => ()
+        }
       ToolResult(tr) =>
         // ToolResult → user 消息含 tool_result content block
         msgs_json.push(
@@ -399,8 +491,48 @@ pub fn lux_request_to_messages(
       )
     None => ()
   }
+  // parallel_tool_calls（OpenAI 系）→ disable_parallel_tool_use（语义反向，标准 §2）
+  // extras 中透传的 parallel_tool_calls 由本分支消费，不落入输出 JSON。
+  let mut merged_extras = opts.extras
+  match opts.extras {
+    Some(m) =>
+      match m.get("parallel_tool_calls") {
+        Some(True) => {
+          parts.push("\"disable_parallel_tool_use\":true")
+          merged_extras = extras_without(opts.extras, "parallel_tool_calls")
+        }
+        Some(False) => {
+          parts.push("\"disable_parallel_tool_use\":false")
+          merged_extras = extras_without(opts.extras, "parallel_tool_calls")
+        }
+        _ => ()
+      }
+    None => ()
+  }
+  // previous_response_id：仅 Responses 有语义；跨端出站时若无可恢复历史必须拒绝（标准 §3.2）
+  match merged_extras {
+    Some(m) =>
+      match m.get("previous_response_id") {
+        Some(_) => {
+          if req.conversation.length() == 0 {
+            return Err(
+              "previous_response_id without conversation history cannot be converted to anthropic-messages",
+            )
+          }
+          diagnostics.push(
+            @lux.ConversionDiagnostic::unsupported(
+              "options.previous_response_id",
+              Some("previous_response_id not preserved by anthropic-messages"),
+            ),
+          )
+          merged_extras = extras_without(merged_extras, "previous_response_id")
+        }
+        None => ()
+      }
+    None => ()
+  }
   // extras：合并进请求 JSON 顶层
-  @internal.merge_extras_json(parts, opts.extras)
+  @internal.merge_extras_json(parts, merged_extras)
   let result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
   Ok(result.with_diagnostics(diagnostics))
 }

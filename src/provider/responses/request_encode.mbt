@@ -4,6 +4,30 @@
 /// LucentRequest → OpenAI Responses API JSON
 
 ///|
+/// 从 extras Map 中移除指定键（返回新 Map；移除后为空返回 None）
+fn extras_without(
+  extras : Map[String, Json]?,
+  key : String,
+) -> Map[String, Json]? {
+  match extras {
+    Some(m) => {
+      let nm : Map[String, Json] = Map([])
+      for k, v in m {
+        if k != key {
+          nm[k] = v
+        }
+      }
+      if nm.is_empty() {
+        None
+      } else {
+        Some(nm)
+      }
+    }
+    None => None
+  }
+}
+
+///|
 /// 2. lux_request_to_responses — 请求编码
 pub fn lux_request_to_responses(
   req : @lux.LucentRequest,
@@ -310,7 +334,32 @@ pub fn lux_request_to_responses(
     Some(b) => parts.push("\"store\":" + b.to_string())
     None => ()
   }
-  @internal.merge_extras_json(parts, opts.extras)
+  // disable_parallel_tool_use（Anthropic 系）→ parallel_tool_calls（语义反向，标准 §2）
+  // extras 中透传的 disable_parallel_tool_use 由本分支消费，不落入输出 JSON。
+  // previous_response_id 保留在 extras 中原样透传（responses → responses 往返）。
+  let mut merged_extras = opts.extras
+  match opts.extras {
+    Some(m) =>
+      match m.get("disable_parallel_tool_use") {
+        Some(True) => {
+          parts.push("\"parallel_tool_calls\":false")
+          merged_extras = extras_without(
+            opts.extras,
+            "disable_parallel_tool_use",
+          )
+        }
+        Some(False) => {
+          parts.push("\"parallel_tool_calls\":true")
+          merged_extras = extras_without(
+            opts.extras,
+            "disable_parallel_tool_use",
+          )
+        }
+        _ => ()
+      }
+    None => ()
+  }
+  @internal.merge_extras_json(parts, merged_extras)
   let result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
   Ok(result.with_diagnostics(diagnostics))
 }

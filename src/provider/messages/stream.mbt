@@ -137,10 +137,12 @@ pub fn messages_sse_to_events(
       }
       "message_stop" => {
         // 如果没有 Finish 事件，补一个默认的 Finish(Stop)
-        let has_finish = events.any(fn(e) { match e {
-          Finish(_) => true
-          _ => false
-        }})
+        let has_finish = events.any(fn(e) {
+          match e {
+            Finish(_) => true
+            _ => false
+          }
+        })
         if !has_finish {
           events.push(Finish(@lux.LucentFinishReason::Stop))
         }

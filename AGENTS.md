@@ -1,96 +1,98 @@
-# Project Agents.md Guide
+# Project Guide
 
 This is a [MoonBit](https://docs.moonbitlang.com) project.
 
-You can browse and install extra skills here:
-<https://github.com/moonbitlang/skills>
-
 ## Project Structure
 
-- MoonBit packages are organized per directory; each directory contains a
-  `moon.pkg` file listing its dependencies. Each package has its files and
-  blackbox test files (ending in `_test.mbt`) and whitebox test files (ending in
-  `_wbtest.mbt`).
+- Each directory is a MoonBit package with a `moon.pkg` file listing its
+  dependencies. Test files end in `_test.mbt` (blackbox) or `_wbtest.mbt`
+  (whitebox).
+- Toplevel `moon.mod` holds module metadata.
 
-- In the toplevel directory, there is a `moon.mod` file listing module
-  metadata.
+## Context & Planning (flowstate)
 
-## Planning & Task Documents (flowstate)
+When starting work, restore context from, in order:
 
-When starting work on this project, read these in order to restore context:
-
-- `.agent-workplace/` — Agent private workspace (gitignored). Contains:
-  - `docs/plan/` — Plan mode: roadmap-style planning (e.g. `2026-08-01-project-roadmap.md`)
-  - `docs/spec/` — Spec mode: requirements→plan→task three-chain (e.g. thinking-reasoning unification)
-  - `docs/task/` — Task mode: numbered checkbox task lists (e.g. thinking-reasoning tasks, e2e verification)
-  - `docs/decisions.md` — Decision records (options, rationale, rejections)
-  - `docs/requirements.md` — Requirements list (Spec mode starting point)
-  - `state/checkpoint.json` — Breakpoint resume state
-  - `modes/` — Flowstate mode definitions (graph/plan/spec/task/goal)
-- `.moonbit-pipeline.json` — pipeline state (current phase, plan file pointer,
-  task progress). Use it as the session checkpoint.
-- `docs/architecture.md` — dual-scenario architecture design (IR hub +
-  developer SDK / relay server), the source of truth for design decisions.
-- `docs/status.md` — current project status and module completion tracking.
-- `docs/rules/lucent-ir-evolution.md` — mandatory governance before changing
-  any Lucent IR field, enum variant, stream event, capability, or payload.
+- `.agent-workplace/` — private workspace (gitignored): `docs/plan/`,
+  `docs/spec/`, `docs/task/`, `docs/decisions.md`, `docs/requirements.md`,
+  `state/checkpoint.json`, `modes/`
+- `.moonbit-pipeline.json` — session checkpoint (phase, plan pointer, progress)
+- `docs/architecture.md` — source of truth for design decisions
+- `docs/status.md` — project status and module completion tracking
+- `docs/rules/lucent-ir-evolution.md` — governance for Lucent IR changes
 
 Progress convention: one feature per commit, commit after each task, pass
 `moon fmt --check` / `moon check` / `moon test` before committing. Once a
-task has passed acceptance verification (its acceptance checklist is fully
-green), the agent may commit to git on its own — no need to ask the user
-first.
-
+task passes acceptance verification, the agent may commit on its own.
 
 ## Coding convention
 
-- MoonBit code is organized in block style, each block is separated by `///|`,
-  the order of each block is irrelevant. In some refactorings, you can process
-  block by block independently.
-
-- Try to keep deprecated blocks in file called `deprecated.mbt` in each
-  directory.
+- MoonBit code is organized in block style, each block separated by `///|`;
+  block order is irrelevant, and refactorings can process block by block.
+- Keep deprecated blocks in `deprecated.mbt` in each directory.
 
 ## Lucent IR evolution
 
-- Before adding or changing any Lucent IR field, enum variant, tool model,
-  stream event, capability, request extension, or response payload, read and
-  follow [`docs/rules/lucent-ir-evolution.md`](docs/rules/lucent-ir-evolution.md).
-- Every Lucent IR proposal MUST identify whether it affects protocol conversion,
-  SDK/Agent consumption, or both. Conversion fidelity and explicit
-  `Exact`/`Degraded`/`Unsupported` boundaries are hard gates; SDK ergonomics are
-  evaluated only after those gates pass.
-- Treat `docs/lux-ir-design.md` as the current formal schema specification and
-  `docs/rules/lucent-ir-evolution.md` as the mandatory governance process for
-  evolving that specification. Do not change one without reconciling the other.
+- Before changing any Lucent IR field, enum variant, tool model, stream event,
+  capability, request extension, or response payload, read and follow
+  [`docs/rules/lucent-ir-evolution.md`](docs/rules/lucent-ir-evolution.md).
+- Every proposal MUST state whether it affects protocol conversion, SDK/Agent
+  consumption, or both. `Exact`/`Degraded`/`Unsupported` fidelity boundaries
+  are hard gates; SDK ergonomics come after.
+- `docs/lux-ir-design.md` is the formal schema spec; the evolution rule above
+  governs it. Never change one without reconciling the other.
+
+## Field classification: standard vs extension
+
+Every IR field is one of:
+
+- **Standard** — defined by the official spec (`docs/lux-ir-design.md`,
+  `schemas/lux-ir-v1.json`); required/optional status is fixed and every
+  provider must support them.
+- **Extension** — third-party / provider-specific (e.g. `extra`, `Native`,
+  `provider_payload`); not guaranteed to be supported by any target.
+
+Hard rules:
+
+- Extension fields MUST always be optional (`T?` or empty-by-default map).
+- Deserialization must never fail on a missing/unknown extension field; degrade
+  gracefully (drop, or preserve via `extra`/`provider_payload`/diagnostics).
+- Changing a standard field's required status, or adding a required standard
+  field, is a breaking change — follow the IR evolution governance first.
+- Preserve unknown extension data where practical.
+
+## Protocol conversion (3-endpoint hub)
+
+Prism converts between the Lucent IR and three wire protocols — OpenAI
+`/v1/chat/completions`, `/v1/responses`, and Anthropic `/v1/messages`.
+Adapters live under `src/provider/<name>/` (see `docs/provider-guide.md`).
+
+Rules (details: `api-protocol-converter/SKILL.md` + its `references/`):
+
+- Normalize into the IR first, then encode IR → target; never pairwise
+  converters between providers.
+- External side is the client's expected format; internal side is the target
+  API's native format.
+- Unsupported capabilities MUST fail explicitly, never silently drop data.
+- Implement the common intersection first (text, tool calls, streaming).
+- Streaming conversion maintains: content block index, tool call index,
+  partial JSON, and stop reason.
+- Provider-specific experimental features (thinking, server tools, audio, ...)
+  are extension fields: optional, never required.
+- Before claiming "3-endpoint interop", pass the 12-case minimum test matrix
+  in `api-protocol-converter/SKILL.md`.
 
 ## Tooling
 
-- `moon fmt` is used to format your code properly.
-
-- `moon ide` provides project navigation helpers like `peek-def`, `outline`, and
-  `find-references`. See $moonbit-agent-guide for details.
-
-- `moon info` is used to update the generated interface of the package, each
-  package has a generated interface file `.mbti`, it is a brief formal
-  description of the package. If nothing in `.mbti` changes, this means your
-  change does not bring the visible changes to the external package users, it is
-  typically a safe refactoring.
-
-- In the last step, run `moon info && moon fmt` to update the interface and
-  format the code. Check the diffs of `.mbti` file to see if the changes are
-  expected.
-
-- Run `moon test` to check tests pass. MoonBit supports snapshot testing; when
-  changes affect outputs, run `moon test --update` to refresh snapshots.
-
-- Prefer `assert_eq` or `assert_true(pattern is Pattern(...))` for results that
-  are stable or very unlikely to change. For snapshot tests that record
-  structured debugging output, derive `Debug` and use `debug_inspect`, rather
-  than deriving `Show` for debugging. For solid, well-defined results (e.g.
-  scientific computations), prefer assertion tests. You can use
-  `moon coverage analyze > uncovered.log` to see which parts of your code are
-  not covered by tests.
+- `moon fmt` — formats code.
+- `moon ide` — navigation helpers (`peek-def`, `outline`, `find-references`).
+- `moon info` — updates the generated `.mbti` interface per package; no diff
+  means a safe refactoring.
+- Last step: run `moon info && moon fmt` and check `.mbti` diffs are expected.
+- `moon test` — run tests; use `moon test --update` to refresh snapshots.
+- Prefer `assert_eq` / `assert_true(pattern is ...)` for stable results; derive
+  `Debug` + `debug_inspect` (not `Show`) for snapshot-style debugging output.
+  `moon coverage analyze > uncovered.log` shows uncovered code.
 
 
 <!-- headroom:rtk-instructions -->

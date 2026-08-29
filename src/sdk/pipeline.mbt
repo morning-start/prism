@@ -19,14 +19,14 @@ fn Prism::decode_to_lux(
   self : Prism,
   json_str : String,
 ) -> Result[@lux.LucentResponse, String] {
-  dispatch_provider(self.provider, fn(
-    reg,
-  ) -> Result[@lux.LucentResponse, String] {
-    match (reg.response_decode)(json_str) {
-      Ok(cr) => Ok(cr.value())
-      Err(e) => Err(e)
-    }
-  })
+  match match_provider_name(self.provider) {
+    Some(reg) =>
+      match (reg.response_decode)(json_str) {
+        Ok(cr) => Ok(cr.value())
+        Err(e) => Err(e)
+      }
+    None => Err("unknown provider: " + self.provider)
+  }
 }
 
 ///|
@@ -35,12 +35,14 @@ fn Prism::encode_lux_request(
   self : Prism,
   req : @lux.LucentRequest,
 ) -> Result[String, String] {
-  dispatch_provider(self.provider, fn(reg) -> Result[String, String] {
-    match (reg.request_encode)(req) {
-      Ok(cr) => Ok(cr.value())
-      Err(e) => Err(e)
-    }
-  })
+  match match_provider_name(self.provider) {
+    Some(reg) =>
+      match (reg.request_encode)(req) {
+        Ok(cr) => Ok(cr.value())
+        Err(e) => Err(e)
+      }
+    None => Err("unknown provider: " + self.provider)
+  }
 }
 
 ///|
@@ -49,14 +51,14 @@ fn decode_sse_inner(
   provider : String,
   sse_str : String,
 ) -> Result[Array[@lux.LucentStreamEvent], String] {
-  dispatch_provider(provider, fn(
-    reg,
-  ) -> Result[Array[@lux.LucentStreamEvent], String] {
-    match (reg.events_decode)(sse_str) {
-      Ok(cr) => Ok(cr.value())
-      Err(e) => Err(e)
-    }
-  })
+  match match_provider_name(provider) {
+    Some(reg) =>
+      match (reg.events_decode)(sse_str) {
+        Ok(cr) => Ok(cr.value())
+        Err(e) => Err(e)
+      }
+    None => Err("unknown provider: " + provider)
+  }
 }
 
 ///|
