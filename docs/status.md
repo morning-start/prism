@@ -1,6 +1,6 @@
 # Prism Project Status
 
-> Last updated: 2026-08-28
+> Last updated: 2026-08-29
 
 ## Module Completion
 
@@ -44,6 +44,10 @@ Provider aliases and model-pattern variants (codex, azure, vllm, gemini-vertex, 
 - `src/lux/lux.mbt` remains the type/model hub; codec implementations are split into request/response/stream/primitive files
 - Provider request codecs are split into dedicated request_decode/request_encode files; response/stream code remains co-located where further separation is not yet justified
 - JSON Schema (`schemas/lux-ir-v1.json`) remains manually authored, but `scripts/check_schema_drift.ps1` now reports version/required-field/enum/stream-event drift
+
+- `src/internal/sse.mbt` exports `parse_sse_frame` — shared SSE preprocessing pipeline used by messages, openai, and gemini stream decoders
+- `src/internal/json.mbt` exports `parse_string_array` and `merge_extras_json` — shared JSON helpers used by all four providers
+- `src/lux/stream.mbt` exports `BlockAccumulator` (package-internal) — extracted from the 290-line stream accumulator function
 
 ## Build & Verify
 
