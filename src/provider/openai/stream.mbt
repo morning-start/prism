@@ -21,6 +21,8 @@ pub fn openai_sse_to_events(
   let events : Array[@lux.LucentStreamEvent] = []
   let messages = @internal.parse_sse_messages(sse_str)
   let mut text_block_open = false // 是否有未闭合的文本块
+  let mut thinking_block_open = false // 是否有未闭合的 thinking 块
+  let thinking_block_idx = 1 // thinking 块使用固定索引 1，避免与 text 块（索引 0）冲突
   let mut current_tool_block = -1 // 当前工具调用块索引（-1 表示无）
   let mut i = 0
   while i < messages.length() {
@@ -30,6 +32,10 @@ pub fn openai_sse_to_events(
       if text_block_open {
         events.push(BlockEnd(0))
         text_block_open = false
+      }
+      if thinking_block_open {
+        events.push(BlockEnd(thinking_block_idx))
+        thinking_block_open = false
       }
       if current_tool_block >= 0 {
         events.push(BlockEnd(current_tool_block))
@@ -67,17 +73,29 @@ pub fn openai_sse_to_events(
             Some(delta) => {
               // role
               match @internal.field_str(delta, "role") {
-                Some("assistant") =>
+                Some("assistant") => {
+                  // 从 chunk 顶层提取真实 id/model/created，供 response.created 使用
+                  let chunk_id = @internal.field_str(jv, "id")
+                  let chunk_model = @internal.field_str(jv, "model")
+                  let chunk_created = @internal.field_int(jv, "created")
                   events.push(
                     ConversationStart(
-                      @lux.LucentConversationMeta::new(None, None, None),
+                      @lux.LucentConversationMeta::new_full(
+                        chunk_id,
+                        chunk_model,
+                        None,
+                        chunk_created,
+                        None,
+                      ),
                     ),
                   )
+                }
                 _ => ()
               }
-              // content
+              // content（空字符串不触发文本块：上游首个 chunk 常为 role + content:""，
+              // 若触发会导致 message item 先于 reasoning 创建，思考块被渲染到答案下方）
               match @internal.field_str(delta, "content") {
-                Some(s) => {
+                Some(s) if s.length() > 0 => {
                   if !text_block_open {
                     events.push(BlockStart(0, Text))
                     text_block_open = true
@@ -86,14 +104,19 @@ pub fn openai_sse_to_events(
                     BlockDelta(0, @lux.LucentBlockDelta::text_delta(s)),
                   )
                 }
-                None => ()
+                _ => ()
               }
               // reasoning_content（DeepSeek/vLLM thinking 内容）
               match @internal.field_str(delta, "reasoning_content") {
-                Some(s) =>
+                Some(s) => {
+                  if !thinking_block_open {
+                    events.push(BlockStart(thinking_block_idx, Thinking))
+                    thinking_block_open = true
+                  }
                   events.push(
-                    BlockDelta(0, @lux.LucentBlockDelta::thinking_delta(s)),
+                    BlockDelta(thinking_block_idx, @lux.LucentBlockDelta::thinking_delta(s)),
                   )
+                }
                 None => ()
               }
               // tool_calls
@@ -151,6 +174,10 @@ pub fn openai_sse_to_events(
               if text_block_open {
                 events.push(BlockEnd(0))
                 text_block_open = false
+              }
+              if thinking_block_open {
+                events.push(BlockEnd(thinking_block_idx))
+                thinking_block_open = false
               }
               if current_tool_block >= 0 {
                 events.push(BlockEnd(current_tool_block))

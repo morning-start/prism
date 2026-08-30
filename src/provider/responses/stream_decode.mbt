@@ -91,7 +91,14 @@ pub fn responses_sse_to_events(
         match @internal.obj_get(jv, "item") {
           Some(item) =>
             match parse_input_item(item, diagnostics) {
-              Some(ci) => events.push(ItemStart(idx, ci))
+              Some(ci) => {
+                events.push(ItemStart(idx, ci))
+                // reasoning item 需要额外发出 BlockStart，让编码器生成 thinking content block
+                match @internal.field_str(item, "type") {
+                  Some("reasoning") => events.push(BlockStart(idx, Thinking))
+                  _ => ()
+                }
+              }
               None => ()
             }
           None => ()
@@ -121,7 +128,7 @@ pub fn responses_sse_to_events(
         let idx = @internal.field_int(jv, "content_index").unwrap_or(0)
         events.push(BlockEnd(idx))
       }
-      "response.reasoning_summary_text.delta" => {
+      "response.reasoning_summary_text.delta" | "response.reasoning_text.delta" => {
         let idx = @internal.field_int(jv, "content_index").unwrap_or(0)
         match @internal.field_str(jv, "delta") {
           Some(t) =>
@@ -131,7 +138,7 @@ pub fn responses_sse_to_events(
           None => ()
         }
       }
-      "response.reasoning_summary_text.done" => {
+      "response.reasoning_summary_text.done" | "response.reasoning_text.done" => {
         let idx = @internal.field_int(jv, "content_index").unwrap_or(0)
         events.push(BlockEnd(idx))
       }

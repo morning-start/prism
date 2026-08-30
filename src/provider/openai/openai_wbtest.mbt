@@ -618,6 +618,89 @@ test "openai_sse_to_events - usage frame" {
 }
 
 ///|
+test "openai_sse_to_events - reasoning_content emits BlockStart(Thinking)" {
+  // DeepSeek/vLLM 风格：reasoning_content 出现在 delta 中
+  let sse = "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"reasoning_content\":\"Thinking\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"reasoning_content\":\" step\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\"Answer\"}}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
+  match openai_sse_to_events(sse) {
+    Ok(cr) => {
+      let events = cr.value()
+      // 必须有 BlockStart(thinking_block_idx, Thinking) — 使用索引 1 避免与 text 块冲突
+      let has_thinking_start = {
+        let mut found = false
+        for ev in events {
+          match ev {
+            BlockStart(1, Thinking) => found = true
+            _ => ()
+          }
+        }
+        found
+      }
+      assert_true(has_thinking_start)
+      // 必须有 ThinkingDelta
+      let has_thinking_delta = {
+        let mut found = false
+        for ev in events {
+          match ev {
+            BlockDelta(1, ThinkingDelta(_)) => found = true
+            _ => ()
+          }
+        }
+        found
+      }
+      assert_true(has_thinking_delta)
+      // 必须有 BlockStart(0, Text) 在 content delta 之前
+      let has_text_start = {
+        let mut found = false
+        for ev in events {
+          match ev {
+            BlockStart(0, Text) => found = true
+            _ => ()
+          }
+        }
+        found
+      }
+      assert_true(has_text_start)
+      // 事件序列必须包含 BlockEnd（thinking 用索引 1，text 用索引 0）
+      let has_thinking_end = {
+        let mut found = false
+        for ev in events {
+          match ev {
+            BlockEnd(1) => found = true
+            _ => ()
+          }
+        }
+        found
+      }
+      assert_true(has_thinking_end)
+      let has_text_end = {
+        let mut found = false
+        for ev in events {
+          match ev {
+            BlockEnd(0) => found = true
+            _ => ()
+          }
+        }
+        found
+      }
+      assert_true(has_text_end)
+      // Finish 必须存在
+      let has_finish = {
+        let mut found = false
+        for ev in events {
+          match ev {
+            Finish(_) => found = true
+            _ => ()
+          }
+        }
+        found
+      }
+      assert_true(has_finish)
+    }
+    Err(e) => fail("sse decode error: \{e}")
+  }
+}
+
+///|
 /// === 6. 流编码 ===
 
 ///|

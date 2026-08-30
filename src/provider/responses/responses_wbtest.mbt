@@ -95,6 +95,52 @@ test "responses_to_lux_request - tool types mapped to kinds" {
 }
 
 ///|
+test "responses_to_lux_request - input items without type field" {
+  // 某些客户端（如 OpenCode）省略 type 字段，默认应为 message
+  let json = "{\"model\":\"gpt-5\",\"input\":[{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"Hello\"}]}]}"
+  match responses_to_lux_request(json) {
+    Ok(cr) => {
+      let req = cr.value()
+      assert_eq(req.conversation.length(), 1)
+      match req.conversation[0] {
+        Message(m) => {
+          assert_eq(m.role, User)
+          match m.content[0] {
+            Text(t, _) => assert_eq(t, "Hello")
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(e) => fail("unexpected: \{e}")
+  }
+}
+
+///|
+test "responses_to_lux_request - input as string" {
+  let json = "{\"model\":\"gpt-5\",\"input\":\"Hello world\"}"
+  match responses_to_lux_request(json) {
+    Ok(cr) => {
+      let req = cr.value()
+      assert_eq(req.model, "gpt-5")
+      assert_eq(req.conversation.length(), 1)
+      match req.conversation[0] {
+        Message(m) => {
+          assert_eq(m.role, User)
+          match m.content[0] {
+            Text(t, _) => assert_eq(t, "Hello world")
+            _ => assert_true(false)
+          }
+        }
+        _ => assert_true(false)
+      }
+    }
+    Err(e) => fail("unexpected: \{e}")
+  }
+}
+
+///|
 /// === 2. 请求编码 ===
 
 ///|
@@ -240,6 +286,37 @@ test "lux_response_to_responses - empty choices error" {
   match lux_response_to_responses(resp) {
     Ok(_) => assert_true(false)
     Err(e) => assert_eq(e, "response has no choices")
+  }
+}
+
+///|
+test "lux_events_to_responses_sse - auto-emits output_item.added when ItemStart missing" {
+  // 模拟 OpenAI 解码器输出：只有 BlockStart/BlockDelta/BlockEnd，无 ItemStart
+  let events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new(Some("r_1"), Some("gpt-5"), None),
+    ),
+    BlockStart(0, Thinking),
+    BlockDelta(0, @lux.LucentBlockDelta::thinking_delta("thinking")),
+    BlockEnd(0),
+    BlockStart(0, Text),
+    BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
+    BlockEnd(0),
+    Finish(Stop),
+    Done,
+  ]
+  match lux_events_to_responses_sse(events) {
+    Ok(cr) => {
+      let sse = cr.value()
+      // 必须自动补全 response.output_item.added
+      assert_true(sse.contains("response.output_item.added"))
+      // 必须自动补全 response.content_part.added
+      assert_true(sse.contains("response.content_part.added"))
+      // 必须包含 thinking 和 text delta（AI SDK 消费 reasoning_summary_text.delta）
+      assert_true(sse.contains("response.reasoning_summary_text.delta"))
+      assert_true(sse.contains("response.output_text.delta"))
+    }
+    Err(e) => fail("encode error: \{e}")
   }
 }
 

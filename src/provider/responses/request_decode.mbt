@@ -223,19 +223,69 @@ fn parse_input_item(
       )
       Some(@lux.LucentConversationItem::reasoning(th))
     }
-    _ => None
+    _ =>
+      // 无 type 字段：某些客户端省略 type，默认当作 message 处理
+      match @internal.field_str(item, "role") {
+        Some(role_str) => {
+          let role = match role_str {
+            "user" => @lux.User
+            "assistant" => Assistant
+            "developer" => Developer
+            _ => User
+          }
+          let content = match @internal.field_arr(item, "content") {
+            Some(parts) => {
+              let result : Array[@lux.LucentContent] = []
+              let mut i = 0
+              while i < parts.length() {
+                match @internal.field_str(parts[i], "type") {
+                  Some("input_text") =>
+                    match @internal.field_str(parts[i], "text") {
+                      Some(t) => result.push(@lux.LucentContent::text(t))
+                      None => ()
+                    }
+                  _ => ()
+                }
+                i = i + 1
+              }
+              result
+            }
+            None =>
+              // content 也可能是字符串
+              match @internal.field_str(item, "content") {
+                Some(s) => [@lux.LucentContent::text(s)]
+                None => []
+              }
+          }
+          Some(@lux.LucentConversationItem::message(
+            @lux.LucentMessage::new(role, content),
+          ))
+        }
+        None => None
+      }
   }
 }
 
 ///|
-/// 解析 input[] → Array[LucentConversationItem]
+/// 解析 input → Array[LucentConversationItem]
+///
+/// Responses API 的 input 字段有两种形态：
+///   - string → 单个用户消息（简化格式）
+///   - array  → Item 数组（标准格式）
 fn parse_input(
   jv : Json,
   diagnostics : Array[@lux.ConversionDiagnostic],
 ) -> Array[@lux.LucentConversationItem] {
   let result : Array[@lux.LucentConversationItem] = []
-  match @internal.field_arr(jv, "input") {
-    Some(items) => {
+  match @internal.obj_get(jv, "input") {
+    Some(String(s)) =>
+      // 简化格式：input 为字符串 → 包装为单条 user 消息
+      result.push(
+        @lux.LucentConversationItem::message(
+          @lux.LucentMessage::new(User, [@lux.LucentContent::text(s)]),
+        ),
+      )
+    Some(Array(items)) => {
       let mut i = 0
       while i < items.length() {
         match parse_input_item(items[i], diagnostics) {
@@ -245,7 +295,7 @@ fn parse_input(
         i = i + 1
       }
     }
-    None => ()
+    _ => ()
   }
   result
 }

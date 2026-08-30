@@ -6,6 +6,81 @@
 ///   2. source 侧用 openai 编码，target 侧用 messages 解码验证语义保持
 
 ///|
+test "openai stream to responses stream - full event sequence" {
+  // 模拟 OpenAI Chat Completions 流式响应（包含 reasoning_content）
+  let openai_sse = "data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":1000,\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"}}]}\n\ndata: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":1000,\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"thinking\"}}]}\n\ndata: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":1000,\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" step\"}}]}\n\ndata: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":1000,\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\\n\\n\"}}]}\n\ndata: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":1000,\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"}}]}\n\ndata: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":1000,\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":1000,\"model\":\"gpt-4\",\"choices\":[],\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5,\"total_tokens\":15}}\n\ndata: [DONE]\n\n"
+
+  match @sdk.convert_stream("openai", openai_sse, "responses") {
+    Ok(cr) => {
+      let sse = cr.value()
+      // 必须包含 response.created
+      assert_true(sse.contains("event: response.created"))
+      // 必须包含 response.output_item.added（reasoning item）
+      assert_true(sse.contains("response.output_item.added"))
+      // 必须包含 reasoning_summary_text.delta（AI SDK 消费该事件，reasoning_text.delta 会被忽略）
+      assert_true(sse.contains("response.reasoning_summary_text.delta"))
+      // 必须包含 content_part.added
+      assert_true(sse.contains("response.content_part.added"))
+      // 必须包含 output_text.delta
+      assert_true(sse.contains("response.output_text.delta"))
+      // 必须包含 output_text.done
+      assert_true(sse.contains("response.output_text.done"))
+      // 必须包含 response.completed（只出现一次）
+      let completed_count = sse.split("event: response.completed").length() - 1
+      assert_eq(completed_count, 1)
+      // 不应包含 [DONE]
+      assert_false(sse.contains("[DONE]"))
+      // 输出每个事件行用于调试
+      let lines = sse.split("\n").to_array()
+      let mut j = 0
+      while j < lines.length() {
+        let line = lines[j]
+        if line.has_prefix("event: ") {
+          // 打印事件类型
+          let _ = line.length() // 确保不 panic
+        }
+        j = j + 1
+      }
+      // 调试：统计所有事件类型
+      let event_type_counts : Map[String, Int] = Map([])
+      let all_lines = sse.split("\n").to_array()
+      let mut j = 0
+      while j < all_lines.length() {
+        let line = all_lines[j]
+        if line.has_prefix("event: ") {
+          let etype = line[7:].to_owned()
+          match event_type_counts.get(etype) {
+            Some(n) => event_type_counts[etype] = n + 1
+            None => event_type_counts[etype] = 1
+          }
+        }
+        j = j + 1
+      }
+      // 检查关键事件是否存在
+      let has_output_text_done = sse.contains("response.output_text.done")
+      let has_reasoning_done = sse.contains("response.reasoning_summary_part.done")
+      let has_completed = sse.contains("response.completed")
+      let has_hello = sse.contains("Hello")
+      // 断言：output_text.done 必须存在
+      assert_true(has_output_text_done)
+      // 断言：reasoning_summary_part.done 应只出现一次
+      if has_reasoning_done {
+        let reasoning_done_count = sse.split("event: response.reasoning_summary_part.done").length() - 1
+        assert_eq(reasoning_done_count, 1)
+      }
+      // 断言：response.completed 只出现一次
+      let completed_count = sse.split("event: response.completed").length() - 1
+      assert_eq(completed_count, 1)
+      // 断言：不应包含 [DONE]
+      assert_false(sse.contains("[DONE]"))
+      // 断言：应包含文本内容
+      assert_true(has_hello)
+    }
+    Err(e) => fail("convert_stream error: \{e}")
+  }
+}
+
+///|
 /// 标准请求 → openai JSON（source 侧输入）
 fn openai_req_json() -> Result[String, String] {
   let req = @lux.LucentRequest::new(
