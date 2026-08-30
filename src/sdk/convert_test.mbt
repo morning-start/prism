@@ -61,7 +61,6 @@ test "openai stream to responses stream - full event sequence" {
       let has_reasoning_done = sse.contains(
         "response.reasoning_summary_part.done",
       )
-      let has_completed = sse.contains("response.completed")
       let has_hello = sse.contains("Hello")
       // 断言：output_text.done 必须存在
       assert_true(has_output_text_done)

@@ -144,7 +144,7 @@ pub fn messages_sse_to_events(
           }
         })
         if !has_finish {
-          events.push(Finish(@lux.LucentFinishReason::Stop))
+          events.push(Finish(Stop))
         }
         events.push(Done)
       }

@@ -38,7 +38,7 @@ fn tool_use_input_fragment(
       diagnostics.push(
         @lux.ConversionDiagnostic::new(
           "content.tool_use.input",
-          @lux.Invalid,
+          Invalid,
           Some("invalid JSON arguments cannot be sent to anthropic"),
         ),
       )

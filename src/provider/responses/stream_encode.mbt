@@ -13,7 +13,6 @@ pub fn lux_events_to_responses_sse(
   let block_is_tool : Map[Int, Bool] = Map([])
   let block_is_thinking : Map[Int, Bool] = Map([])
   let mut next_output_index = 0
-  let mut cur_message_output : Int = -1
   let mut message_output_index : Int = -1 // message item 的 output_index（Thinking 不修改）
   let mut cur_content_index = 0
   // item_id 生成：AI SDK 要求 output_item 必须有 id、delta 事件必须有 item_id。
@@ -67,7 +66,6 @@ pub fn lux_events_to_responses_sse(
       ItemStart(idx, item) => {
         // ItemStart 提供 output_index；message item 重置 content 计数
         next_output_index = idx + 1
-        cur_message_output = -1
         cur_content_index = 0
         // AI SDK 要求 item 必须有 id（message/reasoning 等均校验）
         let item_id = "msg_" + item_counter.to_string()
@@ -225,7 +223,6 @@ pub fn lux_events_to_responses_sse(
                 "\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[]}}",
               )
             }
-            cur_message_output = message_output_index
             let out = message_output_index
             block_output[idx] = out
             block_content[idx] = cur_content_index
