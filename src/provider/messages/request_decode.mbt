@@ -148,11 +148,19 @@ fn parse_message(
   let role = @internal.field_str(msg_jv, "role")
   match role {
     Some("user") => {
-      let content_arr = match @internal.field_arr(msg_jv, "content") {
-        Some(arr) => arr
-        None => return Err("message missing content array")
+      let parts = match @internal.field_arr(msg_jv, "content") {
+        Some(arr) => parse_content_blocks(arr, diagnostics)
+        None =>
+          // content 为字符串时，转为单个 text block
+          match @internal.field_str(msg_jv, "content") {
+            Some(s) => {
+              let arr : Array[@lux.LucentContent] = []
+              arr.push(@lux.LucentContent::text(s))
+              arr
+            }
+            None => return Err("message missing content")
+          }
       }
-      let parts = parse_content_blocks(content_arr, diagnostics)
       // 统计 tool_result 块
       let mut tool_count = 0
       let mut single_tr : @lux.LucentToolResult? = None
@@ -195,11 +203,19 @@ fn parse_message(
       }
     }
     Some("assistant") => {
-      let content_arr = match @internal.field_arr(msg_jv, "content") {
-        Some(arr) => arr
-        None => return Err("assistant message missing content array")
+      let parts = match @internal.field_arr(msg_jv, "content") {
+        Some(arr) => parse_content_blocks(arr, diagnostics)
+        None =>
+          // content 为字符串时，转为单个 text block
+          match @internal.field_str(msg_jv, "content") {
+            Some(s) => {
+              let arr : Array[@lux.LucentContent] = []
+              arr.push(@lux.LucentContent::text(s))
+              arr
+            }
+            None => return Err("assistant message missing content")
+          }
       }
-      let parts = parse_content_blocks(content_arr, diagnostics)
       let msg = @lux.LucentMessage::new(Assistant, parts)
       Ok(@lux.LucentConversationItem::message(msg))
     }

@@ -183,14 +183,14 @@ pub fn lux_events_to_messages_sse(
             fields = fields + ",\"model\":\"" + @internal.json_escape(m) + "\""
           None => ()
         }
-        match meta.usage_input {
-          Some(n) =>
-            fields = fields +
-              ",\"usage\":{\"input_tokens\":" +
-              n.to_string() +
-              "}"
-          None => ()
+        let usage_val = match meta.usage_input {
+          Some(n) => n
+          None => 0
         }
+        fields = fields +
+          ",\"usage\":{\"input_tokens\":" +
+          usage_val.to_string() +
+          "}"
         lines.push(
           "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{" +
           fields +
@@ -259,18 +259,53 @@ pub fn lux_events_to_messages_sse(
           idx.to_string() +
           "}",
         )
-      Finish(fr) =>
+      Finish(fr) => {
+        // 向后查找 Usage 事件，合并为单个 message_delta
+        let mut output_tokens = 0
+        let mut has_usage = false
+        let mut j = i + 1
+        while j < events.length() {
+          match events[j] {
+            Usage(u) => {
+              output_tokens = u.completion_tokens
+              has_usage = true
+            }
+            _ => ()
+          }
+          j = j + 1
+        }
+        if has_usage {
+          // 标记 Usage 已被消费（通过将 index 设为 -1 或其他方式跳过）
+          // 由于 MoonBit 的 match 需要穷尽，我们在 Usage 分支检查
+        }
         lines.push(
           "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"" +
           @internal.json_escape(fr.to_string()) +
-          "\"}}",
-        )
-      Usage(u) =>
-        lines.push(
-          "event: message_delta\ndata: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":" +
-          u.completion_tokens.to_string() +
+          "\"},\"usage\":{\"output_tokens\":" +
+          output_tokens.to_string() +
           "}}",
         )
+      }
+      Usage(u) => {
+        // 检查前面是否有 Finish 事件（如果有则跳过，因为已合并到 Finish 中）
+        let mut has_finish = false
+        let mut j = 0
+        while j < i {
+          match events[j] {
+            Finish(_) => has_finish = true
+            _ => ()
+          }
+          j = j + 1
+        }
+        if !has_finish {
+          // 没有 Finish 事件时，单独输出 Usage
+          lines.push(
+            "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{},\"usage\":{\"output_tokens\":" +
+            u.completion_tokens.to_string() +
+            "}}",
+          )
+        }
+      }
       Error(e) =>
         lines.push(
           "event: error\ndata: {\"type\":\"error\",\"error\":{\"message\":\"" +
