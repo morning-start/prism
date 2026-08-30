@@ -58,14 +58,19 @@ test "openai stream to responses stream - full event sequence" {
       }
       // 检查关键事件是否存在
       let has_output_text_done = sse.contains("response.output_text.done")
-      let has_reasoning_done = sse.contains("response.reasoning_summary_part.done")
+      let has_reasoning_done = sse.contains(
+        "response.reasoning_summary_part.done",
+      )
       let has_completed = sse.contains("response.completed")
       let has_hello = sse.contains("Hello")
       // 断言：output_text.done 必须存在
       assert_true(has_output_text_done)
       // 断言：reasoning_summary_part.done 应只出现一次
       if has_reasoning_done {
-        let reasoning_done_count = sse.split("event: response.reasoning_summary_part.done").length() - 1
+        let reasoning_done_count = sse
+          .split("event: response.reasoning_summary_part.done")
+          .length() -
+          1
         assert_eq(reasoning_done_count, 1)
       }
       // 断言：response.completed 只出现一次

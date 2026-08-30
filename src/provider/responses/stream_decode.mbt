@@ -128,7 +128,8 @@ pub fn responses_sse_to_events(
         let idx = @internal.field_int(jv, "content_index").unwrap_or(0)
         events.push(BlockEnd(idx))
       }
-      "response.reasoning_summary_text.delta" | "response.reasoning_text.delta" => {
+      "response.reasoning_summary_text.delta"
+      | "response.reasoning_text.delta" => {
         let idx = @internal.field_int(jv, "content_index").unwrap_or(0)
         match @internal.field_str(jv, "delta") {
           Some(t) =>

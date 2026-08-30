@@ -257,9 +257,11 @@ fn parse_input_item(
                 None => []
               }
           }
-          Some(@lux.LucentConversationItem::message(
-            @lux.LucentMessage::new(role, content),
-          ))
+          Some(
+            @lux.LucentConversationItem::message(
+              @lux.LucentMessage::new(role, content),
+            ),
+          )
         }
         None => None
       }

@@ -48,7 +48,11 @@ pub fn lux_events_to_responses_sse(
             match ex {
               Object(m) =>
                 m.each(fn(key, val) {
-                  fields = fields + ",\"" + @internal.json_escape(key) + "\":" + val.stringify()
+                  fields = fields +
+                    ",\"" +
+                    @internal.json_escape(key) +
+                    "\":" +
+                    val.stringify()
                 })
               _ => ()
             }
@@ -163,7 +167,11 @@ pub fn lux_events_to_responses_sse(
             // 缺少则后续 function_call_arguments.delta 无法归属到工具调用
             let out = next_output_index
             next_output_index = next_output_index + 1
-            let fid = if tid == "" { "fc_" + item_counter.to_string() } else { tid }
+            let fid = if tid == "" {
+              "fc_" + item_counter.to_string()
+            } else {
+              tid
+            }
             if tid == "" {
               item_counter = item_counter + 1
             }
@@ -380,9 +388,13 @@ pub fn lux_events_to_responses_sse(
           j = j + 1
         }
         let usage_json = if has_usage {
-          ",\"usage\":{\"input_tokens\":" + pt.to_string() +
-          ",\"output_tokens\":" + ct.to_string() +
-          ",\"total_tokens\":" + tt.to_string() + "}"
+          ",\"usage\":{\"input_tokens\":" +
+          pt.to_string() +
+          ",\"output_tokens\":" +
+          ct.to_string() +
+          ",\"total_tokens\":" +
+          tt.to_string() +
+          "}"
         } else {
           ""
         }

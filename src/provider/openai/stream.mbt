@@ -114,7 +114,10 @@ pub fn openai_sse_to_events(
                     thinking_block_open = true
                   }
                   events.push(
-                    BlockDelta(thinking_block_idx, @lux.LucentBlockDelta::thinking_delta(s)),
+                    BlockDelta(
+                      thinking_block_idx,
+                      @lux.LucentBlockDelta::thinking_delta(s),
+                    ),
                   )
                 }
                 None => ()
