@@ -1,0 +1,23 @@
+{
+  "skill_name": "prism-wasm",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I want to call prism.wasm directly from Node.js to convert an OpenAI request to Anthropic format. No wrapper libraries. Show me how to load the WASM, write strings to linear memory, and call the conversion function.",
+      "expected_output": "JavaScript code showing: 1) load WASM with WebAssembly.instantiate, 2) writeString helper using UTF-16LE, 3) allocate scratch buffer with wasm_init_scratch, 4) write provider/json/target to scratch, 5) read back with wasm_read_scratch_arg, 6) call wasm_convert_req, 7) read result string.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "How do I read the result string returned by a prism.wasm function? I keep getting garbage or empty strings.",
+      "expected_output": "Explanation of the string ABI: result is a pointer to UTF-16LE data with length at ptr-4. Show readString function that reads u32 LE length then decodes UTF-16LE. Mention that MoonBit returns pointers, not scratch offsets.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "I'm building a Python service that needs to convert between 5 different LLM providers using prism.wasm. What's the best pattern for reusing the WASM instance and managing memory?",
+      "expected_output": "Python code showing: 1) load WASM once at startup, 2) reuse instance for all calls, 3) scratch buffer allocation pattern, 4) helper functions for write/read strings, 5) example converting between providers. Should mention wasmer or wasmtime.",
+      "files": []
+    }
+  ]
+}

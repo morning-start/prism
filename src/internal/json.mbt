@@ -76,39 +76,29 @@ pub fn field_int_exact(jv : Json, key : String) -> Int? {
 
 ///|
 /// 清理 JSON 字符串中的 SSE 心跳标记
-///
-/// 某些 SSE 实现会在数据后附加心跳标记（如 `: keep-alive`），
-/// 或把心跳注释行错误合并进 JSON payload（产生 `\: keep-alive.` 等
-/// 无效转义序列），导致 JSON 字符串中混入非法内容。此函数移除这些标记。
 pub fn clean_sse_heartbeat(s : String) -> String {
   let mut result = s.trim_end().to_owned()
-  // 第一类：带反斜杠的心跳片段（`\:` 是非法 JSON 转义，正常数据中不会出现，
-  // 只可能来自心跳行被错误合并进 payload，可安全全局移除）
-  let escaped_patterns = [
-    "\\: keep-alive.", "\\: keep-alive", "\\:keep-alive.", "\\:keep-alive", "\\: heartbeat.",
-    "\\: heartbeat", "\\:heartbeat.", "\\:heartbeat",
-  ]
-  let mut k = 0
-  while k < escaped_patterns.length() {
-    result = result.replace(old=escaped_patterns[k], new="")
-    k = k + 1
+  // 第一类：带反斜杠的心跳片段（`\:` 是非法 JSON 转义，全局移除）
+  let escaped_prefixes = ["\\: ", "\\:"]
+  let heartbeat_words = ["keep-alive", "heartbeat"]
+  for prefix in escaped_prefixes {
+    for word in heartbeat_words {
+      result = result.replace(old=prefix + word + ".", new="")
+      result = result.replace(old=prefix + word, new="")
+    }
   }
-  // 第二类：无反斜杠心跳标记（可能带句点），仅移除字符串末尾的标记
-  let heartbeat_patterns = [
+  // 第二类：无反斜杠心跳标记，仅移除字符串末尾
+  let trailing_patterns = [
     ": keep-alive.", ": keep-alive", ":keep-alive.", ":keep-alive", ": heartbeat.",
     ": heartbeat", ":heartbeat.", ":heartbeat",
   ]
-  let mut j = 0
-  while j < heartbeat_patterns.length() {
-    let pattern = heartbeat_patterns[j]
-    // 允许 result 恰好等于 pattern（纯心跳行）
+  for pattern in trailing_patterns {
     if result.length() >= pattern.length() {
       let suffix = result[result.length() - pattern.length():result.length()].to_owned()
       if suffix == pattern {
         result = result[0:result.length() - pattern.length()].to_owned()
       }
     }
-    j = j + 1
   }
   result
 }
@@ -290,5 +280,184 @@ pub fn collect_extra_fields(
       }
     }
     _ => None
+  }
+}
+
+///|
+/// Polymorphic content 解析辅助
+///
+/// LLM API 的 content 字段有三种形态：
+///   - string → 单个文本内容
+///   - array  → 多个内容块
+///   - null / 缺失 → 空
+///
+/// 此函数统一处理这三种形态，对 array 中的每个元素调用 `parse_item` 回调。
+///
+/// 典型用法：
+/// ```
+/// let parts = @internal.parse_content_polymorphic(
+///   msg_jv,
+///   "content",
+///   parse_content_block,
+/// )
+/// ```
+pub fn parse_content_polymorphic(
+  jv : Json,
+  field : String,
+  parse_item : (Json) -> Array[Json],
+) -> Array[Json] {
+  match obj_get(jv, field) {
+    Some(String(s)) => [Json::string(s)]
+    Some(Array(arr)) => {
+      let result : Array[Json] = []
+      let mut i = 0
+      while i < arr.length() {
+        let items = parse_item(arr[i])
+        let mut j = 0
+        while j < items.length() {
+          result.push(items[j])
+          j = j + 1
+        }
+        i = i + 1
+      }
+      result
+    }
+    _ => []
+  }
+}
+
+///|
+/// 从 JSON 对象中提取 content 字段为字符串数组（简化版）
+///
+/// 处理 content 的 string/array/null 三态，返回纯文本片段数组。
+/// 适用于只关心文本内容、不需要结构化解析的场景。
+pub fn extract_text_content(jv : Json, field : String) -> Array[String] {
+  match obj_get(jv, field) {
+    Some(String(s)) => [s]
+    Some(Array(arr)) => {
+      let result : Array[String] = []
+      let mut i = 0
+      while i < arr.length() {
+        match arr[i] {
+          String(s) => result.push(s)
+          Object(_) =>
+            match field_str(arr[i], "text") {
+              Some(t) => result.push(t)
+              None => ()
+            }
+          _ => ()
+        }
+        i = i + 1
+      }
+      result
+    }
+    _ => []
+  }
+}
+
+///|
+/// 内容块序列化辅助 — 单 text part 快速路径
+///
+/// LLM API 的 content 字段常见优化：当只有一个 text 类型的内容块时，
+/// 直接序列化为字符串而非数组。此函数封装该逻辑。
+///
+/// 参数：
+///   - `parts`：内容块数组
+///   - `is_text`：判断某个 part 是否为 text 类型
+///   - `get_text`：从 text part 提取文本
+///   - `serialize_array`：多 part 时的数组序列化回调
+///
+/// 返回：序列化后的字符串（单 text 时为纯字符串，否则为数组 JSON）
+pub fn[T] serialize_content_with_text_optimization(
+  parts : Array[T],
+  is_text : (T) -> Bool,
+  get_text : (T) -> String,
+  serialize_array : (Array[T]) -> String,
+) -> String {
+  if parts.length() == 1 && is_text(parts[0]) {
+    get_text(parts[0])
+  } else {
+    serialize_array(parts)
+  }
+}
+
+///|
+/// 从 JSON 对象中解析 token 用量
+///
+/// 统一四个适配器的 usage 解析模式。每个协议的字段名不同：
+/// - OpenAI: `prompt_tokens` / `completion_tokens` / `total_tokens`
+/// - Anthropic: `input_tokens` / `output_tokens`（无 total，需计算）
+/// - Responses: `input_tokens` / `output_tokens` / `total_tokens`
+/// - Gemini: `promptTokenCount` / `candidatesTokenCount` / `totalTokenCount`
+///
+/// `tt_key` 为 None 时，total = pt + ct。
+pub fn parse_usage_json(
+  u : Json,
+  pt_key : String,
+  ct_key : String,
+  tt_key : String?,
+) -> (Int, Int, Int) {
+  let pt = field_int(u, pt_key).unwrap_or(0)
+  let ct = field_int(u, ct_key).unwrap_or(0)
+  let tt = match tt_key {
+    Some(key) => field_int(u, key).unwrap_or(pt + ct)
+    None => pt + ct
+  }
+  (pt, ct, tt)
+}
+
+///|
+/// 从 JSON 对象中提取指定字段的字符串数组
+///
+/// 支持两种 JSON 形态：
+///   - `"field": "single"` → `["single"]`（单字符串包装为数组）
+///   - `"field": ["a", "b"]` → `["a", "b"]`（数组逐个提取）
+///
+/// 字段缺失、非字符串元素等情况被安全跳过。
+/// 返回 `None` 表示字段不存在或为空数组。
+pub fn parse_string_array(jv : Json, field : String) -> Array[String]? {
+  match obj_get(jv, field) {
+    Some(String(s)) => Some([s])
+    Some(Array(arr)) => {
+      let result : Array[String] = []
+      let mut i = 0
+      while i < arr.length() {
+        match arr[i] {
+          String(s) => result.push(s)
+          _ => ()
+        }
+        i = i + 1
+      }
+      if result.length() > 0 {
+        Some(result)
+      } else {
+        None
+      }
+    }
+    _ => None
+  }
+}
+
+///|
+/// 将 extras Map 合并到 JSON 编码的 parts 数组中
+///
+/// 四个 provider 的 request_encode 中都有相同的 extras 合并逻辑：
+/// ```
+/// match opts.extras {
+///   Some(m) => for k, v in m { parts.push("\"" + json_escape(k) + "\":" + v.stringify()) }
+///   None => ()
+/// }
+/// ```
+/// 此 helper 封装该模式，接收 parts 数组（引用语义）和 extras（可选 Map）。
+pub fn merge_extras_json(
+  parts : Array[String],
+  extras : Map[String, Json]?,
+) -> Unit {
+  match extras {
+    Some(m) =>
+      for k, v in m {
+        parts.push("\"" + json_escape(k) + "\":" + v.stringify())
+      }
+    None => ()
   }
 }

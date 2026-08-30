@@ -233,6 +233,219 @@ pub struct AccumulatedResponse {
 } derive(Eq, Debug)
 
 ///|
+/// BlockAccumulator — 块状态跟踪器
+///
+/// 管理流式解码中的块生命周期：按 block_index 跟踪类型、文本、
+/// thinking、签名、工具调用信息。提供 ensure/flush/discard 操作。
+pub(all) struct BlockAccumulator {
+  block_types : Array[LucentBlockType]
+  block_texts : Array[StringBuilder]
+  block_thinking : Array[StringBuilder]
+  block_signatures : Array[StringBuilder]
+  block_tool_ids : Array[String]
+  block_tool_names : Array[String]
+}
+
+///|
+/// 创建空的 BlockAccumulator
+pub fn BlockAccumulator::new() -> BlockAccumulator {
+  {
+    block_types: [],
+    block_texts: [],
+    block_thinking: [],
+    block_signatures: [],
+    block_tool_ids: [],
+    block_tool_names: [],
+  }
+}
+
+///|
+/// 确保 block_index 在跟踪数组中占位
+pub fn BlockAccumulator::ensure_block(
+  self : BlockAccumulator,
+  idx : Int,
+) -> Unit {
+  while self.block_types.length() <= idx {
+    self.block_types.push(Text)
+    self.block_texts.push(StringBuilder())
+    self.block_thinking.push(StringBuilder())
+    self.block_signatures.push(StringBuilder())
+    self.block_tool_ids.push("")
+    self.block_tool_names.push("")
+  }
+}
+
+///|
+/// 按类型把已累加内容刷入 content 数组
+pub fn BlockAccumulator::flush_block(
+  self : BlockAccumulator,
+  idx : Int,
+  content : Array[LucentContent],
+  reasoning : LucentThinking?,
+) -> LucentThinking? {
+  self.ensure_block(idx)
+  match self.block_types[idx] {
+    Text => {
+      let s = self.block_texts[idx].to_string()
+      if s != "" {
+        content.push(LucentContent::text(s))
+        self.block_texts[idx].reset()
+      }
+      reasoning
+    }
+    ToolCall(_id, _name) => {
+      let id = self.block_tool_ids[idx]
+      let name = self.block_tool_names[idx]
+      let args = self.block_texts[idx].to_string()
+      content.push(LucentContent::tool_use(id, name, args, None))
+      self.block_texts[idx].reset()
+      reasoning
+    }
+    Thinking => {
+      let th_text = if !self.block_thinking[idx].is_empty() {
+        self.block_thinking[idx].to_string()
+      } else {
+        self.block_texts[idx].to_string()
+      }
+      let th = LucentThinking::new(
+        th_text,
+        match self.block_signatures[idx].to_string() {
+          "" => None
+          s => Some(s)
+        },
+        false,
+        None,
+      )
+      let new_reasoning = merge_reasoning(reasoning, th)
+      self.block_texts[idx].reset()
+      self.block_thinking[idx].reset()
+      self.block_signatures[idx].reset()
+      new_reasoning
+    }
+    Refusal => {
+      let s = self.block_texts[idx].to_string()
+      if s != "" {
+        content.push(Refusal(s))
+        self.block_texts[idx].reset()
+      }
+      reasoning
+    }
+    Image | Audio | Video | Native(_) => reasoning
+  }
+}
+
+///|
+/// 丢弃该块已累加内容（Gemini 全量帧覆盖语义），保留类型信息
+pub fn BlockAccumulator::discard_block(
+  self : BlockAccumulator,
+  idx : Int,
+) -> Unit {
+  self.ensure_block(idx)
+  self.block_texts[idx].reset()
+  self.block_thinking[idx].reset()
+  self.block_signatures[idx].reset()
+  self.block_tool_ids[idx] = ""
+  self.block_tool_names[idx] = ""
+}
+
+///|
+/// 流结束时 flush 所有未闭合的块
+pub fn BlockAccumulator::flush_remaining(
+  self : BlockAccumulator,
+  content : Array[LucentContent],
+  reasoning : LucentThinking?,
+) -> LucentThinking? {
+  let mut r = reasoning
+  let mut j = 0
+  while j < self.block_types.length() {
+    if !self.block_texts[j].is_empty() ||
+      !self.block_signatures[j].is_empty() ||
+      !self.block_thinking[j].is_empty() {
+      r = self.flush_block(j, content, r)
+    }
+    j = j + 1
+  }
+  r
+}
+
+///|
+/// 把一段 thinking 累加进消息级 reasoning（文本拼接，签名取最后，redacted 取 OR）
+fn merge_reasoning(
+  acc : LucentThinking?,
+  th : LucentThinking,
+) -> LucentThinking? {
+  let new_text = match acc {
+    Some(a) => a.text + th.text
+    None => th.text
+  }
+  let new_sig = match th.signature {
+    Some(s) => Some(s)
+    None =>
+      match acc {
+        Some(a) => a.signature
+        None => None
+      }
+  }
+  let new_redacted = match acc {
+    Some(a) => a.redacted || th.redacted
+    None => th.redacted
+  }
+  Some(LucentThinking::new(new_text, new_sig, new_redacted, None))
+}
+
+///|
+/// 处理 BlockDelta 事件
+fn handle_block_delta(
+  acc : BlockAccumulator,
+  idx : Int,
+  delta : LucentBlockDelta,
+  events : Array[LucentStreamEvent],
+  event_idx : Int,
+  diagnostics : Array[ConversionDiagnostic],
+  native_events : Array[LucentStreamEvent],
+) -> Unit {
+  acc.ensure_block(idx)
+  match delta {
+    TextDelta(s) => acc.block_texts[idx].write_string(s)
+    ThinkingDelta(s) => {
+      acc.block_thinking[idx].write_string(s)
+      match acc.block_types[idx] {
+        Thinking => ()
+        _ =>
+          diagnostics.push(
+            ConversionDiagnostic::new(
+              "delta.thinking",
+              Degraded,
+              Some("thinking delta on non-thinking block"),
+            ),
+          )
+      }
+    }
+    SignatureDelta(s) => acc.block_signatures[idx].write_string(s)
+    ToolArgumentsDelta(s) => acc.block_texts[idx].write_string(s)
+    RefusalDelta(s) => {
+      match acc.block_types[idx] {
+        Text => acc.block_types[idx] = Refusal
+        _ => ()
+      }
+      acc.block_texts[idx].write_string(s)
+    }
+    NativeDelta(vendor, raw) => {
+      native_events.push(events[event_idx])
+      diagnostics.push(
+        ConversionDiagnostic::new(
+          "delta.native",
+          Unsupported,
+          Some(
+            "native delta (" + vendor + ") not accumulated: " + raw.stringify(),
+          ),
+        ),
+      )
+    }
+  }
+}
+
+///|
 /// 完整累加：把流事件合成为 LucentResponse，同时保留 annotations/native_events/agent_actions
 /// 及对应诊断。原 lucent_stream_events_to_response 是其薄包装（取 .response）。
 pub fn lucent_stream_events_to_accumulated(
@@ -240,124 +453,20 @@ pub fn lucent_stream_events_to_accumulated(
   fallback_id : String,
   fallback_model : String,
 ) -> AccumulatedResponse {
-  // 会话元信息（ConversationStart 携带，缺则用 fallback）
   let mut resp_id = fallback_id
   let mut resp_model = fallback_model
   let mut usage : LucentUsage? = None
   let mut finish : LucentFinishReason = Stop
   let mut had_error = false
 
-  // 累加内容：单一 assistant 消息（流式语义：一个响应对应一个 assistant 回复）
   let content : Array[LucentContent] = []
-  // 消息级 reasoning（vLLM/DeepSeek/Fireworks 流式累加，非流式一致）
   let mut reasoning : LucentThinking? = None
-  // 块状态跟踪：block_index -> (类型, 已累加的文本)
-  // 用线性数组替代 Map（MoonBit 风格），下标即 block_index
-  let block_types : Array[LucentBlockType] = []
-  let block_texts : Array[StringBuilder] = []
-  let block_thinking : Array[StringBuilder] = []
-  let block_signatures : Array[StringBuilder] = []
-  let block_tool_ids : Array[String] = []
-  let block_tool_names : Array[String] = []
+  let acc = BlockAccumulator::new()
 
-  // 辅助信息侧信道（不进入 response 主体）
   let annotations : Array[LucentAnnotation] = []
   let native_events : Array[LucentStreamEvent] = []
   let agent_actions : Array[LucentAgentAction] = []
   let diagnostics : Array[ConversionDiagnostic] = []
-
-  ///| 块辅助：确保 block_index 在跟踪数组中占位
-  fn ensure_block(idx : Int) -> Unit {
-    while block_types.length() <= idx {
-      block_types.push(Text) // 占位，真实类型由 BlockStart 覆盖
-      block_texts.push(StringBuilder())
-      block_thinking.push(StringBuilder())
-      block_signatures.push(StringBuilder())
-      block_tool_ids.push("")
-      block_tool_names.push("")
-    }
-  }
-
-  ///| 块辅助：把一段 thinking 累加进消息级 reasoning（文本拼接，签名取最后，redacted 取 OR）
-  fn merge_reasoning(th : LucentThinking) -> Unit {
-    let new_text = match reasoning {
-      Some(acc) => acc.text + th.text
-      None => th.text
-    }
-    let new_sig = match th.signature {
-      Some(s) => Some(s)
-      None =>
-        match reasoning {
-          Some(acc) => acc.signature
-          None => None
-        }
-    }
-    let new_redacted = match reasoning {
-      Some(acc) => acc.redacted || th.redacted
-      None => th.redacted
-    }
-    reasoning = Some(LucentThinking::new(new_text, new_sig, new_redacted, None))
-  }
-
-  ///| 块辅助：按类型把已累加内容刷入 content 数组
-  fn flush_block(idx : Int) -> Unit {
-    ensure_block(idx)
-    match block_types[idx] {
-      Text => {
-        let s = block_texts[idx].to_string()
-        if s != "" {
-          content.push(LucentContent::text(s))
-          block_texts[idx].reset()
-        }
-      }
-      ToolCall(_id, _name) => {
-        let id = block_tool_ids[idx]
-        let name = block_tool_names[idx]
-        let args = block_texts[idx].to_string()
-        content.push(LucentContent::tool_use(id, name, args, None))
-        block_texts[idx].reset()
-      }
-      Thinking => {
-        // 优先取独立 thinking 缓冲；空则回退 block_texts（兼容旧事件流）
-        let th_text = if !block_thinking[idx].is_empty() {
-          block_thinking[idx].to_string()
-        } else {
-          block_texts[idx].to_string()
-        }
-        let th = LucentThinking::new(
-          th_text,
-          match block_signatures[idx].to_string() {
-            "" => None
-            s => Some(s)
-          },
-          false,
-          None,
-        )
-        merge_reasoning(th)
-        block_texts[idx].reset()
-        block_thinking[idx].reset()
-        block_signatures[idx].reset()
-      }
-      Refusal => {
-        let s = block_texts[idx].to_string()
-        if s != "" {
-          content.push(Refusal(s))
-          block_texts[idx].reset()
-        }
-      }
-      Image | Audio | Video | Native(_) => () // 流中不累加媒体块
-    }
-  }
-
-  ///| 块辅助：丢弃该块已累加内容（Gemini 全量帧覆盖语义），保留类型信息
-  fn discard_block(idx : Int) -> Unit {
-    ensure_block(idx)
-    block_texts[idx].reset()
-    block_thinking[idx].reset()
-    block_signatures[idx].reset()
-    block_tool_ids[idx] = ""
-    block_tool_names[idx] = ""
-  }
 
   let mut i = 0
   while i < events.length() {
@@ -373,19 +482,15 @@ pub fn lucent_stream_events_to_accumulated(
         }
       }
       ItemStart(_, item) =>
-        // Responses 风格：独立 Item（非 Message 内的块）
-        // 对于 ToolCall/ToolResult/Reasoning/AgentAction 直接 flush 到 content
         match item {
           Message(m) =>
-            // 流中单 assistant 消息模型：把 Message 的内容并入 content
             for c in m.content {
               content.push(c)
             }
           ToolCall(tu) => content.push(ToolUse(tu))
           ToolResult(tr) => content.push(ToolResult(tr))
-          Reasoning(th) => merge_reasoning(th)
+          Reasoning(th) => reasoning = merge_reasoning(reasoning, th)
           AgentAction(aa) => {
-            // v1 不展开到 response，保留到侧信道 + 诊断
             agent_actions.push(aa)
             diagnostics.push(
               ConversionDiagnostic::new(
@@ -397,72 +502,27 @@ pub fn lucent_stream_events_to_accumulated(
           }
         }
       BlockStart(idx, bt) => {
-        ensure_block(idx)
-        block_types[idx] = bt
-        block_texts[idx].reset()
-        block_thinking[idx].reset()
-        block_signatures[idx].reset()
+        acc.ensure_block(idx)
+        acc.block_types[idx] = bt
+        acc.block_texts[idx].reset()
+        acc.block_thinking[idx].reset()
+        acc.block_signatures[idx].reset()
         match bt {
           ToolCall(id, name) => {
-            block_tool_ids[idx] = id
-            block_tool_names[idx] = name
+            acc.block_tool_ids[idx] = id
+            acc.block_tool_names[idx] = name
           }
           _ => ()
         }
       }
-      BlockDelta(idx, delta) => {
-        ensure_block(idx)
-        match delta {
-          TextDelta(s) => block_texts[idx].write_string(s)
-          ThinkingDelta(s) => {
-            // 思考增量独立累加，不污染文本缓冲
-            block_thinking[idx].write_string(s)
-            // 块类型非 Thinking 时（如未显式 BlockStart(Thinking)）→ Degraded 诊断
-            match block_types[idx] {
-              Thinking => ()
-              _ =>
-                diagnostics.push(
-                  ConversionDiagnostic::new(
-                    "delta.thinking",
-                    Degraded,
-                    Some("thinking delta on non-thinking block"),
-                  ),
-                )
-            }
-          }
-          SignatureDelta(s) => block_signatures[idx].write_string(s)
-          ToolArgumentsDelta(s) => block_texts[idx].write_string(s)
-          RefusalDelta(s) => {
-            // Refusal 块类型若未显式 BlockStart，按 Refusal 处理
-            match block_types[idx] {
-              Text => block_types[idx] = Refusal
-              _ => ()
-            }
-            block_texts[idx].write_string(s)
-          }
-          NativeDelta(vendor, raw) => {
-            // 厂商私有增量：保留到侧信道 + 诊断
-            native_events.push(events[i])
-            diagnostics.push(
-              ConversionDiagnostic::new(
-                "delta.native",
-                Unsupported,
-                Some(
-                  "native delta (" +
-                  vendor +
-                  ") not accumulated: " +
-                  raw.stringify(),
-                ),
-              ),
-            )
-          }
-        }
-      }
-      BlockEnd(idx) => flush_block(idx)
+      BlockDelta(idx, delta) =>
+        handle_block_delta(
+          acc, idx, delta, events, i, diagnostics, native_events,
+        )
+      BlockEnd(idx) => reasoning = acc.flush_block(idx, content, reasoning)
       ItemEnd(_) => ()
-      BlockDiscard(idx) => discard_block(idx)
+      BlockDiscard(idx) => acc.discard_block(idx)
       Annotations(_, anns) => {
-        // 标注事件：保留到侧信道 + 诊断
         for a in anns {
           annotations.push(a)
         }
@@ -485,19 +545,8 @@ pub fn lucent_stream_events_to_accumulated(
     i = i + 1
   }
 
-  // 流结束时未闭合的块：按块索引顺序 flush
-  let mut j = 0
-  while j < block_types.length() {
-    // 仅 flush 有内容的块（避免空 Text 块污染）
-    if !block_texts[j].is_empty() ||
-      !block_signatures[j].is_empty() ||
-      !block_thinking[j].is_empty() {
-      flush_block(j)
-    }
-    j = j + 1
-  }
+  reasoning = acc.flush_remaining(content, reasoning)
 
-  // 构造 assistant 消息：若内容为空且发生错误，保留空消息；否则用累加内容
   let final_content : Array[LucentContent] = if had_error &&
     content.length() == 0 {
     [LucentContent::text("")]

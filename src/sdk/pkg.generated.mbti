@@ -6,6 +6,10 @@ import {
 }
 
 // Values
+pub const DEFAULT_MODEL : String = "gpt-4o"
+
+pub const DEFAULT_PROVIDER : String = "openai"
+
 pub fn all_providers() -> Array[ProviderRegistration]
 
 pub fn context_to_lux_request(Context, String, PrismOptions) -> @lux.LucentRequest

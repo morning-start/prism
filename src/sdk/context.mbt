@@ -74,23 +74,29 @@ pub fn Context::add_system(self : Context, prompt : String) -> Context {
 ///|
 /// 添加用户消息
 pub fn Context::add_user(self : Context, text : String) -> Context {
-  let new_msgs = self.messages.copy()
-  new_msgs.push(SdkMessage::new("user", text))
-  { ..self, messages: new_msgs }
+  self.push_msg(SdkMessage::new("user", text))
 }
 
 ///|
 /// 添加助手消息
 pub fn Context::add_assistant(self : Context, text : String) -> Context {
-  let new_msgs = self.messages.copy()
-  new_msgs.push(SdkMessage::new("assistant", text))
-  { ..self, messages: new_msgs }
+  self.push_msg(SdkMessage::new("assistant", text))
 }
 
 ///|
 /// 添加工具
 pub fn Context::add_tools(self : Context, tools : Array[SdkTool]) -> Context {
   { ..self, tools: Some(tools) }
+}
+
+///|
+
+///|
+/// 内部辅助：追加消息并返回新 Context（消除 add_* 中的 copy+push 样板）
+fn Context::push_msg(self : Context, msg : SdkMessage) -> Context {
+  let new_msgs = self.messages.copy()
+  new_msgs.push(msg)
+  { ..self, messages: new_msgs }
 }
 
 ///|
@@ -101,9 +107,7 @@ pub fn Context::add_tool_result(
   content : String,
   is_error : Bool,
 ) -> Context {
-  let new_msgs = self.messages.copy()
-  new_msgs.push(SdkMessage::tool_result(tool_use_id, content, is_error))
-  { ..self, messages: new_msgs }
+  self.push_msg(SdkMessage::tool_result(tool_use_id, content, is_error))
 }
 
 ///|

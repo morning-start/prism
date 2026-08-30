@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "morning-start/prism/provider/openai_chat"
+package "morning-start/prism/provider/openai"
 
 import {
   "morning-start/prism/lux",
@@ -8,17 +8,17 @@ import {
 // Values
 pub fn capability() -> @lux.ProviderCapability
 
-pub fn lux_events_to_openai_chat_sse(Array[@lux.LucentStreamEvent]) -> Result[@lux.ConversionResult[String], String]
+pub fn lux_events_to_openai_sse(Array[@lux.LucentStreamEvent]) -> Result[@lux.ConversionResult[String], String]
 
-pub fn lux_request_to_openai_chat(@lux.LucentRequest) -> Result[@lux.ConversionResult[String], String]
+pub fn lux_request_to_openai(@lux.LucentRequest) -> Result[@lux.ConversionResult[String], String]
 
-pub fn lux_response_to_openai_chat(@lux.LucentResponse) -> Result[@lux.ConversionResult[String], String]
+pub fn lux_response_to_openai(@lux.LucentResponse) -> Result[@lux.ConversionResult[String], String]
 
-pub fn openai_chat_sse_to_events(String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String]
+pub fn openai_sse_to_events(String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String]
 
-pub fn openai_chat_to_lux_request(String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String]
+pub fn openai_to_lux_request(String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String]
 
-pub fn openai_chat_to_lux_response(String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String]
+pub fn openai_to_lux_response(String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String]
 
 // Errors
 

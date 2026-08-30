@@ -20,6 +20,12 @@ pub fn lucent_stream_events_to_response(Array[LucentStreamEvent], String, String
 
 pub fn lux_to_json_string(Json) -> String
 
+pub fn push_unsupported(String, String, Array[ConversionDiagnostic]) -> Unit
+
+pub fn push_unsupported_content(String, String, Array[ConversionDiagnostic]) -> Unit
+
+pub fn skip_thinking_when_dual_carrier(LucentContent, LucentThinking?, Array[ConversionDiagnostic]) -> Bool
+
 // Errors
 
 // Types and methods
@@ -30,6 +36,20 @@ pub struct AccumulatedResponse {
   agent_actions : Array[LucentAgentAction]
   diagnostics : Array[ConversionDiagnostic]
 } derive(Eq, @debug.Debug)
+
+pub(all) struct BlockAccumulator {
+  block_types : Array[LucentBlockType]
+  block_texts : Array[StringBuilder]
+  block_thinking : Array[StringBuilder]
+  block_signatures : Array[StringBuilder]
+  block_tool_ids : Array[String]
+  block_tool_names : Array[String]
+}
+pub fn BlockAccumulator::discard_block(Self, Int) -> Unit
+pub fn BlockAccumulator::ensure_block(Self, Int) -> Unit
+pub fn BlockAccumulator::flush_block(Self, Int, Array[LucentContent], LucentThinking?) -> LucentThinking?
+pub fn BlockAccumulator::flush_remaining(Self, Array[LucentContent], LucentThinking?) -> LucentThinking?
+pub fn BlockAccumulator::new() -> Self
 
 pub struct ConversionDiagnostic {
   field : String

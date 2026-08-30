@@ -1,13 +1,10 @@
 ///|
-/// Prism — SDK 主入口
-///
-/// 使用方式（L1 应用开发者）：
-/// ```
-/// let prism = Prism::new().with_provider("openai")
-/// let json = prism.encode_request("Hello", PrismOptions::default())
-/// // json 是提供商 JSON 请求体，Host 发送 HTTP 请求
-/// // Host 收到响应后调用 prism.decode_response(json)
-/// ```
+/// SDK 默认 provider 名称（Prism::new() 使用）
+pub const DEFAULT_PROVIDER : String = "openai"
+
+///|
+/// SDK 默认模型名称（请求编码时的 fallback）
+pub const DEFAULT_MODEL : String = "gpt-4o"
 
 ///|
 /// ConversionMeta — 转换来源元信息（D8）
@@ -87,7 +84,7 @@ pub struct Prism {
 
 ///|
 pub fn Prism::new() -> Prism {
-  { provider: "openai" }
+  { provider: DEFAULT_PROVIDER }
 }
 
 ///|
@@ -97,23 +94,13 @@ pub fn Prism::with_provider(_self : Prism, name : String) -> Prism {
 }
 
 ///|
-/// === 请求编码 / 响应解码 ===
-
-///|
 /// 将文本请求编码为提供商 JSON（L1：文本进，JSON 出）
 pub fn Prism::encode_request(
   self : Prism,
   text : String,
   opts : PrismOptions,
 ) -> Result[String, String] {
-  let ctx = Context::new()
-  let ctx = ctx.add_user(text)
-  let model = match opts.model {
-    Some(m) => m
-    None => "gpt-4o"
-  }
-  let req = context_to_lux_request(ctx, model, opts)
-  self.encode_lux_request(req)
+  self.encode_lux_request(build_request_from_text(text, opts))
 }
 
 ///|
@@ -183,13 +170,7 @@ pub fn Prism::encode_request_with_diagnostics(
   text : String,
   opts : PrismOptions,
 ) -> Result[@lux.ConversionResult[String], String] {
-  let ctx = Context::new()
-  let ctx = ctx.add_user(text)
-  let model = match opts.model {
-    Some(m) => m
-    None => "gpt-4o"
-  }
-  let req = context_to_lux_request(ctx, model, opts)
+  let req = build_request_from_text(text, opts)
   let mut result = @lux.ConversionResult::new(req)
   match get_schema(self.provider) {
     Some(schema) =>
@@ -213,40 +194,6 @@ pub fn Prism::encode_request_with_diagnostics(
 }
 
 ///|
-/// 将提供商 JSON 解码为 LucentResponse（基于 ProviderRegistration 注册表）
-fn Prism::decode_to_lux(
-  self : Prism,
-  json_str : String,
-) -> Result[@lux.LucentResponse, String] {
-  let provider = self.provider
-  match match_provider_name(provider) {
-    Some(reg) =>
-      match (reg.response_decode)(json_str) {
-        Ok(cr) => Ok(cr.value())
-        Err(e) => Err(e)
-      }
-    None => Err("unknown provider: " + provider)
-  }
-}
-
-///|
-/// 编码 LucentRequest 为提供商 JSON（基于 ProviderRegistration 注册表）
-fn Prism::encode_lux_request(
-  self : Prism,
-  req : @lux.LucentRequest,
-) -> Result[String, String] {
-  let provider = self.provider
-  match match_provider_name(provider) {
-    Some(reg) =>
-      match (reg.request_encode)(req) {
-        Ok(cr) => Ok(cr.value())
-        Err(e) => Err(e)
-      }
-    None => Err("unknown provider: " + provider)
-  }
-}
-
-///|
 /// === 流式接口 ===
 
 ///|
@@ -256,13 +203,7 @@ pub fn Prism::encode_stream_request(
   text : String,
   opts : PrismOptions,
 ) -> Result[String, String] {
-  let ctx = Context::new()
-  let ctx = ctx.add_user(text)
-  let model = match opts.model {
-    Some(m) => m
-    None => "gpt-4o"
-  }
-  let mut req = context_to_lux_request(ctx, model, opts)
+  let mut req = build_request_from_text(text, opts)
   req = @lux.LucentRequest::with_stream(req, true)
   self.encode_lux_request(req)
 }
@@ -305,7 +246,7 @@ pub fn Prism::stream(
   ctx : Context,
   send : (String) -> Result[String, String],
 ) -> Result[Array[PrismEvent], String] {
-  let model = "gpt-4o"
+  let model = DEFAULT_MODEL
   let mut req = context_to_lux_request(ctx, model, PrismOptions::default())
   req = @lux.LucentRequest::with_stream(req, true)
   match self.encode_lux_request(req) {
@@ -316,74 +257,6 @@ pub fn Prism::stream(
       }
     Err(e) => Err(e)
   }
-}
-
-///|
-/// 将提供商 SSE 解码为原始 LucentStreamEvent（基于注册表）
-fn decode_sse_inner(
-  provider : String,
-  sse_str : String,
-) -> Result[Array[@lux.LucentStreamEvent], String] {
-  match match_provider_name(provider) {
-    Some(reg) =>
-      match (reg.events_decode)(sse_str) {
-        Ok(cr) => Ok(cr.value())
-        Err(e) => Err(e)
-      }
-    None => Err("unknown provider: " + provider)
-  }
-}
-
-///|
-/// 将 LucentStreamEvent 数组转为 PrismEvent 数组（SDK 内部）
-fn lucent_events_to_prism(
-  events : Array[@lux.LucentStreamEvent],
-) -> Array[PrismEvent] {
-  let result : Array[PrismEvent] = []
-  let mut has_finish = false
-  for ev in events {
-    if has_finish {
-      break
-    }
-    match ev {
-      BlockDelta(_, TextDelta(s)) => result.push(TextDelta(s))
-      BlockDelta(_, ToolArgumentsDelta(_s)) =>
-        // L2: 工具参数增量，当前简化
-        ()
-      ItemStart(_, ToolCall(tu)) =>
-        result.push(
-          ToolCall({
-            id: tu.id,
-            name: tu.name,
-            arguments_json: tu.arguments_json,
-          }),
-        )
-      ItemStart(_, ToolResult(tr)) =>
-        result.push(
-          ToolResult({
-            tool_use_id: tr.tool_use_id,
-            content: @lux.lucent_content_to_text(tr.content),
-            is_error: tr.is_error,
-          }),
-        )
-      BlockStart(_, Thinking) => ()
-      BlockDelta(_, ThinkingDelta(s)) =>
-        result.push(Thinking({ text: s, signature: None, redacted: false }))
-      Finish(fr) => {
-        let pfr = match fr {
-          Stop => Stop
-          Length => Length
-          ToolCalls => ToolCalls
-          ContentFilter => ContentFilter
-          _ => Error
-        }
-        result.push(Finish(pfr))
-        has_finish = true
-      }
-      _ => ()
-    }
-  }
-  result
 }
 
 ///|

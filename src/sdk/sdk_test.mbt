@@ -12,8 +12,8 @@ test "Prism::new - default provider is openai" {
 
 ///|
 test "Prism::with_provider - sets provider name" {
-  let p = Prism::new().with_provider("anthropic")
-  assert_eq(p.provider, "anthropic")
+  let p = Prism::new().with_provider("messages")
+  assert_eq(p.provider, "messages")
 }
 
 ///|
@@ -138,8 +138,8 @@ test "context_to_lux_request - with options" {
 /// === Prism::encode_request ===
 
 ///|
-test "encode_request - openai_chat returns valid JSON" {
-  let p = Prism::new().with_provider("openai-chat")
+test "encode_request - openai returns valid JSON" {
+  let p = Prism::new().with_provider("openai")
   match p.encode_request("Hello", PrismOptions::default()) {
     Ok(json) => {
       assert_true(json.length() > 0)
@@ -150,14 +150,14 @@ test "encode_request - openai_chat returns valid JSON" {
 }
 
 ///|
-test "encode_request - anthropic returns valid JSON" {
-  let p = Prism::new().with_provider("anthropic")
+test "encode_request - messages returns valid JSON" {
+  let p = Prism::new().with_provider("messages")
   match p.encode_request("Hello", PrismOptions::default()) {
     Ok(json) => {
       assert_true(json.contains("model"))
       assert_true(json.contains("messages"))
     }
-    Err(e) => fail("anthropic encode failed: " + e)
+    Err(e) => fail("messages encode failed: " + e)
   }
 }
 
@@ -192,8 +192,8 @@ test "encode_request - unknown provider returns error" {
 /// === Prism::encode_stream_request ===
 
 ///|
-test "encode_stream_request - openai_chat includes stream field" {
-  let p = Prism::new().with_provider("openai-chat")
+test "encode_stream_request - openai includes stream field" {
+  let p = Prism::new().with_provider("openai")
   match p.encode_stream_request("Hello", PrismOptions::default()) {
     Ok(json) => assert_true(json.contains("stream"))
     Err(e) => fail("stream encode failed: " + e)
@@ -213,9 +213,9 @@ test "encode_stream_request - unknown provider returns error" {
 /// === Prism::decode_response ===
 
 ///|
-test "decode_response - openai_chat extracts text" {
+test "decode_response - openai extracts text" {
   let resp_json = "{\"id\":\"chatcmpl-123\",\"object\":\"chat.completion\",\"created\":123,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello!\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":3,\"total_tokens\":8}}"
-  let p = Prism::new().with_provider("openai-chat")
+  let p = Prism::new().with_provider("openai")
   match p.decode_response(resp_json) {
     Ok(text) => assert_eq(text, "Hello!")
     Err(e) => fail("decode failed: " + e)
@@ -235,8 +235,8 @@ test "decode_response - unknown provider returns error" {
 /// === Prism::decode_sse ===
 
 ///|
-test "decode_sse - openai_chat returns events with text content" {
-  let p = Prism::new().with_provider("openai-chat")
+test "decode_sse - openai returns events with text content" {
+  let p = Prism::new().with_provider("openai")
   let sse = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n"
   match p.decode_sse(sse) {
     Ok(events) => {
@@ -272,7 +272,7 @@ test "decode_sse - unknown provider returns error" {
 ///|
 test "capability - known provider returns Some" {
   let p = Prism::new()
-  match p.capability("openai") {
+  match p.capability("responses") {
     Some(_) => assert_true(true)
     None => fail("expected Some for known provider")
   }
@@ -292,8 +292,8 @@ test "capability - unknown provider returns None" {
 
 ///|
 test "match_provider_name - known provider found" {
-  match match_provider_name("openai") {
-    Some(r) => assert_eq(r.name, "openai")
+  match match_provider_name("responses") {
+    Some(r) => assert_eq(r.name, "responses")
     None => fail("expected Some for openai")
   }
 }
@@ -318,8 +318,8 @@ test "match_provider_name - unknown returns None" {
 test "list_provider_names - returns all registered names" {
   let names = list_provider_names()
   assert_true(names.length() >= 4)
-  assert_true(names.contains("openai"))
-  assert_true(names.contains("anthropic"))
+  assert_true(names.contains("responses"))
+  assert_true(names.contains("messages"))
 }
 
 ///|
@@ -327,7 +327,7 @@ test "list_provider_names - returns all registered names" {
 
 ///|
 test "decode_sse result contains expected event types" {
-  let p = Prism::new().with_provider("openai-chat")
+  let p = Prism::new().with_provider("openai")
   let sse = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hi\"},\"finish_reason\":null}]}\n\ndata: [DONE]\n"
   match p.decode_sse(sse) {
     Ok(events) => assert_true(events.length() > 0)
@@ -387,7 +387,7 @@ fn mock_send_fixed_response(_req_json : String) -> Result[String, String] {
     Some(@lux.LucentUsage::new(10, 5, 15)),
     None,
   )
-  match @openai_chat.lux_response_to_openai_chat(resp) {
+  match @openai.lux_response_to_openai(resp) {
     Ok(cr) => Ok(cr.value())
     Err(e) => Err(e)
   }
@@ -404,7 +404,7 @@ fn mock_send_fixed_sse(_req_json : String) -> Result[String, String] {
     Finish(Stop),
     Done,
   ]
-  match @openai_chat.lux_events_to_openai_chat_sse(events) {
+  match @openai.lux_events_to_openai_sse(events) {
     Ok(cr) => Ok(cr.value())
     Err(e) => Err(e)
   }
@@ -412,7 +412,7 @@ fn mock_send_fixed_sse(_req_json : String) -> Result[String, String] {
 
 ///|
 test "complete - text in text out via mock transport" {
-  let prism = Prism::new().with_provider("openai-chat")
+  let prism = Prism::new().with_provider("openai")
   match
     prism.complete("Hi", PrismOptions::default(), mock_send_fixed_response) {
     Ok(text) => assert_eq(text, "Hello back")
@@ -422,7 +422,7 @@ test "complete - text in text out via mock transport" {
 
 ///|
 test "stream - returns prism events via mock transport" {
-  let prism = Prism::new().with_provider("openai-chat")
+  let prism = Prism::new().with_provider("openai")
   let ctx = Context::new().add_user("Hi")
   match prism.stream(ctx, mock_send_fixed_sse) {
     Ok(events) =>
@@ -437,7 +437,7 @@ test "stream - returns prism events via mock transport" {
 
 ///|
 test "meta - decode_response_with_meta carries source_provider" {
-  let prism = Prism::new().with_provider("openai-chat")
+  let prism = Prism::new().with_provider("openai")
   let resp = @lux.LucentResponse::new(
     "resp-1",
     "gpt-4o",
@@ -455,22 +455,22 @@ test "meta - decode_response_with_meta carries source_provider" {
     Some(@lux.LucentUsage::new(10, 5, 15)),
     None,
   )
-  let json = match @openai_chat.lux_response_to_openai_chat(resp) {
+  let json = match @openai.lux_response_to_openai(resp) {
     Ok(cr) => cr.value()
     Err(e) => fail("encode failed: \{e}")
   }
   match prism.decode_response_with_meta(json) {
     Ok(decoded) => {
       assert_eq(decoded.text, "Hello back")
-      assert_eq(decoded.meta.source_provider, "openai-chat")
+      assert_eq(decoded.meta.source_provider, "openai")
     }
     Err(e) => fail("meta decode failed: \{e}")
   }
 }
 
 ///|
-test "meta - anthropic source tag" {
-  let prism = Prism::new().with_provider("anthropic")
+test "meta - messages source tag" {
+  let prism = Prism::new().with_provider("messages")
   let resp = @lux.LucentResponse::new(
     "msg_1",
     "claude-sonnet-4",
@@ -486,32 +486,14 @@ test "meta - anthropic source tag" {
     Some(@lux.LucentUsage::new(10, 20, 30)),
     None,
   )
-  let json = match @anthropic.lux_response_to_anthropic(resp) {
+  let json = match @messages.lux_response_to_messages(resp) {
     Ok(cr) => cr.value()
     Err(e) => fail("encode failed: \{e}")
   }
   match prism.decode_response_with_meta(json) {
     Ok(decoded) => {
       assert_eq(decoded.text, "Hello!")
-      assert_eq(decoded.meta.source_provider, "anthropic")
-    }
-    Err(e) => fail("meta decode failed: \{e}")
-  }
-}
-
-///|
-test "meta - provider_payload passthrough" {
-  let prism = Prism::new().with_provider("azure-openai")
-  // Azure 响应含 content_filters 扩展 → 适配器解码进 provider_payload
-  let azure_json = "{\"id\":\"resp-1\",\"model\":\"gpt-4o\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hello\",\"annotations\":[]}],\"id\":\"msg_1\"}],\"content_filters\":[{\"filtered\":false}]}"
-  match prism.decode_response_with_meta(azure_json) {
-    Ok(decoded) => {
-      assert_eq(decoded.text, "Hello")
-      assert_eq(decoded.meta.source_provider, "azure-openai")
-      match decoded.meta.provider_payload {
-        Some(_) => ()
-        None => fail("provider_payload should be present")
-      }
+      assert_eq(decoded.meta.source_provider, "messages")
     }
     Err(e) => fail("meta decode failed: \{e}")
   }
@@ -519,7 +501,7 @@ test "meta - provider_payload passthrough" {
 
 ///|
 test "meta - diagnostics attached" {
-  let prism = Prism::new().with_provider("openai-chat")
+  let prism = Prism::new().with_provider("openai")
   let resp = @lux.LucentResponse::new(
     "resp-1",
     "gpt-4o",
@@ -535,7 +517,7 @@ test "meta - diagnostics attached" {
     Some(@lux.LucentUsage::new(10, 5, 15)),
     None,
   )
-  let json = match @openai_chat.lux_response_to_openai_chat(resp) {
+  let json = match @openai.lux_response_to_openai(resp) {
     Ok(cr) => cr.value()
     Err(e) => fail("encode failed: \{e}")
   }
@@ -566,15 +548,15 @@ fn meta_chat_resp_json() -> Result[String, String] {
     Some(@lux.LucentUsage::new(10, 5, 15)),
     None,
   )
-  match @openai_chat.lux_response_to_openai_chat(resp) {
+  match @openai.lux_response_to_openai(resp) {
     Ok(cr) => Ok(cr.value())
     Err(e) => Err(e)
   }
 }
 
 ///|
-/// 构造 anthropic 响应 JSON（经适配器编码产生）
-fn anthropic_resp_json() -> Result[String, String] {
+/// 构造 messages 响应 JSON（经适配器编码产生）
+fn messages_resp_json() -> Result[String, String] {
   let resp = @lux.LucentResponse::new(
     "msg-1",
     "claude-sonnet-4",
@@ -583,7 +565,7 @@ fn anthropic_resp_json() -> Result[String, String] {
       @lux.LucentChoice::new(
         0,
         @lux.LucentMessage::new(Assistant, [
-          @lux.LucentContent::text("Hello from anthropic"),
+          @lux.LucentContent::text("Hello from messages"),
         ]),
         Stop,
         None,
@@ -592,7 +574,7 @@ fn anthropic_resp_json() -> Result[String, String] {
     Some(@lux.LucentUsage::new(10, 20, 30)),
     None,
   )
-  match @anthropic.lux_response_to_anthropic(resp) {
+  match @messages.lux_response_to_messages(resp) {
     Ok(cr) => Ok(cr.value())
     Err(e) => Err(e)
   }
@@ -626,15 +608,15 @@ fn gemini_resp_json() -> Result[String, String] {
 
 ///|
 test "meta - mixed-flow sources are distinguishable" {
-  // openai-chat 响应
+  // openai 响应
   let chat_json = match meta_chat_resp_json() {
     Ok(j) => j
-    Err(e) => fail("openai_chat encode failed: \{e}")
+    Err(e) => fail("openai encode failed: \{e}")
   }
-  // anthropic 响应
-  let anth_json = match anthropic_resp_json() {
+  // messages 响应
+  let anth_json = match messages_resp_json() {
     Ok(j) => j
-    Err(e) => fail("anthropic encode failed: \{e}")
+    Err(e) => fail("messages encode failed: \{e}")
   }
   // gemini 响应
   let gem_json = match gemini_resp_json() {
@@ -643,16 +625,14 @@ test "meta - mixed-flow sources are distinguishable" {
   }
 
   let chat = match
-    Prism::new()
-    .with_provider("openai-chat")
-    .decode_response_with_meta(chat_json) {
+    Prism::new().with_provider("openai").decode_response_with_meta(chat_json) {
     Ok(d) => d
-    Err(e) => fail("openai-chat meta decode failed: \{e}")
+    Err(e) => fail("openai meta decode failed: \{e}")
   }
   let anth = match
-    Prism::new().with_provider("anthropic").decode_response_with_meta(anth_json) {
+    Prism::new().with_provider("messages").decode_response_with_meta(anth_json) {
     Ok(d) => d
-    Err(e) => fail("anthropic meta decode failed: \{e}")
+    Err(e) => fail("messages meta decode failed: \{e}")
   }
   let gem = match
     Prism::new().with_provider("gemini").decode_response_with_meta(gem_json) {
@@ -661,12 +641,12 @@ test "meta - mixed-flow sources are distinguishable" {
   }
 
   // 三家来源各自正确，可 if 分支分辨
-  assert_eq(chat.meta.source_provider, "openai-chat")
-  assert_eq(anth.meta.source_provider, "anthropic")
+  assert_eq(chat.meta.source_provider, "openai")
+  assert_eq(anth.meta.source_provider, "messages")
   assert_eq(gem.meta.source_provider, "gemini")
   // 文本各自正确
   assert_eq(chat.text, "Hi back")
-  assert_eq(anth.text, "Hello from anthropic")
+  assert_eq(anth.text, "Hello from messages")
   assert_eq(gem.text, "Hi from gemini")
 }
 
@@ -674,8 +654,7 @@ test "meta - mixed-flow sources are distinguishable" {
 /// 按来源特判 helper（模拟开发者的 if 分支用法）
 fn handle_special_if_any(decoded : DecodedResponse) -> String {
   match decoded.meta.source_provider {
-    "azure-openai" => "special:azure"
-    "openai-codex" => "special:codex"
+    "gemini" => "special:gemini"
     _ => "normal"
   }
 }
@@ -685,24 +664,12 @@ test "meta - special field handling via if branch" {
   // 普通来源 → 分支不触发
   let chat_json = match meta_chat_resp_json() {
     Ok(j) => j
-    Err(e) => fail("openai_chat encode failed: \{e}")
+    Err(e) => fail("openai encode failed: \{e}")
   }
   let chat = match
-    Prism::new()
-    .with_provider("openai-chat")
-    .decode_response_with_meta(chat_json) {
+    Prism::new().with_provider("openai").decode_response_with_meta(chat_json) {
     Ok(d) => d
     Err(e) => fail("meta decode failed: \{e}")
   }
   assert_eq(handle_special_if_any(chat), "normal")
-  // Azure 来源（content_filters 扩展）→ 特判分支可达
-  let azure_json = "{\"id\":\"resp-1\",\"model\":\"gpt-4o\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hello\",\"annotations\":[]}],\"id\":\"msg_1\"}],\"content_filters\":[{\"filtered\":false}]}"
-  let azure = match
-    Prism::new()
-    .with_provider("azure-openai")
-    .decode_response_with_meta(azure_json) {
-    Ok(d) => d
-    Err(e) => fail("azure meta decode failed: \{e}")
-  }
-  assert_eq(handle_special_if_any(azure), "special:azure")
 }

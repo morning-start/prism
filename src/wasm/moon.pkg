@@ -5,6 +5,6 @@ import {
 }
 
 import {
-  "morning-start/prism/provider/openai_chat",
-  "morning-start/prism/provider/anthropic",
+  "morning-start/prism/provider/openai",
+  "morning-start/prism/provider/messages",
 } for "test"

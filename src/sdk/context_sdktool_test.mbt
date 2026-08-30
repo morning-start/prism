@@ -97,7 +97,7 @@ test "context_to_lux_request - no tools when tools is None" {
 /// === Prism::encode_request ===
 test "encode_request - custom model used" {
   let opts = PrismOptions::new(Some("gpt-4o-mini"), None, None, None, None)
-  let p = Prism::new().with_provider("openai-chat")
+  let p = Prism::new().with_provider("openai")
   match p.encode_request("Hi", opts) {
     Ok(json) => assert_true(json.contains("gpt-4o-mini"))
     Err(e) => fail("encode failed: " + e)
@@ -106,7 +106,7 @@ test "encode_request - custom model used" {
 
 ///|
 test "encode_request - default model gpt-4o used" {
-  let p = Prism::new().with_provider("openai-chat")
+  let p = Prism::new().with_provider("openai")
   match p.encode_request("Hi", PrismOptions::default()) {
     Ok(json) => assert_true(json.contains("gpt-4o"))
     Err(e) => fail("encode failed: " + e)

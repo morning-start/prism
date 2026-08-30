@@ -22,7 +22,7 @@ fn separator(title : String) -> Unit {
 fn test_encode_request() -> String {
   separator("测试 1: 编码请求（生成真实 API 可用的 JSON）")
 
-  let prism = @sdk.Prism::new().with_provider("openai-chat")
+  let prism = @sdk.Prism::new().with_provider("openai")
   let prompt = "What is 2 + 2? Answer in one sentence."
 
   println("用户输入: \"" + prompt + "\"")
@@ -62,7 +62,7 @@ fn test_encode_request() -> String {
 fn test_decode_response() -> Unit {
   separator("测试 2: 解码真实 API 响应")
 
-  let prism = @sdk.Prism::new().with_provider("openai-chat")
+  let prism = @sdk.Prism::new().with_provider("openai")
 
   // 这是从真实 API 获取的响应（agnes-2.5-flash 模型）
   let real_api_response = "{\"id\":\"e15872f160cf4155b320dac47f85fef5\",\"created\":1787583442,\"model\":\"agnes-2.5-flash\",\"object\":\"chat.completion\",\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"message\":{\"content\":\"\\n\\n2 + 2 equals 4.\",\"role\":\"assistant\",\"reasoning_content\":\"The user is asking a simple math question.\\n\"}}],\"usage\":{\"completion_tokens\":21,\"prompt_tokens\":297,\"total_tokens\":318}}"
@@ -115,9 +115,7 @@ fn test_request_conversion(openai_json : String) -> Unit {
 
   // 转换为 Anthropic 格式
   println("步骤 1: 转换为 Anthropic 格式...")
-  let anthropic_result = @sdk.convert_request(
-    "openai-chat", openai_json, "anthropic",
-  )
+  let anthropic_result = @sdk.convert_request("openai", openai_json, "messages")
   match anthropic_result {
     Ok(cr) => {
       let anthropic_json = cr.value()
@@ -153,7 +151,7 @@ fn test_request_conversion(openai_json : String) -> Unit {
 
   // 转换为 Gemini 格式
   println("步骤 2: 转换为 Gemini 格式...")
-  let gemini_result = @sdk.convert_request("openai-chat", openai_json, "gemini")
+  let gemini_result = @sdk.convert_request("openai", openai_json, "gemini")
   match gemini_result {
     Ok(cr) => {
       let gemini_json = cr.value()
@@ -210,7 +208,7 @@ fn test_response_conversion() -> Unit {
   // 转换为 Anthropic 格式
   println("步骤 1: 转换为 Anthropic 格式...")
   let anthropic_result = @sdk.convert_response(
-    "openai-chat", real_response, "anthropic",
+    "openai", real_response, "messages",
   )
   match anthropic_result {
     Ok(cr) => {
@@ -248,7 +246,7 @@ fn test_response_conversion() -> Unit {
 fn test_stream_decode() -> Unit {
   separator("测试 5: 流式响应解码（真实 SSE 数据）")
 
-  let prism = @sdk.Prism::new().with_provider("openai-chat")
+  let prism = @sdk.Prism::new().with_provider("openai")
 
   // 真实 SSE 流数据
   let real_sse = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"1\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\", 2\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\", 3\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\", 4\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\", 5\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n"
