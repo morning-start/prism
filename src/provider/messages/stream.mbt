@@ -325,12 +325,24 @@ pub fn lux_events_to_messages_sse(
           )
         }
       }
-      Error(e) =>
+      Error(e) => {
+        // 官方错误帧：event: error + {"type":"error","error":{"type":"...","message":"..."}}
+        let error_type = match e.kind {
+          @lux.RateLimit => "rate_limit_error"
+          @lux.InvalidRequest => "invalid_request_error"
+          @lux.Authentication => "authentication_error"
+          @lux.ServerError => "api_error"
+          @lux.ContentFilter => "invalid_request_error"
+          @lux.Native(tag) => tag
+        }
         lines.push(
-          "event: error\ndata: {\"type\":\"error\",\"error\":{\"message\":\"" +
+          "event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"" +
+          @internal.json_escape(error_type) +
+          "\",\"message\":\"" +
           @internal.json_escape(e.message) +
           "\"}}",
         )
+      }
       Done =>
         lines.push("event: message_stop\ndata: {\"type\":\"message_stop\"}")
     }

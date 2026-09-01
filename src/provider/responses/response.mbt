@@ -70,7 +70,10 @@ fn parse_output_content(output_item : Json) -> Array[@lux.LucentContent] {
 /// Responses 的 typed output 将服务器工具执行记录为独立 item。lux-ir v1 的
 /// LucentAgentAction 占位已存在但对话外无法进入 LucentResponse（响应仅承载
 /// choices[].message），故解码时以 Unsupported 诊断显式暴露，不静默丢弃。
-fn scan_server_tool_items(jv : Json, diagnostics : Array[@lux.ConversionDiagnostic]) -> Unit {
+fn scan_server_tool_items(
+  jv : Json,
+  diagnostics : Array[@lux.ConversionDiagnostic],
+) -> Unit {
   match @internal.field_arr(jv, "output") {
     Some(outputs) => {
       let mut i = 0
@@ -84,7 +87,9 @@ fn scan_server_tool_items(jv : Json, diagnostics : Array[@lux.ConversionDiagnost
               diagnostics.push(
                 @lux.ConversionDiagnostic::unsupported(
                   "response.output." + t,
-                  Some("server-side output item preserved only as diagnostic in lux-ir v1"),
+                  Some(
+                    "server-side output item preserved only as diagnostic in lux-ir v1",
+                  ),
                 ),
               )
             }

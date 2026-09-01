@@ -449,12 +449,24 @@ pub fn lux_events_to_responses_sse(
         )
       }
       Usage(_) => () // Usage 已合并到 Finish 的 response.completed 中，不再单独输出
-      Error(e) =>
+      Error(e) => {
+        // 官方错误帧：{"type":"error","code":"...","message":"..."}（error 为平铺字段）
+        let error_code = match e.kind {
+          @lux.RateLimit => "rate_limit_exceeded"
+          @lux.InvalidRequest => "invalid_request_error"
+          @lux.Authentication => "invalid_api_key"
+          @lux.ServerError => "server_error"
+          @lux.ContentFilter => "content_filter"
+          @lux.Native(tag) => tag
+        }
         lines.push(
-          "event: error\ndata: {\"type\":\"error\",\"error\":\"" +
+          "event: error\ndata: {\"type\":\"error\",\"code\":\"" +
+          @internal.json_escape(error_code) +
+          "\",\"message\":\"" +
           @internal.json_escape(e.message) +
           "\"}",
         )
+      }
       Done => () // Responses 流以 response.completed 结束，无独立 done 事件
     }
     i = i + 1

@@ -338,13 +338,25 @@ pub fn lux_events_to_openai_sse(
           chunk_prefix(chat_id, chat_model, chat_created) + usage_json + "}}",
         )
       }
-      Error(e) =>
+      Error(e) => {
+        // 官方错误帧为独立 data: {"error":{...}}，不包 chunk 外壳（id/choices 前缀）
+        // kind 类型化为 OpenAI error.type 语义（rate_limit_error 等），未知走 native
+        let error_type = match e.kind {
+          @lux.RateLimit => "rate_limit_error"
+          @lux.InvalidRequest => "invalid_request_error"
+          @lux.Authentication => "authentication_error"
+          @lux.ServerError => "server_error"
+          @lux.ContentFilter => "invalid_request_error"
+          @lux.Native(tag) => tag
+        }
         out.push(
-          chunk_prefix(chat_id, chat_model, chat_created) +
-          "\"error\":{\"message\":\"" +
+          "data: {\"error\":{\"type\":\"" +
+          @internal.json_escape(error_type) +
+          "\",\"message\":\"" +
           @internal.json_escape(e.message) +
           "\"}}",
         )
+      }
       Done => out.push("data: [DONE]")
     }
     i = i + 1

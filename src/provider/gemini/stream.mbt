@@ -271,5 +271,9 @@ pub fn lux_events_to_gemini_sse(
     }
     i = i + 1
   }
-  Ok(@lux.ConversionResult::new(lines.join("\n") + "\n").with_diagnostics(diagnostics))
+  Ok(
+    @lux.ConversionResult::new(lines.join("\n") + "\n").with_diagnostics(
+      diagnostics,
+    ),
+  )
 }
