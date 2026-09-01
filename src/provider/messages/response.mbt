@@ -81,11 +81,15 @@ pub fn lux_response_to_messages(
   }
   let content_json = "[" + content_blocks.join(",") + "]"
   // stop_reason
+  // Anthropic stop_reason 枚举：end_turn/max_tokens/stop_sequence/tool_use/
+  // refusal/pause_turn/model_context_window_exceeded。
+  // IR ContentFilter 无对等值 → 映射为 "refusal"（Anthropic 语义最近的载体）；
+  // Safety/Recitation/MalformedToolCall/Error 等无对等值 → 收敛为 "end_turn"。
   let stop_reason = match choice.finish_reason {
     Stop => "\"end_turn\""
     Length => "\"max_tokens\""
     ToolCalls => "\"tool_use\""
-    ContentFilter => "\"content_filter\""
+    ContentFilter => "\"refusal\""
     Safety => "\"end_turn\""
     Recitation => "\"end_turn\""
     MalformedToolCall => "\"end_turn\""
