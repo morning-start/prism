@@ -36,11 +36,14 @@ fn parse_part(
       match @internal.obj_get(part, "thought") {
         Some(True) => {
           // thought:true → 仅发 Thinking，不伪装成文本
-          let th = @lux.LucentThinking::visible(t, None)
+          // thoughtSignature：Gemini 跨轮思考延续凭证，保留进 IR signature
+          let sig = @internal.field_str(part, "thoughtSignature")
+          let th = @lux.LucentThinking::visible(t, sig)
           [Thinking(th)]
         }
         Some(String(_)) => {
-          let th = @lux.LucentThinking::visible(t, None)
+          let sig = @internal.field_str(part, "thoughtSignature")
+          let th = @lux.LucentThinking::visible(t, sig)
           [Thinking(th)]
         }
         _ => [@lux.LucentContent::text(t)]

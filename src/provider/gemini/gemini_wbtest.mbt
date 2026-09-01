@@ -430,6 +430,48 @@ test "gemini thought part - only Thinking, no text placeholder" {
 }
 
 ///|
+/// thoughtSignature 跨轮延续：入站 part.thoughtSignature → IR signature → 出站还原
+test "gemini thoughtSignature round-trips through IR" {
+  let json = "{\"contents\":[{\"role\":\"model\",\"parts\":[{\"text\":\"internal reasoning\",\"thought\":true,\"thoughtSignature\":\"sig-gemini-1\"}]}]}"
+  match gemini_to_lux_request(json) {
+    Ok(cr) =>
+      match cr.value().conversation[0] {
+        Message(m) =>
+          match m.content[0] {
+            Thinking(th) => assert_eq(th.signature, Some("sig-gemini-1"))
+            _ => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    Err(e) => fail("decode: \{e}")
+  }
+  // 出站还原
+  let req = @lux.LucentRequest::new(
+    "gemini-3-pro",
+    None,
+    [
+      @lux.LucentConversationItem::reasoning(
+        @lux.LucentThinking::visible("internal reasoning", Some("sig-gemini-1")),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_gemini(req) {
+    Ok(cr) =>
+      assert_true(
+        cr.value().contains("\"thoughtSignature\":\"sig-gemini-1\""),
+      )
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
 /// 跨协议链路：vLLM 消息级 reasoning → IR → Gemini 出站 → thought:true part
 test "lux_response_to_gemini - message-level reasoning emits thought part" {
   let th = @lux.LucentThinking::visible("step by step", None)

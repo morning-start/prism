@@ -99,12 +99,19 @@ pub fn lux_response_to_gemini(
     let parts : Array[String] = []
     // 消息级 reasoning 优先（vLLM/DeepSeek 入站 → IR → Gemini 出站），前置为 thought:true part
     match c.message.reasoning {
-      Some(th) =>
+      Some(th) => {
+        let sig_part = match th.signature {
+          Some(s) => ",\"thoughtSignature\":\"" + @internal.json_escape(s) + "\""
+          None => ""
+        }
         parts.push(
           "{\"text\":\"" +
           @internal.json_escape(th.text) +
-          "\",\"thought\":true}",
+          "\",\"thought\":true" +
+          sig_part +
+          "}",
         )
+      }
       None => ()
     }
     let mut j = 0
@@ -129,12 +136,20 @@ pub fn lux_response_to_gemini(
             tu.arguments_json +
             "}}",
           )
-        Thinking(th) =>
+        Thinking(th) => {
+          // thought part + thoughtSignature（Gemini 跨轮思考延续凭证）
+          let sig_part = match th.signature {
+            Some(s) => ",\"thoughtSignature\":\"" + @internal.json_escape(s) + "\""
+            None => ""
+          }
           parts.push(
             "{\"text\":\"" +
             @internal.json_escape(th.text) +
-            "\",\"thought\":true}",
+            "\",\"thought\":true" +
+            sig_part +
+            "}",
           )
+        }
         File(mm) =>
           parts.push(
             "{\"fileData\":{\"mimeType\":\"" +
