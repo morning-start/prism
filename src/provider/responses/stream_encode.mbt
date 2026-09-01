@@ -295,6 +295,30 @@ pub fn lux_events_to_responses_sse(
               @internal.json_escape(s) +
               "\"}",
             )
+          SignatureDelta(s) =>
+            // thinking signature → reasoning item 的 encrypted-style signature 字段：
+            // Responses 推理延续凭证，不丢弃（标准 §10.2 reasoning signature）
+            lines.push(
+              "event: response.reasoning_summary_text.done\ndata: {\"type\":\"response.reasoning_summary_part.done\",\"item_id\":\"" +
+              @internal.json_escape(item_id) +
+              "\",\"output_index\":" +
+              out.to_string() +
+              ",\"summary_index\":0,\"signature\":\"" +
+              @internal.json_escape(s) +
+              "\"}",
+            )
+          RefusalDelta(s) =>
+            lines.push(
+              "event: response.refusal.delta\ndata: {\"type\":\"response.refusal.delta\",\"item_id\":\"" +
+              @internal.json_escape(item_id) +
+              "\",\"output_index\":" +
+              out.to_string() +
+              ",\"content_index\":" +
+              ci.to_string() +
+              ",\"delta\":\"" +
+              @internal.json_escape(s) +
+              "\"}",
+            )
           _ => ()
         }
       }
