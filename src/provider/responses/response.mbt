@@ -1,5 +1,7 @@
 ///|
 /// 解析 output Item 为 LucentContent[]
+/// 未知 server-side item（web_search_call / file_search_call 等）不发诊断——
+/// 本函数无诊断通道，由 responses_json_to_lux_response 的 output 级扫描兜底。
 fn parse_output_content(output_item : Json) -> Array[@lux.LucentContent] {
   match @internal.field_str(output_item, "type") {
     Some("message") => {
@@ -63,6 +65,39 @@ fn parse_output_content(output_item : Json) -> Array[@lux.LucentContent] {
 }
 
 ///|
+/// 扫描 output[] 中的 server-side 动作 item（web_search_call 等）→ AgentAction 诊断提示
+///
+/// Responses 的 typed output 将服务器工具执行记录为独立 item。lux-ir v1 的
+/// LucentAgentAction 占位已存在但对话外无法进入 LucentResponse（响应仅承载
+/// choices[].message），故解码时以 Unsupported 诊断显式暴露，不静默丢弃。
+fn scan_server_tool_items(jv : Json, diagnostics : Array[@lux.ConversionDiagnostic]) -> Unit {
+  match @internal.field_arr(jv, "output") {
+    Some(outputs) => {
+      let mut i = 0
+      while i < outputs.length() {
+        match @internal.field_str(outputs[i], "type") {
+          Some(t) =>
+            if t != "message" &&
+              t != "function_call" &&
+              t != "reasoning" &&
+              t != "function_call_output" {
+              diagnostics.push(
+                @lux.ConversionDiagnostic::unsupported(
+                  "response.output." + t,
+                  Some("server-side output item preserved only as diagnostic in lux-ir v1"),
+                ),
+              )
+            }
+          None => ()
+        }
+        i = i + 1
+      }
+    }
+    None => ()
+  }
+}
+
+///|
 /// 3. responses_to_lux_response — 响应解码
 pub fn responses_to_lux_response(
   json_str : String,
@@ -84,6 +119,9 @@ pub fn responses_json_to_lux_response(
   let id = @internal.field_str(jv, "id").unwrap_or("")
   let model = @internal.field_str(jv, "model").unwrap_or("")
   let created = @internal.field_int(jv, "created_at")
+  let diagnostics : Array[@lux.ConversionDiagnostic] = []
+  // server-side 动作 item（web_search_call 等）显式暴露，不静默丢弃
+  scan_server_tool_items(jv, diagnostics)
   // output items → choices[0].message.content
   let content : Array[@lux.LucentContent] = []
   match @internal.field_arr(jv, "output") {
@@ -125,11 +163,10 @@ pub fn responses_json_to_lux_response(
     }
     None => None
   }
-  Ok(
-    @lux.ConversionResult::new(
-      @lux.LucentResponse::new(id, model, created, [choice], usage, None),
-    ),
+  let result = @lux.ConversionResult::new(
+    @lux.LucentResponse::new(id, model, created, [choice], usage, None),
   )
+  Ok(result.with_diagnostics(diagnostics))
 }
 
 ///|
