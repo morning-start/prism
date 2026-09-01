@@ -98,6 +98,31 @@ pub fn openai_to_lux_response(
   let model = @internal.field_str(jv, "model").unwrap_or("")
   let created = @internal.field_int(jv, "created")
   let choices = parse_choices(jv)
+  // 响应级元数据 → provider_payload（system_fingerprint / service_tier / logprobs 归属等，
+  // 标准 §9：不进 IR 字段的响应级信息保留给调用方，不静默丢弃）
+  let payload_fields : Array[String] = []
+  match @internal.field_str(jv, "system_fingerprint") {
+    Some(fp) =>
+      payload_fields.push(
+        "\"system_fingerprint\":\"" + @internal.json_escape(fp) + "\"",
+      )
+    None => ()
+  }
+  match @internal.field_str(jv, "service_tier") {
+    Some(tier) =>
+      payload_fields.push(
+        "\"service_tier\":\"" + @internal.json_escape(tier) + "\"",
+      )
+    None => ()
+  }
+  let provider_payload : Json? = if payload_fields.length() > 0 {
+    match @internal.parse_json_opt("{" + payload_fields.join(",") + "}") {
+      Some(v) => Some(v)
+      None => None
+    }
+  } else {
+    None
+  }
   // usage（含 reasoning/cached 细化用量，标准 §9）
   let usage = match @internal.obj_get(jv, "usage") {
     Some(u) => {
@@ -117,7 +142,14 @@ pub fn openai_to_lux_response(
   }
   Ok(
     @lux.ConversionResult::new(
-      @lux.LucentResponse::new(id, model, created, choices, usage, None),
+      @lux.LucentResponse::new(
+        id,
+        model,
+        created,
+        choices,
+        usage,
+        provider_payload,
+      ),
     ),
   )
 }
