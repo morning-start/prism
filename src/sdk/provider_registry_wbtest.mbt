@@ -33,13 +33,25 @@ test "registry - request_encode returns ConversionResult" {
   match match_provider_name("anthropic") {
     Some(reg) => {
       let msg = @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")])
+      let opts = @lux.LucentOptions::new(
+        None,
+        None,
+        None,
+        Some(1024),
+        None,
+        false,
+        None,
+        None,
+        None,
+        None,
+      )
       let req = @lux.LucentRequest::from_messages(
         "claude-3-5",
         None,
         [msg],
         None,
         None,
-        @lux.LucentOptions::default(),
+        opts,
         None,
         None,
         None,

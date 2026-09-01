@@ -21,6 +21,7 @@ pub fn gemini_sse_to_events(
   // （按函数名独立计数），避免与块序号混用导致跨帧配对错位（标准 §10.1）
   let call_seq : Map[String, Int] = Map([])
   let mut i = 0
+  let mut done_emitted = false
   while i < messages.length() {
     let jv = match @internal.parse_sse_frame(messages[i].data) {
       Some(v) => v
@@ -139,6 +140,11 @@ pub fn gemini_sse_to_events(
                 has_text_block = false
               }
               events.push(Finish(@lux.LucentFinishReason::from_string(fr)))
+              // 原生 Gemini 无 [DONE]；finishReason 即终止信号，补发 Done
+              if !done_emitted {
+                events.push(Done)
+                done_emitted = true
+              }
             }
             None => ()
           }
@@ -159,7 +165,10 @@ pub fn gemini_sse_to_events(
         events.push(
           Usage(@lux.LucentUsage::full(pt, ct, tt, reasoning, cached, None)),
         )
-        events.push(Done)
+        if !done_emitted {
+          events.push(Done)
+          done_emitted = true
+        }
       }
       None => ()
     }
@@ -167,6 +176,10 @@ pub fn gemini_sse_to_events(
   }
   if has_text_block {
     events.push(BlockEnd(text_block_index))
+  }
+  // 兜底：末帧既无 finishReason 也无 usageMetadata 时（异常流）仍发 Done，避免消费者挂起
+  if !done_emitted {
+    events.push(Done)
   }
   Ok(@lux.ConversionResult::new(events))
 }

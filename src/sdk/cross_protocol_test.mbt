@@ -107,7 +107,26 @@ test "consistency - responses roundtrip" {
         Ok(cr2) => {
           let req = cr2.value()
           assert_eq(req.model, base_req.model)
-          assert_eq(req.conversation.length(), base_req.conversation.length())
+          // 修复 #1 后：嵌块工具调用被保留为独立 item（对话长度可能变化，不再断言相等）
+          let mut has_tool_call = false
+          let mut has_tool_result = false
+          let mut i = 0
+          while i < req.conversation.length() {
+            match req.conversation[i] {
+              ToolCall(tu) =>
+                if tu.name == "get_weather" {
+                  has_tool_call = true
+                }
+              ToolResult(tr) =>
+                if @lux.lucent_content_to_text(tr.content).contains("sunny") {
+                  has_tool_result = true
+                }
+              _ => ()
+            }
+            i = i + 1
+          }
+          assert_true(has_tool_call)
+          assert_true(has_tool_result)
           match req.tools {
             Some(tools) => assert_eq(tools.length(), 1)
             None => assert_true(false)
@@ -711,5 +730,92 @@ test "fidelity - openai native content yields Unsupported diagnostic" {
       assert_true(has_diag)
     }
     Err(e) => fail("encode failed: \{e}")
+  }
+}
+
+///|
+/// 回归 #1：OpenAI 嵌块工具调用/结果 → Responses 必须保留（修复前被静默丢弃）
+test "regression - openai embedded tool survives responses encode" {
+  let req : @lux.LucentRequest = @lux.LucentRequest::new(
+    "test-model",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
+      ),
+      // OpenAI 解码出来的表示：assistant 消息内嵌 ToolUse
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(Assistant, [
+          @lux.LucentContent::text("Let me check"),
+          @lux.LucentContent::tool_use(
+            "call_1",
+            "get_weather",
+            "{\"city\":\"Beijing\"}",
+            None,
+          ),
+        ]),
+      ),
+      // OpenAI 解码出来的表示：role=tool → Message(Tool, [ToolResult])
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(Tool, [
+          @lux.LucentContent::tool_result("call_1", [
+            @lux.LucentContent::text("sunny"),
+          ]),
+        ]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match @responses.lux_request_to_responses(req) {
+    Ok(cr) => {
+      let json = cr.value()
+      assert_true(json.contains("\"type\":\"function_call\""))
+      assert_true(json.contains("\"type\":\"function_call_output\""))
+      assert_true(json.contains("get_weather"))
+      assert_true(json.contains("Beijing"))
+      assert_true(json.contains("sunny"))
+    }
+    Err(e) => fail("responses encode failed: " + e)
+  }
+}
+
+///|
+/// 回归 #2：Anthropic 编码器在缺 max_tokens 时补默认（修复前省略必填字段 → 400）
+test "regression - messages fills max_tokens default when missing" {
+  let req : @lux.LucentRequest = @lux.LucentRequest::new(
+    "test-model",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match @messages.lux_request_to_messages(req) {
+    Ok(cr) => {
+      let json = cr.value()
+      assert_true(json.contains("\"max_tokens\""))
+      let mut has_diag = false
+      for d in cr.diagnostics() {
+        if d.field == "options.max_output_tokens" {
+          has_diag = true
+        }
+      }
+      assert_true(has_diag)
+    }
+    Err(e) => fail("messages encode failed: " + e)
   }
 }

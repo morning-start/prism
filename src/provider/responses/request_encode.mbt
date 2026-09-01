@@ -28,6 +28,41 @@ fn extras_without(
 }
 
 ///|
+/// LucentThinking → OpenAI Responses reasoning item JSON（input 复用）
+/// 消息级/块级 thinking 与独立 Reasoning item 共用同一序列化
+fn reasoning_item_json(th : @lux.LucentThinking) -> String {
+  let summary_parts : Array[String] = []
+  match th.summary {
+    Some(arr) => {
+      let mut k = 0
+      while k < arr.length() {
+        match arr[k] {
+          Text(t, _) =>
+            summary_parts.push(
+              "{\"type\":\"summary_text\",\"text\":\"" +
+              @internal.json_escape(t) +
+              "\"}",
+            )
+          _ => ()
+        }
+        k = k + 1
+      }
+    }
+    None => ()
+  }
+  let mut r_item = "{\"type\":\"reasoning\""
+  if summary_parts.length() > 0 {
+    r_item = r_item + ",\"summary\":[" + summary_parts.join(",") + "]"
+  }
+  match th.signature {
+    Some(s) =>
+      r_item = r_item + ",\"signature\":\"" + @internal.json_escape(s) + "\""
+    None => ()
+  }
+  r_item + "}"
+}
+
+///|
 /// 2. lux_request_to_responses — 请求编码
 pub fn lux_request_to_responses(
   req : @lux.LucentRequest,
@@ -53,6 +88,7 @@ pub fn lux_request_to_responses(
       Message(m) => {
         let role_str = m.role.to_string()
         let content_parts : Array[String] = []
+        let extra_items : Array[String] = []
         let mut j = 0
         while j < m.content.length() {
           match m.content[j] {
@@ -112,17 +148,48 @@ pub fn lux_request_to_responses(
                     diagnostics,
                   )
               }
+            // 嵌在消息里的工具调用/结果/思考 → 独立 item（与独立 ToolCall/ToolResult/Reasoning 同构）
+            // 修复：原实现只处理独立 item，OpenAI/Anthropic/Gemini 解码出来的嵌块表示被静默丢弃
+            ToolUse(tu) =>
+              extra_items.push(
+                "{\"type\":\"function_call\",\"id\":\"" +
+                @internal.json_escape(tu.id) +
+                "\",\"call_id\":\"" +
+                @internal.json_escape(tu.id) +
+                "\",\"name\":\"" +
+                @internal.json_escape(tu.name) +
+                "\",\"arguments\":\"" +
+                @internal.json_escape(tu.arguments_json) +
+                "\",\"status\":\"completed\"}",
+              )
+            ToolResult(tr) =>
+              extra_items.push(
+                "{\"type\":\"function_call_output\",\"call_id\":\"" +
+                @internal.json_escape(tr.tool_use_id) +
+                "\",\"output\":\"" +
+                @internal.json_escape(@lux.lucent_content_to_text(tr.content)) +
+                "\"}",
+              )
+            Thinking(th) => extra_items.push(reasoning_item_json(th))
             _ => ()
           }
           j = j + 1
         }
-        items.push(
-          "{\"type\":\"message\",\"role\":\"" +
-          @internal.json_escape(role_str) +
-          "\",\"content\":[" +
-          content_parts.join(",") +
-          "]}",
-        )
+        // 先发文本消息（保持文档顺序），再发工具/思考独立 item
+        if content_parts.length() > 0 {
+          items.push(
+            "{\"type\":\"message\",\"role\":\"" +
+            @internal.json_escape(role_str) +
+            "\",\"content\":[" +
+            content_parts.join(",") +
+            "]}",
+          )
+        }
+        let mut e = 0
+        while e < extra_items.length() {
+          items.push(extra_items[e])
+          e = e + 1
+        }
       }
       ToolCall(tu) =>
         items.push(
@@ -144,40 +211,7 @@ pub fn lux_request_to_responses(
           @internal.json_escape(@lux.lucent_content_to_text(tr.content)) +
           "\"}",
         )
-      Reasoning(th) => {
-        let summary_parts : Array[String] = []
-        match th.summary {
-          Some(arr) => {
-            let mut k = 0
-            while k < arr.length() {
-              match arr[k] {
-                Text(t, _) =>
-                  summary_parts.push(
-                    "{\"type\":\"summary_text\",\"text\":\"" +
-                    @internal.json_escape(t) +
-                    "\"}",
-                  )
-                _ => ()
-              }
-              k = k + 1
-            }
-          }
-          None => ()
-        }
-        let mut r_item = "{\"type\":\"reasoning\""
-        if summary_parts.length() > 0 {
-          r_item = r_item + ",\"summary\":[" + summary_parts.join(",") + "]"
-        }
-        match th.signature {
-          Some(s) =>
-            r_item = r_item +
-              ",\"signature\":\"" +
-              @internal.json_escape(s) +
-              "\""
-          None => ()
-        }
-        items.push(r_item + "}")
-      }
+      Reasoning(th) => items.push(reasoning_item_json(th))
       AgentAction(_) => ()
     }
     i = i + 1

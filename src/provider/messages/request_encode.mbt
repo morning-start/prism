@@ -413,7 +413,16 @@ pub fn lux_request_to_messages(
   let opts = req.options
   match opts.max_output_tokens {
     Some(n) => parts.push("\"max_tokens\":" + n.to_string())
-    None => ()
+    None => {
+      // Anthropic 必填 max_tokens（无默认值）；OpenAI/Chat 常省略 → 补默认避免 400
+      diagnostics.push(
+        @lux.ConversionDiagnostic::degraded(
+          "options.max_output_tokens",
+          Some("anthropic requires max_tokens; filled default 4096"),
+        ),
+      )
+      parts.push("\"max_tokens\":4096")
+    }
   }
   match opts.temperature {
     Some(t) => parts.push("\"temperature\":" + t.to_string())

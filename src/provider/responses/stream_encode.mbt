@@ -106,6 +106,8 @@ pub fn lux_events_to_responses_sse(
           ToolResult(tr) =>
             "{\"type\":\"function_call_output\",\"call_id\":\"" +
             @internal.json_escape(tr.tool_use_id) +
+            "\",\"output\":\"" +
+            @internal.json_escape(@lux.lucent_content_to_text(tr.content)) +
             "\"}"
           Reasoning(th) => {
             let summary = match th.summary {
