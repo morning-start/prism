@@ -149,9 +149,28 @@ pub fn messages_sse_to_events(
         events.push(Done)
       }
       "error" =>
-        match @internal.field_str(jv, "error") {
-          Some(e_msg) => events.push(Error(@lux.LucentError::simple(e_msg)))
-          None => ()
+        // Anthropic error 事件：{"type":"error","error":{"type":"...","message":"..."}}
+        // error 是对象而非字符串；兼容字符串形态的容错写法
+        match @internal.obj_get(jv, "error") {
+          Some(err_obj) => {
+            let err_type = @internal.field_str(err_obj, "type")
+            let err_msg = @internal.field_str(err_obj, "message")
+            let msg = match err_msg {
+              Some(m) => m
+              None =>
+                match err_type {
+                  Some(t) => t
+                  None => "unknown error"
+                }
+            }
+            let kind = @lux.LucentErrorKind::from_string(err_type.unwrap_or(""))
+            events.push(Error(@lux.LucentError::new(kind, msg, err_type)))
+          }
+          None =>
+            match @internal.field_str(jv, "error") {
+              Some(e_msg) => events.push(Error(@lux.LucentError::simple(e_msg)))
+              None => ()
+            }
         }
       _ => ()
     }
