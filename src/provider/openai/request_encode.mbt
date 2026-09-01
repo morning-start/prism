@@ -249,6 +249,15 @@ fn extras_without(
 }
 
 ///|
+/// extras 查询辅助（只读，不消费）
+fn merged_extras_lookup(extras : Map[String, Json]?, key : String) -> Json? {
+  match extras {
+    Some(m) => m.get(key)
+    None => None
+  }
+}
+
+///|
 /// 2. lux_request_to_openai — 请求编码
 pub fn lux_request_to_openai(
   req : @lux.LucentRequest,
@@ -412,11 +421,27 @@ pub fn lux_request_to_openai(
       parts.push("\"response_format\":{\"type\":\"json_object\"}")
     Some(Text) => parts.push("\"response_format\":{\"type\":\"text\"}")
     Some(JsonSchema(schema)) =>
-      parts.push(
-        "\"response_format\":{\"type\":\"json_schema\",\"json_schema\":{\"schema\":" +
-        schema +
-        "}}",
-      )
+      // name/strict 从 extras 透传的 json_schema_name / json_schema_strict 消费（标准 §6）
+      // 缺省 name="response"、strict 不发（模型默认），严格客户端可按需声明
+      {
+        let name_part = match merged_extras_lookup(opts.extras, "json_schema_name") {
+          Some(String(n)) => "\"name\":\"" + @internal.json_escape(n) + "\""
+          _ => "\"name\":\"response\""
+        }
+        let strict_part = match merged_extras_lookup(opts.extras, "json_schema_strict") {
+          Some(True) => ",\"strict\":true"
+          Some(False) => ",\"strict\":false"
+          _ => ""
+        }
+        parts.push(
+          "\"response_format\":{\"type\":\"json_schema\",\"json_schema\":{" +
+          name_part +
+          strict_part +
+          ",\"schema\":" +
+          schema +
+          "}}",
+        )
+      }
     None => ()
   }
   match opts.store {
