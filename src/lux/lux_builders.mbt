@@ -434,6 +434,15 @@ pub fn LucentReasoningConfig::disabled() -> LucentReasoningConfig {
 }
 
 ///|
+/// 构建替换 budget_tokens 的副本（保留其余字段）
+pub fn LucentReasoningConfig::copy_with_budget(
+  self : LucentReasoningConfig,
+  budget_tokens : Int?,
+) -> LucentReasoningConfig {
+  { ..self, budget_tokens, }
+}
+
+///|
 pub fn LucentRequest::new(
   model : String,
   instructions : Array[LucentContent]?,

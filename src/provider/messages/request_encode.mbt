@@ -248,6 +248,16 @@ fn content_array_to_json(
 }
 
 ///|
+/// output_config.effort 前缀辅助：effort 存在时输出 `"effort":"...",`，否则空串
+fn output_effort_part_with_prefix(effort_part : String) -> String {
+  if effort_part != "" {
+    effort_part + ","
+  } else {
+    ""
+  }
+}
+
+///|
 /// 2. lux_request_to_messages — 请求编码
 pub fn lux_request_to_messages(
   req : @lux.LucentRequest,
@@ -417,19 +427,78 @@ pub fn lux_request_to_messages(
     Some(k) => parts.push("\"top_k\":" + k.to_string())
     None => ()
   }
+  // reasoning config → thinking + output_config.effort
+  //
+  // Anthropic 思考控制两形态（标准 §语义映射）：
+  // - budget_tokens 有值 → 旧式固定预算 {"thinking":{"type":"enabled","budget_tokens":N}}
+  // - effort 有值 → 新式 adaptive {"thinking":{"type":"adaptive"},"output_config":{"effort":"..."}}
+  //   IR XHigh 与 Anthropic xhigh 对等；无 max 档位（XHigh 不降级，注释说明）
+  // 两者都无 → enabled 无参（模型默认行为）
+  let mut output_effort_part = ""
+  match req.reasoning {
+    Some(rc) =>
+      if rc.enabled {
+        match rc.budget_tokens {
+          Some(n) =>
+            parts.push(
+              "\"thinking\":{\"type\":\"enabled\",\"budget_tokens\":" +
+              n.to_string() +
+              "}",
+            )
+          None => {
+            // adaptive 形态：effort 落 output_config（与 structured output 的 format 合并）
+            match rc.effort {
+              Some(e) => {
+                let level = match e {
+                  @lux.Low => "low"
+                  @lux.Medium => "medium"
+                  @lux.High => "high"
+                  // Anthropic 支持 xhigh；IR 无 max 档位，XHigh 即 Anthropic 次高档
+                  @lux.XHigh => "xhigh"
+                }
+                output_effort_part = "\"effort\":\"" + level + "\""
+              }
+              None => ()
+            }
+            parts.push("\"thinking\":{\"type\":\"adaptive\"}")
+          }
+        }
+      } else {
+        parts.push("\"thinking\":{\"type\":\"disabled\"}")
+      }
+    None => ()
+  }
   // structured output → output_config.format
+  // output_effort_part（来自 reasoning.effort）与 format 合并为单个 output_config 对象
   match opts.structured_output {
     Some(JsonObject) =>
       parts.push(
-        "\"output_config\":{\"format\":{\"type\":\"json_schema\",\"schema\":{}}}",
+        "\"output_config\":{" +
+        output_effort_part_with_prefix(output_effort_part) +
+        "\"format\":{\"type\":\"json_schema\",\"schema\":{}}}",
       )
     Some(JsonSchema(schema)) =>
       parts.push(
-        "\"output_config\":{\"format\":{\"type\":\"json_schema\",\"schema\":" +
+        "\"output_config\":{" +
+        output_effort_part_with_prefix(output_effort_part) +
+        "\"format\":{\"type\":\"json_schema\",\"schema\":" +
         schema +
         "}}",
       )
+    Some(Text) =>
+      parts.push(
+        "\"output_config\":{" +
+        output_effort_part_with_prefix(output_effort_part) +
+        "\"format\":{\"type\":\"text\"}}",
+      )
     _ => ()
+  }
+  // effort 无 structured output 时独立成 output_config
+  if output_effort_part != "" {
+    match opts.structured_output {
+      Some(_) => ()
+      None => parts.push("\"output_config\":{" + output_effort_part + "}")
+    }
   }
   match opts.stop {
     Some(arr) => {
@@ -445,20 +514,6 @@ pub fn lux_request_to_messages(
   }
   if opts.stream {
     parts.push("\"stream\":true")
-  }
-  // reasoning config → thinking
-  match req.reasoning {
-    Some(rc) =>
-      if rc.enabled {
-        let budget_part = match rc.budget_tokens {
-          Some(n) => ",\"budget_tokens\":" + n.to_string()
-          None => ""
-        }
-        parts.push("\"thinking\":{\"type\":\"enabled\"" + budget_part + "}")
-      } else {
-        parts.push("\"thinking\":{\"type\":\"disabled\"}")
-      }
-    None => ()
   }
   // metadata
   match req.metadata {

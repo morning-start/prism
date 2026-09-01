@@ -321,6 +321,12 @@ fn parse_tool_choice(jv : Json) -> @lux.LucentToolChoice? {
 
 ///|
 /// 解析 thinking 配置 → LucentReasoningConfig?
+///
+/// Anthropic thinking.type 三形态：
+/// - "enabled"：固定预算模式（budget_tokens）
+/// - "adaptive"：模型自适应思考（配合 output_config.effort），映射为 enabled
+/// - "disabled"：关闭思考
+/// 其余未知形态按 disabled 处理（保守，不猜测语义）。
 fn parse_reasoning(jv : Json) -> @lux.LucentReasoningConfig? {
   match @internal.obj_get(jv, "thinking") {
     Some(Object(m)) =>
@@ -332,9 +338,44 @@ fn parse_reasoning(jv : Json) -> @lux.LucentReasoningConfig? {
           }
           Some(@lux.LucentReasoningConfig::enabled(budget))
         }
+        // adaptive = 启用思考、模型自适应；语义上是"开"而非"关"
+        Some(String("adaptive")) =>
+          Some(@lux.LucentReasoningConfig::new(None, None))
         _ => Some(@lux.LucentReasoningConfig::disabled())
       }
     _ => None
+  }
+}
+
+///|
+/// 解析 output_config.effort → LucentReasoningEffort?
+///
+/// Anthropic 档位：low / medium / high / xhigh / max。
+/// IR 无 max 档位 → 降级为 XHigh 并由调用方标注诊断。
+/// effort 是 adaptive 思考的强度控制，归入 IR reasoning.effort。
+fn parse_output_effort(
+  jv : Json,
+  diagnostics : Array[@lux.ConversionDiagnostic],
+) -> @lux.LucentReasoningEffort? {
+  match @internal.obj_get(jv, "output_config") {
+    Some(oc) =>
+      match @internal.field_str(oc, "effort") {
+        Some("low") => Some(@lux.Low)
+        Some("medium") => Some(@lux.Medium)
+        Some("high") => Some(@lux.High)
+        Some("xhigh") => Some(@lux.XHigh)
+        Some("max") => {
+          diagnostics.push(
+            @lux.ConversionDiagnostic::degraded(
+              "output_config.effort",
+              Some("anthropic effort \"max\" downgraded to xhigh"),
+            ),
+          )
+          Some(@lux.XHigh)
+        }
+        _ => None
+      }
+    None => None
   }
 }
 
@@ -431,7 +472,24 @@ pub fn messages_to_lux_request(
     }
     _ => None
   }
-  let reasoning = parse_reasoning(jv)
+  let reasoning = match parse_reasoning(jv) {
+    Some(rc) =>
+      // effort 来自 output_config.effort（adaptive 思考的强度控制）
+      match parse_output_effort(jv, diagnostics) {
+        Some(effort) =>
+          // 保留 budget_tokens（enabled 形态可同时给 effort），替换 effort
+          Some(
+            @lux.LucentReasoningConfig::new(Some(effort), rc.summary).copy_with_budget(
+              rc.budget_tokens,
+            ),
+          )
+        None => Some(rc)
+      }
+    None =>
+      parse_output_effort(jv, diagnostics).map(fn(effort) {
+        @lux.LucentReasoningConfig::new(Some(effort), None)
+      })
+  }
   let extras = @internal.collect_extra_fields(jv, [
     "model", "system", "messages", "tools", "tool_choice", "temperature", "top_p",
     "top_k", "max_tokens", "stream", "stop_sequences", "metadata", "thinking", "output_config",

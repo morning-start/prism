@@ -192,6 +192,46 @@ test "messages_to_lux_request - thinking config" {
 }
 
 ///|
+test "messages_to_lux_request - adaptive thinking maps to enabled not disabled" {
+  let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}],\"thinking\":{\"type\":\"adaptive\"},\"output_config\":{\"effort\":\"high\"}}"
+  match messages_to_lux_request(json) {
+    Ok(cr) =>
+      match cr.value().reasoning {
+        Some(rc) => {
+          // adaptive 语义上是"开"：映射为 enabled，禁止落入 disabled
+          assert_eq(rc.enabled, true)
+          assert_eq(rc.budget_tokens, None)
+          assert_eq(rc.effort, Some(@lux.High))
+        }
+        None => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "messages_to_lux_request - output_config effort max downgrades to xhigh with diagnostic" {
+  let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}],\"thinking\":{\"type\":\"adaptive\"},\"output_config\":{\"effort\":\"max\"}}"
+  match messages_to_lux_request(json) {
+    Ok(cr) => {
+      match cr.value().reasoning {
+        Some(rc) => assert_eq(rc.effort, Some(@lux.XHigh))
+        None => assert_true(false)
+      }
+      let ds = cr.diagnostics()
+      let mut found = false
+      for d in ds {
+        if d.field == "output_config.effort" {
+          found = true
+        }
+      }
+      assert_true(found)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
 test "messages_to_lux_request - redacted_thinking" {
   let json = "{\"model\":\"claude-sonnet-4\",\"max_tokens\":1024,\"messages\":[{\"role\":\"assistant\",\"content\":[{\"type\":\"redacted_thinking\",\"signature\":\"sig-redacted\"},{\"type\":\"text\",\"text\":\"ok\"}]}]}"
   match messages_to_lux_request(json) {
@@ -521,6 +561,82 @@ test "lux_request_to_messages - thinking config" {
   )
   match lux_request_to_messages(req) {
     Ok(cr) => assert_true(cr.value().contains("\"budget_tokens\":2048"))
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "lux_request_to_messages - effort-based reasoning emits adaptive thinking with output_config" {
+  let req = @lux.LucentRequest::from_messages(
+    "claude-sonnet-4",
+    None,
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
+    None,
+    None,
+    @lux.LucentOptions::new(
+      None,
+      None,
+      None,
+      Some(1024),
+      None,
+      false,
+      None,
+      None,
+      None,
+      None,
+    ),
+    None,
+    Some(@lux.LucentReasoningConfig::new(Some(@lux.High), None)),
+    None,
+    None,
+  )
+  match lux_request_to_messages(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      // adaptive 形态：thinking.type=adaptive + effort 落 output_config
+      assert_true(s.contains("\"thinking\":{\"type\":\"adaptive\"}"))
+      assert_true(s.contains("\"output_config\":{\"effort\":\"high\"}"))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+test "lux_request_to_messages - effort reasoning with structured output merges single output_config" {
+  let req = @lux.LucentRequest::from_messages(
+    "claude-sonnet-4",
+    None,
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
+    None,
+    None,
+    @lux.LucentOptions::new(
+      None,
+      None,
+      None,
+      Some(1024),
+      None,
+      false,
+      None,
+      Some(@lux.JsonSchema("{\"type\":\"object\"}")),
+      None,
+      None,
+    ),
+    None,
+    Some(@lux.LucentReasoningConfig::new(Some(@lux.Medium), None)),
+    None,
+    None,
+  )
+  match lux_request_to_messages(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      // effort 与 format 合并为单个 output_config 对象，不产生两个 output_config
+      assert_true(
+        s.contains(
+          "\"output_config\":{\"effort\":\"medium\",\"format\":{\"type\":\"json_schema\"",
+        ),
+      )
+      assert_false(s.contains("\"thinking\":{\"type\":\"enabled\"}"))
+    }
     Err(_) => assert_true(false)
   }
 }
