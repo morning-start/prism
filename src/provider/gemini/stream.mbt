@@ -17,6 +17,9 @@ pub fn gemini_sse_to_events(
   let mut has_text_block = false
   let mut current_text = ""
   let mut text_block_index = 0
+  // functionCall 序号：与 request_decode/response 的 fc_<name>_<n> 规则保持一致
+  // （按函数名独立计数），避免与块序号混用导致跨帧配对错位（标准 §10.1）
+  let call_seq : Map[String, Int] = Map([])
   let mut i = 0
   while i < messages.length() {
     let jv = match @internal.parse_sse_frame(messages[i].data) {
@@ -70,12 +73,18 @@ pub fn gemini_sse_to_events(
                           events.push(BlockEnd(text_block_index))
                           has_text_block = false
                         }
+                        // ID 规则与 request_decode 对齐：fc_<name>_<按函数名序号>
+                        let seq = match call_seq.get(name) {
+                          Some(v) => v
+                          None => 0
+                        }
+                        call_seq[name] = seq + 1
                         text_block_index = text_block_index + 1
                         events.push(
                           BlockStart(
                             text_block_index,
                             @lux.LucentBlockType::tool_call(
-                              "fc_" + name + "_" + text_block_index.to_string(),
+                              "fc_" + name + "_" + seq.to_string(),
                               name,
                             ),
                           ),
