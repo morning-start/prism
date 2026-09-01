@@ -114,7 +114,8 @@ pub fn openai_sse_to_events(
               }
               // reasoning_content（DeepSeek/vLLM thinking 内容）；
               // delta.reasoning（OpenRouter 等流式标准字段）与 message.reasoning 对称
-              let reasoning_text = match @internal.field_str(delta, "reasoning_content") {
+              let reasoning_text = match
+                @internal.field_str(delta, "reasoning_content") {
                 Some(s) => Some(s)
                 None => @internal.field_str(delta, "reasoning")
               }

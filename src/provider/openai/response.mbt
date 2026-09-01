@@ -143,12 +143,7 @@ pub fn openai_to_lux_response(
   Ok(
     @lux.ConversionResult::new(
       @lux.LucentResponse::new(
-        id,
-        model,
-        created,
-        choices,
-        usage,
-        provider_payload,
+        id, model, created, choices, usage, provider_payload,
       ),
     ),
   )

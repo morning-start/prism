@@ -1,6 +1,6 @@
 # Prism Project Status
 
-> Last updated: 2026-08-30
+> Last updated: 2026-09-01
 
 ## Module Completion
 
@@ -46,8 +46,29 @@ Provider aliases and model-pattern variants (codex, azure, vllm, gemini-vertex, 
 - JSON Schema (`schemas/lux-ir-v1.json`) remains manually authored, but `scripts/check_schema_drift.ps1` now reports version/required-field/enum/stream-event drift
 
 - `src/internal/sse.mbt` exports `parse_sse_frame` — shared SSE preprocessing pipeline used by messages, openai, and gemini stream decoders
-- `src/internal/json.mbt` exports `parse_string_array` and `merge_extras_json` — shared JSON helpers used by all four providers
+- `src/internal/json.mbt` exports `parse_string_array`, `merge_extras_json`, and usage-detail helpers (`parse_reasoning_tokens` / `parse_cached_tokens` / `parse_cache_creation_tokens`) — shared helpers used by all four providers
 - `src/lux/stream.mbt` exports `BlockAccumulator` (package-internal) — extracted from the 290-line stream accumulator function
+
+## IR Evolution Backlog (from 2026-09 protocol audit)
+
+Items identified by the cross-protocol conversion audit (context-continuation
+and tool-pairing focus). Adapter-level mitigations are in place; IR-level
+carriers are pending governance per `docs/rules/lucent-ir-evolution.md`:
+
+- **ToolResult name carrier**: `LucentToolResult` has only `tool_use_id`;
+  Gemini `functionResponse.name` requires the function name, so encoders
+  pre-scan `ToolCall` items to rebuild the id→name map (see
+  `src/provider/gemini/request_encode.mbt` `build_tool_name_map`). An IR
+  carrier would remove the scan and handle orphan tool results cleanly.
+- **Reasoning continuation credential side-channel**: Responses
+  `reasoning.encrypted_content` (stateless reasoning continuation) has no IR
+  carrier; decode emits a Degraded diagnostic instead of preserving it.
+- **ReasoningEffort `Minimal` tier**: OpenAI `reasoning_effort: "minimal"`
+  (gpt-5 family) degrades to `Low` with a diagnostic; Anthropic `"max"`
+  degrades to `XHigh`.
+- **parallel_tool_calls as a standard option**: currently exchanged via the
+  `extras` map with semantic inversion per target (`parallel_tool_calls` ↔
+  `disable_parallel_tool_use`); both directions are tested.
 
 ## Build & Verify
 
