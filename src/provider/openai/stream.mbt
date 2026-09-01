@@ -299,8 +299,18 @@ pub fn lux_events_to_openai_sse(
               @internal.json_escape(s) +
               "\"}}]}",
             )
-          SignatureDelta(_) | RefusalDelta(_) => ()
-          // OpenAI Chat 流无原生 signature/refusal 增量，编码时忽略
+          SignatureDelta(_) =>
+            // OpenAI Chat 无原生 signature 载体，忽略（IR 侧 signature 已在
+            // 非流式路径由消息级 reasoning 承载，chat 端无延续语义）
+            ()
+          RefusalDelta(s) =>
+            // refusal 以 content 增量输出（Chat 无独立 refusal delta 字段）
+            out.push(
+              chunk_prefix(chat_id, chat_model, chat_created) +
+              "\"choices\":[{\"delta\":{\"content\":\"" +
+              @internal.json_escape(s) +
+              "\"}}]}",
+            )
           NativeDelta(_, _) => ()
         }
       Finish(fr) =>

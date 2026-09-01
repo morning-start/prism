@@ -420,28 +420,29 @@ pub fn lux_request_to_openai(
     Some(JsonObject) =>
       parts.push("\"response_format\":{\"type\":\"json_object\"}")
     Some(Text) => parts.push("\"response_format\":{\"type\":\"text\"}")
-    Some(JsonSchema(schema)) =>
-      // name/strict 从 extras 透传的 json_schema_name / json_schema_strict 消费（标准 §6）
-      // 缺省 name="response"、strict 不发（模型默认），严格客户端可按需声明
-      {
-        let name_part = match merged_extras_lookup(opts.extras, "json_schema_name") {
-          Some(String(n)) => "\"name\":\"" + @internal.json_escape(n) + "\""
-          _ => "\"name\":\"response\""
-        }
-        let strict_part = match merged_extras_lookup(opts.extras, "json_schema_strict") {
-          Some(True) => ",\"strict\":true"
-          Some(False) => ",\"strict\":false"
-          _ => ""
-        }
-        parts.push(
-          "\"response_format\":{\"type\":\"json_schema\",\"json_schema\":{" +
-          name_part +
-          strict_part +
-          ",\"schema\":" +
-          schema +
-          "}}",
-        )
+    // name/strict 从 extras 透传的 json_schema_name / json_schema_strict 消费（标准 §6）
+    // 缺省 name="response"、strict 不发（模型默认），严格客户端可按需声明
+    Some(JsonSchema(schema)) => {
+      let name_part = match
+        merged_extras_lookup(opts.extras, "json_schema_name") {
+        Some(String(n)) => "\"name\":\"" + @internal.json_escape(n) + "\""
+        _ => "\"name\":\"response\""
       }
+      let strict_part = match
+        merged_extras_lookup(opts.extras, "json_schema_strict") {
+        Some(True) => ",\"strict\":true"
+        Some(False) => ",\"strict\":false"
+        _ => ""
+      }
+      parts.push(
+        "\"response_format\":{\"type\":\"json_schema\",\"json_schema\":{" +
+        name_part +
+        strict_part +
+        ",\"schema\":" +
+        schema +
+        "}}",
+      )
+    }
     None => ()
   }
   match opts.store {
