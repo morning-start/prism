@@ -786,6 +786,123 @@ test "regression - openai embedded tool survives responses encode" {
 }
 
 ///|
+/// 不变量：工具调用在 IR 中有两种合法表示（内嵌 Message 块 / 独立 ToolCall·ToolResult item，
+/// 见 lux-ir-design.md），四家编码器都必须保留「工具名 + 工具结果」。
+/// 这是修复 #1 类回归（某编码器只处理一种表示、静默丢弃另一种）的根因级防护。
+/// 注意：双表示是设计使然，不在 IR 层归一化，而是在转换层强制所有编码器都处理两种形态。
+test "invariant - all encoders preserve tool call and result in both IR forms" {
+  let tool_use = @lux.LucentContent::tool_use(
+    "call_1",
+    "get_weather",
+    "{\"city\":\"Beijing\"}",
+    None,
+  )
+  let tool_res = @lux.LucentContent::tool_result("call_1", [
+    @lux.LucentContent::text("sunny"),
+  ])
+  // 形态 A：内嵌块（OpenAI / Anthropic / Gemini 解码产出）
+  let req_embedded : @lux.LucentRequest = @lux.LucentRequest::new(
+    "test-model",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
+      ),
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(Assistant, [
+          @lux.LucentContent::text("Let me check"),
+          tool_use,
+        ]),
+      ),
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(Tool, [tool_res]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  // 形态 B：独立 item（Responses 解码产出）
+  let req_standalone : @lux.LucentRequest = @lux.LucentRequest::new(
+    "test-model",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
+      ),
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(Assistant, [
+          @lux.LucentContent::text("Let me check"),
+        ]),
+      ),
+      @lux.LucentConversationItem::tool_call(
+        @lux.LucentToolUse::new(
+          "call_1",
+          "get_weather",
+          "{\"city\":\"Beijing\"}",
+          None,
+        ),
+      ),
+      @lux.LucentConversationItem::tool_result(
+        @lux.LucentToolResult::ok("call_1", [@lux.LucentContent::text("sunny")]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  let encoders : Array[
+    (@lux.LucentRequest) -> Result[@lux.ConversionResult[String], String],
+  ] = [
+    @openai.lux_request_to_openai, @messages.lux_request_to_messages, @gemini.lux_request_to_gemini,
+    @responses.lux_request_to_responses,
+  ]
+  let names = ["openai", "messages", "gemini", "responses"]
+  let forms = [(req_embedded, "embedded"), (req_standalone, "standalone")]
+  let mut f = 0
+  while f < forms.length() {
+    let (req, form_label) = forms[f]
+    let mut i = 0
+    while i < encoders.length() {
+      match encoders[i](req) {
+        Ok(cr) => {
+          let json = cr.value()
+          if !json.contains("get_weather") {
+            fail(
+              form_label +
+              "/" +
+              names[i] +
+              " dropped tool name get_weather; json=" +
+              json,
+            )
+          }
+          if !json.contains("sunny") {
+            fail(
+              form_label +
+              "/" +
+              names[i] +
+              " dropped tool result sunny; json=" +
+              json,
+            )
+          }
+        }
+        Err(e) => fail(form_label + "/" + names[i] + " encode failed: " + e)
+      }
+      i = i + 1
+    }
+    f = f + 1
+  }
+}
+
+///|
 /// 回归 #2：Anthropic 编码器在缺 max_tokens 时补默认（修复前省略必填字段 → 400）
 test "regression - messages fills max_tokens default when missing" {
   let req : @lux.LucentRequest = @lux.LucentRequest::new(
