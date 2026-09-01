@@ -4,6 +4,63 @@
 /// LucentRequest → Google Gemini API JSON
 
 ///|
+/// 扫描 conversation 建立 tool_use_id → function name 映射。
+///
+/// Gemini functionResponse.name 必须是函数名（而非调用 ID），
+/// 但 IR LucentToolResult 只携带 tool_use_id。跨协议转换时
+/// （OpenAI call_abc123 / Anthropic toolu_xxx 入站），需回查
+/// 同请求中 ToolCall/ToolUse 的 id → name 配对关系。
+fn build_tool_name_map(
+  items : Array[@lux.LucentConversationItem],
+) -> Map[String, String] {
+  let m : Map[String, String] = Map([])
+  let mut i = 0
+  while i < items.length() {
+    match items[i] {
+      ToolCall(tu) => m[tu.id] = tu.name
+      Message(msg) => {
+        let mut j = 0
+        while j < msg.content.length() {
+          match msg.content[j] {
+            ToolUse(tu) => m[tu.id] = tu.name
+            _ => ()
+          }
+          j = j + 1
+        }
+      }
+      _ => ()
+    }
+    i = i + 1
+  }
+  m
+}
+
+///|
+/// 按 tool_use_id 查函数名；查不到时发 Degraded 诊断并回退用 id 充当 name
+/// （保持输出结构合法，Gemini 端最坏情况是配对失败而非请求被拒）。
+fn tool_response_name(
+  tool_use_id : String,
+  name_map : Map[String, String],
+  diagnostics : Array[@lux.ConversionDiagnostic],
+) -> String {
+  match name_map.get(tool_use_id) {
+    Some(name) => name
+    None => {
+      diagnostics.push(
+        @lux.ConversionDiagnostic::degraded(
+          "content.tool_result.name",
+          Some(
+            "functionResponse.name resolved from tool_use_id without matching ToolCall: " +
+            tool_use_id,
+          ),
+        ),
+      )
+      tool_use_id
+    }
+  }
+}
+
+///|
 /// 2. lux_request_to_gemini — 请求编码
 pub fn lux_request_to_gemini(
   req : @lux.LucentRequest,
@@ -37,6 +94,8 @@ pub fn lux_request_to_gemini(
   }
   // contents
   let contents : Array[String] = []
+  // functionResponse.name 需要函数名而非调用 ID：先全量扫描配对关系
+  let tool_name_map = build_tool_name_map(req.conversation)
   let mut i = 0
   while i < req.conversation.length() {
     match req.conversation[i] {
@@ -62,16 +121,23 @@ pub fn lux_request_to_gemini(
                 tu.arguments_json +
                 "}}",
               )
-            ToolResult(tr) =>
+            ToolResult(tr) => {
+              // functionResponse.name 必须是函数名：从 ToolCall 配对回查（Gemini 无调用 ID 概念）
+              let fn_name = tool_response_name(
+                tr.tool_use_id,
+                tool_name_map,
+                diagnostics,
+              )
               content_parts.push(
                 "{\"functionResponse\":{\"name\":\"" +
-                @internal.json_escape(tr.tool_use_id) +
+                @internal.json_escape(fn_name) +
                 "\",\"response\":{\"name\":\"" +
-                @internal.json_escape(tr.tool_use_id) +
+                @internal.json_escape(fn_name) +
                 "\",\"content\":" +
                 @lux.lucent_content_to_text(tr.content) +
                 "}}}",
               )
+            }
             Thinking(th) =>
               content_parts.push(
                 "{\"text\":\"" +
@@ -112,16 +178,22 @@ pub fn lux_request_to_gemini(
           tu.arguments_json +
           "}}]}",
         )
-      ToolResult(tr) =>
+      ToolResult(tr) => {
+        let fn_name = tool_response_name(
+          tr.tool_use_id,
+          tool_name_map,
+          diagnostics,
+        )
         contents.push(
           "{\"role\":\"tool\",\"parts\":[{\"functionResponse\":{\"name\":\"" +
-          @internal.json_escape(tr.tool_use_id) +
+          @internal.json_escape(fn_name) +
           "\",\"response\":{\"name\":\"" +
-          @internal.json_escape(tr.tool_use_id) +
+          @internal.json_escape(fn_name) +
           "\",\"content\":" +
           @internal.json_escape(@lux.lucent_content_to_text(tr.content)) +
           "}}}]}",
         )
+      }
       Reasoning(th) =>
         contents.push(
           "{\"role\":\"model\",\"parts\":[{\"text\":\"" +
