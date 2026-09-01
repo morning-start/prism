@@ -240,6 +240,9 @@ pub fn openai_to_lux_request(
     Err(e) => return Err(e)
   }
   let model = @internal.field_str(jv, "model").unwrap_or("")
+  // reasoning_effort 非常规档位的降级诊断标志
+  let mut push_degraded = false
+  let mut ignored_effort : String? = None
   // 系统指令：role=system/developer 的消息抽出为 instructions
   let instructions : Array[@lux.LucentContent] = []
   let business_msgs : Array[@lux.LucentMessage] = []
@@ -284,9 +287,31 @@ pub fn openai_to_lux_request(
   let stream = @internal.field_bool(jv, "stream").unwrap_or(false)
   let stop = @internal.parse_string_array(jv, "stop")
   let store = @internal.field_bool(jv, "store")
+  // reasoning_effort → IR reasoning.effort（o-series / gpt-5 推理控制）
+  // "minimal" 在 IR 无对等档位 → 降级为 Low + 诊断（IR 演进项：补 Minimal）
+  let reasoning_effort = match @internal.field_str(jv, "reasoning_effort") {
+    Some("low") => Some(@lux.Low)
+    Some("medium") => Some(@lux.Medium)
+    Some("high") => Some(@lux.High)
+    Some("xhigh") => Some(@lux.XHigh)
+    Some("minimal") => {
+      push_degraded = true
+      Some(@lux.Low)
+    }
+    Some(other) => {
+      push_degraded = true
+      ignored_effort = Some(other)
+      None
+    }
+    None => None
+  }
+  let reasoning : @lux.LucentReasoningConfig? = match reasoning_effort {
+    Some(effort) => Some(@lux.LucentReasoningConfig::new(Some(effort), None))
+    None => None
+  }
   let extras = @internal.collect_extra_fields(jv, [
     "model", "messages", "tools", "tool_choice", "temperature", "top_p", "max_completion_tokens",
-    "max_tokens", "stream", "stop", "response_format", "store",
+    "max_tokens", "stream", "stop", "response_format", "store", "reasoning_effort",
   ])
   // response_format → structured_output
   let structured = match @internal.obj_get(jv, "response_format") {
@@ -307,33 +332,54 @@ pub fn openai_to_lux_request(
       }
     None => None
   }
-  Ok(
-    @lux.ConversionResult::new(
-      @lux.LucentRequest::from_messages(
-        model,
-        instr_opt,
-        business_msgs,
-        tools,
-        tool_choice,
-        @lux.LucentOptions::new(
-          temperature,
-          top_p,
-          None,
-          max_tokens,
-          stop,
-          stream,
-          None,
-          structured,
-          store,
-          extras,
+  // 诊断组装：reasoning_effort 降级信息
+  let diagnostics : Array[@lux.ConversionDiagnostic] = []
+  if push_degraded {
+    diagnostics.push(
+      @lux.ConversionDiagnostic::degraded(
+        "reasoning_effort",
+        Some(
+          "reasoning_effort \"minimal\" downgraded to Low (lux-ir v1 has no Minimal)",
         ),
-        None,
-        None,
-        None,
-        None,
       ),
+    )
+  }
+  match ignored_effort {
+    Some(v) =>
+      diagnostics.push(
+        @lux.ConversionDiagnostic::degraded(
+          "reasoning_effort",
+          Some("unknown reasoning_effort \"" + v + "\" ignored"),
+        ),
+      )
+    None => ()
+  }
+  let result = @lux.ConversionResult::new(
+    @lux.LucentRequest::from_messages(
+      model,
+      instr_opt,
+      business_msgs,
+      tools,
+      tool_choice,
+      @lux.LucentOptions::new(
+        temperature,
+        top_p,
+        None,
+        max_tokens,
+        stop,
+        stream,
+        None,
+        structured,
+        store,
+        extras,
+      ),
+      None,
+      reasoning,
+      None,
+      None,
     ),
   )
+  Ok(result.with_diagnostics(diagnostics))
 }
 
 ///|

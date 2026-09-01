@@ -77,6 +77,26 @@ test "responses_to_lux_request - reasoning item" {
 }
 
 ///|
+test "responses_to_lux_request - encrypted_content emits Degraded diagnostic" {
+  // include: ["reasoning.encrypted_content"] 的无状态推理延续凭证，
+  // lux-ir v1 无载体：不静默丢弃，显式 Degraded（IR 演进项）
+  let json = "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[],\"encrypted_content\":\"enc-abc\"}]}"
+  match responses_to_lux_request(json) {
+    Ok(cr) => {
+      let ds = cr.diagnostics()
+      let mut found = false
+      for d in ds {
+        if d.field == "input.reasoning.encrypted_content" {
+          found = true
+        }
+      }
+      assert_true(found)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
 test "responses_to_lux_request - tool types mapped to kinds" {
   let json = "{\"model\":\"gpt-5\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hi\"}]}],\"tools\":[{\"type\":\"function\",\"name\":\"f\",\"description\":\"d\",\"parameters\":{\"type\":\"object\"}},{\"type\":\"web_search\",\"name\":\"ws\"},{\"type\":\"mcp\",\"name\":\"mt\"}]}"
   match responses_to_lux_request(json) {

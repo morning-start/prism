@@ -206,7 +206,8 @@ pub fn lux_request_to_gemini(
       Reasoning(th) => {
         // 独立 Reasoning item → model thought part（含 thoughtSignature）
         let sig_part = match th.signature {
-          Some(s) => ",\"thoughtSignature\":\"" + @internal.json_escape(s) + "\""
+          Some(s) =>
+            ",\"thoughtSignature\":\"" + @internal.json_escape(s) + "\""
           None => ""
         }
         contents.push(

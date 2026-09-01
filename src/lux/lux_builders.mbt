@@ -443,15 +443,6 @@ pub fn LucentReasoningConfig::copy_with_budget(
 }
 
 ///|
-/// 构建替换 text 的副本（保留 signature/redacted/summary）
-pub fn LucentThinking::copy_with_text(
-  self : LucentThinking,
-  text : String,
-) -> LucentThinking {
-  { ..self, text, }
-}
-
-///|
 pub fn LucentRequest::new(
   model : String,
   instructions : Array[LucentContent]?,

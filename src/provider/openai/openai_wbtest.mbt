@@ -962,6 +962,59 @@ test "lux_request_to_openai - reasoning config emits reasoning_effort" {
 }
 
 ///|
+/// 入站 reasoning_effort → IR reasoning.effort（o-series / gpt-5 推理控制跨端延续）
+test "openai_to_lux_request - reasoning_effort parses into IR" {
+  let json = "{\"model\":\"o3\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"reasoning_effort\":\"high\"}"
+  match openai_to_lux_request(json) {
+    Ok(cr) =>
+      match cr.value().reasoning {
+        Some(rc) => {
+          assert_eq(rc.enabled, true)
+          assert_eq(rc.effort, Some(@lux.High))
+        }
+        None => assert_true(false)
+      }
+    Err(_) => assert_true(false)
+  }
+  // 不在 extras 里重复残留
+  match openai_to_lux_request(json) {
+    Ok(cr) => {
+      let extras = cr.value().options.extras
+      let mut leaked = false
+      match extras {
+        Some(m) => if m.get("reasoning_effort") != None { leaked = true }
+        None => ()
+      }
+      assert_false(leaked)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// minimal 档位在 IR 无对等 → 降级 Low + Degraded 诊断
+test "openai_to_lux_request - reasoning_effort minimal degrades to low" {
+  let json = "{\"model\":\"gpt-5\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"reasoning_effort\":\"minimal\"}"
+  match openai_to_lux_request(json) {
+    Ok(cr) => {
+      match cr.value().reasoning {
+        Some(rc) => assert_eq(rc.effort, Some(@lux.Low))
+        None => assert_true(false)
+      }
+      let ds = cr.diagnostics()
+      let mut found = false
+      for d in ds {
+        if d.field == "reasoning_effort" {
+          found = true
+        }
+      }
+      assert_true(found)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
 test "encode - image url maps to image_url array content" {
   let req = @lux.LucentRequest::new(
     "gpt-4o",

@@ -101,7 +101,8 @@ pub fn lux_response_to_gemini(
     match c.message.reasoning {
       Some(th) => {
         let sig_part = match th.signature {
-          Some(s) => ",\"thoughtSignature\":\"" + @internal.json_escape(s) + "\""
+          Some(s) =>
+            ",\"thoughtSignature\":\"" + @internal.json_escape(s) + "\""
           None => ""
         }
         parts.push(
@@ -139,7 +140,8 @@ pub fn lux_response_to_gemini(
         Thinking(th) => {
           // thought part + thoughtSignature（Gemini 跨轮思考延续凭证）
           let sig_part = match th.signature {
-            Some(s) => ",\"thoughtSignature\":\"" + @internal.json_escape(s) + "\""
+            Some(s) =>
+              ",\"thoughtSignature\":\"" + @internal.json_escape(s) + "\""
             None => ""
           }
           parts.push(

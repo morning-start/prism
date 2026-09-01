@@ -464,9 +464,7 @@ test "gemini thoughtSignature round-trips through IR" {
   )
   match lux_request_to_gemini(req) {
     Ok(cr) =>
-      assert_true(
-        cr.value().contains("\"thoughtSignature\":\"sig-gemini-1\""),
-      )
+      assert_true(cr.value().contains("\"thoughtSignature\":\"sig-gemini-1\""))
     Err(e) => fail("encode: \{e}")
   }
 }

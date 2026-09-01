@@ -211,6 +211,10 @@ fn parse_input_item(
         None => None
       }
       let signature = @internal.field_str(item, "signature")
+      // encrypted_content（include: ["reasoning.encrypted_content"] 的无状态推理延续凭证）
+      // IR LucentThinking v1 无载体 → 显式 Degraded 诊断，不静默丢弃。
+      // IR 演进项：为 Reasoning item 增加 provider 续传凭证旁路（见 IR 治理清单）。
+      let encrypted = @internal.field_str(item, "encrypted_content")
       let th = @lux.LucentThinking::new(
         // thinking text from summary array
         match summary {
@@ -221,6 +225,16 @@ fn parse_input_item(
         false,
         summary,
       )
+      if encrypted != None {
+        diagnostics.push(
+          @lux.ConversionDiagnostic::degraded(
+            "input.reasoning.encrypted_content",
+            Some(
+              "encrypted_content (stateless reasoning continuation) not preserved by lux-ir v1",
+            ),
+          ),
+        )
+      }
       Some(@lux.LucentConversationItem::reasoning(th))
     }
     _ =>
