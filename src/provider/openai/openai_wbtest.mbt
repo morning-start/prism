@@ -395,6 +395,22 @@ test "openai_to_lux_response - text + usage" {
 }
 
 ///|
+test "openai_to_lux_response - detailed usage with reasoning and cached tokens" {
+  let json = "{\"id\":\"chatcmpl-1\",\"object\":\"chat.completion\",\"model\":\"o3\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello!\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":100,\"completion_tokens\":50,\"total_tokens\":150,\"completion_tokens_details\":{\"reasoning_tokens\":30},\"prompt_tokens_details\":{\"cached_tokens\":40}}}"
+  match openai_to_lux_response(json) {
+    Ok(cr) => {
+      let u = cr.value().usage.unwrap_or(@lux.LucentUsage::new(0, 0, 0))
+      assert_eq(u.prompt_tokens, 100)
+      assert_eq(u.completion_tokens, 50)
+      assert_eq(u.total_tokens, 150)
+      assert_eq(u.reasoning_tokens, Some(30))
+      assert_eq(u.cached_tokens, Some(40))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
 test "openai_to_lux_response - assistant with tool_calls" {
   let json = "{\"id\":\"c-1\",\"object\":\"chat.completion\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"c1\",\"type\":\"function\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]},\"finish_reason\":\"tool_calls\"}]}"
   match openai_to_lux_response(json) {

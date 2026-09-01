@@ -145,7 +145,11 @@ pub fn gemini_sse_to_events(
           "candidatesTokenCount",
           Some("totalTokenCount"),
         )
-        events.push(Usage(@lux.LucentUsage::new(pt, ct, tt)))
+        let reasoning = @internal.parse_reasoning_tokens(u, [])
+        let cached = @internal.parse_cached_tokens_gemini(u)
+        events.push(
+          Usage(@lux.LucentUsage::full(pt, ct, tt, reasoning, cached, None)),
+        )
         events.push(Done)
       }
       None => ()

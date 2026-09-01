@@ -172,7 +172,17 @@ pub fn responses_sse_to_events(
                 let tt = @internal.field_int(u, "total_tokens").unwrap_or(
                   pt + ct,
                 )
-                events.push(Usage(@lux.LucentUsage::new(pt, ct, tt)))
+                let reasoning = @internal.parse_reasoning_tokens(u, [
+                  "output_tokens_details",
+                ])
+                let cached = @internal.parse_cached_tokens(u, [
+                  "input_tokens_details",
+                ])
+                events.push(
+                  Usage(
+                    @lux.LucentUsage::full(pt, ct, tt, reasoning, cached, None),
+                  ),
+                )
               }
               None => ()
             }

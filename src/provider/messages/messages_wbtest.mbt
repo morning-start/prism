@@ -645,6 +645,21 @@ test "lux_request_to_messages - effort reasoning with structured output merges s
 /// === 3. 响应解码 ===
 
 ///|
+test "messages_to_lux_response - usage with cache read and creation tokens" {
+  let json = "{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4\",\"content\":[{\"type\":\"text\",\"text\":\"Hello!\"}],\"stop_reason\":\"end_turn\",\"usage\":{\"input_tokens\":100,\"output_tokens\":20,\"cache_creation_input_tokens\":50,\"cache_read_input_tokens\":30}}"
+  match messages_to_lux_response(json) {
+    Ok(cr) => {
+      let u = cr.value().usage.unwrap_or(@lux.LucentUsage::new(0, 0, 0))
+      assert_eq(u.prompt_tokens, 100)
+      assert_eq(u.completion_tokens, 20)
+      assert_eq(u.cache_creation_tokens, Some(50))
+      assert_eq(u.cached_tokens, Some(30))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
 test "messages_to_lux_response - text and thinking" {
   let json = "{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-4\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"Let me think\",\"signature\":\"sig-1\"},{\"type\":\"text\",\"text\":\"Hello!\"}],\"stop_reason\":\"end_turn\",\"usage\":{\"input_tokens\":10,\"output_tokens\":20}}"
   match messages_to_lux_response(json) {

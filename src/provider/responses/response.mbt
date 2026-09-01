@@ -108,7 +108,7 @@ pub fn responses_json_to_lux_response(
     None => Stop
   }
   let choice = @lux.LucentChoice::new(0, msg, finish, None)
-  // usage
+  // usage（含 reasoning/cached 细化用量，标准 §9）
   let usage = match @internal.obj_get(jv, "usage") {
     Some(u) => {
       let (pt, ct, tt) = @internal.parse_usage_json(
@@ -117,13 +117,17 @@ pub fn responses_json_to_lux_response(
         "output_tokens",
         Some("total_tokens"),
       )
-      @lux.LucentUsage::new(pt, ct, tt)
+      let reasoning = @internal.parse_reasoning_tokens(u, [
+        "output_tokens_details",
+      ])
+      let cached = @internal.parse_cached_tokens(u, ["input_tokens_details"])
+      Some(@lux.LucentUsage::full(pt, ct, tt, reasoning, cached, None))
     }
-    None => @lux.LucentUsage::new(0, 0, 0)
+    None => None
   }
   Ok(
     @lux.ConversionResult::new(
-      @lux.LucentResponse::new(id, model, created, [choice], Some(usage), None),
+      @lux.LucentResponse::new(id, model, created, [choice], usage, None),
     ),
   )
 }
@@ -234,14 +238,31 @@ pub fn lux_response_to_responses(
     _ => "\"completed\""
   }
   let usage_json = match resp.usage {
-    Some(u) =>
-      ",\"usage\":{\"input_tokens\":" +
-      u.prompt_tokens.to_string() +
-      ",\"output_tokens\":" +
-      u.completion_tokens.to_string() +
-      ",\"total_tokens\":" +
-      u.total_tokens.to_string() +
-      "}"
+    Some(u) => {
+      let mut s = ",\"usage\":{\"input_tokens\":" +
+        u.prompt_tokens.to_string() +
+        ",\"output_tokens\":" +
+        u.completion_tokens.to_string() +
+        ",\"total_tokens\":" +
+        u.total_tokens.to_string()
+      match u.reasoning_tokens {
+        Some(n) =>
+          s = s +
+            ",\"output_tokens_details\":{\"reasoning_tokens\":" +
+            n.to_string() +
+            "}"
+        None => ()
+      }
+      match u.cached_tokens {
+        Some(n) =>
+          s = s +
+            ",\"input_tokens_details\":{\"cached_tokens\":" +
+            n.to_string() +
+            "}"
+        None => ()
+      }
+      s + "}"
+    }
     None => ""
   }
   let created_part = match resp.created_at {

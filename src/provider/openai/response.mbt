@@ -98,7 +98,7 @@ pub fn openai_to_lux_response(
   let model = @internal.field_str(jv, "model").unwrap_or("")
   let created = @internal.field_int(jv, "created")
   let choices = parse_choices(jv)
-  // usage
+  // usage（含 reasoning/cached 细化用量，标准 §9）
   let usage = match @internal.obj_get(jv, "usage") {
     Some(u) => {
       let (pt, ct, tt) = @internal.parse_usage_json(
@@ -107,7 +107,11 @@ pub fn openai_to_lux_response(
         "completion_tokens",
         Some("total_tokens"),
       )
-      Some(@lux.LucentUsage::new(pt, ct, tt))
+      let reasoning = @internal.parse_reasoning_tokens(u, [
+        "completion_tokens_details",
+      ])
+      let cached = @internal.parse_cached_tokens(u, ["prompt_tokens_details"])
+      Some(@lux.LucentUsage::full(pt, ct, tt, reasoning, cached, None))
     }
     None => None
   }
@@ -186,14 +190,32 @@ pub fn lux_response_to_openai(
     i = i + 1
   }
   let usage_obj = match resp.usage {
-    Some(u) =>
-      ",\"usage\":{\"prompt_tokens\":" +
-      u.prompt_tokens.to_string() +
-      ",\"completion_tokens\":" +
-      u.completion_tokens.to_string() +
-      ",\"total_tokens\":" +
-      u.total_tokens.to_string() +
-      "}"
+    Some(u) => {
+      let mut s = ",\"usage\":{\"prompt_tokens\":" +
+        u.prompt_tokens.to_string() +
+        ",\"completion_tokens\":" +
+        u.completion_tokens.to_string() +
+        ",\"total_tokens\":" +
+        u.total_tokens.to_string()
+      // 细化用量：IR 有值时输出 details 子对象（o-series prompt caching / reasoning）
+      match u.reasoning_tokens {
+        Some(n) =>
+          s = s +
+            ",\"completion_tokens_details\":{\"reasoning_tokens\":" +
+            n.to_string() +
+            "}"
+        None => ()
+      }
+      match u.cached_tokens {
+        Some(n) =>
+          s = s +
+            ",\"prompt_tokens_details\":{\"cached_tokens\":" +
+            n.to_string() +
+            "}"
+        None => ()
+      }
+      s + "}"
+    }
     None => ""
   }
   let created_part = match resp.created_at {

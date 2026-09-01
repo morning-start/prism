@@ -522,7 +522,7 @@ pub fn LucentToolUse::from_json(Json) -> Result[Self, String]
 pub fn LucentToolUse::new(String, String, String, Json?) -> Self
 pub fn LucentToolUse::to_json(Self) -> Json
 
-pub struct LucentUsage {
+pub(all) struct LucentUsage {
   prompt_tokens : Int
   completion_tokens : Int
   total_tokens : Int
@@ -531,6 +531,7 @@ pub struct LucentUsage {
   cache_creation_tokens : Int?
 } derive(Eq, @debug.Debug)
 pub fn LucentUsage::from_json(Json) -> Result[Self, String]
+pub fn LucentUsage::full(Int, Int, Int, Int?, Int?, Int?) -> Self
 pub fn LucentUsage::new(Int, Int, Int) -> Self
 pub fn LucentUsage::to_json(Self) -> Json
 pub fn LucentUsage::with_reasoning(Int, Int, Int, Int) -> Self

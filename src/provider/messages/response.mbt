@@ -26,7 +26,7 @@ pub fn messages_to_lux_response(
     None => Stop
   }
   let choice = @lux.LucentChoice::new(0, msg, finish, None)
-  // usage（cached_tokens / cache_creation_tokens 可选，暂不传）
+  // usage（cached / cache_creation 细化用量：prompt caching 计费核心，标准 §9）
   let usage = match @internal.obj_get(jv, "usage") {
     Some(u) => {
       let (pt, ct, tt) = @internal.parse_usage_json(
@@ -35,7 +35,9 @@ pub fn messages_to_lux_response(
         "output_tokens",
         None,
       )
-      Some(@lux.LucentUsage::new(pt, ct, tt))
+      let cached = @internal.parse_cached_tokens(u, [])
+      let cache_creation = @internal.parse_cache_creation_tokens(u, [])
+      Some(@lux.LucentUsage::full(pt, ct, tt, None, cached, cache_creation))
     }
     None => None
   }
@@ -96,14 +98,23 @@ pub fn lux_response_to_messages(
     Error => "\"end_turn\""
     Native(s) => "\"" + @internal.json_escape(s) + "\""
   }
-  // usage
+  // usage（cached / cache_creation 细化用量输出，标准 §9）
   let usage_json = match resp.usage {
-    Some(u) =>
-      ",\"usage\":{\"input_tokens\":" +
-      u.prompt_tokens.to_string() +
-      ",\"output_tokens\":" +
-      u.completion_tokens.to_string() +
-      "}"
+    Some(u) => {
+      let mut s = ",\"usage\":{\"input_tokens\":" +
+        u.prompt_tokens.to_string() +
+        ",\"output_tokens\":" +
+        u.completion_tokens.to_string()
+      match u.cache_creation_tokens {
+        Some(n) => s = s + ",\"cache_creation_input_tokens\":" + n.to_string()
+        None => ()
+      }
+      match u.cached_tokens {
+        Some(n) => s = s + ",\"cache_read_input_tokens\":" + n.to_string()
+        None => ()
+      }
+      s + "}"
+    }
     None => ""
   }
   let body = "{\"id\":\"" +

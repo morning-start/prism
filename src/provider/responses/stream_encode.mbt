@@ -371,6 +371,8 @@ pub fn lux_events_to_responses_sse(
         let mut ct = 0
         let mut tt = 0
         let mut has_usage = false
+        let mut last_usage_reasoning : Int? = None
+        let mut last_usage_cached : Int? = None
         let mut j = i + 1
         while j < events.length() {
           match events[j] {
@@ -378,6 +380,8 @@ pub fn lux_events_to_responses_sse(
               pt = u.prompt_tokens
               ct = u.completion_tokens
               tt = u.total_tokens
+              last_usage_reasoning = u.reasoning_tokens
+              last_usage_cached = u.cached_tokens
               has_usage = true
             }
             _ => ()
@@ -385,13 +389,29 @@ pub fn lux_events_to_responses_sse(
           j = j + 1
         }
         let usage_json = if has_usage {
-          ",\"usage\":{\"input_tokens\":" +
-          pt.to_string() +
-          ",\"output_tokens\":" +
-          ct.to_string() +
-          ",\"total_tokens\":" +
-          tt.to_string() +
-          "}"
+          let mut s = ",\"usage\":{\"input_tokens\":" +
+            pt.to_string() +
+            ",\"output_tokens\":" +
+            ct.to_string() +
+            ",\"total_tokens\":" +
+            tt.to_string()
+          match last_usage_reasoning {
+            Some(n) =>
+              s = s +
+                ",\"output_tokens_details\":{\"reasoning_tokens\":" +
+                n.to_string() +
+                "}"
+            None => ()
+          }
+          match last_usage_cached {
+            Some(n) =>
+              s = s +
+                ",\"input_tokens_details\":{\"cached_tokens\":" +
+                n.to_string() +
+                "}"
+            None => ()
+          }
+          s + "}"
         } else {
           ""
         }

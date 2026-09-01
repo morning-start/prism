@@ -64,8 +64,8 @@ pub fn gemini_to_lux_response(
   if choices.length() == 0 {
     return Err("response has no candidates")
   }
-  // usage
-  let usage = match @internal.obj_get(jv, "usageMetadata") {
+  // usage（含 thoughtsTokenCount / cachedContentTokenCount 细化用量，标准 §9）
+  let usage : @lux.LucentUsage? = match @internal.obj_get(jv, "usageMetadata") {
     Some(u) => {
       let (pt, ct, tt) = @internal.parse_usage_json(
         u,
@@ -73,12 +73,14 @@ pub fn gemini_to_lux_response(
         "candidatesTokenCount",
         Some("totalTokenCount"),
       )
-      @lux.LucentUsage::new(pt, ct, tt)
+      let reasoning = @internal.parse_reasoning_tokens(u, [])
+      let cached = @internal.parse_cached_tokens_gemini(u)
+      Some(@lux.LucentUsage::full(pt, ct, tt, reasoning, cached, None))
     }
-    None => @lux.LucentUsage::new(0, 0, 0)
+    None => None
   }
   let result = @lux.ConversionResult::new(
-    @lux.LucentResponse::new(id, model, None, choices, Some(usage), None),
+    @lux.LucentResponse::new(id, model, None, choices, usage, None),
   )
   Ok(result.with_diagnostics(diagnostics))
 }

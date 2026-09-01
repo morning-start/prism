@@ -137,6 +137,26 @@ pub fn LucentUsage::new(
 }
 
 ///|
+/// 构造含细化用量的 LucentUsage（reasoning / cached / cache_creation）
+pub fn LucentUsage::full(
+  prompt_tokens : Int,
+  completion_tokens : Int,
+  total_tokens : Int,
+  reasoning_tokens : Int?,
+  cached_tokens : Int?,
+  cache_creation_tokens : Int?,
+) -> LucentUsage {
+  {
+    prompt_tokens,
+    completion_tokens,
+    total_tokens,
+    reasoning_tokens,
+    cached_tokens,
+    cache_creation_tokens,
+  }
+}
+
+///|
 pub fn LucentUsage::with_reasoning(
   prompt_tokens : Int,
   completion_tokens : Int,

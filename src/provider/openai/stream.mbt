@@ -61,7 +61,13 @@ pub fn openai_sse_to_events(
           "completion_tokens",
           Some("total_tokens"),
         )
-        events.push(Usage(@lux.LucentUsage::new(pt, ct, tt)))
+        let reasoning = @internal.parse_reasoning_tokens(u, [
+          "completion_tokens_details",
+        ])
+        let cached = @internal.parse_cached_tokens(u, ["prompt_tokens_details"])
+        events.push(
+          Usage(@lux.LucentUsage::full(pt, ct, tt, reasoning, cached, None)),
+        )
       }
       None => ()
     }
@@ -304,18 +310,34 @@ pub fn lux_events_to_openai_sse(
           @internal.json_escape(fr.to_string()) +
           "\"}]}",
         )
-      Usage(u) =>
+      Usage(u) => {
         // 附带空 choices 保证 Chat Completions 格式合法
-        out.push(
-          chunk_prefix(chat_id, chat_model, chat_created) +
-          "\"choices\":[],\"usage\":{\"prompt_tokens\":" +
+        let mut usage_json = "\"choices\":[],\"usage\":{\"prompt_tokens\":" +
           u.prompt_tokens.to_string() +
           ",\"completion_tokens\":" +
           u.completion_tokens.to_string() +
           ",\"total_tokens\":" +
-          u.total_tokens.to_string() +
-          "}}",
+          u.total_tokens.to_string()
+        match u.reasoning_tokens {
+          Some(n) =>
+            usage_json = usage_json +
+              ",\"completion_tokens_details\":{\"reasoning_tokens\":" +
+              n.to_string() +
+              "}"
+          None => ()
+        }
+        match u.cached_tokens {
+          Some(n) =>
+            usage_json = usage_json +
+              ",\"prompt_tokens_details\":{\"cached_tokens\":" +
+              n.to_string() +
+              "}"
+          None => ()
+        }
+        out.push(
+          chunk_prefix(chat_id, chat_model, chat_created) + usage_json + "}}",
         )
+      }
       Error(e) =>
         out.push(
           chunk_prefix(chat_id, chat_model, chat_created) +

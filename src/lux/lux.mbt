@@ -277,7 +277,7 @@ pub struct LucentRequest {
 
 ///|
 /// LucentUsage — Token 用量（面向 reasoning 时代）
-pub struct LucentUsage {
+pub(all) struct LucentUsage {
   prompt_tokens : Int
   completion_tokens : Int
   total_tokens : Int

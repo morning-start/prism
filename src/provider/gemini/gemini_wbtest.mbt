@@ -145,6 +145,22 @@ test "gemini_to_lux_response - text response" {
 }
 
 ///|
+test "gemini_to_lux_response - detailed usage with thoughts and cached tokens" {
+  let json = "{\"candidates\":[{\"index\":0,\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello!\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":100,\"candidatesTokenCount\":50,\"totalTokenCount\":150,\"thoughtsTokenCount\":30,\"cachedContentTokenCount\":40}}"
+  match gemini_to_lux_response(json) {
+    Ok(cr) => {
+      let u = cr.value().usage.unwrap_or(@lux.LucentUsage::new(0, 0, 0))
+      assert_eq(u.prompt_tokens, 100)
+      assert_eq(u.completion_tokens, 50)
+      assert_eq(u.total_tokens, 150)
+      assert_eq(u.reasoning_tokens, Some(30))
+      assert_eq(u.cached_tokens, Some(40))
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
 test "gemini_to_lux_response - multiple candidates" {
   let json = "{\"candidates\":[{\"index\":0,\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"answer1\"}]},\"finishReason\":\"STOP\"},{\"index\":1,\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"answer2\"}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":10,\"totalTokenCount\":15}}"
   match gemini_to_lux_response(json) {
