@@ -1285,3 +1285,262 @@ test "decode - document block maps to file multimedia" {
     Err(e) => fail("decode: \{e}")
   }
 }
+
+///|
+/// #11（api-protocol-converter 最小测试矩阵）：非法 JSON arguments 不能发给 Claude，
+/// 编码端必须产生 Invalid 诊断且不输出非法 input 请求体（标准 §11.2）。
+test "#11 invalid JSON tool arguments produce Invalid diagnostic and no broken input" {
+  let req = @lux.LucentRequest::new(
+    "claude-sonnet-4",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(Assistant, [
+          @lux.LucentContent::tool_use(
+            "tu_bad",
+            "get_weather",
+            "not-valid-json{",
+            None,
+          ),
+        ]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_messages(req) {
+    Ok(cr) => {
+      // 非法 tool_use 块被跳过，不落入输出 JSON
+      assert_false(cr.value().contains("not-valid-json{"))
+      // 必须携带 Invalid 诊断（field = content.tool_use.input）
+      let mut has_invalid = false
+      for d in cr.diagnostics() {
+        if d.field == "content.tool_use.input" && d.status == Invalid {
+          has_invalid = true
+        }
+      }
+      assert_true(has_invalid)
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// #11 独立 ToolCall conversation item 同样受 arguments JSON 校验约束。
+test "#11 standalone invalid tool call item is not emitted" {
+  let req = @lux.LucentRequest::new(
+    "claude-sonnet-4",
+    None,
+    [
+      @lux.LucentConversationItem::tool_call(
+        @lux.LucentToolUse::new("tu_bad", "get_weather", "{oops", None),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_messages(req) {
+    Ok(cr) => {
+      assert_false(cr.value().contains("get_weather"))
+      let mut has_invalid = false
+      for d in cr.diagnostics() {
+        if d.field == "content.tool_use.input" && d.status == Invalid {
+          has_invalid = true
+        }
+      }
+      assert_true(has_invalid)
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// #9（最小测试矩阵）：Claude 无 tool 角色，Tool 角色消息必须包装为
+/// role:"user" + tool_result block，禁止输出 "role":"tool"（标准 §3.3-D/§11.3）。
+test "#9 tool-role message is wrapped as user with tool_result block" {
+  let req = @lux.LucentRequest::new(
+    "claude-sonnet-4",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(Tool, [
+          @lux.LucentContent::tool_result("tu_1", [
+            @lux.LucentContent::text("{\"temp\":25}"),
+          ]),
+        ]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_messages(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      assert_true(s.contains("\"role\":\"user\""))
+      assert_true(s.contains("\"type\":\"tool_result\""))
+      assert_true(s.contains("\"tool_use_id\":\"tu_1\""))
+      // Claude 协议没有 tool 角色，绝不能输出 role:"tool"
+      assert_false(s.contains("\"role\":\"tool\""))
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// #9：同一 user 消息内 tool_result 必须排在文本前面（Claude 顺序硬规则，标准 §11.4）。
+/// 入站混合内容被保留为 Message item（#3 修复），出站时工具结果前置。
+test "#9 tool_result block is emitted before text in the same user message" {
+  let req = @lux.LucentRequest::new(
+    "claude-sonnet-4",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [
+          @lux.LucentContent::tool_result("tu_1", [
+            @lux.LucentContent::text("sunny"),
+          ]),
+          @lux.LucentContent::text("please use the tool result"),
+        ]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_messages(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      // 文本块位于 tool_result 块之前时会违反 Claude 顺序要求；
+      // 编码端必须把 tool_result 前置（用 split 求相对位置，避免依赖 index_of API）。
+      let before_tool = s.split("\"type\":\"tool_result\"").to_array()[0].length()
+      let before_text = s.split("\"please use the tool result\"").to_array()[0].length()
+      assert_true(s.contains("\"type\":\"tool_result\""))
+      assert_true(s.contains("\"please use the tool result\""))
+      assert_true(before_tool < before_text)
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// #9 入站：user 消息中 tool_result 与文本混合时不得静默丢弃文本（#3 修复），
+/// 且应产生 Degraded 诊断；往返编码后文本与 tool_result 均保留。
+test "#9 decode preserves mixed text + tool_result user message" {
+  let json = "{\"model\":\"claude-sonnet-4\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"tu_1\",\"content\":[{\"type\":\"text\",\"text\":\"sunny\"}]},{\"type\":\"text\",\"text\":\"context note\"}]}]}"
+  match messages_to_lux_request(json) {
+    Ok(cr) => {
+      let req = cr.value()
+      assert_eq(req.conversation.length(), 1)
+      match req.conversation[0] {
+        Message(m) => {
+          // 混合内容被保留为 Message item，文本与 tool_result 都在
+          assert_true(m.content.length() >= 2)
+          let mut has_tool = false
+          let mut has_text = false
+          for c in m.content {
+            match c {
+              ToolResult(_) => has_tool = true
+              Text(t, _) => if t.contains("context note") { has_text = true }
+              _ => ()
+            }
+          }
+          assert_true(has_tool)
+          assert_true(has_text)
+        }
+        _ => assert_true(false)
+      }
+      // 应产生 Degraded 诊断（tool_result 与其他内容混合）
+      let mut has_degraded = false
+      for d in cr.diagnostics() {
+        if d.status == Degraded && d.field == "message.tool_result" {
+          has_degraded = true
+        }
+      }
+      assert_true(has_degraded)
+    }
+    Err(e) => fail("decode: \{e}")
+  }
+}
+
+///|
+/// #10（最小测试矩阵）：Responses 只有 previous_response_id 且无会话历史时，
+/// 跨端出站（chat/messages）必须拒绝转换（标准 §3.2）。
+test "#10 previous_response_id without history is rejected for messages outbound" {
+  let opts = @lux.LucentOptions::default().with_extras(
+    Some({ "previous_response_id": Json::string("resp_123") }),
+  )
+  let req = @lux.LucentRequest::new(
+    "claude-sonnet-4",
+    None,
+    [],
+    None,
+    None,
+    opts,
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_messages(req) {
+    Ok(_) => fail("expected rejection for previous_response_id without history")
+    Err(e) => assert_true(e.contains("previous_response_id"))
+  }
+}
+
+///|
+/// #10 有会话历史时的跨端出站：不允许伪造续接，previous_response_id 被剔除，
+/// 并产生 Unsupported 诊断（不能静默假装成功）。
+test "#10 previous_response_id with history degrades for messages outbound" {
+  let opts = @lux.LucentOptions::default().with_extras(
+    Some({ "previous_response_id": Json::string("resp_123") }),
+  )
+  let req = @lux.LucentRequest::new(
+    "claude-sonnet-4",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
+      ),
+    ],
+    None,
+    None,
+    opts,
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_messages(req) {
+    Ok(cr) => {
+      // previous_response_id 不得落入 Anthropic 请求体
+      assert_false(cr.value().contains("previous_response_id"))
+      let mut has_unsupported = false
+      for d in cr.diagnostics() {
+        if d.field == "options.previous_response_id" && d.status == Unsupported {
+          has_unsupported = true
+        }
+      }
+      assert_true(has_unsupported)
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}

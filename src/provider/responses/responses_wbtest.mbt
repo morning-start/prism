@@ -806,3 +806,58 @@ test "responses_sse_to_events - heartbeat line merged as data: : keep-alive row"
     Err(e) => fail("unexpected Err: \{e}")
   }
 }
+
+///|
+/// #10（api-protocol-converter 最小测试矩阵）：解码时 previous_response_id 必须
+/// 保留在 extras 中（不再静默丢弃），供 responses → responses 原样透传；
+/// 跨端出站（chat/messages）时由目标端编码器拒绝或降级（标准 §3.2）。
+test "#10 decode keeps previous_response_id in extras" {
+  let json = "{\"model\":\"gpt-5.3\",\"previous_response_id\":\"resp_prev_9\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"Hi\"}]}]}"
+  match responses_to_lux_request(json) {
+    Ok(cr) => {
+      let req = cr.value()
+      let mut found = false
+      match req.options.extras {
+        Some(m) =>
+          match m.get("previous_response_id") {
+            Some(String(s)) => found = s == "resp_prev_9"
+            _ => ()
+          }
+        None => ()
+      }
+      assert_true(found)
+    }
+    Err(e) => fail("unexpected Err: \{e}")
+  }
+}
+
+///|
+/// #10 responses → responses 往返：extras 中的 previous_response_id 必须原样透传。
+test "#10 encode round-trips previous_response_id to responses" {
+  let opts = @lux.LucentOptions::default().with_extras(
+    Some({ "previous_response_id": Json::string("resp_prev_9") }),
+  )
+  let req = @lux.LucentRequest::new(
+    "gpt-5.3",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
+      ),
+    ],
+    None,
+    None,
+    opts,
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_responses(req) {
+    Ok(cr) => {
+      assert_true(cr.value().contains("previous_response_id"))
+      assert_true(cr.value().contains("resp_prev_9"))
+    }
+    Err(e) => fail("unexpected Err: \{e}")
+  }
+}
