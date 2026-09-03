@@ -209,14 +209,14 @@ fn target_decode_sse(
 }
 
 ///|
-/// 请求转发验证：source 编码 → convert_request → target 解码 → 语义保持
+/// 请求转发验证：source 编码 → @sdk.convert_request → target 解码 → 语义保持
 fn verify_request_forward(
   source : String,
   target : String,
 ) -> Result[Unit, String] {
   match source_req_json(source) {
     Ok(json) =>
-      match convert_request(source, json, target) {
+      match @sdk.convert_request(source, json, target) {
         Ok(cr) =>
           match target_decode_req(target, cr.value()) {
             Ok(req) => {
@@ -230,21 +230,22 @@ fn verify_request_forward(
             }
             Err(e) => Err("target decode failed (\{source}->\{target}): \{e}")
           }
-        Err(e) => Err("convert_request failed (\{source}->\{target}): \{e}")
+        Err(e) =>
+          Err("@sdk.convert_request failed (\{source}->\{target}): \{e}")
       }
     Err(e) => Err("source encode failed (\{source}): \{e}")
   }
 }
 
 ///|
-/// 响应转发验证：source 编码 → convert_response → target 解码 → 语义保持
+/// 响应转发验证：source 编码 → @sdk.convert_response → target 解码 → 语义保持
 fn verify_response_forward(
   source : String,
   target : String,
 ) -> Result[Unit, String] {
   match source_resp_json(source) {
     Ok(json) =>
-      match convert_response(source, json, target) {
+      match @sdk.convert_response(source, json, target) {
         Ok(cr) =>
           match target_decode_resp(target, cr.value()) {
             Ok(resp) => {
@@ -259,21 +260,22 @@ fn verify_response_forward(
             Err(e) =>
               Err("target response decode failed (\{source}->\{target}): \{e}")
           }
-        Err(e) => Err("convert_response failed (\{source}->\{target}): \{e}")
+        Err(e) =>
+          Err("@sdk.convert_response failed (\{source}->\{target}): \{e}")
       }
     Err(e) => Err("source response encode failed (\{source}): \{e}")
   }
 }
 
 ///|
-/// 流式转发验证：source SSE → convert_stream → target SSE → 解码 → 语义保持
+/// 流式转发验证：source SSE → @sdk.convert_stream → target SSE → 解码 → 语义保持
 fn verify_stream_forward(
   source : String,
   target : String,
 ) -> Result[Unit, String] {
   match source_sse(source) {
     Ok(sse) =>
-      match convert_stream(source, sse, target) {
+      match @sdk.convert_stream(source, sse, target) {
         Ok(cr) =>
           match target_decode_sse(target, cr.value()) {
             Ok(events) => {
@@ -285,17 +287,17 @@ fn verify_stream_forward(
             Err(e) =>
               Err("target sse decode failed (\{source}->\{target}): \{e}")
           }
-        Err(e) => Err("convert_stream failed (\{source}->\{target}): \{e}")
+        Err(e) => Err("@sdk.convert_stream failed (\{source}->\{target}): \{e}")
       }
     Err(e) => Err("source sse encode failed (\{source}): \{e}")
   }
 }
 
 ///|
-/// === convert_request：5 个新方向（openai→messages 见 convert_test.mbt）===
+/// === @sdk.convert_request：5 个新方向（openai→messages 见 convert_test.mbt）===
 
 ///|
-test "convert_request - messages to openai" {
+test "@sdk.convert_request - messages to openai" {
   match verify_request_forward("messages", "openai") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -303,7 +305,7 @@ test "convert_request - messages to openai" {
 }
 
 ///|
-test "convert_request - messages to responses" {
+test "@sdk.convert_request - messages to responses" {
   match verify_request_forward("messages", "responses") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -311,7 +313,7 @@ test "convert_request - messages to responses" {
 }
 
 ///|
-test "convert_request - responses to messages" {
+test "@sdk.convert_request - responses to messages" {
   match verify_request_forward("responses", "messages") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -319,7 +321,7 @@ test "convert_request - responses to messages" {
 }
 
 ///|
-test "convert_request - responses to openai" {
+test "@sdk.convert_request - responses to openai" {
   match verify_request_forward("responses", "openai") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -327,7 +329,7 @@ test "convert_request - responses to openai" {
 }
 
 ///|
-test "convert_request - openai to responses" {
+test "@sdk.convert_request - openai to responses" {
   match verify_request_forward("openai", "responses") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -335,10 +337,10 @@ test "convert_request - openai to responses" {
 }
 
 ///|
-/// === convert_response：5 个新方向 ===
+/// === @sdk.convert_response：5 个新方向 ===
 
 ///|
-test "convert_response - messages to openai" {
+test "@sdk.convert_response - messages to openai" {
   match verify_response_forward("messages", "openai") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -346,7 +348,7 @@ test "convert_response - messages to openai" {
 }
 
 ///|
-test "convert_response - messages to responses" {
+test "@sdk.convert_response - messages to responses" {
   match verify_response_forward("messages", "responses") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -354,7 +356,7 @@ test "convert_response - messages to responses" {
 }
 
 ///|
-test "convert_response - responses to messages" {
+test "@sdk.convert_response - responses to messages" {
   match verify_response_forward("responses", "messages") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -362,7 +364,7 @@ test "convert_response - responses to messages" {
 }
 
 ///|
-test "convert_response - openai to openai-chat" {
+test "@sdk.convert_response - openai to openai-chat" {
   match verify_response_forward("responses", "openai") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -370,7 +372,7 @@ test "convert_response - openai to openai-chat" {
 }
 
 ///|
-test "convert_response - openai-chat to openai" {
+test "@sdk.convert_response - openai-chat to openai" {
   match verify_response_forward("openai", "responses") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -378,10 +380,10 @@ test "convert_response - openai-chat to openai" {
 }
 
 ///|
-/// === convert_stream：5 个新方向 ===
+/// === @sdk.convert_stream：5 个新方向 ===
 
 ///|
-test "convert_stream - anthropic to openai-chat" {
+test "@sdk.convert_stream - anthropic to openai-chat" {
   match verify_stream_forward("messages", "openai") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -389,7 +391,7 @@ test "convert_stream - anthropic to openai-chat" {
 }
 
 ///|
-test "convert_stream - anthropic to openai" {
+test "@sdk.convert_stream - anthropic to openai" {
   match verify_stream_forward("messages", "responses") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -397,7 +399,7 @@ test "convert_stream - anthropic to openai" {
 }
 
 ///|
-test "convert_stream - openai to anthropic" {
+test "@sdk.convert_stream - openai to anthropic" {
   match verify_stream_forward("responses", "messages") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -405,7 +407,7 @@ test "convert_stream - openai to anthropic" {
 }
 
 ///|
-test "convert_stream - openai to openai-chat" {
+test "@sdk.convert_stream - openai to openai-chat" {
   match verify_stream_forward("responses", "openai") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -413,7 +415,7 @@ test "convert_stream - openai to openai-chat" {
 }
 
 ///|
-test "convert_stream - openai-chat to openai" {
+test "@sdk.convert_stream - openai-chat to openai" {
   match verify_stream_forward("openai", "responses") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -421,7 +423,7 @@ test "convert_stream - openai-chat to openai" {
 }
 
 ///|
-/// 响应转发验证（带 D8 信封）：source 编码 → convert_response_with_meta →
+/// 响应转发验证（带 D8 信封）：source 编码 → @sdk.convert_response_with_meta →
 /// target 解码语义保持 + meta.source_provider 透出
 fn verify_response_meta_forward(
   source : String,
@@ -429,7 +431,7 @@ fn verify_response_meta_forward(
 ) -> Result[Unit, String] {
   match source_resp_json(source) {
     Ok(json) =>
-      match convert_response_with_meta(source, json, target) {
+      match @sdk.convert_response_with_meta(source, json, target) {
         Ok(cr) => {
           if cr.meta.source_provider != source {
             return Err(
@@ -451,17 +453,19 @@ fn verify_response_meta_forward(
           }
         }
         Err(e) =>
-          Err("convert_response_with_meta failed (\{source}->\{target}): \{e}")
+          Err(
+            "@sdk.convert_response_with_meta failed (\{source}->\{target}): \{e}",
+          )
       }
     Err(e) => Err("source response encode failed (\{source}): \{e}")
   }
 }
 
 ///|
-/// === convert_response_with_meta：5 个新方向（openai-chat→anthropic 见 convert_test.mbt）===
+/// === @sdk.convert_response_with_meta：5 个新方向（openai-chat→anthropic 见 convert_test.mbt）===
 
 ///|
-test "convert_response_with_meta - anthropic to openai-chat" {
+test "@sdk.convert_response_with_meta - anthropic to openai-chat" {
   match verify_response_meta_forward("messages", "openai") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -469,7 +473,7 @@ test "convert_response_with_meta - anthropic to openai-chat" {
 }
 
 ///|
-test "convert_response_with_meta - anthropic to openai" {
+test "@sdk.convert_response_with_meta - anthropic to openai" {
   match verify_response_meta_forward("messages", "responses") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -477,7 +481,7 @@ test "convert_response_with_meta - anthropic to openai" {
 }
 
 ///|
-test "convert_response_with_meta - openai to anthropic" {
+test "@sdk.convert_response_with_meta - openai to anthropic" {
   match verify_response_meta_forward("responses", "messages") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -485,7 +489,7 @@ test "convert_response_with_meta - openai to anthropic" {
 }
 
 ///|
-test "convert_response_with_meta - openai to openai-chat" {
+test "@sdk.convert_response_with_meta - openai to openai-chat" {
   match verify_response_meta_forward("responses", "openai") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -493,7 +497,7 @@ test "convert_response_with_meta - openai to openai-chat" {
 }
 
 ///|
-test "convert_response_with_meta - openai-chat to openai" {
+test "@sdk.convert_response_with_meta - openai-chat to openai" {
   match verify_response_meta_forward("openai", "responses") {
     Ok(_) => ()
     Err(e) => fail(e)
@@ -501,7 +505,7 @@ test "convert_response_with_meta - openai-chat to openai" {
 }
 
 ///|
-/// 图片转发：source 编码（含图片）→ convert_request → target 解码 → 图片保留
+/// 图片转发：source 编码（含图片）→ @sdk.convert_request → target 解码 → 图片保留
 fn verify_image_forward(
   source : String,
   target : String,
@@ -543,7 +547,7 @@ fn verify_image_forward(
       }
     _ => return Err("unknown source: " + source)
   }
-  match convert_request(source, json, target) {
+  match @sdk.convert_request(source, json, target) {
     Ok(cr) =>
       match target_decode_req(target, cr.value()) {
         Ok(out_req) =>
@@ -567,7 +571,7 @@ fn verify_image_forward(
           }
         Err(e) => Err("target decode failed (\{source}->\{target}): \{e}")
       }
-    Err(e) => Err("convert_request failed (\{source}->\{target}): \{e}")
+    Err(e) => Err("@sdk.convert_request failed (\{source}->\{target}): \{e}")
   }
 }
 

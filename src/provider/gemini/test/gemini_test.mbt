@@ -1,5 +1,5 @@
 ///|
-/// OpenAI Responses 适配器黑盒测试 — 仅通过公开 API 验证
+/// Google Gemini 适配器黑盒测试 — 仅通过公开 API 验证
 ///
 /// 与白盒测试（_wbtest.mbt）互补：模拟外部调用者视角，
 /// 通过 6 函数 + capability 的公开契约验证双向转换与 round-trip 语义。
@@ -9,7 +9,7 @@
 
 ///|
 test "capability - declares provider name" {
-  assert_eq(capability().provider, "openai")
+  assert_eq(@gemini.capability().provider, "google")
 }
 
 ///|
@@ -18,7 +18,7 @@ test "capability - declares provider name" {
 ///|
 test "round trip - request encode then decode preserves semantics" {
   let original = @lux.LucentRequest::from_messages(
-    "gpt-4o",
+    "gemini-1.5-pro",
     Some([@lux.LucentContent::text("You are helpful")]),
     [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
     None,
@@ -29,12 +29,12 @@ test "round trip - request encode then decode preserves semantics" {
     None,
     None,
   )
-  match lux_request_to_responses(original) {
+  match @gemini.lux_request_to_gemini(original) {
     Ok(cr1) =>
-      match responses_to_lux_request(cr1.value()) {
-        Ok(cr2) => {
-          let round = cr2.value()
-          assert_eq(round.model, "gpt-4o")
+      match @gemini.gemini_to_lux_request(cr1.value()) {
+        Ok(cr) => {
+          let round = cr.value()
+          assert_eq(round.model, "gemini-1.5-pro")
           assert_eq(round.conversation.length(), 1)
           match round.conversation[0] {
             Message(m) => {
@@ -68,7 +68,7 @@ test "round trip - request encode then decode preserves semantics" {
 test "round trip - response encode then decode preserves text" {
   let resp = @lux.LucentResponse::new(
     "resp-1",
-    "gpt-4o",
+    "gemini-1.5-pro",
     None,
     [
       @lux.LucentChoice::new(
@@ -81,10 +81,10 @@ test "round trip - response encode then decode preserves text" {
     None,
     None,
   )
-  match lux_response_to_responses(resp) {
+  match @gemini.lux_response_to_gemini(resp) {
     Ok(cr1) =>
-      match responses_to_lux_response(cr1.value()) {
-        Ok(cr2) => assert_eq(cr2.value().get_text(), "hi")
+      match @gemini.gemini_to_lux_response(cr1.value()) {
+        Ok(cr) => assert_eq(cr.value().get_text(), "hi")
         Err(_) => assert_true(false)
       }
     Err(_) => assert_true(false)
@@ -96,6 +96,6 @@ test "round trip - response encode then decode preserves text" {
 
 ///|
 test "invalid input - malformed JSON returns Err" {
-  assert_true(responses_to_lux_request("{invalid}") is Err(_))
-  assert_true(responses_to_lux_response("{invalid}") is Err(_))
+  assert_true(@gemini.gemini_to_lux_request("{invalid}") is Err(_))
+  assert_true(@gemini.gemini_to_lux_response("{invalid}") is Err(_))
 }

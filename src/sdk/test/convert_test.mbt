@@ -80,7 +80,7 @@ test "openai stream to responses stream - full event sequence" {
       // 断言：应包含文本内容
       assert_true(has_hello)
     }
-    Err(e) => fail("convert_stream error: \{e}")
+    Err(e) => fail("@sdk.convert_stream error: \{e}")
   }
 }
 
@@ -151,13 +151,13 @@ fn openai_sse() -> Result[String, String] {
 }
 
 ///|
-/// === convert_request ===
+/// === @sdk.convert_request ===
 
 ///|
-test "convert_request - openai to messages" {
+test "@sdk.convert_request - openai to messages" {
   match openai_req_json() {
     Ok(json) =>
-      match convert_request("openai", json, "messages") {
+      match @sdk.convert_request("openai", json, "messages") {
         Ok(cr) => {
           let target_json = cr.value()
           match @messages.messages_to_lux_request(target_json) {
@@ -169,25 +169,25 @@ test "convert_request - openai to messages" {
             Err(e) => fail("target decode failed: \{e}")
           }
         }
-        Err(e) => fail("convert_request failed: \{e}")
+        Err(e) => fail("@sdk.convert_request failed: \{e}")
       }
     Err(e) => fail("encode source failed: \{e}")
   }
 }
 
 ///|
-test "convert_request - unknown source returns error" {
-  match convert_request("no-such-provider", "{}", "messages") {
+test "@sdk.convert_request - unknown source returns error" {
+  match @sdk.convert_request("no-such-provider", "{}", "messages") {
     Err(e) => assert_true(e.contains("unknown provider"))
     Ok(_) => fail("expected error")
   }
 }
 
 ///|
-test "convert_request - unknown target returns error" {
+test "@sdk.convert_request - unknown target returns error" {
   match openai_req_json() {
     Ok(json) =>
-      match convert_request("openai", json, "no-such-provider") {
+      match @sdk.convert_request("openai", json, "no-such-provider") {
         Err(e) => assert_true(e.contains("unknown provider"))
         Ok(_) => fail("expected error")
       }
@@ -196,13 +196,13 @@ test "convert_request - unknown target returns error" {
 }
 
 ///|
-/// === convert_response ===
+/// === @sdk.convert_response ===
 
 ///|
-test "convert_response - openai to messages" {
+test "@sdk.convert_response - openai to messages" {
   match openai_resp_json() {
     Ok(json) =>
-      match convert_response("openai", json, "messages") {
+      match @sdk.convert_response("openai", json, "messages") {
         Ok(cr) => {
           let target_json = cr.value()
           match @messages.messages_to_lux_response(target_json) {
@@ -215,28 +215,28 @@ test "convert_response - openai to messages" {
             Err(e) => fail("target response decode failed: \{e}")
           }
         }
-        Err(e) => fail("convert_response failed: \{e}")
+        Err(e) => fail("@sdk.convert_response failed: \{e}")
       }
     Err(e) => fail("encode response failed: \{e}")
   }
 }
 
 ///|
-test "convert_response - unknown provider returns error" {
-  match convert_response("nope", "{}", "messages") {
+test "@sdk.convert_response - unknown provider returns error" {
+  match @sdk.convert_response("nope", "{}", "messages") {
     Err(e) => assert_true(e.contains("unknown provider"))
     Ok(_) => fail("expected error")
   }
 }
 
 ///|
-/// === convert_stream ===
+/// === @sdk.convert_stream ===
 
 ///|
-test "convert_stream - openai to messages" {
+test "@sdk.convert_stream - openai to messages" {
   match openai_sse() {
     Ok(sse) =>
-      match convert_stream("openai", sse, "messages") {
+      match @sdk.convert_stream("openai", sse, "messages") {
         Ok(cr) => {
           let target_sse = cr.value()
           match @messages.messages_sse_to_events(target_sse) {
@@ -244,28 +244,28 @@ test "convert_stream - openai to messages" {
             Err(e) => fail("target sse decode failed: \{e}")
           }
         }
-        Err(e) => fail("convert_stream failed: \{e}")
+        Err(e) => fail("@sdk.convert_stream failed: \{e}")
       }
     Err(e) => fail("encode sse failed: \{e}")
   }
 }
 
 ///|
-test "convert_stream - unknown provider returns error" {
-  match convert_stream("nope", "data: {}", "messages") {
+test "@sdk.convert_stream - unknown provider returns error" {
+  match @sdk.convert_stream("nope", "data: {}", "messages") {
     Err(e) => assert_true(e.contains("unknown provider"))
     Ok(_) => fail("expected error")
   }
 }
 
 ///|
-/// === convert_response_with_meta（D8 信封透出）===
+/// === @sdk.convert_response_with_meta（D8 信封透出）===
 
 ///|
-test "convert_response_with_meta - carries source" {
+test "@sdk.convert_response_with_meta - carries source" {
   match openai_resp_json() {
     Ok(json) =>
-      match convert_response_with_meta("openai", json, "messages") {
+      match @sdk.convert_response_with_meta("openai", json, "messages") {
         Ok(cr) => {
           // value 可解析为 target JSON
           let target_json = cr.value()
@@ -280,15 +280,15 @@ test "convert_response_with_meta - carries source" {
           // meta 信封含 source_provider
           assert_eq(cr.meta.source_provider, "openai")
         }
-        Err(e) => fail("convert_response_with_meta failed: \{e}")
+        Err(e) => fail("@sdk.convert_response_with_meta failed: \{e}")
       }
     Err(e) => fail("encode response failed: \{e}")
   }
 }
 
 ///|
-test "convert_response_with_meta - unknown provider returns error" {
-  match convert_response_with_meta("nope", "{}", "messages") {
+test "@sdk.convert_response_with_meta - unknown provider returns error" {
+  match @sdk.convert_response_with_meta("nope", "{}", "messages") {
     Err(e) => assert_true(e.contains("unknown provider"))
     Ok(_) => fail("expected error")
   }

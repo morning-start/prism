@@ -1,5 +1,4 @@
 import {
   "morning-start/prism/lux",
-  "morning-start/prism/sdk",
   "moonbitlang/core/json",
-}
+} for "test"
