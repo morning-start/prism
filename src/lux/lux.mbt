@@ -471,6 +471,3 @@ pub fn LucentDiscovery::new(
 ) -> LucentDiscovery {
   { schema_version: "v1", protocol_version, schema_url, providers }
 }
-
-///|
-/// 构造器与辅助函数
