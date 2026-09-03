@@ -435,11 +435,11 @@ pub fn lux_request_to_messages(
             match rc.effort {
               Some(e) => {
                 let level = match e {
-                  @lux.Low => "low"
-                  @lux.Medium => "medium"
-                  @lux.High => "high"
+                  Low => "low"
+                  Medium => "medium"
+                  High => "high"
                   // Anthropic 支持 xhigh；IR 无 max 档位，XHigh 即 Anthropic 次高档
-                  @lux.XHigh => "xhigh"
+                  XHigh => "xhigh"
                 }
                 output_effort_part = "\"effort\":\"" + level + "\""
               }

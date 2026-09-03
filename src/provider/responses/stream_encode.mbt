@@ -451,12 +451,12 @@ pub fn lux_events_to_responses_sse(
       Error(e) => {
         // 官方错误帧：{"type":"error","code":"...","message":"..."}（error 为平铺字段）
         let error_code = match e.kind {
-          @lux.RateLimit => "rate_limit_exceeded"
-          @lux.InvalidRequest => "invalid_request_error"
-          @lux.Authentication => "invalid_api_key"
-          @lux.ServerError => "server_error"
-          @lux.ContentFilter => "content_filter"
-          @lux.Native(tag) => tag
+          RateLimit => "rate_limit_exceeded"
+          InvalidRequest => "invalid_request_error"
+          Authentication => "invalid_api_key"
+          ServerError => "server_error"
+          ContentFilter => "content_filter"
+          Native(tag) => tag
         }
         lines.push(
           "event: error\ndata: {\"type\":\"error\",\"code\":\"" +

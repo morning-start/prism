@@ -143,12 +143,12 @@ pub fn lux_events_to_openai_sse(
         // 官方错误帧为独立 data: {"error":{...}}，不包 chunk 外壳（id/choices 前缀）
         // kind 类型化为 OpenAI error.type 语义（rate_limit_error 等），未知走 native
         let error_type = match e.kind {
-          @lux.RateLimit => "rate_limit_error"
-          @lux.InvalidRequest => "invalid_request_error"
-          @lux.Authentication => "authentication_error"
-          @lux.ServerError => "server_error"
-          @lux.ContentFilter => "invalid_request_error"
-          @lux.Native(tag) => tag
+          RateLimit => "rate_limit_error"
+          InvalidRequest => "invalid_request_error"
+          Authentication => "authentication_error"
+          ServerError => "server_error"
+          ContentFilter => "invalid_request_error"
+          Native(tag) => tag
         }
         out.push(
           "data: {\"error\":{\"type\":\"" +

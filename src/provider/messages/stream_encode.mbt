@@ -147,12 +147,12 @@ pub fn lux_events_to_messages_sse(
       Error(e) => {
         // 官方错误帧：event: error + {"type":"error","error":{"type":"...","message":"..."}}
         let error_type = match e.kind {
-          @lux.RateLimit => "rate_limit_error"
-          @lux.InvalidRequest => "invalid_request_error"
-          @lux.Authentication => "authentication_error"
-          @lux.ServerError => "api_error"
-          @lux.ContentFilter => "invalid_request_error"
-          @lux.Native(tag) => tag
+          RateLimit => "rate_limit_error"
+          InvalidRequest => "invalid_request_error"
+          Authentication => "authentication_error"
+          ServerError => "api_error"
+          ContentFilter => "invalid_request_error"
+          Native(tag) => tag
         }
         lines.push(
           "event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"" +

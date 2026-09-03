@@ -201,7 +201,7 @@ test "messages_to_lux_request - adaptive thinking maps to enabled not disabled" 
           // adaptive 语义上是"开"：映射为 enabled，禁止落入 disabled
           assert_eq(rc.enabled, true)
           assert_eq(rc.budget_tokens, None)
-          assert_eq(rc.effort, Some(@lux.High))
+          assert_eq(rc.effort, Some(High))
         }
         None => assert_true(false)
       }
@@ -215,7 +215,7 @@ test "messages_to_lux_request - output_config effort max downgrades to xhigh wit
   match messages_to_lux_request(json) {
     Ok(cr) => {
       match cr.value().reasoning {
-        Some(rc) => assert_eq(rc.effort, Some(@lux.XHigh))
+        Some(rc) => assert_eq(rc.effort, Some(XHigh))
         None => assert_true(false)
       }
       let ds = cr.diagnostics()
@@ -586,7 +586,7 @@ test "lux_request_to_messages - effort-based reasoning emits adaptive thinking w
       None,
     ),
     None,
-    Some(@lux.LucentReasoningConfig::new(Some(@lux.High), None)),
+    Some(@lux.LucentReasoningConfig::new(Some(High), None)),
     None,
     None,
   )
@@ -617,12 +617,12 @@ test "lux_request_to_messages - effort reasoning with structured output merges s
       None,
       false,
       None,
-      Some(@lux.JsonSchema("{\"type\":\"object\"}")),
+      Some(JsonSchema("{\"type\":\"object\"}")),
       None,
       None,
     ),
     None,
-    Some(@lux.LucentReasoningConfig::new(Some(@lux.Medium), None)),
+    Some(@lux.LucentReasoningConfig::new(Some(Medium), None)),
     None,
     None,
   )
