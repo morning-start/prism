@@ -110,18 +110,15 @@ pub fn lux_events_to_responses_sse(
             @internal.json_escape(@lux.lucent_content_to_text(tr.content)) +
             "\"}"
           Reasoning(th) => {
+            // summary/signature 片段与 request_encode/response 共享 helper，
+            // 保证三处 reasoning 序列化转义一致
             let summary = match th.summary {
               Some(arr) => {
                 let parts : Array[String] = []
                 let mut k = 0
                 while k < arr.length() {
                   match arr[k] {
-                    Text(t, _) =>
-                      parts.push(
-                        "{\"type\":\"summary_text\",\"text\":\"" +
-                        @internal.json_escape(t) +
-                        "\"}",
-                      )
+                    Text(t, _) => parts.push(summary_text_item(t))
                     _ => ()
                   }
                   k = k + 1
@@ -131,7 +128,7 @@ pub fn lux_events_to_responses_sse(
               None => ""
             }
             let sig = match th.signature {
-              Some(s) => ",\"signature\":\"" + @internal.json_escape(s) + "\""
+              Some(s) => thinking_signature_field(s)
               None => ""
             }
             "{\"id\":\"" +
