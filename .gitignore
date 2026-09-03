@@ -379,3 +379,4 @@ $RECYCLE.BIN/
 
 # Agent private workspace (flowstate)
 .agent-workplace/
+.workbuddy/memory/
