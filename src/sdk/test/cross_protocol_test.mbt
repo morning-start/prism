@@ -936,3 +936,82 @@ test "regression - messages fills max_tokens default when missing" {
     Err(e) => fail("messages encode failed: " + e)
   }
 }
+
+///|
+/// #8（最小测试矩阵）：tool_result 回填后的第二轮继续回答。
+///
+/// 会话结构：user 提问 → assistant 发起 tool_use → user 回填 tool_result →
+/// assistant 继续回答。验证三个端点编码后 tool_result 都跟随在
+/// assistant tool_use 之后（tool_use → tool_result 配对不丢），
+/// 且第二轮回填语义保留（标准 §11.3/§11.4）。
+test "#8 tool_result followed by second assistant answer round-trips" {
+  let req : @lux.LucentRequest = @lux.LucentRequest::new(
+    "test-model",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [
+          @lux.LucentContent::text("What's the weather?"),
+        ]),
+      ),
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(Assistant, [
+          @lux.LucentContent::tool_use(
+            "tu_1",
+            "get_weather",
+            "{\"city\":\"Beijing\"}",
+            None,
+          ),
+        ]),
+      ),
+      @lux.LucentConversationItem::tool_result(
+        @lux.LucentToolResult::ok("tu_1", [@lux.LucentContent::text("sunny")]),
+      ),
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(Assistant, [
+          @lux.LucentContent::text("It's sunny in Beijing."),
+        ]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  // openai chat：tool_use → role:tool 回填 → assistant 继续
+  match @openai.lux_request_to_openai(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      // OpenAI Chat 的 tool 回填字段名是 tool_call_id（非 Anthropic 的 tool_use_id）
+      assert_true(s.contains("\"tool_call_id\":\"tu_1\""))
+      // assistant 第二轮回答必须存在
+      assert_true(s.contains("It's sunny in Beijing."))
+    }
+    Err(e) => fail("openai encode failed: " + e)
+  }
+  // messages：tool_result 紧随 tool_use（同一 user 消息中排在文本前）
+  match @messages.lux_request_to_messages(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      let tr_pos = s.split("\"tool_use_id\":\"tu_1\"").to_array()[0].length()
+      let text_pos = s.split("It's sunny in Beijing.").to_array()[0].length()
+      assert_true(s.contains("\"tool_use_id\":\"tu_1\""))
+      assert_true(s.contains("It's sunny in Beijing."))
+      assert_true(tr_pos < text_pos)
+    }
+    Err(e) => fail("messages encode failed: " + e)
+  }
+  // responses：function_call → function_call_output → message
+  match @responses.lux_request_to_responses(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      assert_true(s.contains("\"type\":\"function_call\""))
+      assert_true(s.contains("\"type\":\"function_call_output\""))
+      assert_true(s.contains("It's sunny in Beijing."))
+    }
+    Err(e) => fail("responses encode failed: " + e)
+  }
+}

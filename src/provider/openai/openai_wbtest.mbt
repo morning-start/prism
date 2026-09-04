@@ -1355,3 +1355,41 @@ test "#10 previous_response_id with history degrades for openai-chat outbound" {
     Err(e) => fail("encode: \{e}")
   }
 }
+
+///|
+/// #6（最小测试矩阵）：多工具调用流式参数增量。
+/// OpenAI 流式中 tool_calls index 单调递增（0 → 1），每个 index 连续多帧
+/// 累积 arguments；解码端按 index 切换块（BlockEnd 旧块 + BlockStart 新块）。
+test "#6 openai_sse_to_events - multi tool call stream with deltas" {
+  let sse = "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"type\":\"function\",\"function\":{\"name\":\"get_weather\",\"arguments\":\"{\\\"city\\\":\\\"Bei\"}}]}}]}\n\ndata: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"jing\\\"}\"}}]}}]}\n\ndata: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":1,\"id\":\"c2\",\"type\":\"function\",\"function\":{\"name\":\"send_email\",\"arguments\":\"{\\\"to\\\":\\\"a@b.c\\\"}\"}}]}}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\ndata: [DONE]\n\n"
+  match openai_sse_to_events(sse) {
+    Ok(cr) => {
+      let events = cr.value()
+      // 两个 tool 块：index 0（get_weather）+ index 1（send_email）
+      let starts : Array[Int] = []
+      for ev in events {
+        match ev {
+          BlockStart(idx, ToolCall(_, name)) => {
+            starts.push(idx)
+            ignore(name)
+          }
+          _ => ()
+        }
+      }
+      assert_eq(starts, [0, 1])
+      // 两个工具块各自收到 arguments 增量
+      let deltas : Array[Int] = []
+      for ev in events {
+        match ev {
+          BlockDelta(idx, ToolArgumentsDelta(_)) => deltas.push(idx)
+          _ => ()
+        }
+      }
+      assert_true(deltas.contains(0))
+      assert_true(deltas.contains(1))
+      // 末事件 Done
+      assert_true(events[events.length() - 1] is Done)
+    }
+    Err(_) => assert_true(false)
+  }
+}
