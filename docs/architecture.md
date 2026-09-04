@@ -69,7 +69,7 @@ The ABI is a string-in/string-out boundary. cmd/main owns export names; wasm own
 ## Current decisions
 
 - The Lucent package remains a single protocol-neutral core package.
-  Splitting it was measured in iteration-004 (`docs/report/lux-split-feasibility.md`):
+  Splitting it was measured in iteration-004 (`.agent-workplace/research/iteration-008/lux-split-feasibility.md`):
   serialize/deserialize define 70 inherent methods (`Type::method`), which MoonBit
   requires to stay in the type's package, and struct fields are intentionally
   non-public — splitting would force trait/top-level-function rewrites across
@@ -118,7 +118,7 @@ The ABI is a string-in/string-out boundary. cmd/main owns export names; wasm own
   field comments, and `docs/api-protocol-converter.md`.
 - Provider adapters were split from monolithic files into request, response, stream, and capability units without changing package names or function signatures.
 - SDK remains the static provider composition root; a dedicated registry
-  package was measured in iteration-005 (`docs/report/sdk-split-feasibility.md`):
+  package was measured in iteration-005 (`.agent-workplace/research/iteration-008/sdk-split-feasibility.md`):
   its 36 inherent methods (`Prism::*` etc.) must stay in the type's package and
   struct fields are intentionally non-public, so **the split is declined** —
   same conclusion as the lux measurement. Type definitions plus their methods

@@ -19,8 +19,8 @@ This is a [MoonBit](https://docs.moonbitlang.com) project.
 When starting work, restore context from, in order:
 
 - `.agent-workplace/` — private workspace (gitignored): `docs/plan/`,
-  `docs/spec/`, `docs/task/`, `docs/decisions.md`, `docs/requirements.md`,
-  `state/checkpoint.json`, `modes/`
+  `docs/task/`, `docs/report/`, `shared/architecture.md`,
+  `state/checkpoint.json`
 - `.moonbit-pipeline.json` — session checkpoint (phase, plan pointer, progress)
 - `docs/architecture.md` — source of truth for design decisions
 - `docs/status.md` — project status and module completion tracking
