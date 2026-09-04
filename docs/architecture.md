@@ -93,6 +93,19 @@ The ABI is a string-in/string-out boundary. cmd/main owns export names; wasm own
   deps), already consumed by all four providers; lux's internal `get_*` helpers
   have zero external consumers, so sinking them to `internal` would be churn
   without benefit.
+- The "common protocol package" already exists (iteration-008): `src/lux`
+  provides the shared IR types plus their `to_json`/`from_json`
+  (serialize_*/deserialize_*), stream events and diagnostics; `src/internal`
+  provides the shared JSON/extras/usage/SSE utilities. The four provider
+  adapters are thin "protocol JSON ↔ IR" layers over these. Trait-ifying the
+  6-function contract was evaluated and declined: the contract is already an
+  implicit interface (identical signatures across packages, verified in
+  `.mbti`), the SDK is a static composition root with no runtime polymorphism
+  need, and trait conversion would break the public API for no benefit.
+  Remaining provider-side near-duplicates (usage field names, tool-definition
+  wrappers, error codes, stream event names) are protocol-semantic differences
+  and must stay in each adapter; genuinely identical helpers keep landing in
+  `src/internal`.
 - Provider adapters were split from monolithic files into request, response, stream, and capability units without changing package names or function signatures.
 - SDK remains the static provider composition root; a dedicated registry
   package was measured in iteration-005 (`docs/report/sdk-split-feasibility.md`):
