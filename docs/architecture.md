@@ -76,6 +76,13 @@ The ABI is a string-in/string-out boundary. cmd/main owns export names; wasm own
   800+ external call sites and a large public-API expansion, so **the split is
   declined**; the per-file codec split (serialize_*/deserialize_*) remains the
   structural boundary.
+- Navigation instead of folders: re-audited in iteration-007 — every lux/sdk
+  source file carries inherent methods bound to package-local types, so any
+  sub-folder would create a sub-package and break same-package method rules
+  (or introduce package cycles). Package-internal organization therefore uses
+  **file-name prefixes + partition comments + per-package `README.md` indexes**
+  (`src/lux/README.md`, `src/sdk/README.md`) as the navigation layer instead of
+  nested directories.
 - Provider adapters were split from monolithic files into request, response, stream, and capability units without changing package names or function signatures.
 - SDK remains the static provider composition root; a dedicated registry
   package was measured in iteration-005 (`docs/report/sdk-split-feasibility.md`):

@@ -46,7 +46,7 @@ compilation to reach non-public members).
 
 - `scripts/check_schema_drift.ps1` runs in report mode by default and can be used with `-Strict` in CI; its self-test covers version, required fields, enums, and stream events
 
-- `src/lux/types.mbt` remains the type/model hub; codec implementations are split into request/response/stream/primitive files (deserialization further split: `deserialize_helpers` / `deserialize_primitives` / `deserialize_content` / `deserialize_tools` / `deserialize_options`); diagnostics JSON codec lives in `diagnostics_json.mbt`
+- `src/lux/types.mbt` remains the type/model hub; codec implementations are split into request/response/stream/primitive files (deserialization further split: `deserialize_helpers` / `deserialize_primitives` / `deserialize_content` / `deserialize_tools` / `deserialize_options`); diagnostics JSON codec lives in `diagnostics_json.mbt`. Package navigation: `src/lux/README.md` and `src/sdk/README.md` provide per-package file maps and dependency rules (MoonBit folders = packages, so intra-package organization uses prefixes + partition comments + index READMEs, iteration-007)
 - Provider adapters use a uniform file layout: capability / request_decode / request_encode / response / stream_decode / stream_encode
 - JSON Schema (`schemas/lux-ir-v1.json`) remains manually authored, but `scripts/check_schema_drift.ps1` now reports version/required-field/enum/stream-event drift
 
