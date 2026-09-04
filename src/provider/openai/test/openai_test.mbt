@@ -9,7 +9,7 @@
 
 ///|
 test "capability - declares provider name" {
-  assert_eq(capability().provider, "openai")
+  assert_eq(@openai.capability().provider, "openai")
 }
 
 ///|
@@ -29,9 +29,9 @@ test "round trip - request encode then decode preserves semantics" {
     None,
     None,
   )
-  match lux_request_to_openai(original) {
+  match @openai.lux_request_to_openai(original) {
     Ok(cr1) =>
-      match openai_to_lux_request(cr1.value()) {
+      match @openai.openai_to_lux_request(cr1.value()) {
         Ok(cr2) => {
           let round = cr2.value()
           assert_eq(round.model, "gpt-4o")
@@ -81,9 +81,9 @@ test "round trip - response encode then decode preserves id" {
     None,
     None,
   )
-  match lux_response_to_openai(resp) {
+  match @openai.lux_response_to_openai(resp) {
     Ok(cr1) =>
-      match openai_to_lux_response(cr1.value()) {
+      match @openai.openai_to_lux_response(cr1.value()) {
         Ok(cr2) => assert_eq(cr2.value().id, "resp-1")
         Err(_) => assert_true(false)
       }
@@ -96,6 +96,6 @@ test "round trip - response encode then decode preserves id" {
 
 ///|
 test "invalid input - malformed JSON returns Err" {
-  assert_true(openai_to_lux_request("{invalid}") is Err(_))
-  assert_true(openai_to_lux_response("{invalid}") is Err(_))
+  assert_true(@openai.openai_to_lux_request("{invalid}") is Err(_))
+  assert_true(@openai.openai_to_lux_response("{invalid}") is Err(_))
 }

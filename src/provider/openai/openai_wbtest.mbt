@@ -986,7 +986,7 @@ test "openai_to_lux_request - reasoning_effort parses into IR" {
       match cr.value().reasoning {
         Some(rc) => {
           assert_eq(rc.enabled, true)
-          assert_eq(rc.effort, Some(@lux.High))
+          assert_eq(rc.effort, Some(High))
         }
         None => assert_true(false)
       }
@@ -1014,7 +1014,7 @@ test "openai_to_lux_request - reasoning_effort minimal degrades to low" {
   match openai_to_lux_request(json) {
     Ok(cr) => {
       match cr.value().reasoning {
-        Some(rc) => assert_eq(rc.effort, Some(@lux.Low))
+        Some(rc) => assert_eq(rc.effort, Some(Low))
         None => assert_true(false)
       }
       let ds = cr.diagnostics()

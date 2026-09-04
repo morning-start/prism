@@ -1,5 +1,5 @@
 ///|
-/// Anthropic Messages 适配器黑盒测试 — 仅通过公开 API 验证
+/// OpenAI Responses 适配器黑盒测试 — 仅通过公开 API 验证
 ///
 /// 与白盒测试（_wbtest.mbt）互补：模拟外部调用者视角，
 /// 通过 6 函数 + capability 的公开契约验证双向转换与 round-trip 语义。
@@ -9,7 +9,7 @@
 
 ///|
 test "capability - declares provider name" {
-  assert_eq(capability().provider, "messages")
+  assert_eq(@responses.capability().provider, "openai")
 }
 
 ///|
@@ -18,7 +18,7 @@ test "capability - declares provider name" {
 ///|
 test "round trip - request encode then decode preserves semantics" {
   let original = @lux.LucentRequest::from_messages(
-    "claude-sonnet-4",
+    "gpt-4o",
     Some([@lux.LucentContent::text("You are helpful")]),
     [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
     None,
@@ -29,12 +29,12 @@ test "round trip - request encode then decode preserves semantics" {
     None,
     None,
   )
-  match lux_request_to_messages(original) {
-    Ok(cr) =>
-      match messages_to_lux_request(cr.value()) {
-        Ok(round_cr) => {
-          let round = round_cr.value()
-          assert_eq(round.model, "claude-sonnet-4")
+  match @responses.lux_request_to_responses(original) {
+    Ok(cr1) =>
+      match @responses.responses_to_lux_request(cr1.value()) {
+        Ok(cr2) => {
+          let round = cr2.value()
+          assert_eq(round.model, "gpt-4o")
           assert_eq(round.conversation.length(), 1)
           match round.conversation[0] {
             Message(m) => {
@@ -68,7 +68,7 @@ test "round trip - request encode then decode preserves semantics" {
 test "round trip - response encode then decode preserves text" {
   let resp = @lux.LucentResponse::new(
     "resp-1",
-    "claude-sonnet-4",
+    "gpt-4o",
     None,
     [
       @lux.LucentChoice::new(
@@ -81,10 +81,10 @@ test "round trip - response encode then decode preserves text" {
     None,
     None,
   )
-  match lux_response_to_messages(resp) {
-    Ok(cr) =>
-      match messages_to_lux_response(cr.value()) {
-        Ok(round_cr) => assert_eq(round_cr.value().get_text(), "hi")
+  match @responses.lux_response_to_responses(resp) {
+    Ok(cr1) =>
+      match @responses.responses_to_lux_response(cr1.value()) {
+        Ok(cr2) => assert_eq(cr2.value().get_text(), "hi")
         Err(_) => assert_true(false)
       }
     Err(_) => assert_true(false)
@@ -96,6 +96,6 @@ test "round trip - response encode then decode preserves text" {
 
 ///|
 test "invalid input - malformed JSON returns Err" {
-  assert_true(messages_to_lux_request("{invalid}") is Err(_))
-  assert_true(messages_to_lux_response("{invalid}") is Err(_))
+  assert_true(@responses.responses_to_lux_request("{invalid}") is Err(_))
+  assert_true(@responses.responses_to_lux_response("{invalid}") is Err(_))
 }

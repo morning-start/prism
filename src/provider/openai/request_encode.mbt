@@ -225,30 +225,6 @@ fn message_to_json(
 }
 
 ///|
-/// 从 extras Map 中移除指定键（返回新 Map；移除后为空返回 None）
-fn extras_without(
-  extras : Map[String, Json]?,
-  key : String,
-) -> Map[String, Json]? {
-  match extras {
-    Some(m) => {
-      let nm : Map[String, Json] = Map([])
-      for k, v in m {
-        if k != key {
-          nm[k] = v
-        }
-      }
-      if nm.is_empty() {
-        None
-      } else {
-        Some(nm)
-      }
-    }
-    None => None
-  }
-}
-
-///|
 /// extras 查询辅助（只读，不消费）
 fn merged_extras_lookup(extras : Map[String, Json]?, key : String) -> Json? {
   match extras {
@@ -457,14 +433,14 @@ pub fn lux_request_to_openai(
       match m.get("disable_parallel_tool_use") {
         Some(True) => {
           parts.push("\"parallel_tool_calls\":false")
-          merged_extras = extras_without(
+          merged_extras = @internal.extras_without(
             opts.extras,
             "disable_parallel_tool_use",
           )
         }
         Some(False) => {
           parts.push("\"parallel_tool_calls\":true")
-          merged_extras = extras_without(
+          merged_extras = @internal.extras_without(
             opts.extras,
             "disable_parallel_tool_use",
           )
@@ -489,7 +465,9 @@ pub fn lux_request_to_openai(
               Some("previous_response_id not preserved by openai-chat"),
             ),
           )
-          merged_extras = extras_without(merged_extras, "previous_response_id")
+          merged_extras = @internal.extras_without(
+            merged_extras, "previous_response_id",
+          )
         }
         None => ()
       }

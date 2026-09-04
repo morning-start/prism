@@ -289,14 +289,15 @@ pub fn openai_to_lux_request(
   let store = @internal.field_bool(jv, "store")
   // reasoning_effort → IR reasoning.effort（o-series / gpt-5 推理控制）
   // "minimal" 在 IR 无对等档位 → 降级为 Low + 诊断（IR 演进项：补 Minimal）
-  let reasoning_effort = match @internal.field_str(jv, "reasoning_effort") {
-    Some("low") => Some(@lux.Low)
-    Some("medium") => Some(@lux.Medium)
-    Some("high") => Some(@lux.High)
-    Some("xhigh") => Some(@lux.XHigh)
+  let reasoning_effort : @lux.LucentReasoningEffort? = match
+    @internal.field_str(jv, "reasoning_effort") {
+    Some("low") => Some(Low)
+    Some("medium") => Some(Medium)
+    Some("high") => Some(High)
+    Some("xhigh") => Some(XHigh)
     Some("minimal") => {
       push_degraded = true
-      Some(@lux.Low)
+      Some(Low)
     }
     Some(other) => {
       push_degraded = true

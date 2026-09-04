@@ -360,10 +360,10 @@ fn parse_output_effort(
   match @internal.obj_get(jv, "output_config") {
     Some(oc) =>
       match @internal.field_str(oc, "effort") {
-        Some("low") => Some(@lux.Low)
-        Some("medium") => Some(@lux.Medium)
-        Some("high") => Some(@lux.High)
-        Some("xhigh") => Some(@lux.XHigh)
+        Some("low") => Some(Low)
+        Some("medium") => Some(Medium)
+        Some("high") => Some(High)
+        Some("xhigh") => Some(XHigh)
         Some("max") => {
           diagnostics.push(
             @lux.ConversionDiagnostic::degraded(
@@ -371,7 +371,7 @@ fn parse_output_effort(
               Some("anthropic effort \"max\" downgraded to xhigh"),
             ),
           )
-          Some(@lux.XHigh)
+          Some(XHigh)
         }
         _ => None
       }

@@ -4,32 +4,10 @@
 /// LucentRequest → OpenAI Responses API JSON
 
 ///|
-/// 从 extras Map 中移除指定键（返回新 Map；移除后为空返回 None）
-fn extras_without(
-  extras : Map[String, Json]?,
-  key : String,
-) -> Map[String, Json]? {
-  match extras {
-    Some(m) => {
-      let nm : Map[String, Json] = Map([])
-      for k, v in m {
-        if k != key {
-          nm[k] = v
-        }
-      }
-      if nm.is_empty() {
-        None
-      } else {
-        Some(nm)
-      }
-    }
-    None => None
-  }
-}
-
-///|
 /// LucentThinking → OpenAI Responses reasoning item JSON（input 复用）
-/// 消息级/块级 thinking 与独立 Reasoning item 共用同一序列化
+/// 消息级/块级 thinking 与独立 Reasoning item 共用同一序列化；
+/// summary/signature 片段逻辑与 response.mbt 共享（summary_text_item /
+/// thinking_signature_field），避免三处转义不一致。
 fn reasoning_item_json(th : @lux.LucentThinking) -> String {
   let summary_parts : Array[String] = []
   match th.summary {
@@ -37,12 +15,7 @@ fn reasoning_item_json(th : @lux.LucentThinking) -> String {
       let mut k = 0
       while k < arr.length() {
         match arr[k] {
-          Text(t, _) =>
-            summary_parts.push(
-              "{\"type\":\"summary_text\",\"text\":\"" +
-              @internal.json_escape(t) +
-              "\"}",
-            )
+          Text(t, _) => summary_parts.push(summary_text_item(t))
           _ => ()
         }
         k = k + 1
@@ -55,8 +28,7 @@ fn reasoning_item_json(th : @lux.LucentThinking) -> String {
     r_item = r_item + ",\"summary\":[" + summary_parts.join(",") + "]"
   }
   match th.signature {
-    Some(s) =>
-      r_item = r_item + ",\"signature\":\"" + @internal.json_escape(s) + "\""
+    Some(s) => r_item = r_item + thinking_signature_field(s)
     None => ()
   }
   r_item + "}"
@@ -377,14 +349,14 @@ pub fn lux_request_to_responses(
       match m.get("disable_parallel_tool_use") {
         Some(True) => {
           parts.push("\"parallel_tool_calls\":false")
-          merged_extras = extras_without(
+          merged_extras = @internal.extras_without(
             opts.extras,
             "disable_parallel_tool_use",
           )
         }
         Some(False) => {
           parts.push("\"parallel_tool_calls\":true")
-          merged_extras = extras_without(
+          merged_extras = @internal.extras_without(
             opts.extras,
             "disable_parallel_tool_use",
           )

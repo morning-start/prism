@@ -30,12 +30,25 @@ The dependency direction is one-way. Provider adapters may depend on lux and int
 
 Each adapter keeps its public API unchanged while separating responsibilities into files:
 
-- <provider>.mbt: request decode/encode and request helpers
-- esponse.mbt: response decode/encode
-- stream.mbt: SSE and event decode/encode
-- capability.mbt: capability declaration
+- `request_decode.mbt`: request JSON -> LucentRequest
+- `request_encode.mbt`: LucentRequest -> request JSON
+- `response.mbt`: response decode/encode
+- `stream_decode.mbt`: provider SSE -> LucentStreamEvent
+- `stream_encode.mbt`: LucentStreamEvent -> provider SSE
+- `capability.mbt`: capability declaration
 
+All four adapters (openai / messages / responses / gemini) share this layout.
 MoonBit compiles all files in a package together, so this is a structural boundary without runtime indirection or API churn.
+
+## Test organization
+
+- Blackbox tests (`*_test.mbt`, public API only) live in a dedicated `test/`
+  subpackage per package (`import { "<pkg>", ... } for "test"`), following the
+  `internal/test` precedent.
+- Whitebox tests (`*_wbtest.mbt`) must stay in the tested package directory:
+  MoonBit compiles them into the package so they can reach non-public members;
+  moving them to a `test/` subpackage breaks that access (verified experimentally).
+- `examples/*` keep their own whitebox tests in place.
 
 ## Registry and conversion pipeline
 

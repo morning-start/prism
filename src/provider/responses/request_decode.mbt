@@ -4,6 +4,16 @@
 /// 依据：docs/lux-ir-design.md §10（6-Function 契约）
 /// 依据：docs/protocols/02-openai-responses.md（协议映射）
 ///
+/// 6 函数：
+///   1. responses_to_lux_request      请求解码
+///   2. lux_request_to_responses      请求编码
+///   3. responses_to_lux_response     响应解码
+///   4. lux_response_to_responses     响应编码
+///   5. responses_sse_to_events       流解码
+///   6. lux_events_to_responses_sse   流编码
+/// 附加 pub：responses_json_to_lux_response(Json) — 供 Azure 薄封装复用的
+///   Json 直接入口（等价于函数 3 的 Json 变体，见 response.mbt）
+///
 /// 关键差异（vs Chat Completions）：
 ///   - input[] 是 Item 数组而非 messages[]
 ///   - function_call / function_call_output 是独立 Item

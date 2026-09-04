@@ -1,0 +1,7 @@
+import {
+  "morning-start/prism/wasm",
+  "morning-start/prism/lux",
+  "moonbitlang/core/json",
+  "morning-start/prism/provider/openai",
+  "morning-start/prism/provider/messages",
+} for "test"

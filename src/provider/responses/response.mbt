@@ -175,6 +175,20 @@ pub fn responses_json_to_lux_response(
 }
 
 ///|
+/// LucentThinking.summary 中单个 Text → summary_text block JSON
+/// 供 request_encode / response / stream_encode 三处 reasoning 序列化复用
+fn summary_text_item(t : String) -> String {
+  "{\"type\":\"summary_text\",\"text\":\"" + @internal.json_escape(t) + "\"}"
+}
+
+///|
+/// LucentThinking.signature → signature 字段片段（无则返回空串）
+/// 供三处 reasoning 序列化复用，保证转义一致
+fn thinking_signature_field(s : String) -> String {
+  ",\"signature\":\"" + @internal.json_escape(s) + "\""
+}
+
+///|
 /// LucentThinking → OpenAI Responses reasoning item JSON（消息级 reasoning 出站复用）
 fn thinking_to_reasoning_item(th : @lux.LucentThinking, id : Int) -> String {
   let summary = match th.summary {
@@ -183,12 +197,7 @@ fn thinking_to_reasoning_item(th : @lux.LucentThinking, id : Int) -> String {
       let mut k = 0
       while k < arr.length() {
         match arr[k] {
-          Text(t, _) =>
-            parts.push(
-              "{\"type\":\"summary_text\",\"text\":\"" +
-              @internal.json_escape(t) +
-              "\"}",
-            )
+          Text(t, _) => parts.push(summary_text_item(t))
           _ => ()
         }
         k = k + 1
@@ -198,7 +207,7 @@ fn thinking_to_reasoning_item(th : @lux.LucentThinking, id : Int) -> String {
     None => ""
   }
   let sig_part = match th.signature {
-    Some(s) => ",\"signature\":\"" + @internal.json_escape(s) + "\""
+    Some(s) => thinking_signature_field(s)
     None => ""
   }
   "{\"type\":\"reasoning\",\"id\":\"rs_" +

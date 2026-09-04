@@ -48,30 +48,6 @@ fn tool_use_input_fragment(
 }
 
 ///|
-/// 从 extras Map 中移除指定键（返回新 Map；移除后为空返回 None）
-fn extras_without(
-  extras : Map[String, Json]?,
-  key : String,
-) -> Map[String, Json]? {
-  match extras {
-    Some(m) => {
-      let nm : Map[String, Json] = Map([])
-      for k, v in m {
-        if k != key {
-          nm[k] = v
-        }
-      }
-      if nm.is_empty() {
-        None
-      } else {
-        Some(nm)
-      }
-    }
-    None => None
-  }
-}
-
-///|
 /// 单个 LucentContent → Anthropic content block JSON 片段
 /// 无法映射的媒体产生 Unsupported 诊断并返回空串（调用方跳过，不输出空块）
 fn content_to_block(
@@ -459,11 +435,11 @@ pub fn lux_request_to_messages(
             match rc.effort {
               Some(e) => {
                 let level = match e {
-                  @lux.Low => "low"
-                  @lux.Medium => "medium"
-                  @lux.High => "high"
+                  Low => "low"
+                  Medium => "medium"
+                  High => "high"
                   // Anthropic 支持 xhigh；IR 无 max 档位，XHigh 即 Anthropic 次高档
-                  @lux.XHigh => "xhigh"
+                  XHigh => "xhigh"
                 }
                 output_effort_part = "\"effort\":\"" + level + "\""
               }
@@ -563,11 +539,17 @@ pub fn lux_request_to_messages(
       match m.get("parallel_tool_calls") {
         Some(True) => {
           parts.push("\"disable_parallel_tool_use\":true")
-          merged_extras = extras_without(opts.extras, "parallel_tool_calls")
+          merged_extras = @internal.extras_without(
+            opts.extras,
+            "parallel_tool_calls",
+          )
         }
         Some(False) => {
           parts.push("\"disable_parallel_tool_use\":false")
-          merged_extras = extras_without(opts.extras, "parallel_tool_calls")
+          merged_extras = @internal.extras_without(
+            opts.extras,
+            "parallel_tool_calls",
+          )
         }
         _ => ()
       }
@@ -589,7 +571,9 @@ pub fn lux_request_to_messages(
               Some("previous_response_id not preserved by anthropic-messages"),
             ),
           )
-          merged_extras = extras_without(merged_extras, "previous_response_id")
+          merged_extras = @internal.extras_without(
+            merged_extras, "previous_response_id",
+          )
         }
         None => ()
       }

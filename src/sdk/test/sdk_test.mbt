@@ -1,33 +1,33 @@
 ///|
-/// SDK 层测试 — Prism struct、Context、Event、注册表
+/// SDK 层测试 — @sdk.Prism struct、@sdk.Context、Event、注册表
 
 ///|
-/// === Prism 构造 ===
+/// === @sdk.Prism 构造 ===
 
 ///|
-test "Prism::new - default provider is openai" {
-  let p = Prism::new()
+test "@sdk.Prism::new - default provider is openai" {
+  let p = @sdk.Prism::new()
   assert_eq(p.provider, "openai")
 }
 
 ///|
-test "Prism::with_provider - sets provider name" {
-  let p = Prism::new().with_provider("messages")
+test "@sdk.Prism::with_provider - sets provider name" {
+  let p = @sdk.Prism::new().with_provider("messages")
   assert_eq(p.provider, "messages")
 }
 
 ///|
-test "Prism::with_provider - chained construction" {
-  let p = Prism::new().with_provider("gemini")
+test "@sdk.Prism::with_provider - chained construction" {
+  let p = @sdk.Prism::new().with_provider("gemini")
   assert_eq(p.provider, "gemini")
 }
 
 ///|
-/// === PrismOptions ===
+/// === @sdk.PrismOptions ===
 
 ///|
-test "PrismOptions::default - all fields none" {
-  let opts = PrismOptions::default()
+test "@sdk.PrismOptions::default - all fields none" {
+  let opts = @sdk.PrismOptions::default()
   assert_eq(opts.model, None)
   assert_eq(opts.temperature, None)
   assert_eq(opts.max_tokens, None)
@@ -35,8 +35,8 @@ test "PrismOptions::default - all fields none" {
 }
 
 ///|
-test "PrismOptions::new - sets fields" {
-  let opts = PrismOptions::new(
+test "@sdk.PrismOptions::new - sets fields" {
+  let opts = @sdk.PrismOptions::new(
     Some("gpt-4o"),
     Some(0.7),
     Some(2048),
@@ -50,40 +50,40 @@ test "PrismOptions::new - sets fields" {
 }
 
 ///|
-/// === Context ===
+/// === @sdk.Context ===
 
 ///|
-test "Context::new - empty context" {
-  let ctx = Context::new()
+test "@sdk.Context::new - empty context" {
+  let ctx = @sdk.Context::new()
   assert_eq(ctx.system_prompt, None)
   assert_eq(ctx.messages.length(), 0)
 }
 
 ///|
-test "Context::add_system - sets system prompt" {
-  let ctx = Context::new().add_system("You are helpful")
+test "@sdk.Context::add_system - sets system prompt" {
+  let ctx = @sdk.Context::new().add_system("You are helpful")
   assert_eq(ctx.system_prompt, Some("You are helpful"))
 }
 
 ///|
-test "Context::add_user - appends user message" {
-  let ctx = Context::new().add_user("Hello")
+test "@sdk.Context::add_user - appends user message" {
+  let ctx = @sdk.Context::new().add_user("Hello")
   assert_eq(ctx.messages.length(), 1)
   assert_eq(ctx.messages[0].role, "user")
   assert_eq(ctx.messages[0].content, "Hello")
 }
 
 ///|
-test "Context::add_assistant - appends assistant message" {
-  let ctx = Context::new().add_assistant("Hi there!")
+test "@sdk.Context::add_assistant - appends assistant message" {
+  let ctx = @sdk.Context::new().add_assistant("Hi there!")
   assert_eq(ctx.messages.length(), 1)
   assert_eq(ctx.messages[0].role, "assistant")
   assert_eq(ctx.messages[0].content, "Hi there!")
 }
 
 ///|
-test "Context::add_user - multiple messages" {
-  let ctx = Context::new()
+test "@sdk.Context::add_user - multiple messages" {
+  let ctx = @sdk.Context::new()
     .add_user("Hello")
     .add_assistant("How can I help?")
     .add_user("Tell me a joke")
@@ -94,21 +94,29 @@ test "Context::add_user - multiple messages" {
 }
 
 ///|
-/// === context_to_lux_request ===
+/// === @sdk.context_to_lux_request ===
 
 ///|
-test "context_to_lux_request - basic user message" {
-  let ctx = Context::new().add_user("Hello")
-  let req = context_to_lux_request(ctx, "test-model", PrismOptions::default())
+test "@sdk.context_to_lux_request - basic user message" {
+  let ctx = @sdk.Context::new().add_user("Hello")
+  let req = @sdk.context_to_lux_request(
+    ctx,
+    "test-model",
+    @sdk.PrismOptions::default(),
+  )
   assert_eq(req.model, "test-model")
   assert_eq(req.conversation.length(), 1)
   assert_eq(req.instructions, None)
 }
 
 ///|
-test "context_to_lux_request - with system prompt" {
-  let ctx = Context::new().add_system("You are helpful").add_user("Hi")
-  let req = context_to_lux_request(ctx, "test-model", PrismOptions::default())
+test "@sdk.context_to_lux_request - with system prompt" {
+  let ctx = @sdk.Context::new().add_system("You are helpful").add_user("Hi")
+  let req = @sdk.context_to_lux_request(
+    ctx,
+    "test-model",
+    @sdk.PrismOptions::default(),
+  )
   match req.instructions {
     Some(content) => assert_eq(content.length(), 1)
     None => assert_true(false)
@@ -116,31 +124,31 @@ test "context_to_lux_request - with system prompt" {
 }
 
 ///|
-test "context_to_lux_request - multiple messages preserved" {
-  let ctx = Context::new()
+test "@sdk.context_to_lux_request - multiple messages preserved" {
+  let ctx = @sdk.Context::new()
     .add_user("Hello")
     .add_assistant("Hi!")
     .add_user("Weather?")
-  let req = context_to_lux_request(ctx, "m1", PrismOptions::default())
+  let req = @sdk.context_to_lux_request(ctx, "m1", @sdk.PrismOptions::default())
   assert_eq(req.conversation.length(), 3)
 }
 
 ///|
-test "context_to_lux_request - with options" {
-  let opts = PrismOptions::new(None, Some(0.5), Some(100), None, None)
-  let ctx = Context::new().add_user("test")
-  let req = context_to_lux_request(ctx, "custom", opts)
+test "@sdk.context_to_lux_request - with options" {
+  let opts = @sdk.PrismOptions::new(None, Some(0.5), Some(100), None, None)
+  let ctx = @sdk.Context::new().add_user("test")
+  let req = @sdk.context_to_lux_request(ctx, "custom", opts)
   assert_eq(req.options.temperature, Some(0.5))
   assert_eq(req.options.max_output_tokens, Some(100))
 }
 
 ///|
-/// === Prism::encode_request ===
+/// === @sdk.Prism::encode_request ===
 
 ///|
 test "encode_request - openai returns valid JSON" {
-  let p = Prism::new().with_provider("openai")
-  match p.encode_request("Hello", PrismOptions::default()) {
+  let p = @sdk.Prism::new().with_provider("openai")
+  match p.encode_request("Hello", @sdk.PrismOptions::default()) {
     Ok(json) => {
       assert_true(json.length() > 0)
       assert_true(json.has_prefix("{"))
@@ -151,8 +159,8 @@ test "encode_request - openai returns valid JSON" {
 
 ///|
 test "encode_request - messages returns valid JSON" {
-  let p = Prism::new().with_provider("messages")
-  match p.encode_request("Hello", PrismOptions::default()) {
+  let p = @sdk.Prism::new().with_provider("messages")
+  match p.encode_request("Hello", @sdk.PrismOptions::default()) {
     Ok(json) => {
       assert_true(json.contains("model"))
       assert_true(json.contains("messages"))
@@ -163,8 +171,8 @@ test "encode_request - messages returns valid JSON" {
 
 ///|
 test "encode_request - openai-responses returns valid JSON" {
-  let p = Prism::new().with_provider("openai-responses")
-  match p.encode_request("Hello", PrismOptions::default()) {
+  let p = @sdk.Prism::new().with_provider("openai-responses")
+  match p.encode_request("Hello", @sdk.PrismOptions::default()) {
     Ok(json) => assert_true(json.contains("model"))
     Err(e) => fail("responses encode failed: " + e)
   }
@@ -172,8 +180,8 @@ test "encode_request - openai-responses returns valid JSON" {
 
 ///|
 test "encode_request - gemini returns valid JSON" {
-  let p = Prism::new().with_provider("gemini")
-  match p.encode_request("Hello", PrismOptions::default()) {
+  let p = @sdk.Prism::new().with_provider("gemini")
+  match p.encode_request("Hello", @sdk.PrismOptions::default()) {
     Ok(json) => assert_true(json.contains("model"))
     Err(e) => fail("gemini encode failed: " + e)
   }
@@ -181,20 +189,20 @@ test "encode_request - gemini returns valid JSON" {
 
 ///|
 test "encode_request - unknown provider returns error" {
-  let p = Prism::new().with_provider("nonexistent-provider")
-  match p.encode_request("Hello", PrismOptions::default()) {
+  let p = @sdk.Prism::new().with_provider("nonexistent-provider")
+  match p.encode_request("Hello", @sdk.PrismOptions::default()) {
     Ok(_) => fail("expected error for unknown provider")
     Err(e) => assert_true(e.contains("unknown provider"))
   }
 }
 
 ///|
-/// === Prism::encode_stream_request ===
+/// === @sdk.Prism::encode_stream_request ===
 
 ///|
 test "encode_stream_request - openai includes stream field" {
-  let p = Prism::new().with_provider("openai")
-  match p.encode_stream_request("Hello", PrismOptions::default()) {
+  let p = @sdk.Prism::new().with_provider("openai")
+  match p.encode_stream_request("Hello", @sdk.PrismOptions::default()) {
     Ok(json) => assert_true(json.contains("stream"))
     Err(e) => fail("stream encode failed: " + e)
   }
@@ -202,20 +210,20 @@ test "encode_stream_request - openai includes stream field" {
 
 ///|
 test "encode_stream_request - unknown provider returns error" {
-  let p = Prism::new().with_provider("invalid")
-  match p.encode_stream_request("Hi", PrismOptions::default()) {
+  let p = @sdk.Prism::new().with_provider("invalid")
+  match p.encode_stream_request("Hi", @sdk.PrismOptions::default()) {
     Ok(_) => fail("expected error")
     Err(e) => assert_true(e.contains("unknown provider"))
   }
 }
 
 ///|
-/// === Prism::decode_response ===
+/// === @sdk.Prism::decode_response ===
 
 ///|
 test "decode_response - openai extracts text" {
   let resp_json = "{\"id\":\"chatcmpl-123\",\"object\":\"chat.completion\",\"created\":123,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Hello!\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":3,\"total_tokens\":8}}"
-  let p = Prism::new().with_provider("openai")
+  let p = @sdk.Prism::new().with_provider("openai")
   match p.decode_response(resp_json) {
     Ok(text) => assert_eq(text, "Hello!")
     Err(e) => fail("decode failed: " + e)
@@ -224,7 +232,7 @@ test "decode_response - openai extracts text" {
 
 ///|
 test "decode_response - unknown provider returns error" {
-  let p = Prism::new().with_provider("nonexistent")
+  let p = @sdk.Prism::new().with_provider("nonexistent")
   match p.decode_response("{}") {
     Ok(_) => fail("expected error")
     Err(e) => assert_true(e.contains("unknown provider"))
@@ -232,11 +240,11 @@ test "decode_response - unknown provider returns error" {
 }
 
 ///|
-/// === Prism::decode_sse ===
+/// === @sdk.Prism::decode_sse ===
 
 ///|
 test "decode_sse - openai returns events with text content" {
-  let p = Prism::new().with_provider("openai")
+  let p = @sdk.Prism::new().with_provider("openai")
   let sse = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hello\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n"
   match p.decode_sse(sse) {
     Ok(events) => {
@@ -259,7 +267,7 @@ test "decode_sse - openai returns events with text content" {
 
 ///|
 test "decode_sse - unknown provider returns error" {
-  let p = Prism::new().with_provider("bad")
+  let p = @sdk.Prism::new().with_provider("bad")
   match p.decode_sse("data: {}") {
     Ok(_) => fail("expected error")
     Err(e) => assert_true(e.contains("unknown provider"))
@@ -267,11 +275,11 @@ test "decode_sse - unknown provider returns error" {
 }
 
 ///|
-/// === Prism::capability ===
+/// === @sdk.Prism::capability ===
 
 ///|
 test "capability - known provider returns Some" {
-  let p = Prism::new()
+  let p = @sdk.Prism::new()
   match p.capability("responses") {
     Some(_) => assert_true(true)
     None => fail("expected Some for known provider")
@@ -280,7 +288,7 @@ test "capability - known provider returns Some" {
 
 ///|
 test "capability - unknown provider returns None" {
-  let p = Prism::new()
+  let p = @sdk.Prism::new()
   match p.capability("nobody") {
     Some(_) => fail("expected None")
     None => assert_true(true)
@@ -291,43 +299,43 @@ test "capability - unknown provider returns None" {
 /// === 注册表函数 ===
 
 ///|
-test "match_provider_name - known provider found" {
-  match match_provider_name("responses") {
+test "@sdk.match_provider_name - known provider found" {
+  match @sdk.match_provider_name("responses") {
     Some(r) => assert_eq(r.name, "responses")
     None => fail("expected Some for openai")
   }
 }
 
 ///|
-test "match_provider_name - alias resolves" {
-  match match_provider_name("google") {
+test "@sdk.match_provider_name - alias resolves" {
+  match @sdk.match_provider_name("google") {
     Some(_) => assert_true(true)
     None => fail("google alias should resolve")
   }
 }
 
 ///|
-test "match_provider_name - unknown returns None" {
-  match match_provider_name("not-a-provider") {
+test "@sdk.match_provider_name - unknown returns None" {
+  match @sdk.match_provider_name("not-a-provider") {
     Some(_) => fail("expected None")
     None => assert_true(true)
   }
 }
 
 ///|
-test "list_provider_names - returns all registered names" {
-  let names = list_provider_names()
+test "@sdk.list_provider_names - returns all registered names" {
+  let names = @sdk.list_provider_names()
   assert_true(names.length() >= 4)
   assert_true(names.contains("responses"))
   assert_true(names.contains("messages"))
 }
 
 ///|
-/// === PrismEvent 通过 decode_sse 间接验证 ===
+/// === @sdk.PrismEvent 通过 decode_sse 间接验证 ===
 
 ///|
 test "decode_sse result contains expected event types" {
-  let p = Prism::new().with_provider("openai")
+  let p = @sdk.Prism::new().with_provider("openai")
   let sse = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hi\"},\"finish_reason\":null}]}\n\ndata: [DONE]\n"
   match p.decode_sse(sse) {
     Ok(events) => assert_true(events.length() > 0)
@@ -336,14 +344,18 @@ test "decode_sse result contains expected event types" {
 }
 
 ///|
-/// === Context::add_tool_result（Agent 循环工具结果注入）===
+/// === @sdk.Context::add_tool_result（Agent 循环工具结果注入）===
 
 ///|
 test "context - add_tool_result appends tool result item" {
-  let ctx = Context::new()
+  let ctx = @sdk.Context::new()
     .add_user("use weather tool")
     .add_tool_result("tu_1", "sunny", false)
-  let req = context_to_lux_request(ctx, "gpt-4o", PrismOptions::default())
+  let req = @sdk.context_to_lux_request(
+    ctx,
+    "gpt-4o",
+    @sdk.PrismOptions::default(),
+  )
   assert_eq(req.conversation.length(), 2)
   match req.conversation[1] {
     ToolResult(tr) => {
@@ -356,8 +368,12 @@ test "context - add_tool_result appends tool result item" {
 
 ///|
 test "context - add_tool_result marks error" {
-  let ctx = Context::new().add_tool_result("tu_2", "boom", true)
-  let req = context_to_lux_request(ctx, "gpt-4o", PrismOptions::default())
+  let ctx = @sdk.Context::new().add_tool_result("tu_2", "boom", true)
+  let req = @sdk.context_to_lux_request(
+    ctx,
+    "gpt-4o",
+    @sdk.PrismOptions::default(),
+  )
   match req.conversation[0] {
     ToolResult(tr) => assert_eq(tr.is_error, true)
     _ => fail("expected ToolResult item")
@@ -365,7 +381,7 @@ test "context - add_tool_result marks error" {
 }
 
 ///|
-/// === Prism::complete / Prism::stream（L1/L2，HTTP 由 Host 注入）===
+/// === @sdk.Prism::complete / @sdk.Prism::stream（L1/L2，HTTP 由 Host 注入）===
 
 ///|
 /// 假 transport：请求 JSON 进，固定响应 JSON 出
@@ -412,9 +428,9 @@ fn mock_send_fixed_sse(_req_json : String) -> Result[String, String] {
 
 ///|
 test "complete - text in text out via mock transport" {
-  let prism = Prism::new().with_provider("openai")
+  let prism = @sdk.Prism::new().with_provider("openai")
   match
-    prism.complete("Hi", PrismOptions::default(), mock_send_fixed_response) {
+    prism.complete("Hi", @sdk.PrismOptions::default(), mock_send_fixed_response) {
     Ok(text) => assert_eq(text, "Hello back")
     Err(e) => fail("complete failed: \{e}")
   }
@@ -422,8 +438,8 @@ test "complete - text in text out via mock transport" {
 
 ///|
 test "stream - returns prism events via mock transport" {
-  let prism = Prism::new().with_provider("openai")
-  let ctx = Context::new().add_user("Hi")
+  let prism = @sdk.Prism::new().with_provider("openai")
+  let ctx = @sdk.Context::new().add_user("Hi")
   match prism.stream(ctx, mock_send_fixed_sse) {
     Ok(events) =>
       // TextDelta("Hello") + Finish(Stop)
@@ -433,11 +449,11 @@ test "stream - returns prism events via mock transport" {
 }
 
 ///|
-/// === ConversionMeta（来源元信息，D8）===
+/// === @sdk.ConversionMeta（来源元信息，D8）===
 
 ///|
 test "meta - decode_response_with_meta carries source_provider" {
-  let prism = Prism::new().with_provider("openai")
+  let prism = @sdk.Prism::new().with_provider("openai")
   let resp = @lux.LucentResponse::new(
     "resp-1",
     "gpt-4o",
@@ -470,7 +486,7 @@ test "meta - decode_response_with_meta carries source_provider" {
 
 ///|
 test "meta - messages source tag" {
-  let prism = Prism::new().with_provider("messages")
+  let prism = @sdk.Prism::new().with_provider("messages")
   let resp = @lux.LucentResponse::new(
     "msg_1",
     "claude-sonnet-4",
@@ -501,7 +517,7 @@ test "meta - messages source tag" {
 
 ///|
 test "meta - diagnostics attached" {
-  let prism = Prism::new().with_provider("openai")
+  let prism = @sdk.Prism::new().with_provider("openai")
   let resp = @lux.LucentResponse::new(
     "resp-1",
     "gpt-4o",
@@ -625,17 +641,23 @@ test "meta - mixed-flow sources are distinguishable" {
   }
 
   let chat = match
-    Prism::new().with_provider("openai").decode_response_with_meta(chat_json) {
+    @sdk.Prism::new()
+    .with_provider("openai")
+    .decode_response_with_meta(chat_json) {
     Ok(d) => d
     Err(e) => fail("openai meta decode failed: \{e}")
   }
   let anth = match
-    Prism::new().with_provider("messages").decode_response_with_meta(anth_json) {
+    @sdk.Prism::new()
+    .with_provider("messages")
+    .decode_response_with_meta(anth_json) {
     Ok(d) => d
     Err(e) => fail("messages meta decode failed: \{e}")
   }
   let gem = match
-    Prism::new().with_provider("gemini").decode_response_with_meta(gem_json) {
+    @sdk.Prism::new()
+    .with_provider("gemini")
+    .decode_response_with_meta(gem_json) {
     Ok(d) => d
     Err(e) => fail("gemini meta decode failed: \{e}")
   }
@@ -652,7 +674,7 @@ test "meta - mixed-flow sources are distinguishable" {
 
 ///|
 /// 按来源特判 helper（模拟开发者的 if 分支用法）
-fn handle_special_if_any(decoded : DecodedResponse) -> String {
+fn handle_special_if_any(decoded : @sdk.DecodedResponse) -> String {
   match decoded.meta.source_provider {
     "gemini" => "special:gemini"
     _ => "normal"
@@ -667,7 +689,9 @@ test "meta - special field handling via if branch" {
     Err(e) => fail("openai encode failed: \{e}")
   }
   let chat = match
-    Prism::new().with_provider("openai").decode_response_with_meta(chat_json) {
+    @sdk.Prism::new()
+    .with_provider("openai")
+    .decode_response_with_meta(chat_json) {
     Ok(d) => d
     Err(e) => fail("meta decode failed: \{e}")
   }

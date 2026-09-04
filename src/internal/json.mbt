@@ -539,3 +539,27 @@ pub fn merge_extras_json(
     None => ()
   }
 }
+
+///|
+/// 从 extras Map 中移除指定键（返回新 Map；移除后为空返回 None）
+pub fn extras_without(
+  extras : Map[String, Json]?,
+  key : String,
+) -> Map[String, Json]? {
+  match extras {
+    Some(m) => {
+      let nm : Map[String, Json] = Map([])
+      for k, v in m {
+        if k != key {
+          nm[k] = v
+        }
+      }
+      if nm.is_empty() {
+        None
+      } else {
+        Some(nm)
+      }
+    }
+    None => None
+  }
+}

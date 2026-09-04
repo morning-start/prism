@@ -4,6 +4,14 @@
 /// 依据：docs/lux-ir-design.md §10（6-Function 契约）
 /// 依据：docs/protocols/04-google-gemini.md（协议映射）
 ///
+/// 6 函数：
+///   1. gemini_to_lux_request      请求解码
+///   2. lux_request_to_gemini      请求编码
+///   3. gemini_to_lux_response     响应解码
+///   4. lux_response_to_gemini     响应编码
+///   5. gemini_sse_to_events       流解码
+///   6. lux_events_to_gemini_sse   流编码
+///
 /// 关键差异（vs 其他协议）：
 ///   - contents[] 角色：model 而非 assistant，tool（相同）
 ///   - systemInstruction 是顶层对象（含 role + parts）

@@ -110,18 +110,15 @@ pub fn lux_events_to_responses_sse(
             @internal.json_escape(@lux.lucent_content_to_text(tr.content)) +
             "\"}"
           Reasoning(th) => {
+            // summary/signature 片段与 request_encode/response 共享 helper，
+            // 保证三处 reasoning 序列化转义一致
             let summary = match th.summary {
               Some(arr) => {
                 let parts : Array[String] = []
                 let mut k = 0
                 while k < arr.length() {
                   match arr[k] {
-                    Text(t, _) =>
-                      parts.push(
-                        "{\"type\":\"summary_text\",\"text\":\"" +
-                        @internal.json_escape(t) +
-                        "\"}",
-                      )
+                    Text(t, _) => parts.push(summary_text_item(t))
                     _ => ()
                   }
                   k = k + 1
@@ -131,7 +128,7 @@ pub fn lux_events_to_responses_sse(
               None => ""
             }
             let sig = match th.signature {
-              Some(s) => ",\"signature\":\"" + @internal.json_escape(s) + "\""
+              Some(s) => thinking_signature_field(s)
               None => ""
             }
             "{\"id\":\"" +
@@ -454,12 +451,12 @@ pub fn lux_events_to_responses_sse(
       Error(e) => {
         // 官方错误帧：{"type":"error","code":"...","message":"..."}（error 为平铺字段）
         let error_code = match e.kind {
-          @lux.RateLimit => "rate_limit_exceeded"
-          @lux.InvalidRequest => "invalid_request_error"
-          @lux.Authentication => "invalid_api_key"
-          @lux.ServerError => "server_error"
-          @lux.ContentFilter => "content_filter"
-          @lux.Native(tag) => tag
+          RateLimit => "rate_limit_exceeded"
+          InvalidRequest => "invalid_request_error"
+          Authentication => "invalid_api_key"
+          ServerError => "server_error"
+          ContentFilter => "content_filter"
+          Native(tag) => tag
         }
         lines.push(
           "event: error\ndata: {\"type\":\"error\",\"code\":\"" +
