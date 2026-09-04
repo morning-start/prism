@@ -1,6 +1,6 @@
 # Lucent IR Design
 
-> Authoritative type definitions: `src/lux/types.mbt`, `src/lux/lux_builders.mbt`, `src/lux/lux_helpers.mbt`
+> Authoritative type definitions: `src/lux/types.mbt`, `src/lux/builders.mbt`, `src/lux/helpers.mbt`
 > JSON Schema: `schemas/lux-ir-v1.json`
 > Evolution governance: `docs/rules/lucent-ir-evolution.md`
 
@@ -141,6 +141,6 @@ Wraps any value with an ordered diagnostic list. Success ≠ Exact: value is usa
 
 ## References
 
-- Type definitions: `src/lux/types.mbt` (types), `src/lux/lux_builders.mbt` (constructors)
+- Type definitions: `src/lux/types.mbt` (types), `src/lux/builders.mbt` (constructors)
 - JSON Schema: `schemas/lux-ir-v1.json`
 - Evolution rules: `docs/rules/lucent-ir-evolution.md`
