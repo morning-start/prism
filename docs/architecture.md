@@ -68,7 +68,14 @@ The ABI is a string-in/string-out boundary. cmd/main owns export names; wasm own
 
 ## Current decisions
 
-- The Lucent package remains a large protocol-neutral core; splitting it into multiple packages is deferred until public API and package-cycle impact are measured.
+- The Lucent package remains a single protocol-neutral core package.
+  Splitting it was measured in iteration-004 (`docs/report/lux-split-feasibility.md`):
+  serialize/deserialize define 70 inherent methods (`Type::method`), which MoonBit
+  requires to stay in the type's package, and struct fields are intentionally
+  non-public — splitting would force trait/top-level-function rewrites across
+  800+ external call sites and a large public-API expansion, so **the split is
+  declined**; the per-file codec split (serialize_*/deserialize_*) remains the
+  structural boundary.
 - Provider adapters were split from monolithic files into request, response, stream, and capability units without changing package names or function signatures.
 - SDK remains the static provider composition root for now. A dedicated registry package requires a compatibility plan for the public ProviderRegistration type.
 - Model fallback is deterministic by pattern specificity and registration order; overlapping patterns require registry tests.
