@@ -77,7 +77,13 @@ The ABI is a string-in/string-out boundary. cmd/main owns export names; wasm own
   declined**; the per-file codec split (serialize_*/deserialize_*) remains the
   structural boundary.
 - Provider adapters were split from monolithic files into request, response, stream, and capability units without changing package names or function signatures.
-- SDK remains the static provider composition root for now. A dedicated registry package requires a compatibility plan for the public ProviderRegistration type.
+- SDK remains the static provider composition root; a dedicated registry
+  package was measured in iteration-005 (`docs/report/sdk-split-feasibility.md`):
+  its 36 inherent methods (`Prism::*` etc.) must stay in the type's package and
+  struct fields are intentionally non-public, so **the split is declined** —
+  same conclusion as the lux measurement. Type definitions plus their methods
+  (including registration/serialization logic) form a non-splittable unit in
+  MoonBit; per-file organization is the structural boundary.
 - Model fallback is deterministic by pattern specificity and registration order; overlapping patterns require registry tests.
 
 ## Migration plan

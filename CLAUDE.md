@@ -92,7 +92,9 @@ Prism converts between the Lucent IR and three wire protocols — OpenAI
 Each provider adapter is a MoonBit package under `src/provider/<name>/`
 implementing the 6-function encode/decode contract (see `docs/provider-guide.md`).
 
-Conversion rules (details: `api-protocol-converter/SKILL.md` + its `references/`):
+Conversion rules (details: `docs/api-protocol-converter.md` — the formal
+3-endpoint conversion contract; research notes in
+`.agent-workplace/research/api-protocol-converter/`):
 
 - Normalize into the IR first, then encode IR → target endpoint. Never write
   pairwise converters between providers.
@@ -107,7 +109,7 @@ Conversion rules (details: `api-protocol-converter/SKILL.md` + its `references/`
 - Provider-specific experimental features (thinking, server tools, audio, ...)
   are extension fields: optional, never required (see Field classification above).
 - Before claiming "3-endpoint interop", pass the 12-case minimum test matrix in
-  `api-protocol-converter/SKILL.md`.
+  `docs/api-protocol-converter.md`.
 
 ## Tooling
 

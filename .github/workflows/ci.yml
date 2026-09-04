@@ -97,6 +97,31 @@ jobs:
           moon info --target native
           git diff --exit-code -- '**/pkg.generated.mbti'
 
+  coverage:
+    name: Coverage Baseline
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up MoonBit
+        uses: hustcer/setup-moonbit@v1
+
+      - name: Update dependencies
+        run: moon update
+
+      - name: Coverage regression check
+        run: |
+          moon coverage analyze 2>&1 | tee coverage.log
+          UNCOVERED=$(grep -oE 'Total: [0-9]+ uncovered' coverage.log | grep -oE '[0-9]+' | head -1)
+          echo "uncovered lines: ${UNCOVERED}"
+          # 基线 888（2026-09-04，native 目标，wbtest 不参与统计）；允许 +15% 波动
+          # 超过阈值说明新增代码未配测试，需要补测或显式更新基线
+          if [ -n "${UNCOVERED}" ] && [ "${UNCOVERED}" -gt 1020 ]; then
+            echo "::error::Coverage regression: ${UNCOVERED} uncovered lines (baseline 888, threshold 1020)"
+            exit 1
+          fi
+
   wrappers:
     name: Wrapper Integration
     runs-on: ubuntu-latest

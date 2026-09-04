@@ -72,7 +72,9 @@ Prism converts between the Lucent IR and three wire protocols — OpenAI
 `/v1/chat/completions`, `/v1/responses`, and Anthropic `/v1/messages`.
 Adapters live under `src/provider/<name>/` (see `docs/provider-guide.md`).
 
-Rules (details: `api-protocol-converter/SKILL.md` + its `references/`):
+Rules (details: `docs/api-protocol-converter.md` — the formal 3-endpoint
+conversion contract; research notes in
+`.agent-workplace/research/api-protocol-converter/`):
 
 - Normalize into the IR first, then encode IR → target; never pairwise
   converters between providers.
@@ -85,7 +87,7 @@ Rules (details: `api-protocol-converter/SKILL.md` + its `references/`):
 - Provider-specific experimental features (thinking, server tools, audio, ...)
   are extension fields: optional, never required.
 - Before claiming "3-endpoint interop", pass the 12-case minimum test matrix
-  in `api-protocol-converter/SKILL.md`.
+  in `docs/api-protocol-converter.md`.
 
 ## Tooling
 
