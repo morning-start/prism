@@ -133,9 +133,9 @@ pub fn lux_request_to_gemini(
                 @internal.json_escape(fn_name) +
                 "\",\"response\":{\"name\":\"" +
                 @internal.json_escape(fn_name) +
-                "\",\"content\":" +
+                "\",\"content\":\"" +
                 @internal.json_escape(@lux.lucent_content_to_text(tr.content)) +
-                "}}}",
+                "\"}}}",
               )
             }
             Thinking(th) => {
@@ -198,9 +198,9 @@ pub fn lux_request_to_gemini(
           @internal.json_escape(fn_name) +
           "\",\"response\":{\"name\":\"" +
           @internal.json_escape(fn_name) +
-          "\",\"content\":" +
+          "\",\"content\":\"" +
           @internal.json_escape(@lux.lucent_content_to_text(tr.content)) +
-          "}}}]}",
+          "\"}}}]}",
         )
       }
       Reasoning(th) => {
