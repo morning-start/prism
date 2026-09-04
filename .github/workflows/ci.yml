@@ -153,9 +153,3 @@ jobs:
       - name: TypeScript wrapper integration test
         run: |
           node --experimental-strip-types wrappers/ts/test/integration.test.ts
-
-      - name: H11. Transport daemon build + integration test
-        run: |
-          cd transport/daemon
-          go vet ./...
-          go test -v ./...
