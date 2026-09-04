@@ -84,3 +84,50 @@ test "match_provider_name returns None for unknown provider" {
     Some(_) => fail("expected unknown provider to be None")
   }
 }
+
+///|
+/// === capability 消费一致性（iteration-008 方向 A/C）===
+
+///|
+/// 请求使用声明支持的能力时，check_capability 不得产生 Unsupported 诊断。
+/// 四 provider 均声明 tool_calling/reasoning/structured_output=Full，
+/// 带工具的请求应通过能力校验（声明与实际行为一致，防声明漂移）。
+test "check_capability - supported tools yield no diagnostics" {
+  let tools_req : @lux.LucentRequest = @lux.LucentRequest::new(
+    "test-model",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
+      ),
+    ],
+    Some([
+      @lux.LucentTool::simple(
+        "get_weather", "Get weather", "{\"type\":\"object\"}",
+      ),
+    ]),
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  for name in ["openai", "messages", "responses", "gemini"] {
+    let prism = Prism::new().with_provider(name)
+    let diags = prism.check_capability(tools_req)
+    assert_eq(diags.length(), 0)
+  }
+}
+
+///|
+/// check_capability 与能力声明一致：capability() 查询返回的声明
+/// 中 tool_calling 必须为 Full（与 adapter 实际支持工具的行为一致）。
+test "check_capability - declaration matches tool support" {
+  for name in ["openai", "messages", "responses", "gemini"] {
+    match Prism::new().capability(name) {
+      Some(cap) => assert_true(cap.capabilities.tool_calling is Full)
+      None => fail("capability for " + name + " not found")
+    }
+  }
+}

@@ -186,6 +186,10 @@ pub fn Prism::encode_request_with_diagnostics(
       }
     None => ()
   }
+  // capability 消费：请求所需能力 vs provider 声明（iteration-008 方向 A）
+  for diagnostic in self.check_capability(result.value()) {
+    result = result.with_diagnostic(diagnostic)
+  }
   match self.encode_lux_request(result.value()) {
     Ok(json) => {
       let mut encoded = @lux.ConversionResult::new(json)
@@ -277,4 +281,71 @@ pub fn Prism::capability(
     Some(reg) => Some(reg.capability)
     None => None
   }
+}
+
+///|
+/// 能力校验（capability 消费落地，iteration-008 架构审计方向 A）
+///
+/// 将请求所需能力与 provider 的 `ProviderCapability` 声明对照，
+/// 声明为 `Absent` 的能力若请求实际使用，产生 `Unsupported` 诊断——
+/// 让能力声明从"死数据"变为运行时契约（呼应 AGENTS.md
+/// "Unsupported capabilities MUST fail explicitly"）。
+///
+/// 检查项：
+/// - 请求含 `tools` 但声明 `tool_calling=Absent` → Unsupported
+/// - 请求启用 `reasoning` 但声明 `reasoning=Absent` → Unsupported
+/// - 请求含 `structured_output` 但声明 `structured_output=Absent` → Unsupported
+///
+/// 空数组表示请求能力全部被支持。
+pub fn Prism::check_capability(
+  self : Prism,
+  req : @lux.LucentRequest,
+) -> Array[@lux.ConversionDiagnostic] {
+  let diagnostics : Array[@lux.ConversionDiagnostic] = []
+  match match_provider_name(self.provider) {
+    Some(reg) => {
+      let caps = reg.capability.capabilities
+      // 1. 工具调用
+      match req.tools {
+        Some(tools) if tools.length() > 0 =>
+          if caps.tool_calling == Absent {
+            diagnostics.push(
+              @lux.ConversionDiagnostic::unsupported(
+                "request.tools",
+                Some(self.provider + " declares tool_calling=none"),
+              ),
+            )
+          }
+        _ => ()
+      }
+      // 2. 推理
+      match req.reasoning {
+        Some(rc) if rc.enabled =>
+          if caps.reasoning == Absent {
+            diagnostics.push(
+              @lux.ConversionDiagnostic::unsupported(
+                "request.reasoning",
+                Some(self.provider + " declares reasoning=none"),
+              ),
+            )
+          }
+        _ => ()
+      }
+      // 3. 结构化输出
+      match req.options.structured_output {
+        Some(_) =>
+          if caps.structured_output == Absent {
+            diagnostics.push(
+              @lux.ConversionDiagnostic::unsupported(
+                "request.options.structured_output",
+                Some(self.provider + " declares structured_output=none"),
+              ),
+            )
+          }
+        None => ()
+      }
+    }
+    None => ()
+  }
+  diagnostics
 }

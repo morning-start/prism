@@ -184,3 +184,35 @@ pub fn parse_sse_frame(data_raw : String) -> Json? {
   let jv = @json.parse(cleaned) catch { _ => return None }
   Some(jv)
 }
+
+///|
+/// SSE 帧预处理（带失败原因诊断版）— responses 流解码专用
+///
+/// 与 `parse_sse_frame` 同一管线，但区分失败原因供调用方发诊断：
+/// - `(Some(jv), None)`：解析成功
+/// - `(None, None)`：空帧/心跳帧，静默跳过（无诊断）
+/// - `(None, Some(reason))`：截断或非法 JSON，调用方应发 Invalid 诊断
+///
+/// 收敛目的（iteration-008 方向 B）：responses 原为手动逐帧预处理，
+/// 与 messages/openai/gemini 的 `parse_sse_frame` 管线不对称；此 helper
+/// 让 responses 复用同一管线，同时保留其"失败必诊断"的语义。
+pub fn parse_sse_frame_with_reason(data_raw : String) -> (Json?, String?) {
+  let trimmed = data_raw.trim().to_owned()
+  if trimmed == "" {
+    return (None, None)
+  }
+  let cleaned = sanitize_json_escapes(clean_sse_heartbeat(trimmed))
+  if cleaned == "" {
+    return (None, None)
+  }
+  if is_json_truncated(cleaned) {
+    return (
+      None,
+      Some("truncated JSON in SSE data (stream may be incomplete): " + data_raw),
+    )
+  }
+  let jv = @json.parse(cleaned) catch {
+    _ => return (None, Some("invalid JSON in SSE data: " + data_raw))
+  }
+  (Some(jv), None)
+}
