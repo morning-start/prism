@@ -83,6 +83,16 @@ The ABI is a string-in/string-out boundary. cmd/main owns export names; wasm own
   **file-name prefixes + partition comments + per-package `README.md` indexes**
   (`src/lux/README.md`, `src/sdk/README.md`) as the navigation layer instead of
   nested directories.
+- Nested feature sub-packages are not viable (re-audited in iteration-007):
+  "big package calls small feature packages" is the wrong dependency direction —
+  MoonBit package dependencies are acyclic, and every feature that could be
+  extracted (serialize/deserialize/diagnostics) depends on the parent package's
+  types, so `lux → lux/serialize → lux` would be a cycle. The only legal
+  sub-package direction is leaf → parent (e.g. `test/` sub-packages). Shared
+  base utilities live in the sibling `src/internal` package (leaf, core-only
+  deps), already consumed by all four providers; lux's internal `get_*` helpers
+  have zero external consumers, so sinking them to `internal` would be churn
+  without benefit.
 - Provider adapters were split from monolithic files into request, response, stream, and capability units without changing package names or function signatures.
 - SDK remains the static provider composition root; a dedicated registry
   package was measured in iteration-005 (`docs/report/sdk-split-feasibility.md`):
