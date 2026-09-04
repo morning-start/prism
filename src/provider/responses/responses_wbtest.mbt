@@ -861,3 +861,120 @@ test "#10 encode round-trips previous_response_id to responses" {
     Err(e) => fail("unexpected Err: \{e}")
   }
 }
+
+///|
+/// 流编码：tool 块自动补 output_item.added（function_call item），
+/// arguments 增量与 done 事件按块类型发出（标准 §10.2）。
+test "lux_events_to_responses_sse - tool call block" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new(Some("r_1"), Some("gpt-5"), None),
+    ),
+    BlockStart(0, @lux.LucentBlockType::tool_call("fc_1", "search")),
+    BlockDelta(0, @lux.LucentBlockDelta::tool_arguments_delta("{\"q\":\"x\"}")),
+    BlockEnd(0),
+    Finish(ToolCalls),
+    Done,
+  ]
+  match lux_events_to_responses_sse(events) {
+    Ok(cr) => {
+      let sse = cr.value()
+      // tool 块必须自动补 output_item.added（function_call）
+      assert_true(sse.contains("response.output_item.added"))
+      assert_true(sse.contains("\"type\":\"function_call\""))
+      assert_true(sse.contains("\"name\":\"search\""))
+      // arguments 增量 + done
+      assert_true(sse.contains("response.function_call_arguments.delta"))
+      assert_true(sse.contains("response.function_call_arguments.done"))
+      // 结束状态：tool_calls → completed
+      assert_true(sse.contains("\"status\":\"completed\""))
+    }
+    Err(e) => fail("encode error: \{e}")
+  }
+}
+
+///|
+/// 流编码：thinking 块的结束序列（reasoning_summary_part.done + output_item.done）
+/// 与 signature 延续凭证（不丢弃，标准 §10.2 reasoning signature）。
+test "lux_events_to_responses_sse - thinking block end and signature" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new(Some("r_1"), Some("gpt-5"), None),
+    ),
+    BlockStart(0, Thinking),
+    BlockDelta(0, @lux.LucentBlockDelta::thinking_delta("thinking")),
+    BlockDelta(0, @lux.LucentBlockDelta::signature_delta("sig_abc")),
+    BlockEnd(0),
+    Finish(Stop),
+    Done,
+  ]
+  match lux_events_to_responses_sse(events) {
+    Ok(cr) => {
+      let sse = cr.value()
+      // reasoning item 自动补全（BlockStart Thinking 无 ItemStart 时）
+      assert_true(sse.contains("\"type\":\"reasoning\""))
+      // 摘要 delta（AI SDK 消费 reasoning_summary_text.delta）
+      assert_true(sse.contains("response.reasoning_summary_text.delta"))
+      // signature 保留在 reasoning_summary_part.done 中
+      assert_true(sse.contains("response.reasoning_summary_part.done"))
+      assert_true(sse.contains("sig_abc"))
+      // 结束序列：output_item.done
+      assert_true(sse.contains("response.output_item.done"))
+    }
+    Err(e) => fail("encode error: \{e}")
+  }
+}
+
+///|
+/// 流编码：Usage 事件合并到 response.completed（含 reasoning/cached 明细）。
+test "lux_events_to_responses_sse - usage merged into completed" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new(Some("r_1"), Some("gpt-5"), None),
+    ),
+    Finish(Stop),
+    Usage(@lux.LucentUsage::full(10, 3, 13, Some(2), Some(4), None)),
+    Done,
+  ]
+  match lux_events_to_responses_sse(events) {
+    Ok(cr) => {
+      let sse = cr.value()
+      assert_true(sse.contains("response.completed"))
+      assert_true(sse.contains("\"usage\""))
+      assert_true(sse.contains("\"input_tokens\":10"))
+      assert_true(sse.contains("\"output_tokens\":3"))
+      assert_true(sse.contains("\"total_tokens\":13"))
+      // reasoning/cached 明细
+      assert_true(sse.contains("\"reasoning_tokens\":2"))
+      assert_true(sse.contains("\"cached_tokens\":4"))
+    }
+    Err(e) => fail("encode error: \{e}")
+  }
+}
+
+///|
+/// 流编码：Error 事件 → 官方错误帧（error 为平铺字段，含 code/message）。
+test "lux_events_to_responses_sse - error frame" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new(Some("r_1"), Some("gpt-5"), None),
+    ),
+    Error(
+      @lux.LucentError::new(
+        RateLimit,
+        "rate limit hit",
+        Some("rate_limit_exceeded"),
+      ),
+    ),
+    Done,
+  ]
+  match lux_events_to_responses_sse(events) {
+    Ok(cr) => {
+      let sse = cr.value()
+      assert_true(sse.contains("event: error"))
+      assert_true(sse.contains("\"code\":\"rate_limit_exceeded\""))
+      assert_true(sse.contains("\"message\":\"rate limit hit\""))
+    }
+    Err(e) => fail("encode error: \{e}")
+  }
+}

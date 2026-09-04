@@ -265,3 +265,49 @@ test "with_diagnostic chains append without aliasing" {
   assert_eq(once.diagnostics().length(), 1)
   assert_eq(twice.diagnostics().length(), 2)
 }
+
+///|
+/// === @lux.LucentOptions stop 数组 round-trip（覆盖 get_str_arr_opt）===
+test "@lux.LucentOptions blackbox - stop array round trips" {
+  let opts = @lux.LucentOptions::new(
+    None,
+    None,
+    None,
+    None,
+    Some(["END", "STOP"]),
+    false,
+    None,
+    None,
+    None,
+    None,
+  )
+  let s = opts.to_json().stringify()
+  let parsed = @json.parse(s)
+  match @lux.LucentOptions::from_json(parsed) {
+    Ok(d) => {
+      assert_eq(d.stop, Some(["END", "STOP"]))
+      assert_eq(d, opts)
+    }
+    Err(e) => fail("options round trip failed: " + e)
+  }
+}
+
+///|
+/// === @lux.LucentCapabilities round-trip（覆盖 get_support_level 成功路径）===
+test "@lux.LucentCapabilities blackbox - full round trip via JSON string" {
+  let caps = @lux.LucentCapabilities::create(
+    Full,
+    Partial,
+    Absent,
+    Full,
+    Partial,
+    [Text, Image],
+    [Text],
+  )
+  let s = caps.to_json().stringify()
+  let parsed = @json.parse(s)
+  match @lux.LucentCapabilities::from_json(parsed) {
+    Ok(d) => assert_eq(d, caps)
+    Err(e) => fail("capabilities round trip failed: " + e)
+  }
+}
