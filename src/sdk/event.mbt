@@ -1,4 +1,8 @@
 ///|
+/// ═══ 功能组：schema+event（元数据）═══
+/// 本文件：PrismToolCall/PrismToolResult/PrismThinking（零内部依赖）。
+
+///|
 /// PrismEvent — 流式事件类型（L2 框架作者看到的 5 种语义单位）
 ///
 /// 框架作者只需要 match 这 5 种事件，所有协议差异由 SDK 内部消化。

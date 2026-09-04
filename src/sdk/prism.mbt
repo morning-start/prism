@@ -1,4 +1,9 @@
 ///|
+/// ═══ 功能组：facade（对外入口）═══
+/// Prism 门面类型 + PrismOptions/ConversionMeta/DecodedResponse。
+/// 只做转发，编码/解码实现见 pipeline.mbt。
+
+///|
 /// SDK 默认 provider 名称（Prism::new() 使用）
 pub const DEFAULT_PROVIDER : String = "openai"
 

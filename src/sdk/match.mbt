@@ -1,4 +1,9 @@
 ///|
+/// ═══ 功能组：registry+match（注册与路由）═══
+/// 本文件：路由匹配（match_provider_name / match_by_model）。
+/// 注册表定义见 registry.mbt。
+
+///|
 /// match.mbt — Provider 名称/模型模式匹配
 ///
 /// 从 provider_capability.mbt 拆分，职责单一：字符串匹配逻辑。

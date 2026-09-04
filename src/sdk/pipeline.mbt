@@ -1,6 +1,10 @@
 ///|
+/// ═══ 功能组：pipeline（编码解码编排）═══
+/// 本文件：Prism 门面内部方法（encode/decode 样板）。
+/// 通用 source→target 管线见 codec_pipeline.mbt。
 
-///| SDK request/response/stream conversion pipeline (internal implementation)
+///|
+/// SDK request/response/stream conversion pipeline (internal implementation)
 
 ///|
 /// 从文本和选项构建 LucentRequest（消除 3 处重复的 Context→model→request 样板）

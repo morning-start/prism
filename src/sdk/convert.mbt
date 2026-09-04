@@ -1,4 +1,8 @@
 ///|
+/// ═══ 功能组：convert（跨协议中转）═══
+/// convert_request/response/stream 组合入口；管线实现见 codec_pipeline.mbt。
+
+///|
 /// convert_* 组合入口 — 中转站（场景 2）
 ///
 /// 协议 A JSON/SSE → Lux IR → 协议 B JSON/SSE。

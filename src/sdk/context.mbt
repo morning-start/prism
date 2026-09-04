@@ -1,4 +1,8 @@
 ///|
+/// ═══ 功能组：context（Agent 状态）═══
+/// Context/SdkMessage/SdkTool 构建与 context_to_lux_request。
+
+///|
 /// Context — 对话上下文构建器
 ///
 /// 面向 L1/L2 开发者，隐藏 IR 类型细节。

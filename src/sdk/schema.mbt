@@ -1,4 +1,8 @@
 ///|
+/// ═══ 功能组：schema+event（元数据）═══
+/// 本文件：ProviderSchema/FieldConstraint（零内部依赖）。
+
+///|
 /// ProviderSchema — 各 Provider 请求/响应字段约束定义
 ///
 /// 每个 Provider 适配器可声明自己的字段取值范围、是否必需、格式要求等。

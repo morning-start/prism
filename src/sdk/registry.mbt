@@ -1,4 +1,9 @@
 ///|
+/// ═══ 功能组：registry+match（注册与路由）═══
+/// 本文件：注册表定义（ProviderRegistration + providers_cache）。
+/// 匹配逻辑见 match.mbt。
+
+///|
 /// provider_capability.mbt — Provider 注册表定义与构造
 ///
 /// 职责：ProviderRegistration 结构体、注册表缓存、build_providers 构造。
