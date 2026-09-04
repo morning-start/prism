@@ -8,6 +8,7 @@
 | 文件 | 用途 |
 |------|------|
 | [`architecture.md`](architecture.md) | 架构决策源：分层、包职责、依赖方向、Current decisions |
+| [`architecture-packages.md`](architecture-packages.md) | 包依赖关系 Mermaid 图 + 各包功能说明 |
 | [`status.md`](status.md) | 模块完成进度、已知限制、构建/验证命令 |
 | [`lux-ir-design.md`](lux-ir-design.md) | Lucent IR 正式类型规范（schema spec） |
 | [`api-protocol-converter.md`](api-protocol-converter.md) | 3 端点协议转换契约（12-case 测试矩阵 + 6 函数契约） |
