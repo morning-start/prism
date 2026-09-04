@@ -5,8 +5,13 @@ This is a [MoonBit](https://docs.moonbitlang.com) project.
 ## Project Structure
 
 - Each directory is a MoonBit package with a `moon.pkg` file listing its
-  dependencies. Test files end in `_test.mbt` (blackbox) or `_wbtest.mbt`
-  (whitebox).
+  dependencies.
+- Tests: blackbox tests (`*_test.mbt`, public API only) live in a dedicated
+  `test/` subpackage per package (`import { "<pkg>", ... } for "test"`,
+  precedent: `src/internal/test/`); whitebox tests (`*_wbtest.mbt`) must stay
+  in the tested package directory — MoonBit compiles them into the package so
+  they can reach non-public members (verified: moving them to a `test/`
+  subpackage breaks private access).
 - Toplevel `moon.mod` holds module metadata.
 
 ## Context & Planning (flowstate)

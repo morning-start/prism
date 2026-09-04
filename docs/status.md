@@ -31,22 +31,27 @@ Provider aliases and model-pattern variants (codex, azure, vllm, gemini-vertex, 
 
 ## Test Coverage
 
-- **lux**: Whitebox (`lux_wbtest`, `serialize_wbtest`, `deserialize_wbtest`, `conversion_json_wbtest`) + blackbox (`lux_test`, `from_json_error_test`) — extensive
-- **sdk**: Cross-protocol (`cross_protocol_test`), convert matrix (`convert_matrix_test`), registry (`provider_registry_wbtest`), integration (`sdk_test`, `convert_test`)
-- **provider/\***: Each adapter has `_wbtest` + `_test`
-- **wasm**: `wasm_test` covering all exports
-- **internal**: Basic coverage in `internal/test/` subdirectory
+Tests are organized per package: **blackbox** (`*_test.mbt`, public API only)
+live in a dedicated `test/` subpackage (`import ... for "test"`); **whitebox**
+(`*_wbtest.mbt`) stay in the package directory (MoonBit requires same-package
+compilation to reach non-public members).
+
+- **lux**: Whitebox (`lux_wbtest`, `serialize_wbtest`, `deserialize_wbtest`, `conversion_json_wbtest` in `src/lux/`) + blackbox (`lux_test`, `from_json_error_test` in `src/lux/test/`) — extensive
+- **sdk**: Cross-protocol (`cross_protocol_test`), convert matrix (`convert_matrix_test`), registry (`provider_registry_wbtest`), integration (`sdk_test`, `convert_test`) — blackbox in `src/sdk/test/`
+- **provider/\***: Each adapter has whitebox `_wbtest` (package dir) + blackbox `_test` (`test/` subpackage)
+- **wasm**: `wasm_test` covering all exports (in `src/wasm/test/`)
+- **internal**: Coverage in `internal/test/` subdirectory
 
 ## Known Limitations
 
 - `scripts/check_schema_drift.ps1` runs in report mode by default and can be used with `-Strict` in CI; its self-test covers version, required fields, enums, and stream events
 
 - `src/lux/lux.mbt` remains the type/model hub; codec implementations are split into request/response/stream/primitive files
-- Provider request codecs are split into dedicated request_decode/request_encode files; response/stream code remains co-located where further separation is not yet justified
+- Provider adapters use a uniform file layout: capability / request_decode / request_encode / response / stream_decode / stream_encode
 - JSON Schema (`schemas/lux-ir-v1.json`) remains manually authored, but `scripts/check_schema_drift.ps1` now reports version/required-field/enum/stream-event drift
 
 - `src/internal/sse.mbt` exports `parse_sse_frame` — shared SSE preprocessing pipeline used by messages, openai, and gemini stream decoders
-- `src/internal/json.mbt` exports `parse_string_array`, `merge_extras_json`, and usage-detail helpers (`parse_reasoning_tokens` / `parse_cached_tokens` / `parse_cache_creation_tokens`) — shared helpers used by all four providers
+- `src/internal/json.mbt` exports `parse_string_array`, `merge_extras_json`, `extras_without`, and usage-detail helpers (`parse_reasoning_tokens` / `parse_cached_tokens` / `parse_cache_creation_tokens`) — shared helpers used by all four providers
 - `src/lux/stream.mbt` exports `BlockAccumulator` (package-internal) — extracted from the 290-line stream accumulator function
 
 ## IR Evolution Backlog (from 2026-09 protocol audit)
