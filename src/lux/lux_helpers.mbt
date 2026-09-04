@@ -272,6 +272,21 @@ pub fn LucentFinishReason::to_string(self : LucentFinishReason) -> String {
 }
 
 ///|
+/// LucentReasoningEffort 字符串映射（适配器共用）
+///
+/// 出站侧 openai / messages / responses 三处使用完全相同的档位名
+/// （"low"/"medium"/"high"/"xhigh"），集中于此避免重复 match。
+/// gemini 的降级映射（XHigh → ("high", true)）语义不同，保留在 adapter。
+pub fn LucentReasoningEffort::to_string(self : LucentReasoningEffort) -> String {
+  match self {
+    Low => "low"
+    Medium => "medium"
+    High => "high"
+    XHigh => "xhigh"
+  }
+}
+
+///|
 /// 从 conversation items 中提取所有 Message 项（用于适配器需要 messages 视图的场景）
 pub fn lucent_messages_from_items(
   items : Array[LucentConversationItem],

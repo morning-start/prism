@@ -304,10 +304,10 @@ pub fn lux_request_to_responses(
       let mut rf = ""
       if rc.enabled {
         match rc.effort {
-          Some(Low) => rf = "\"effort\":\"low\""
-          Some(Medium) => rf = "\"effort\":\"medium\""
-          Some(High) => rf = "\"effort\":\"high\""
-          Some(XHigh) => rf = "\"effort\":\"xhigh\""
+          Some(e) =>
+            rf = "\"effort\":\"" +
+              @lux.LucentReasoningEffort::to_string(e) +
+              "\""
           None => ()
         }
         match rc.summary {

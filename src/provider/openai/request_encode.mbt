@@ -11,17 +11,6 @@ fn role_to_string(role : @lux.LucentRole) -> String {
 }
 
 ///|
-/// LucentReasoningEffort → OpenAI reasoning_effort 字符串
-fn reasoning_effort_to_string(e : @lux.LucentReasoningEffort) -> String {
-  match e {
-    Low => "low"
-    Medium => "medium"
-    High => "high"
-    XHigh => "xhigh"
-  }
-}
-
-///|
 /// 工具选择 → JSON 片段
 fn tool_choice_to_json(tc : @lux.LucentToolChoice) -> String {
   match tc {
@@ -381,7 +370,9 @@ pub fn lux_request_to_openai(
         match rc.effort {
           Some(e) =>
             parts.push(
-              "\"reasoning_effort\":\"" + reasoning_effort_to_string(e) + "\"",
+              "\"reasoning_effort\":\"" +
+              @lux.LucentReasoningEffort::to_string(e) +
+              "\"",
             )
           None => () // enabled 无 effort：省略（模型默认）
         }

@@ -433,16 +433,11 @@ pub fn lux_request_to_messages(
           None => {
             // adaptive 形态：effort 落 output_config（与 structured output 的 format 合并）
             match rc.effort {
-              Some(e) => {
-                let level = match e {
-                  Low => "low"
-                  Medium => "medium"
-                  High => "high"
-                  // Anthropic 支持 xhigh；IR 无 max 档位，XHigh 即 Anthropic 次高档
-                  XHigh => "xhigh"
-                }
-                output_effort_part = "\"effort\":\"" + level + "\""
-              }
+              Some(e) =>
+                // 档位名与 openai/responses 共用 lux 侧映射（LucentReasoningEffort::to_string）
+                output_effort_part = "\"effort\":\"" +
+                  @lux.LucentReasoningEffort::to_string(e) +
+                  "\""
               None => ()
             }
             parts.push("\"thinking\":{\"type\":\"adaptive\"}")
