@@ -1,7 +1,9 @@
 ///|
-/// convert_pipeline.mbt — 共享 decode → IR → encode 管线
+/// codec_pipeline.mbt — 共享 decode → IR → encode 管线
 ///
 /// 只负责协议无关的转换编排和诊断合并；Provider codec 由注册表注入。
+/// （命名：与 pipeline.mbt（Prism 门面内部方法）语义区分，本文件为
+/// 通用 source→target 管线，见 docs/rules/naming-conventions.md §6）
 
 ///|
 /// 通用：source 解码 → target 编码（合并解码+编码诊断，返回带诊断结果）
