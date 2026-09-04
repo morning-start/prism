@@ -106,6 +106,16 @@ The ABI is a string-in/string-out boundary. cmd/main owns export names; wasm own
   wrappers, error codes, stream event names) are protocol-semantic differences
   and must stay in each adapter; genuinely identical helpers keep landing in
   `src/internal`.
+- Trait-ification of the 6-function contract re-confirmed declined (iteration-008,
+  user decision): the SDK already dispatches through the `ProviderRegistration`
+  struct's **function fields** (`(src.response_decode)(json_str)` in
+  `src/sdk/convert.mbt`) — a function-table that already achieves the same
+  "unified interface" a `trait Codec` would provide, and it is bound at compile
+  time (static composition root), so a trait's polymorphism/bounds benefit has
+  no consumer. Adding `trait Codec` + 4 adapter structs + 24 forwarding impls
+  would be pure ceremony with double-maintenance (top-level functions must stay
+  for the public API). Clarity is already provided by `.mbti`, registration
+  field comments, and `docs/api-protocol-converter.md`.
 - Provider adapters were split from monolithic files into request, response, stream, and capability units without changing package names or function signatures.
 - SDK remains the static provider composition root; a dedicated registry
   package was measured in iteration-005 (`docs/report/sdk-split-feasibility.md`):
