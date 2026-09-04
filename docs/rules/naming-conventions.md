@@ -2,8 +2,9 @@
 
 > 适用范围：Prism 全仓 MoonBit 代码。目标：任何新增/重构的代码，文件名、
 > 函数名、类型名、测试名都遵循同一套规则，让目录"一眼可读"。
-> 依据：iteration-006 全仓盘点（差异清单见
-> `.agent-workplace/docs/task/iteration-006-naming.md`）。
+> 依据：iteration-006/007 全仓盘点（差异清单见
+> `.agent-workplace/docs/task/iteration-006-naming.md` 与
+> `.agent-workplace/docs/task/iteration-007-architecture-review.md`）。
 
 ---
 
@@ -58,9 +59,8 @@
 | `serialize_primitives.mbt` | `serialize_primitives_wbtest.mbt`（或合并的 `serialize_wbtest.mbt`） |
 | `diagnostics_json.mbt` | `diagnostics_json_wbtest.mbt` |
 
-已知违规（iteration-006 待修）：
-- `lux/conversion_json_wbtest.mbt` → 源码已改名 `diagnostics_json.mbt`，
-  测试文件名未跟随（iteration-005 遗漏）
+历史违规已清零（iteration-006 修复：`conversion_json_wbtest.mbt` 已随源码
+改名 `diagnostics_json_wbtest.mbt`；`lux_wbtest` 作为包级综合白盒测试保留）。
 
 ## 3. 函数命名
 
@@ -95,7 +95,81 @@
 - sdk `ConvertMetaResult` / `ConversionMeta` vs lux `ConversionResult`——
   `Convert`/`Conversion` 前缀不统一，改名破坏 SDK 公开 API，留待大版本
 
-## 5. 文档引用同步
+## 5. 文件夹命名
+
+### 5.1 目录 = 包边界
+
+每个目录是一个 MoonBit 包，含 `moon.pkg`。目录名即包名，用**单数小写名词**
+（`lux` / `sdk` / `internal` / `provider` / `wasm`）。
+
+### 5.2 测试子目录
+
+- blackbox 测试目录统一 `test/`（各包既有先例，无前缀）
+- 禁止命名 `tests/` / `test_xxx/` / `unit/` 等变体
+
+正例：`src/lux/test/`、`src/provider/openai/test/`
+反例：`src/lux/tests/`、`src/lux/unit/`、`src/lux/test_helpers/`
+
+### 5.3 目录内文件分组用前缀，不建多余子目录
+
+MoonBit 目录 = 包，**包内不再建子目录**（同包平铺编译）。文件分组靠
+**文件名前缀**表达职责族：
+
+| 职责族 | 前缀 | 示例 |
+|---|---|---|
+| 序列化 | `serialize_` | `serialize_request.mbt` / `serialize_stream.mbt` |
+| 反序列化 | `deserialize_` | `deserialize_content.mbt` / `deserialize_tools.mbt` |
+| 适配器布局 | 无前缀六文件 | `capability.mbt` / `request_decode.mbt` … |
+
+正例：`serialize_request.mbt` + `deserialize_request.mbt` 成对
+反例：`src/lux/serialize/request.mbt`（错误地建子目录，违反"目录=包"）
+
+## 6. 模块命名
+
+### 6.1 包内模块 = 文件，命名 = 职责名词
+
+包内每个 `.mbt` 文件是一个模块单元，文件名用**职责名词**（非动词、非泛词）：
+
+| 职责 | 正例 | 反例 |
+|---|---|---|
+| 类型定义 | `types.mbt` | `main.mbt` / `defs.mbt` / `index.mbt` |
+| 构造器 | `builders.mbt` | `create.mbt` / `new.mbt` |
+| 辅助 | `helpers.mbt` | `utils.mbt` / `util.mbt` / `common.mbt` |
+| 流事件 | `stream.mbt` | `events_all.mbt` |
+| 转换编排 | `pipeline.mbt` | `convert_pipeline.mbt`（与 pipeline 语义重叠，sdk 待改） |
+
+### 6.2 禁用词
+
+- `utils` / `util` / `common` / `misc` / `others` —— 泛化收容所，掩盖职责
+- `all` / `everything` / `anything` —— 无意义
+- 与包内其他文件语义重叠的名字（如 `convert_pipeline.mbt` 与 `pipeline.mbt` 并存）
+
+## 7. 变量命名
+
+### 7.1 基本规则
+
+- 局部变量：小写下划线（`result` / `cparts` / `item_id`）
+- 缩写词按单词处理：`json_str`（非 `jsonStr`）、`sse`（非 `SSE`）
+- 计数器：`i` / `j` / `k`（循环内短名可接受）；有语义时用全名（`block_index`）
+
+### 7.2 正反示例
+
+| 场景 | 正例 | 反例 |
+|---|---|---|
+| 反序列化结果 | `let parsed = @json.parse(s)` | `let data = ...` / `let x = ...` |
+| 会话项数组 | `let items : Array[...]` | `let arr` / `let list` |
+| 工具参数增量 | `let acc = acc + s` | `let temp` / `let tmp` |
+| 布尔开关 | `let has_usage = true` | `let flag` / `let u` |
+
+### 7.3 枚举变体与常量
+
+- 枚举变体：帕斯卡命名（`Stop` / `ToolCalls` / `RateLimit`），随类型前缀
+  （`LucentErrorKind::RateLimit`）
+- 字符串常量映射：集中为 `Type::to_string` / `Type::from_string` 方法，
+  禁止散落的字符串字面量 match（如 effort 档位映射已在
+  `LucentReasoningEffort::to_string` 收敛）
+
+## 8. 文档引用同步
 
 改名源码文件时，同步更新以下文档中的路径引用：
 - `docs/lux-ir-design.md`（类型定义引用）
@@ -103,7 +177,7 @@
 - `docs/architecture.md`（Current decisions / adapter 布局）
 - `AGENTS.md` / `CLAUDE.md`（如涉及结构描述）
 
-## 6. 验收
+## 9. 验收
 
 - 全仓 `ls */**.mbt`（排除 wbtest）无 `lux_`/`wasm_` 等包名前缀文件
 - 编解码文件 `serialize_*`/`deserialize_*` 两侧对称

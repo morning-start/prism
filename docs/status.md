@@ -8,7 +8,7 @@
 |--------|--------|-------|
 | `src/lux` (Lucent IR) | ✅ Stable | v1 schema, types + builders + stream events + diagnostics |
 | `src/internal` | ✅ Stable | JSON helpers, SSE parser, shared primitives |
-| `src/sdk` | ✅ Stable | Facade, registry, matching, convert pipeline |
+| `src/sdk` | ✅ Stable | Facade, context, registry+match, pipeline/codec_pipeline, convert, schema+event（功能组分区注释，iteration-007） |
 | `src/wasm` | ✅ Stable | 11 exported functions, scratch memory, log buffer |
 | `src/provider/openai` | ✅ Complete | Chat Completions + stream + capability |
 | `src/provider/messages` | ✅ Complete | Anthropic Messages API + extended thinking |
