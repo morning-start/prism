@@ -362,6 +362,7 @@ pub(all) enum LucentReasoningEffort {
   XHigh
 } derive(Eq, @debug.Debug)
 pub fn LucentReasoningEffort::from_json(Json) -> Result[Self, String]
+pub fn LucentReasoningEffort::to_string(Self) -> String
 
 pub(all) enum LucentReasoningSummary {
   Auto

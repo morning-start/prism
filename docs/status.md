@@ -36,7 +36,7 @@ live in a dedicated `test/` subpackage (`import ... for "test"`); **whitebox**
 (`*_wbtest.mbt`) stay in the package directory (MoonBit requires same-package
 compilation to reach non-public members).
 
-- **lux**: Whitebox (`lux_wbtest`, `serialize_wbtest`, `deserialize_wbtest`, `conversion_json_wbtest` in `src/lux/`) + blackbox (`lux_test`, `from_json_error_test` in `src/lux/test/`) — extensive
+- **lux**: Whitebox (`lux_wbtest`, `serialize_wbtest`, `deserialize_wbtest`, `diagnostics_json_wbtest` in `src/lux/`) + blackbox (`lux_test`, `from_json_error_test` in `src/lux/test/`) — extensive
 - **sdk**: Cross-protocol (`cross_protocol_test`), convert matrix (`convert_matrix_test`), registry (`provider_registry_wbtest`), integration (`sdk_test`, `convert_test`) — blackbox in `src/sdk/test/`
 - **provider/\***: Each adapter has whitebox `_wbtest` (package dir) + blackbox `_test` (`test/` subpackage)
 - **wasm**: `wasm_test` covering all exports (in `src/wasm/test/`)
@@ -46,7 +46,7 @@ compilation to reach non-public members).
 
 - `scripts/check_schema_drift.ps1` runs in report mode by default and can be used with `-Strict` in CI; its self-test covers version, required fields, enums, and stream events
 
-- `src/lux/lux.mbt` remains the type/model hub; codec implementations are split into request/response/stream/primitive files
+- `src/lux/types.mbt` remains the type/model hub; codec implementations are split into request/response/stream/primitive files (deserialization further split: `deserialize_helpers` / `deserialize_primitives` / `deserialize_content` / `deserialize_tools` / `deserialize_options`); diagnostics JSON codec lives in `diagnostics_json.mbt`
 - Provider adapters use a uniform file layout: capability / request_decode / request_encode / response / stream_decode / stream_encode
 - JSON Schema (`schemas/lux-ir-v1.json`) remains manually authored, but `scripts/check_schema_drift.ps1` now reports version/required-field/enum/stream-event drift
 
