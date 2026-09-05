@@ -122,34 +122,3 @@ jobs:
             exit 1
           fi
 
-  wrappers:
-    name: Wrapper Integration
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-
-      - name: Set up MoonBit
-        uses: hustcer/setup-moonbit@v1
-
-      - name: Update dependencies
-        run: moon update
-
-      - name: Build classic WASM (wrapper ABI)
-        run: moon build --target wasm
-
-      # --experimental-strip-types 需要 Node >= 22.6，显式固定版本，不依赖 runner 默认值
-      - name: Set up Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Go wrapper integration test
-        run: |
-          cd wrappers/go
-          go vet ./...
-          go test -v ./...
-
-      - name: TypeScript wrapper integration test
-        run: |
-          node --experimental-strip-types wrappers/ts/test/integration.test.ts

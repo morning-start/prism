@@ -63,20 +63,6 @@ fn main {
 切换厂商只需改一个 provider 名；直接传**模型名**也能自动路由
 （`claude-*` → Anthropic、`gemini-*` → Google、`gpt-*` / `o*` → OpenAI）。
 
-**Go wrapper**（`moon build` 产出 `prism.wasm` 后加载）：
-
-```go
-client, err := prism.New(wasmBytes)
-req, _ := client.EncodeRequest("openai", "你好", nil)
-```
-
-**TypeScript wrapper**：
-
-```ts
-const client = new PrismClient(wasmBytes);
-const events = client.decodeSSE("anthropic", sseText); // Anthropic SSE → 事件流
-```
-
 > 完整端到端场景见 [USAGE.md](USAGE.md)：
 > 嵌入 SDK（应用内转换）、网关模式（OpenAI 客户端接 Claude 后端）、流式转码、企业审计网关。
 
@@ -129,7 +115,6 @@ match prism.decode_sse(sse_text) {
 - `src/sdk` —— `Prism` 门面 + 注册表 + 路由 + Context 构建（唯一收敛点）
 - `src/internal` —— JSON 字段访问、SSE 帧解析、extras 合并等共享基元
 - `src/wasm` + `src/cmd/main` —— WASM 字符串 ABI 导出（进出皆 String，零 provider 耦合）
-- `wrappers/go`、`wrappers/ts` —— Go / TypeScript 客户端封装
 - `src/conformance` —— 8 个 `check_*` 协议符合性验证器（测试工具包）
 
 ## 测试与质量
