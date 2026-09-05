@@ -1,113 +1,85 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 520" width="100%">
-  <title>Prism 架构流向图</title>
-  <desc>Prism 的四层架构：Lucent IR 核心层 → 适配器层 → SDK 注册表层 → WASM 导出层。展示从概念设计到代码包结构的完整映射。</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 560" width="100%" role="img" aria-labelledby="title desc">
+  <title id="title">Prism 代码架构</title>
+  <desc id="desc">四层架构：L0 lux 提供 Lucent IR 中立核心；L1 provider 放 4 个协议适配器（openai / responses / messages / gemini，各 6 个纯函数）；L2 sdk 做注册表路由与 Prism 门面；L3 wasm 与 cmd/main 导出字符串 ABI；internal 提供共享基元，另有 conformance 验证器与 Go/TS wrapper。</desc>
 
   <!-- Background -->
-  <rect width="1200" height="520" fill="#0d1117" rx="12"/>
+  <rect width="1200" height="560" fill="#0d1117" rx="20"/>
 
   <!-- Title -->
-  <text x="64" y="52" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif" font-size="22" font-weight="600" fill="#e6edf3">代码架构</text>
-  <text x="64" y="76" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif" font-size="14" fill="#8b949e">四层递进：Lucent IR 核心 → 适配器层 → SDK 层 → WASM 导出层</text>
+  <text x="64" y="66" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif" font-size="30" font-weight="700" fill="#e6edf3">代码架构</text>
+  <text x="64" y="94" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif" font-size="16" fill="#8b949e">L0 → L3 分层：中立核心 · 协议适配 · SDK 收敛 · WASM 导出</text>
 
-  <!-- ===== LAYER 0: Lux IR Core ===== -->
-  <rect x="64" y="100" width="1072" height="68" rx="8" fill="#1c2333" stroke="#30363d" stroke-width="1"/>
-  <rect x="64" y="100" width="180" height="68" rx="8" fill="#0d1117" stroke="#58a6ff" stroke-width="2"/>
-  <text x="154" y="132" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="14" fill="#58a6ff" text-anchor="middle" font-weight="600">L0 · lux/</text>
-  <text x="154" y="152" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif" font-size="11" fill="#8b949e" text-anchor="middle">Lucent IR 核心</text>
+  <!-- ===== LAYER 0: lux ===== -->
+  <rect x="64" y="116" width="1072" height="72" rx="8" fill="#1c2333" stroke="#30363d" stroke-width="1"/>
+  <rect x="64" y="116" width="190" height="72" rx="8" fill="#0d1117" stroke="#58a6ff" stroke-width="2"/>
+  <text x="159" y="151" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="19" font-weight="700" fill="#58a6ff">L0 · lux/</text>
+  <text x="159" y="175" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif" font-size="15" fill="#8b949e">Lucent IR 核心</text>
 
-  <!-- Lux IR types list -->
-  <text x="270" y="126" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="12" fill="#e6edf3">LucentRequest · LucentResponse · LucentStreamEvent</text>
-  <text x="270" y="148" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="12" fill="#8b949e">LucentMessage · LucentContent · LucentTool · LucentOptions · … 34+ 类型</text>
-
-  <!-- Layer label -->
-  <rect x="980" y="110" width="136" height="24" rx="4" fill="#1f2937" stroke="#30363d" stroke-width="1"/>
-  <text x="1048" y="126" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="11" fill="#58a6ff" text-anchor="middle">无 IO · 无厂商绑定</text>
+  <text x="278" y="150" font-family="ui-monospace,SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="16" fill="#e6edf3">LucentRequest · LucentResponse · LucentStreamEvent</text>
+  <text x="278" y="174" font-family="ui-monospace,SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="16" fill="#8b949e">类型 + 序列化 + 诊断 + 流事件 —— 标准 / 扩展字段分级</text>
+  <rect x="982" y="128" width="138" height="28" rx="6" fill="#1f2937" stroke="#30363d" stroke-width="1"/>
+  <text x="1051" y="147" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="14" fill="#58a6ff">无 IO · 无厂商绑定</text>
 
   <!-- Arrow L0 → L1 -->
-  <polygon points="600,168 594,178 606,178" fill="#30363d"/>
-  <line x1="600" y1="168" x2="600" y2="178" stroke="#30363d" stroke-width="2"/>
+  <line x1="600" y1="190" x2="600" y2="200" stroke="#30363d" stroke-width="2"/>
+  <polygon points="600,200 594,206 606,206" fill="#30363d"/>
 
-  <!-- ===== LAYER 1: Provider Adapters ===== -->
-  <rect x="64" y="186" width="1072" height="96" rx="8" fill="#1c2333" stroke="#30363d" stroke-width="1"/>
-  <rect x="64" y="186" width="180" height="96" rx="8" fill="#0d1117" stroke="#f0883e" stroke-width="2"/>
-  <text x="154" y="222" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="14" fill="#f0883e" text-anchor="middle" font-weight="600">L1 · provider/*/</text>
-  <text x="154" y="242" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif" font-size="11" fill="#8b949e" text-anchor="middle">7 个适配器</text>
+  <!-- ===== LAYER 1: provider adapters ===== -->
+  <rect x="64" y="212" width="1072" height="104" rx="8" fill="#1c2333" stroke="#30363d" stroke-width="1"/>
+  <rect x="64" y="212" width="190" height="104" rx="8" fill="#0d1117" stroke="#f0883e" stroke-width="2"/>
+  <text x="159" y="256" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="19" font-weight="700" fill="#f0883e">L1 · provider/</text>
+  <text x="159" y="280" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif" font-size="15" fill="#8b949e">4 协议 · 每端 6 函数</text>
 
-  <!-- Provider cards -->
-  <g transform="translate(270, 196)">
-    <rect x="0" y="0" width="132" height="76" rx="6" fill="#1f2937" stroke="#30363d" stroke-width="1"/>
-    <rect x="0" y="0" width="132" height="24" rx="6" fill="#161b22"/>
-    <text x="66" y="16" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="11" fill="#e6edf3" text-anchor="middle">openai_chat</text>
-    <text x="66" y="44" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="10" fill="#8b949e" text-anchor="middle">Chat Completions</text>
-    <text x="66" y="62" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="10" fill="#8b949e" text-anchor="middle">6 函数</text>
-  </g>
+  <!-- Provider cards (name + protocol) -->
+  <g>
+    <rect x="278" y="222" width="201" height="84" rx="7" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+    <text x="294" y="256" font-family="ui-monospace,SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="19" font-weight="700" fill="#58a6ff">openai</text>
+    <text x="294" y="290" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif" font-size="18" fill="#8b949e">Chat Completions</text>
 
-  <g transform="translate(414, 196)">
-    <rect x="0" y="0" width="132" height="76" rx="6" fill="#1f2937" stroke="#30363d" stroke-width="1"/>
-    <rect x="0" y="0" width="132" height="24" rx="6" fill="#161b22"/>
-    <text x="66" y="16" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="11" fill="#e6edf3" text-anchor="middle">anthropic</text>
-    <text x="66" y="44" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="10" fill="#8b949e" text-anchor="middle">Messages API</text>
-    <text x="66" y="62" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="10" fill="#8b949e" text-anchor="middle">6 函数</text>
-  </g>
+    <rect x="496" y="222" width="201" height="84" rx="7" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+    <text x="512" y="256" font-family="ui-monospace,SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="19" font-weight="700" fill="#d2a8ff">responses</text>
+    <text x="512" y="290" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif" font-size="18" fill="#8b949e">Responses API</text>
 
-  <g transform="translate(558, 196)">
-    <rect x="0" y="0" width="132" height="76" rx="6" fill="#1f2937" stroke="#30363d" stroke-width="1"/>
-    <rect x="0" y="0" width="132" height="24" rx="6" fill="#161b22"/>
-    <text x="66" y="16" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="11" fill="#e6edf3" text-anchor="middle">openai_responses</text>
-    <text x="66" y="44" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="10" fill="#8b949e" text-anchor="middle">Responses API</text>
-    <text x="66" y="62" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="10" fill="#8b949e" text-anchor="middle">6 函数</text>
-  </g>
+    <rect x="714" y="222" width="201" height="84" rx="7" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+    <text x="730" y="256" font-family="ui-monospace,SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="19" font-weight="700" fill="#f0883e">messages</text>
+    <text x="730" y="290" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif" font-size="18" fill="#8b949e">Messages API</text>
 
-  <g transform="translate(702, 196)">
-    <rect x="0" y="0" width="132" height="76" rx="6" fill="#1f2937" stroke="#30363d" stroke-width="1"/>
-    <rect x="0" y="0" width="132" height="24" rx="6" fill="#161b22"/>
-    <text x="66" y="16" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="11" fill="#e6edf3" text-anchor="middle">gemini</text>
-    <text x="66" y="44" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="10" fill="#8b949e" text-anchor="middle">Gemini API</text>
-    <text x="66" y="62" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="10" fill="#8b949e" text-anchor="middle">6 函数</text>
-  </g>
-
-  <g transform="translate(846, 196)">
-    <rect x="0" y="0" width="132" height="76" rx="6" fill="#1f2937" stroke="#30363d" stroke-width="1"/>
-    <rect x="0" y="0" width="132" height="24" rx="6" fill="#161b22"/>
-    <text x="66" y="16" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="11" fill="#e6edf3" text-anchor="middle">+3 variants</text>
-    <text x="66" y="44" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="10" fill="#8b949e" text-anchor="middle">codex / azure / vertex</text>
-    <text x="66" y="62" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="10" fill="#8b949e" text-anchor="middle">6 函数</text>
+    <rect x="932" y="222" width="188" height="84" rx="7" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+    <text x="948" y="256" font-family="ui-monospace,SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="19" font-weight="700" fill="#7ee787">gemini</text>
+    <text x="948" y="290" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif" font-size="18" fill="#8b949e">Gemini API</text>
   </g>
 
   <!-- Arrow L1 → L2 -->
-  <polygon points="600,282 594,292 606,292" fill="#30363d"/>
-  <line x1="600" y1="282" x2="600" y2="292" stroke="#30363d" stroke-width="2"/>
+  <line x1="600" y1="318" x2="600" y2="328" stroke="#30363d" stroke-width="2"/>
+  <polygon points="600,328 594,334 606,334" fill="#30363d"/>
 
-  <!-- ===== LAYER 2: SDK ===== -->
-  <rect x="64" y="300" width="1072" height="68" rx="8" fill="#1c2333" stroke="#30363d" stroke-width="1"/>
-  <rect x="64" y="300" width="180" height="68" rx="8" fill="#0d1117" stroke="#7ee787" stroke-width="2"/>
-  <text x="154" y="332" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="14" fill="#7ee787" text-anchor="middle" font-weight="600">L2 · sdk/</text>
-  <text x="154" y="352" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif" font-size="11" fill="#8b949e" text-anchor="middle">注册表 · 表层 API</text>
+  <!-- ===== LAYER 2: sdk ===== -->
+  <rect x="64" y="340" width="1072" height="72" rx="8" fill="#1c2333" stroke="#30363d" stroke-width="1"/>
+  <rect x="64" y="340" width="190" height="72" rx="8" fill="#0d1117" stroke="#7ee787" stroke-width="2"/>
+  <text x="159" y="375" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="19" font-weight="700" fill="#7ee787">L2 · sdk/</text>
+  <text x="159" y="399" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif" font-size="15" fill="#8b949e">门面 + 注册表</text>
 
-  <text x="270" y="326" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="12" fill="#e6edf3">Prism struct · ProviderRegistration · Context · PrismEvent</text>
-  <text x="270" y="348" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="12" fill="#8b949e">6 种转换函数集中注册 · 新增 Provider 只需改 1 处</text>
-
-  <rect x="980" y="310" width="136" height="24" rx="4" fill="#1f2937" stroke="#30363d" stroke-width="1"/>
-  <text x="1048" y="326" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="11" fill="#7ee787" text-anchor="middle">唯一收敛点</text>
+  <text x="278" y="374" font-family="ui-monospace,SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="16" fill="#e6edf3">Prism 门面 · ProviderRegistration · Context · PrismEvent</text>
+  <text x="278" y="398" font-family="ui-monospace,SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="16" fill="#8b949e">注册表调度 + 模型名路由（match_by_model）—— 新增协议只改 1 处</text>
+  <rect x="982" y="352" width="138" height="28" rx="6" fill="#1f2937" stroke="#30363d" stroke-width="1"/>
+  <text x="1051" y="371" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="14" fill="#7ee787">唯一收敛点</text>
 
   <!-- Arrow L2 → L3 -->
-  <polygon points="600,368 594,378 606,378" fill="#30363d"/>
-  <line x1="600" y1="368" x2="600" y2="378" stroke="#30363d" stroke-width="2"/>
+  <line x1="600" y1="414" x2="600" y2="424" stroke="#30363d" stroke-width="2"/>
+  <polygon points="600,424 594,430 606,430" fill="#30363d"/>
 
-  <!-- ===== LAYER 3: WASM ===== -->
-  <rect x="64" y="386" width="1072" height="68" rx="8" fill="#1c2333" stroke="#30363d" stroke-width="1"/>
-  <rect x="64" y="386" width="180" height="68" rx="8" fill="#0d1117" stroke="#d2a8ff" stroke-width="2"/>
-  <text x="154" y="418" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="14" fill="#d2a8ff" text-anchor="middle" font-weight="600">L3 · wasm/</text>
-  <text x="154" y="438" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif" font-size="11" fill="#8b949e" text-anchor="middle">WASM 导出层</text>
+  <!-- ===== LAYER 3: wasm ===== -->
+  <rect x="64" y="436" width="1072" height="72" rx="8" fill="#1c2333" stroke="#30363d" stroke-width="1"/>
+  <rect x="64" y="436" width="190" height="72" rx="8" fill="#0d1117" stroke="#d2a8ff" stroke-width="2"/>
+  <text x="159" y="471" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="19" font-weight="700" fill="#d2a8ff">L3 · wasm/</text>
+  <text x="159" y="495" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif" font-size="15" fill="#8b949e">cmd/main 汇出</text>
 
-  <text x="270" y="412" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="12" fill="#e6edf3">6 通用分发函数 + 5 SDK API（通过注册表调度，无 provider 耦合）</text>
-  <text x="270" y="434" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="12" fill="#8b949e">String 进出 · wasm_to_lux_request · wasm_lux_request_to_provider · wasm_sse_to_events · …</text>
+  <text x="278" y="470" font-family="ui-monospace,SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="16" fill="#e6edf3">字符串 ABI 导出 · scratch 内存 · 日志缓冲</text>
+  <text x="278" y="494" font-family="ui-monospace,SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="16" fill="#8b949e">wasm_to_lux_req · wasm_sdk_encode_request · wasm_sse_to_events · …</text>
+  <rect x="982" y="448" width="138" height="28" rx="6" fill="#1f2937" stroke="#30363d" stroke-width="1"/>
+  <text x="1051" y="467" text-anchor="middle" font-family="ui-monospace,SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="14" fill="#d2a8ff">String 进出</text>
 
-  <rect x="980" y="396" width="136" height="24" rx="4" fill="#1f2937" stroke="#30363d" stroke-width="1"/>
-  <text x="1048" y="412" font-family="SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="11" fill="#d2a8ff" text-anchor="middle">零 provider 依赖</text>
-
-  <!-- ===== Data flow annotation ===== -->
-  <rect x="64" y="472" width="1072" height="32" rx="6" fill="#1f2937" stroke="#30363d" stroke-width="1"/>
-  <text x="600" y="492" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,sans-serif" font-size="13" fill="#8b949e" text-anchor="middle">数据流：Prism.encode_request() → Context → LucentRequest → SDK 注册表 → provider/*/ → Provider JSON</text>
-
+  <!-- ===== Bottom: shared base + companions ===== -->
+  <rect x="64" y="516" width="1072" height="34" rx="7" fill="#161b22" stroke="#30363d" stroke-width="1"/>
+  <text x="278" y="538" font-family="ui-monospace,SFMono-Regular,Consolas,Liberation Mono,monospace" font-size="15" fill="#e6edf3">internal/ 共享基元：JSON 字段访问 · SSE 帧解析 · extras 合并 · usage 解析</text>
 </svg>
