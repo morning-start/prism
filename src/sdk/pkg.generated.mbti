@@ -79,6 +79,7 @@ pub struct Prism {
   provider : String
 }
 pub fn Prism::capability(Self, String) -> @lux.ProviderCapability?
+pub fn Prism::check_capability(Self, @lux.LucentRequest) -> Array[@lux.ConversionDiagnostic]
 pub fn Prism::complete(Self, String, PrismOptions, (String) -> Result[String, String]) -> Result[String, String]
 pub fn Prism::decode_response(Self, String) -> Result[String, String]
 pub fn Prism::decode_response_with_diagnostics(Self, String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String]

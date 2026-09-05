@@ -56,6 +56,8 @@ pub fn parse_reasoning_tokens(Json, Array[String]) -> Int?
 
 pub fn parse_sse_frame(String) -> Json?
 
+pub fn parse_sse_frame_with_reason(String) -> (Json?, String?)
+
 pub fn parse_sse_line(StringView) -> SseLine?
 
 pub fn parse_sse_message(String) -> SseMessage?

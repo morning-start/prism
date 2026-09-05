@@ -1,0 +1,27 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "morning-start/prism/conformance"
+
+// Values
+pub fn check_gemini_request(String) -> Array[String]
+
+pub fn check_gemini_response(String) -> Array[String]
+
+pub fn check_messages_request(String) -> Array[String]
+
+pub fn check_messages_response(String) -> Array[String]
+
+pub fn check_openai_request(String) -> Array[String]
+
+pub fn check_openai_response(String) -> Array[String]
+
+pub fn check_responses_request(String) -> Array[String]
+
+pub fn check_responses_response(String) -> Array[String]
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
