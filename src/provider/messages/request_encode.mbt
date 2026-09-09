@@ -55,8 +55,20 @@ fn content_to_block(
   diagnostics : Array[@lux.ConversionDiagnostic],
 ) -> String {
   match c {
-    Text(s, _) =>
+    Text(s, anns) => {
+      // annotations 是侧信道数据：anthropic 消息块无注解载体，显式 Degraded
+      match anns {
+        Some(_) =>
+          diagnostics.push(
+            @lux.ConversionDiagnostic::degraded(
+              "content.annotations",
+              Some("text annotations not supported by anthropic"),
+            ),
+          )
+        None => ()
+      }
       "{\"type\":\"text\",\"text\":\"" + @internal.json_escape(s) + "\"}"
+    }
     ToolUse(tu) =>
       match tool_use_input_fragment(tu, diagnostics) {
         Some(input_frag) =>

@@ -105,7 +105,20 @@ fn content_part_to_json(
   diagnostics : Array[@lux.ConversionDiagnostic],
 ) -> String? {
   match c {
-    Text(s, _) => Some(s)
+    Text(s, anns) => {
+      // annotations 是侧信道数据：openai-chat 无注解载体，显式 Degraded
+      match anns {
+        Some(_) =>
+          diagnostics.push(
+            @lux.ConversionDiagnostic::degraded(
+              "content.annotations",
+              Some("text annotations not supported by openai-chat"),
+            ),
+          )
+        None => ()
+      }
+      Some(s)
+    }
     ToolUse(tu) => {
       // 工具调用入 tool_calls 数组，不入 content
       out_tool_calls.push(
@@ -120,7 +133,11 @@ fn content_part_to_json(
       None
     }
     ToolResult(_) => None // tool 结果走独立 tool 角色消息
-    Thinking(_) => None // OpenAI Chat 无原生 thinking，编码时忽略
+    Thinking(_) => {
+      // OpenAI Chat 请求无原生 thinking carrier：显式 Unsupported，不静默丢弃
+      @lux.push_unsupported_content("thinking", "openai-chat", diagnostics)
+      None
+    }
     Refusal(s) => {
       out_refusal.push(s)
       None

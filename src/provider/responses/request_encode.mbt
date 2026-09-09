@@ -64,12 +64,24 @@ pub fn lux_request_to_responses(
         let mut j = 0
         while j < m.content.length() {
           match m.content[j] {
-            Text(s, _) =>
+            Text(s, anns) => {
+              // annotations 是侧信道数据：openai-responses 消息块无注解载体，显式 Degraded
+              match anns {
+                Some(_) =>
+                  diagnostics.push(
+                    @lux.ConversionDiagnostic::degraded(
+                      "content.annotations",
+                      Some("text annotations not supported by openai-responses"),
+                    ),
+                  )
+                None => ()
+              }
               content_parts.push(
                 "{\"type\":\"input_text\",\"text\":\"" +
                 @internal.json_escape(s) +
                 "\"}",
               )
+            }
             Image(mm) =>
               match mm.source {
                 Url(url) =>
@@ -143,6 +155,16 @@ pub fn lux_request_to_responses(
                 "\"}",
               )
             Thinking(th) => extra_items.push(reasoning_item_json(th))
+            Audio(_) =>
+              @lux.push_unsupported_content(
+                "audio", "openai-responses", diagnostics,
+              )
+            Native(tag, _) =>
+              @lux.push_unsupported(
+                "content.native",
+                "native content (" + tag + ") not supported by openai-responses",
+                diagnostics,
+              )
             _ => ()
           }
           j = j + 1
