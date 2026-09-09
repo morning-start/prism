@@ -203,6 +203,29 @@ pub fn json_escape(s : String) -> String {
       sb.write_string("\\t")
     } else if cp == '\r' {
       sb.write_string("\\r")
+    } else if cp.to_int() < 0x20 {
+      // JSON 控制字符（U+0000–U+001F）必须转义为 \uXXXX，否则产出非法 JSON
+      // 注意：String[i] 返回 UInt16 码元，不可直接 to_string()（会得到十进制）
+      let n = cp.to_int()
+      sb.write_string("\\u00")
+      sb.write_char(
+        Int::unsafe_to_char(
+          if n / 16 < 10 {
+            0x30 + n / 16
+          } else {
+            0x61 + n / 16 - 10
+          },
+        ),
+      )
+      sb.write_char(
+        Int::unsafe_to_char(
+          if n % 16 < 10 {
+            0x30 + n % 16
+          } else {
+            0x61 + n % 16 - 10
+          },
+        ),
+      )
     } else {
       sb.write_char(Int::unsafe_to_char(cp.to_int()))
     }

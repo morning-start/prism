@@ -170,6 +170,19 @@ test "json_escape - mixed content" {
 }
 
 ///|
+/// === regr_json_escape_control_chars ===
+/// 属性测试反例：控制字符（U+0000–U+001F）未转义 → 产出非法 JSON → round-trip 断裂
+test "regr_json_escape_control_chars" {
+  // DC3 (0x13)：必须转义为 \u0013
+  assert_eq(@internal.json_escape("\u{13}"), "\\u0013")
+  // NUL (0x00) 与 US (0x1f) 边界
+  assert_eq(@internal.json_escape("\u{00}"), "\\u0000")
+  assert_eq(@internal.json_escape("\u{1f}"), "\\u001f")
+  // 既有转义不受影响
+  assert_eq(@internal.json_escape("a\u{13}b\nc"), "a\\u0013b\\nc")
+}
+
+///|
 /// === obj_set ===
 test "obj_set - sets key in object" {
   let jv = parse("{\"k\":\"v\"}")
