@@ -21,14 +21,32 @@ fn gen_text_req() -> @gen.Gen[@lux.LucentRequest] {
     let models = ["gpt-4o", "gpt-4o-mini", "gpt-4.1"]
     let mstr : String = @coreqc.Arbitrary::arbitrary(size, r0)
     let model = models[mstr.length() % models.length()]
-    // instructions：None 或单条 Text
+    // instructions：None 或单条 Text；文本非空（responses 端点丢弃空
+    // instructions 属端点归一化差异，空文本不在公共交集无损子集内）
     let has_instr : Bool = @coreqc.Arbitrary::arbitrary(size, r1)
     let istr : String = @coreqc.Arbitrary::arbitrary(size, r2)
+    let instr_text = if istr == "" { "hi" } else { istr }
     let instructions = if has_instr {
-      Some([@lux.LucentContent::text(istr)])
+      Some([@lux.LucentContent::text(instr_text)])
     } else {
       None
     }
+    // max_output_tokens 显式化：anthropic 编码在 None 时注入默认 4096，
+    // 破坏 G5 跨端点差分一致性（无损子集要求该字段显式）
+    let max_str : String = @coreqc.Arbitrary::arbitrary(size, r2.split())
+    let max_tokens = Some(1 + max_str.length() % 4096)
+    let opts = @lux.LucentOptions::new(
+      None,
+      None,
+      None,
+      max_tokens,
+      None,
+      false,
+      None,
+      None,
+      None,
+      None,
+    )
     // conversation：1~3 条 User/Assistant 文本消息
     let nstr : String = @coreqc.Arbitrary::arbitrary(size, r3)
     let n_msgs = 1 + nstr.length() % 3
@@ -44,6 +62,7 @@ fn gen_text_req() -> @gen.Gen[@lux.LucentRequest] {
         Assistant
       }
       let txt : String = @coreqc.Arbitrary::arbitrary(size, r5)
+      let txt = if txt == "" { "hi" } else { txt }
       conv.push(
         @lux.LucentConversationItem::message(
           @lux.LucentMessage::new(role, [@lux.LucentContent::text(txt)]),
@@ -57,7 +76,7 @@ fn gen_text_req() -> @gen.Gen[@lux.LucentRequest] {
       conv,
       None,
       None,
-      @lux.LucentOptions::default(),
+      opts,
       None,
       None,
       None,

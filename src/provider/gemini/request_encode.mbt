@@ -109,10 +109,22 @@ pub fn lux_request_to_gemini(
         let mut j = 0
         while j < m.content.length() {
           match m.content[j] {
-            Text(s, _) =>
+            Text(s, anns) => {
+              // annotations 是侧信道数据：gemini part 无注解载体，显式 Degraded
+              match anns {
+                Some(_) =>
+                  diagnostics.push(
+                    @lux.ConversionDiagnostic::degraded(
+                      "content.annotations",
+                      Some("text annotations not supported by gemini"),
+                    ),
+                  )
+                None => ()
+              }
               content_parts.push(
                 "{\"text\":\"" + @internal.json_escape(s) + "\"}",
               )
+            }
             ToolUse(tu) =>
               content_parts.push(
                 "{\"functionCall\":{\"name\":\"" +
@@ -166,6 +178,20 @@ pub fn lux_request_to_gemini(
                   },
                 ) +
                 "\"}}",
+              )
+            Image(_) =>
+              // gemini 请求编码未映射 Image 内容块：显式 Unsupported，不静默丢弃
+              @lux.push_unsupported(
+                "content.image", "image content not supported by gemini encode",
+                diagnostics,
+              )
+            Audio(_) =>
+              @lux.push_unsupported_content("audio", "gemini", diagnostics)
+            Native(tag, _) =>
+              @lux.push_unsupported(
+                "content.native",
+                "native content (" + tag + ") not supported by gemini",
+                diagnostics,
               )
             _ => ()
           }

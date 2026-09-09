@@ -221,7 +221,15 @@ pub fn lux_response_to_gemini(
     None => ""
   }
   let result = @lux.ConversionResult::new(
-    "{\"candidates\":[" + cands.join(",") + "]" + usage_part + "}",
+    "{\"model\":\"" +
+    @internal.json_escape(resp.id) +
+    "\",\"modelVersion\":\"" +
+    @internal.json_escape(resp.model) +
+    "\",\"candidates\":[" +
+    cands.join(",") +
+    "]" +
+    usage_part +
+    "}",
   )
   Ok(result.with_diagnostics(diagnostics))
 }

@@ -97,6 +97,26 @@ jobs:
           moon info --target native
           git diff --exit-code -- '**/pkg.generated.mbti'
 
+  conformance:
+    name: Conformance (schema drift + property tests)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up MoonBit
+        uses: hustcer/setup-moonbit@v1
+
+      - name: Update dependencies
+        run: moon update
+
+      - name: Schema drift check (IR + adapter output fields, strict)
+        shell: pwsh
+        run: ./scripts/check_schema_drift.ps1 -Strict
+
+      - name: Run conformance property tests (native)
+        run: moon test --target native src/sdk/test
+
   coverage:
     name: Coverage Baseline
     runs-on: ubuntu-latest
