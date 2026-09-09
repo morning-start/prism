@@ -28,36 +28,26 @@ fn gen_text_resp() -> @gen.Gen[@lux.LucentResponse] {
     let models = ["gpt-4o", "claude-3-5-sonnet", "gemini-1.5-pro"]
     let idstr : String = @coreqc.Arbitrary::arbitrary(size, r0)
     let mstr : String = @coreqc.Arbitrary::arbitrary(size, r1)
-    let has_created : Bool = @coreqc.Arbitrary::arbitrary(size, r2)
-    let cint : Int = @coreqc.Arbitrary::arbitrary(size, r3)
-    let has_usage : Bool = @coreqc.Arbitrary::arbitrary(size, r4)
-    let usint : Int = @coreqc.Arbitrary::arbitrary(size, r5)
-    let created_at = if has_created {
-      Some(cint.abs() % 2000000000)
-    } else {
-      None
-    }
+    // created_at 恒 None：anthropic-messages 响应无 created_at 载体，
+    // 生成 Some 会破坏 G5 跨端点差分一致性（无损子集要求该字段缺席）
+    let created_at : Int? = None
+    let has_usage : Bool = @coreqc.Arbitrary::arbitrary(size, r2)
+    let usint : Int = @coreqc.Arbitrary::arbitrary(size, r3)
     let usage = if has_usage {
       let p = usint.abs() % 10000
       Some(@lux.LucentUsage::new(p, p / 2, p + p / 2))
     } else {
       None
     }
-    // choices：1~2 条 Assistant 单 Text 块
-    let nstr : String = @coreqc.Arbitrary::arbitrary(size, r5.split())
-    let n_choices = 1 + nstr.length() % 2
+    // choices：单条 Assistant 文本块（messages/responses 端点仅编码第一个
+    // choice，多 choice 不在公共交集无损子集内；文本非空同理）
     let choices : Array[@lux.LucentChoice] = []
-    let mut i = 0
-    while i < n_choices {
-      let r = r5.split()
-      let r_txt = r.split()
-      let txt : String = @coreqc.Arbitrary::arbitrary(size, r_txt)
-      let msg = @lux.LucentMessage::new(Assistant, [
-        @lux.LucentContent::text(txt),
-      ])
-      choices.push(@lux.LucentChoice::new(i, msg, Stop, None))
-      i = i + 1
-    }
+    let r = r5.split()
+    let r_txt = r.split()
+    let txt : String = @coreqc.Arbitrary::arbitrary(size, r_txt)
+    let txt = if txt == "" { "hi" } else { txt }
+    let msg = @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text(txt)])
+    choices.push(@lux.LucentChoice::new(0, msg, Stop, None))
     @lux.LucentResponse::new(
       pick_str(idstr.length(), ids),
       pick_str(mstr.length(), models),
