@@ -69,6 +69,62 @@ function Get-StreamEvents([string]$SchemaText, [string]$SourceText) {
   @{ Expected=$expected; Actual=$actual }
 }
 
+# === adapter 输出侧检查（G6） ===
+# 预期输出字段集来源：
+#   openai   -> .agent-workplace/research/api-protocol-converter/references/chat-completions-spec.md
+#   messages -> .agent-workplace/research/api-protocol-converter/references/messages-spec.md
+#   responses-> .agent-workplace/research/api-protocol-converter/references/responses-spec.md
+#   gemini   -> .agent-workplace/research/api-protocol-converter/references/three-protocol-guide.md
+# 规则：adapter request_encode 实际输出的 JSON 字段名必须是目标端点协议允许的字段；
+#       输出协议字段集之外的字段 = 漂移（拼写错误 / 未注册字段 / schema 失配）。
+
+function Get-AdapterExpectedFields([string]$Adapter) {
+  $sets = @{
+    "openai" = @("model","messages","max_tokens","temperature","top_p","stop","stream","store",
+      "response_format","tool_choice","tools","reasoning_effort","role","content","name",
+      "tool_call_id","tool_calls","refusal","type","text","image_url","url","function","id",
+      "arguments","description","parameters","strict","parallel_tool_calls","schema","json_schema")
+    "messages" = @("model","system","messages","max_tokens","temperature","top_p","top_k",
+      "stop_sequences","stream","metadata","tools","tool_choice","thinking","output_config",
+      "type","text","signature","thinking","id","name","input","is_error","tool_use_id",
+      "source","media_type","data","url","input_schema","description","budget_tokens","effort","format",
+      "schema","disable_parallel_tool_use","role","content")
+    "responses" = @("model","instructions","max_output_tokens","temperature","top_p","stream",
+      "store","tools","reasoning","parallel_tool_calls","type","role","content","id","call_id",
+      "name","arguments","output","status","summary","text","image_url","file_data","description",
+      "parameters","schema","strict","format","effort","input")
+    "gemini" = @("model","systemInstruction","contents","tools","toolConfig","generationConfig",
+      "role","parts","text","thought","thoughtSignature","functionCall","functionResponse",
+      "fileData","fileUri","mimeType","name","args","response","content","functionDeclarations",
+      "description","parameters","functionCallingConfig","mode","temperature","topP","topK",
+      "maxOutputTokens","stopSequences","responseMimeType","responseSchema","candidateCount",
+      "thinkingConfig","thinkingBudget","includeThoughts","thinkingLevel","inlineData","data")
+  }
+  $sets[$Adapter]
+}
+
+function Get-AdapterOutputFields([string]$SourceText) {
+  @([regex]::Matches($SourceText, '\\"([a-zA-Z_][a-zA-Z0-9_]*)\\":') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique)
+}
+
+function Invoke-AdapterOutputCheck([string]$Root) {
+  $issues = @()
+  $adapters = @{ "openai"="openai"; "messages"="messages"; "responses"="responses"; "gemini"="gemini" }
+  foreach ($entry in $adapters.GetEnumerator()) {
+    $dir = Join-Path (Join-Path (Join-Path $Root "src") "provider") $entry.Key
+    $file = Join-Path $dir "request_encode.mbt"
+    if (-not (Test-Path -LiteralPath $file)) { continue }
+    $src = Get-Content -Raw -Encoding UTF8 $file
+    $expected = @(Get-AdapterExpectedFields $entry.Value)
+    $actual = @(Get-AdapterOutputFields $src)
+    $unknown = @($actual | Where-Object { $expected -notcontains $_ } | Sort-Object)
+    if ($unknown.Count -gt 0) {
+      $issues += New-Issue "adapter_field" ("provider/" + $entry.Key + "/request_encode.mbt") ($unknown -join ",") ($actual -join ",") "JSON field(s) emitted by adapter are not in the target protocol field set"
+    }
+  }
+  $issues
+}
+
 function Invoke-Check($Schema, [string]$SchemaText, [string]$SourceText) {
   $issues = @()
   $expectedVersions = @(Get-SchemaVersions $SchemaText)
@@ -121,14 +177,22 @@ if ($SelfTest) {
   $needed = @("version", "required", "enum", "stream_event")
   $missing = @($needed | Where-Object { $found -notcontains $_ })
   if ($missing.Count -gt 0) { Write-Error ("self-test did not detect: " + ($missing -join ", ")); exit 1 }
-  Write-Output "self-test: PASS (version, required, enum, stream_event)"
+  # adapter 输出侧：在 openai 编码器样本中注入未知字段，必须被检出
+  $adapterSrc = Get-Content -Raw -Encoding UTF8 (Join-Path (Join-Path (Join-Path $Root "src") "provider/openai") "request_encode.mbt")
+  $injected = $adapterSrc.Replace('"\"model\":\""', '"\"model\":\"" + ",\"deliberate_adapter_field\":"')
+  $adapterExpected = @(Get-AdapterExpectedFields "openai")
+  $adapterActual = @(Get-AdapterOutputFields $injected)
+  $adapterUnknown = @($adapterActual | Where-Object { $adapterExpected -notcontains $_ })
+  if ($adapterUnknown -notcontains "deliberate_adapter_field") { Write-Error "self-test did not detect injected adapter field"; exit 1 }
+  Write-Output "self-test: PASS (version, required, enum, stream_event, adapter_field)"
   exit 0
 }
 
 $issues = @(Invoke-Check $schema $schemaText $source)
+$issues += @(Invoke-AdapterOutputCheck $Root)
 $mode = if ($Strict) { "strict" } else { "report" }
 Write-Output "schema drift checker (mode=$mode)"
-if ($issues.Count -eq 0) { Write-Output "PASS: schema and production Lux IR declarations are aligned"; exit 0 }
+if ($issues.Count -eq 0) { Write-Output "PASS: schema, production Lux IR declarations and adapter output fields are aligned"; exit 0 }
 foreach ($issue in $issues) { Write-Output ("[$($issue.Category)] $($issue.Location): $($issue.Message); expected=$($issue.Expected); actual=$($issue.Actual)") }
 Write-Output "Found $($issues.Count) drift issue(s)."
 if ($Strict) { exit 1 }
