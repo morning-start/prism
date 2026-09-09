@@ -7,4 +7,7 @@ import {
   "morning-start/prism/provider/responses",
   "morning-start/prism/provider/gemini",
   "moonbitlang/core/json",
+  "moonbitlang/core/quickcheck" @coreqc,
+  "moonbitlang/quickcheck" @qc,
+  "moonbitlang/quickcheck/gen",
 } for "test"
