@@ -1,8 +1,5 @@
 ///|
 /// WASM 内存管理：scratch buffer、LE 字节辅助、日志系统
-fn wasm_envelope_err(e : String) -> String {
-  "{\"error\":\"" + e + "\",\"diagnostics\":[]}"
-}
 
 ///|
 /// 通过 SDK 注册表查找 provider

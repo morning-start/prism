@@ -133,14 +133,6 @@ pub fn wasm_events_to_sse(provider : String, json_str : String) -> String {
 
 ///|
 /// 无诊断信封：{"value":...,"diagnostics":[]}（形状与带诊断信封一致）
-fn wasm_envelope(value : Json) -> String {
-  let fields : Map[String, Json] = {
-    "value": value,
-    "diagnostics": Json::array([]),
-  }
-  Json::object(fields).stringify()
-}
-
 ///|
 /// === SDK 层 API ===
 
