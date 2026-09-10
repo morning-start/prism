@@ -139,7 +139,6 @@ match prism.decode_sse(sse_text) {
 
 - [LINUX DO](https://linux.do)
 - [Moonbit 官方](https://www.moonbitlang.cn/)
-- <p>本项目的 AI API 支持由 <a href="https://tokeness.io">Tokeness.io</a>赞助提供。</p>
 
 ## 赞助感谢
 
