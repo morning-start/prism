@@ -75,4 +75,4 @@
 
 ## 7. 技术债（不影响放行）
 
-TD-FV-1..5：官方端点 schema 未获取；生成器未覆盖全部扩展变体（AgentAction 等）；drift 字段集手工维护；G5 生成域收窄；L2（moon prove）未实施（条件触发）。
+TD-FV-1..5：官方端点 schema 未获取；生成器未覆盖全部扩展变体（AgentAction 等）；drift 字段集手工维护；G5 生成域收窄；L2（moon prove）**已暂缓**（2026-09-09 决策：工具链缺失 + L3 已验证主体路径；重启条件见 design 文档 §9）。
