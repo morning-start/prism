@@ -206,7 +206,17 @@ pub fn lux_request_to_responses(
           "\"}",
         )
       Reasoning(th) => items.push(reasoning_item_json(th))
-      AgentAction(_) => ()
+      AgentAction(aa) =>
+        // Responses 请求 input 无 AgentAction 通用载体（仅 web_search_call /
+        // computer_call 等特定 item 类型）：不静默忽略，显式 Unsupported 诊断
+        diagnostics.push(
+          @lux.ConversionDiagnostic::unsupported(
+            "conversation.agent_action",
+            Some(
+              "agent_action (" + aa.kind + ") not supported by openai-responses",
+            ),
+          ),
+        )
     }
     i = i + 1
   }

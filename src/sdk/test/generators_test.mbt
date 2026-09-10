@@ -84,7 +84,8 @@ fn ext_block_by(pick : Int, txt : String) -> @lux.LucentContent {
 
 ///|
 /// 扩展字段请求生成器：conversation 1~3 条消息，首条必含 ≥1 个扩展内容块，
-/// 其余消息为文本；随机附 reasoning 配置与 capabilities 声明
+/// 其余消息为文本；随机插入 AgentAction 会话项；随机附 server tools、
+/// reasoning 配置与 capabilities 声明
 fn gen_extended_req() -> @gen.Gen[@lux.LucentRequest] {
   @gen.Gen(fn(size, r0) {
     let r1 = r0.split()
@@ -98,6 +99,23 @@ fn gen_extended_req() -> @gen.Gen[@lux.LucentRequest] {
     let conv : Array[@lux.LucentConversationItem] = []
     let mut i = 0
     while i < n_msgs {
+      // 随机插入 AgentAction 会话项（TD-FV-2 扩域）
+      let aa_pick : Bool = @coreqc.Arbitrary::arbitrary(size, r2.split())
+      if aa_pick && i > 0 {
+        conv.push(
+          @lux.LucentConversationItem::agent_action(
+            @lux.LucentAgentAction::new(
+              "browse",
+              "aa_" + i.to_string(),
+              Some("call_" + i.to_string()),
+              Some("web_search"),
+              Some("{}"),
+              None,
+              None,
+            ),
+          ),
+        )
+      }
       let r = r2.split()
       let r_blocks = r.split()
       let blocks : Array[@lux.LucentContent] = []
@@ -129,9 +147,48 @@ fn gen_extended_req() -> @gen.Gen[@lux.LucentRequest] {
       )
       i = i + 1
     }
+    // tools：随机 None 或含 server tools（WebSearch/CodeInterpreter/MCP）+ function
+    let has_tools : Bool = @coreqc.Arbitrary::arbitrary(size, r3)
+    let tk_pick : String = @coreqc.Arbitrary::arbitrary(size, r3.split())
+    let tools = if has_tools {
+      let server : @lux.LucentTool = match tk_pick.length() % 3 {
+        0 =>
+          @lux.LucentTool::new(
+            "web_search",
+            None,
+            "{}",
+            None,
+            @lux.LucentToolKind::WebSearch,
+          )
+        1 =>
+          @lux.LucentTool::new(
+            "code_interpreter",
+            None,
+            "{}",
+            None,
+            @lux.LucentToolKind::CodeInterpreter,
+          )
+        _ =>
+          @lux.LucentTool::new(
+            "mcp_tool",
+            None,
+            "{}",
+            None,
+            @lux.LucentToolKind::MCP,
+          )
+      }
+      Some([
+        @lux.LucentTool::simple(
+          "get_weather", "Get weather", "{\"type\":\"object\"}",
+        ),
+        server,
+      ])
+    } else {
+      None
+    }
     // reasoning：随机 None 或 enabled(预算)；capabilities：随机声明
-    let rb : Bool = @coreqc.Arbitrary::arbitrary(size, r3)
-    let rint : Int = @coreqc.Arbitrary::arbitrary(size, r4)
+    let rb : Bool = @coreqc.Arbitrary::arbitrary(size, r4)
+    let rint : Int = @coreqc.Arbitrary::arbitrary(size, r4.split())
     let reasoning = if rb {
       Some(@lux.LucentReasoningConfig::enabled(Some(rint.abs() % 1000 + 1)))
     } else {
@@ -147,7 +204,7 @@ fn gen_extended_req() -> @gen.Gen[@lux.LucentRequest] {
       pick_str(mstr.length(), models),
       None,
       conv,
-      None,
+      tools,
       None,
       @lux.LucentOptions::default(),
       capabilities,

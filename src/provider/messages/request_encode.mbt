@@ -321,7 +321,14 @@ pub fn lux_request_to_messages(
         msgs_json.push(
           "{\"role\":\"assistant\",\"content\":[" + thinking_to_block(th) + "]}",
         )
-      AgentAction(_) => ()
+      AgentAction(_) =>
+        // Anthropic Messages 无 AgentAction 载体：不静默忽略，显式 Unsupported 诊断
+        diagnostics.push(
+          @lux.ConversionDiagnostic::unsupported(
+            "conversation.agent_action",
+            Some("agent_action not supported by anthropic-messages"),
+          ),
+        )
     }
     i = i + 1
   }

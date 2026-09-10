@@ -244,7 +244,14 @@ pub fn lux_request_to_gemini(
           "}]}",
         )
       }
-      AgentAction(_) => ()
+      AgentAction(_) =>
+        // Gemini 无 AgentAction 载体：不静默忽略，显式 Unsupported 诊断
+        diagnostics.push(
+          @lux.ConversionDiagnostic::unsupported(
+            "conversation.agent_action",
+            Some("agent_action not supported by gemini"),
+          ),
+        )
     }
     i = i + 1
   }

@@ -41,7 +41,25 @@ fn thinking_ok(
 }
 
 ///|
-/// 请求中所有扩展内容块是否均「有表示或有诊断」
+/// 非 Function 工具类型在输出中的结构性标记（`"type":"<wire>"`），
+/// 用于判定 adapter 是否原生编码该工具（避免与工具名字符串误匹配）
+fn tool_kind_marker(kind : @lux.LucentToolKind) -> String {
+  match kind {
+    WebSearch => "\"type\":\"web_search\""
+    CodeInterpreter => "\"type\":\"code_interpreter\""
+    FileSearch => "\"type\":\"file_search\""
+    ComputerUse => "\"type\":\"computer_use\""
+    MCP => "\"type\":\"mcp\""
+    CodeExecution => "\"type\":\"code_execution\""
+    Shell => "\"type\":\"shell\""
+    ApplyPatch => "\"type\":\"apply_patch\""
+    Native(tag) => "\"type\":\"" + tag + "\""
+    _ => ""
+  }
+}
+
+///|
+/// 请求中所有扩展内容块 / AgentAction 会话项 / server tools 是否均「有表示或有诊断」
 fn req_ext_ok(
   req : @lux.LucentRequest,
   out : String,
@@ -70,8 +88,35 @@ fn req_ext_ok(
             ok = false
           }
         }
+      AgentAction(_) =>
+        // AgentAction 是 v1 占位：除 openai-responses 外各端点均无载体，
+        // 必须显式诊断（不静默丢弃）
+        if !(out.contains("agent_action") || has_diag(diags, "agent_action")) {
+          ok = false
+        }
       _ => ()
     }
+  }
+  // server tools：非 Function 工具类型必须原生编码（输出含 `"type":"<wire>"`）
+  // 或显式诊断（tools.kind / tools.mcp），绝不静默丢弃
+  match req.tools {
+    Some(tools) =>
+      for t in tools {
+        match t.kind {
+          Function => ()
+          _ => {
+            let marker = tool_kind_marker(t.kind)
+            if marker == "" {
+              ok = false
+            } else if !(out.contains(marker) ||
+              has_diag(diags, "tools.kind") ||
+              has_diag(diags, "tools.mcp")) {
+              ok = false
+            }
+          }
+        }
+      }
+    None => ()
   }
   ok
 }
