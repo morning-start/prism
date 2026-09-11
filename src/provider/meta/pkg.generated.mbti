@@ -1,0 +1,76 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "morning-start/prism/provider/meta"
+
+import {
+  "morning-start/prism/lux",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct FieldConstraint {
+  min_val : Double?
+  max_val : Double?
+  required : Bool
+  allowed_values : Array[String]?
+}
+pub fn FieldConstraint::allowed(Self) -> Array[String]?
+pub fn FieldConstraint::any() -> Self
+pub fn FieldConstraint::any_optional() -> Self
+pub fn FieldConstraint::any_required() -> Self
+pub fn FieldConstraint::is_required(Self) -> Bool
+pub fn FieldConstraint::max(Double) -> Self
+pub fn FieldConstraint::max_bound(Self) -> Double?
+pub fn FieldConstraint::min(Double) -> Self
+pub fn FieldConstraint::min_bound(Self) -> Double?
+pub fn FieldConstraint::min_required(Double) -> Self
+pub fn FieldConstraint::new(Double?, Double?, Bool, Array[String]?) -> Self
+pub fn FieldConstraint::one_of(Array[String]) -> Self
+pub fn FieldConstraint::range(Double, Double) -> Self
+pub fn FieldConstraint::range_required(Double, Double) -> Self
+pub fn FieldConstraint::required(Bool) -> Self
+
+pub struct ProviderMeta {
+  name : String
+  aliases : Array[String]
+  model_pattern : String
+  capability : @lux.ProviderCapability
+  schema : ProviderSchema
+}
+pub fn ProviderMeta::aliases(Self) -> Array[String]
+pub fn ProviderMeta::capability(Self) -> @lux.ProviderCapability
+pub fn ProviderMeta::model_pattern(Self) -> String
+pub fn ProviderMeta::name(Self) -> String
+pub fn ProviderMeta::new(String, Array[String], String, @lux.ProviderCapability, ProviderSchema) -> Self
+pub fn ProviderMeta::schema(Self) -> ProviderSchema
+
+pub struct ProviderSchema {
+  provider_name : String
+  temperature : FieldConstraint
+  top_p : FieldConstraint
+  top_k : FieldConstraint
+  max_output_tokens : FieldConstraint
+  resp_min_choices : Int
+  supports_tools : Bool
+  supports_system_instruction : Bool
+  supported_reasoning_efforts : Array[String]?
+  extra_checks : Array[() -> Array[String]]?
+}
+pub fn ProviderSchema::max_output_tokens(Self) -> FieldConstraint
+pub fn ProviderSchema::new(String, FieldConstraint, FieldConstraint, FieldConstraint, FieldConstraint, Int, Bool, Bool, Array[String]?, Array[() -> Array[String]]?) -> Self
+pub fn ProviderSchema::provider_name(Self) -> String
+pub fn ProviderSchema::resp_min_choices(Self) -> Int
+pub fn ProviderSchema::supported_reasoning_efforts(Self) -> Array[String]?
+pub fn ProviderSchema::supports_system_instruction(Self) -> Bool
+pub fn ProviderSchema::supports_tools(Self) -> Bool
+pub fn ProviderSchema::temperature(Self) -> FieldConstraint
+pub fn ProviderSchema::top_k(Self) -> FieldConstraint
+pub fn ProviderSchema::top_p(Self) -> FieldConstraint
+pub fn ProviderSchema::validate_request(Self, @lux.LucentRequest) -> Array[String]
+pub fn ProviderSchema::validate_response(Self, @lux.LucentResponse) -> Array[String]
+
+// Type aliases
+
+// Traits

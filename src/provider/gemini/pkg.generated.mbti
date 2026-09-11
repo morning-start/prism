@@ -3,6 +3,7 @@ package "morning-start/prism/provider/gemini"
 
 import {
   "morning-start/prism/lux",
+  "morning-start/prism/provider/meta",
 }
 
 // Values
@@ -19,6 +20,10 @@ pub fn lux_events_to_gemini_sse(Array[@lux.LucentStreamEvent]) -> Result[@lux.Co
 pub fn lux_request_to_gemini(@lux.LucentRequest) -> Result[@lux.ConversionResult[String], String]
 
 pub fn lux_response_to_gemini(@lux.LucentResponse) -> Result[@lux.ConversionResult[String], String]
+
+pub fn metadata() -> @meta.ProviderMeta
+
+pub fn schema() -> @meta.ProviderSchema
 
 // Errors
 

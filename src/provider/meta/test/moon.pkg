@@ -1,3 +1,4 @@
 import {
   "morning-start/prism/provider/meta",
-}
+  "morning-start/prism/lux",
+} for "test"

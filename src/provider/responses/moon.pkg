@@ -1,5 +1,6 @@
 import {
   "morning-start/prism/internal",
   "morning-start/prism/lux",
+  "morning-start/prism/provider/meta",
   "moonbitlang/core/json",
 }

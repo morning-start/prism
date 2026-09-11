@@ -1,5 +1,6 @@
 import {
   "morning-start/prism/lux",
+  "morning-start/prism/provider/meta",
   "morning-start/prism/provider/responses",
   "morning-start/prism/provider/openai",
   "morning-start/prism/provider/messages",

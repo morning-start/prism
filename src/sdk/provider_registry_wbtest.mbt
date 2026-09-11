@@ -131,3 +131,108 @@ test "check_capability - declaration matches tool support" {
     }
   }
 }
+
+///|
+/// === 元数据唯一源一致性（provider meta ↔ registry ↔ schema facade）===
+///
+/// 这三条不变量是「provider 元数据唯一源」重构的验收条件：
+/// registry 只能搬运 `meta.mbt` 的数据，schema facade 不得与 meta 漂移。
+
+///|
+/// 注册项的每个身份字段都必须逐一等于 provider 自己的 metadata()，
+/// 且顺序必须与 build_providers 声明的状态一致。
+test "registry - registrations mirror provider metadata" {
+  let providers = build_providers()
+  assert_eq(providers.length(), 4)
+  let expected_names = ["responses", "openai", "messages", "gemini"]
+  let metas = [
+    @responses.metadata(),
+    @openai.metadata(),
+    @messages.metadata(),
+    @gemini.metadata(),
+  ]
+  let mut i = 0
+  while i < providers.length() {
+    let reg = providers[i]
+    let meta = metas[i]
+    assert_eq(reg.name, expected_names[i])
+    assert_eq(reg.name, meta.name())
+    assert_eq(reg.model_pattern, meta.model_pattern())
+    assert_eq(reg.aliases, meta.aliases())
+    assert_eq(reg.capability, meta.capability())
+    i = i + 1
+  }
+}
+
+///|
+/// 每个 alias 都必须解析回它所属的注册项（别名不在 registry 里重复声明）。
+test "registry - every alias resolves to its own provider" {
+  for reg in build_providers() {
+    for alias_name in reg.aliases {
+      match match_provider_name(alias_name) {
+        Some(found) => assert_eq(found.name, reg.name)
+        None => fail("alias " + alias_name + " must resolve")
+      }
+    }
+  }
+}
+
+///|
+/// `all_providers()` 是 `build_providers()` 的只读投影（顺序一致）。
+test "registry - all_providers mirrors build_providers" {
+  let snapshot = all_providers()
+  let expected = build_providers()
+  assert_eq(snapshot.length(), expected.length())
+  let mut i = 0
+  while i < snapshot.length() {
+    assert_eq(snapshot[i].name, expected[i].name)
+    i = i + 1
+  }
+}
+
+///|
+/// 声明漂移闸门：registry 承载的 schema 必须与 sdk 兼容 facade
+/// (`get_schema` → `ProviderSchema::openai/anthropic/gemini`) 完全一致。
+/// responses 复用 openai 家族约束，messages 复用 anthropic。
+test "registry - metadata schema matches sdk facade schema" {
+  let providers = build_providers()
+  let facade_names = ["openai", "openai", "anthropic", "gemini"]
+  let mut i = 0
+  while i < providers.length() {
+    let facade_name = facade_names[i]
+    let actual = providers[i].schema
+    match get_schema(facade_name) {
+      Some(facade) => {
+        assert_eq(actual.provider_name(), facade.provider_name)
+        assert_eq(actual.resp_min_choices(), facade.resp_min_choices)
+        assert_eq(actual.supports_tools(), facade.supports_tools)
+        assert_eq(
+          actual.supports_system_instruction(),
+          facade.supports_system_instruction,
+        )
+        assert_eq(actual.temperature().min_bound(), facade.temperature.min_val)
+        assert_eq(actual.temperature().max_bound(), facade.temperature.max_val)
+        assert_eq(
+          actual.temperature().is_required(),
+          facade.temperature.required,
+        )
+        assert_eq(actual.top_p().min_bound(), facade.top_p.min_val)
+        assert_eq(actual.top_p().max_bound(), facade.top_p.max_val)
+        assert_eq(actual.top_k().min_bound(), facade.top_k.min_val)
+        assert_eq(actual.top_k().max_bound(), facade.top_k.max_val)
+        assert_eq(
+          actual.max_output_tokens().min_bound(),
+          facade.max_output_tokens.min_val,
+        )
+        assert_eq(
+          actual.max_output_tokens().max_bound(),
+          facade.max_output_tokens.max_val,
+        )
+        assert_true(actual.supported_reasoning_efforts() is None)
+        assert_true(facade.supported_reasoning_efforts is None)
+      }
+      None => fail("facade schema missing for " + facade_name)
+    }
+    i = i + 1
+  }
+}

@@ -3,6 +3,7 @@ package "morning-start/prism/provider/responses"
 
 import {
   "morning-start/prism/lux",
+  "morning-start/prism/provider/meta",
 }
 
 // Values
@@ -14,6 +15,8 @@ pub fn lux_request_to_responses(@lux.LucentRequest) -> Result[@lux.ConversionRes
 
 pub fn lux_response_to_responses(@lux.LucentResponse) -> Result[@lux.ConversionResult[String], String]
 
+pub fn metadata() -> @meta.ProviderMeta
+
 pub fn responses_json_to_lux_response(Json) -> Result[@lux.ConversionResult[@lux.LucentResponse], String]
 
 pub fn responses_sse_to_events(String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String]
@@ -21,6 +24,8 @@ pub fn responses_sse_to_events(String) -> Result[@lux.ConversionResult[Array[@lu
 pub fn responses_to_lux_request(String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String]
 
 pub fn responses_to_lux_response(String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String]
+
+pub fn schema() -> @meta.ProviderSchema
 
 // Errors
 

@@ -3,6 +3,7 @@ package "morning-start/prism/provider/messages"
 
 import {
   "morning-start/prism/lux",
+  "morning-start/prism/provider/meta",
 }
 
 // Values
@@ -19,6 +20,10 @@ pub fn messages_sse_to_events(String) -> Result[@lux.ConversionResult[Array[@lux
 pub fn messages_to_lux_request(String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String]
 
 pub fn messages_to_lux_response(String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String]
+
+pub fn metadata() -> @meta.ProviderMeta
+
+pub fn schema() -> @meta.ProviderSchema
 
 // Errors
 
