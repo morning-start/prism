@@ -16,7 +16,7 @@
 ///|
 /// 有损请求生成器：max_output_tokens 可缺省、文本可空（放宽 G5 无损域）
 fn gen_lossy_req() -> @gen.Gen[@lux.LucentRequest] {
-  @gen.Gen(fn(size, r0) {
+  Gen(fn(size, r0) {
     let r1 = r0.split()
     let r2 = r1.split()
     let r3 = r2.split()
@@ -92,7 +92,7 @@ fn gen_lossy_req() -> @gen.Gen[@lux.LucentRequest] {
 ///|
 /// 有损响应生成器：created_at 可缺省、多 choice（放宽 G5 无损域）
 fn gen_lossy_resp() -> @gen.Gen[@lux.LucentResponse] {
-  @gen.Gen(fn(size, r0) {
+  Gen(fn(size, r0) {
     let r1 = r0.split()
     let r2 = r1.split()
     let r3 = r2.split()

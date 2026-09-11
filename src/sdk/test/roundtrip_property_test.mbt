@@ -12,7 +12,7 @@
 /// 文本请求生成器：model 随机、instructions 0~1 条 Text、conversation 1~3 条
 /// User/Assistant 文本消息（每条恰好一个 Text 块，避免 encode 侧多 Text 拼接致损）
 fn gen_text_req() -> @gen.Gen[@lux.LucentRequest] {
-  @gen.Gen(fn(size, r0) {
+  Gen(fn(size, r0) {
     let r1 = r0.split()
     let r2 = r1.split()
     let r3 = r2.split()

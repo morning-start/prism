@@ -18,7 +18,7 @@ fn pick_str(n : Int, pool : Array[String]) -> String {
 /// 文本响应生成器：id/model 随机、choices 1~2 条（Assistant 单 Text 块、Stop）、
 /// created_at/usage 可选（None 或简单值）
 fn gen_text_resp() -> @gen.Gen[@lux.LucentResponse] {
-  @gen.Gen(fn(size, r0) {
+  Gen(fn(size, r0) {
     let r1 = r0.split()
     let r2 = r1.split()
     let r3 = r2.split()
@@ -87,7 +87,7 @@ fn ext_block_by(pick : Int, txt : String) -> @lux.LucentContent {
 /// 其余消息为文本；随机插入 AgentAction 会话项；随机附 server tools、
 /// reasoning 配置与 capabilities 声明
 fn gen_extended_req() -> @gen.Gen[@lux.LucentRequest] {
-  @gen.Gen(fn(size, r0) {
+  Gen(fn(size, r0) {
     let r1 = r0.split()
     let r2 = r1.split()
     let r3 = r2.split()
@@ -152,30 +152,16 @@ fn gen_extended_req() -> @gen.Gen[@lux.LucentRequest] {
     let tk_pick : String = @coreqc.Arbitrary::arbitrary(size, r3.split())
     let tools = if has_tools {
       let server : @lux.LucentTool = match tk_pick.length() % 3 {
-        0 =>
-          @lux.LucentTool::new(
-            "web_search",
-            None,
-            "{}",
-            None,
-            @lux.LucentToolKind::WebSearch,
-          )
+        0 => @lux.LucentTool::new("web_search", None, "{}", None, WebSearch)
         1 =>
           @lux.LucentTool::new(
             "code_interpreter",
             None,
             "{}",
             None,
-            @lux.LucentToolKind::CodeInterpreter,
+            CodeInterpreter,
           )
-        _ =>
-          @lux.LucentTool::new(
-            "mcp_tool",
-            None,
-            "{}",
-            None,
-            @lux.LucentToolKind::MCP,
-          )
+        _ => @lux.LucentTool::new("mcp_tool", None, "{}", None, MCP)
       }
       Some([
         @lux.LucentTool::simple(

@@ -95,8 +95,8 @@ function Get-AdapterExpectedFields([string]$Adapter) {
       "parameters","schema","strict","format","effort","input")
     "gemini" = @("model","systemInstruction","contents","tools","toolConfig","generationConfig",
       "role","parts","text","thought","thoughtSignature","functionCall","functionResponse",
-      "fileData","fileUri","mimeType","name","args","response","content","functionDeclarations",
-      "description","parameters","functionCallingConfig","mode","temperature","topP","topK",
+      "fileData","fileUri","mimeType","name","args","id","response","content","functionDeclarations",
+      "description","parameters","functionCallingConfig","mode","allowedFunctionNames","temperature","topP","topK",
       "maxOutputTokens","stopSequences","responseMimeType","responseSchema","candidateCount",
       "thinkingConfig","thinkingBudget","includeThoughts","thinkingLevel","inlineData","data")
   }
