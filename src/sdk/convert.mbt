@@ -20,7 +20,7 @@ pub fn ConvertMetaResult::new(
   value : String,
   meta : ConversionMeta,
 ) -> ConvertMetaResult {
-  { value, meta }
+  { value, meta, }
 }
 
 ///|

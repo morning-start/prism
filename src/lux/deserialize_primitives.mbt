@@ -75,7 +75,7 @@ pub fn LucentMultimedia::from_json(
           }
         None => return Err("missing source")
       }
-      Ok({ media_type, source })
+      Ok({ media_type, source, })
     }
     _ => Err("expected object for LucentMultimedia")
   }
@@ -117,7 +117,7 @@ pub fn LucentAnnotation::from_json(
       let reference = get_str_opt(m, "ref")
       let start = get_int_opt(m, "start")
       let end_ = get_int_opt(m, "end")
-      Ok({ kind: km, text, reference, start, end: end_ })
+      Ok({ kind: km, text, reference, start, end: end_, })
     }
     _ => Err("expected object for LucentAnnotation")
   }
@@ -140,7 +140,7 @@ pub fn LucentThinking::from_json(jv : Json) -> Result[LucentThinking, String] {
       let summary_opt : Array[LucentContent]? = get_arr_content_opt(
         m, "summary",
       )
-      Ok({ text, signature, redacted, summary: summary_opt })
+      Ok({ text, signature, redacted, summary: summary_opt, })
     }
     _ => Err("expected object for LucentThinking")
   }
@@ -163,7 +163,7 @@ pub fn LucentToolUse::from_json(jv : Json) -> Result[LucentToolUse, String] {
         Ok(s) => s
         Err(e) => return Err(e)
       }
-      Ok({ id, name, arguments_json, arguments_value: None })
+      Ok({ id, name, arguments_json, arguments_value: None, })
     }
     _ => Err("expected object for LucentToolUse")
   }
@@ -188,7 +188,7 @@ pub fn LucentToolResult::from_json(
         Ok(b) => b
         Err(e) => return Err(e)
       }
-      Ok({ tool_use_id, content, is_error })
+      Ok({ tool_use_id, content, is_error, })
     }
     _ => Err("expected object for LucentToolResult")
   }
@@ -217,7 +217,7 @@ pub fn LucentAgentAction::from_json(
         Some(j) => Some(j)
         None => None
       }
-      Ok({ kind, id, call_id, name, arguments_json, result, provider_payload })
+      Ok({ kind, id, call_id, name, arguments_json, result, provider_payload, })
     }
     _ => Err("expected object for LucentAgentAction")
   }

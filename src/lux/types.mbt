@@ -344,7 +344,7 @@ pub fn ProviderCapability::new(
   capabilities : LucentCapabilities,
   extra_params : Map[String, Json]?,
 ) -> ProviderCapability {
-  { model_pattern, provider, capabilities, extra_params }
+  { model_pattern, provider, capabilities, extra_params, }
 }
 
 ///|
@@ -370,7 +370,7 @@ pub fn ConversionDiagnostic::new(
   status : ConversionStatus,
   detail : String?,
 ) -> ConversionDiagnostic {
-  { field, status, detail }
+  { field, status, detail, }
 }
 
 ///|
@@ -383,7 +383,7 @@ pub struct ConversionResult[T] {
 
 ///|
 pub fn[T] ConversionResult::new(value : T) -> ConversionResult[T] {
-  { value, diagnostics: [] }
+  { value, diagnostics: [], }
 }
 
 ///|
@@ -424,7 +424,7 @@ pub fn[T] ConversionResult::with_diagnostics(
   for d in diagnostics {
     all.push(d)
   }
-  { ..self, diagnostics: all }
+  { ..self, diagnostics: all, }
 }
 
 ///|
@@ -433,7 +433,7 @@ pub fn ConversionDiagnostic::unsupported(
   field : String,
   detail : String?,
 ) -> ConversionDiagnostic {
-  { field, status: Unsupported, detail }
+  { field, status: Unsupported, detail, }
 }
 
 ///|
@@ -442,7 +442,7 @@ pub fn ConversionDiagnostic::degraded(
   field : String,
   detail : String?,
 ) -> ConversionDiagnostic {
-  { field, status: Degraded, detail }
+  { field, status: Degraded, detail, }
 }
 
 ///|
@@ -469,5 +469,5 @@ pub fn LucentDiscovery::new(
   schema_url : String,
   providers : Array[ProviderCapability],
 ) -> LucentDiscovery {
-  { schema_version: "v1", protocol_version, schema_url, providers }
+  { schema_version: "v1", protocol_version, schema_url, providers, }
 }

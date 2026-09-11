@@ -31,7 +31,7 @@ pub fn ConversionMeta::new(
   provider_payload : Json?,
   extra_fields : Map[String, Json]?,
 ) -> ConversionMeta {
-  { source_provider, diagnostics, provider_payload, extra_fields }
+  { source_provider, diagnostics, provider_payload, extra_fields, }
 }
 
 ///|
@@ -46,7 +46,7 @@ pub fn DecodedResponse::new(
   text : String,
   meta : ConversionMeta,
 ) -> DecodedResponse {
-  { text, meta }
+  { text, meta, }
 }
 
 ///|
@@ -78,7 +78,7 @@ pub fn PrismOptions::new(
   store : Bool?,
   extras : Map[String, Json]?,
 ) -> PrismOptions {
-  { model, temperature, max_tokens, store, extras }
+  { model, temperature, max_tokens, store, extras, }
 }
 
 ///|
@@ -89,13 +89,13 @@ pub struct Prism {
 
 ///|
 pub fn Prism::new() -> Prism {
-  { provider: DEFAULT_PROVIDER }
+  { provider: DEFAULT_PROVIDER, }
 }
 
 ///|
 /// 设置 provider 名称
 pub fn Prism::with_provider(_self : Prism, name : String) -> Prism {
-  { provider: name }
+  { provider: name, }
 }
 
 ///|

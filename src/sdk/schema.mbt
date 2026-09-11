@@ -30,7 +30,7 @@ pub fn FieldConstraint::new(
   required : Bool,
   allowed_values : Array[String]?,
 ) -> FieldConstraint {
-  { min_val, max_val, required, allowed_values }
+  { min_val, max_val, required, allowed_values, }
 }
 
 ///|

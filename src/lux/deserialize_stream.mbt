@@ -166,7 +166,7 @@ pub fn ProviderCapability::from_json(
         Some(Object(map)) => Some(map)
         _ => None
       }
-      Ok({ model_pattern, provider, capabilities, extra_params })
+      Ok({ model_pattern, provider, capabilities, extra_params, })
     }
     _ => Err("expected object for ProviderCapability")
   }
@@ -193,7 +193,7 @@ pub fn LucentDiscovery::from_json(jv : Json) -> Result[LucentDiscovery, String] 
         Ok(v) => v
         Err(e) => return Err(e)
       }
-      Ok({ schema_version, protocol_version, schema_url, providers })
+      Ok({ schema_version, protocol_version, schema_url, providers, })
     }
     _ => Err("expected object for LucentDiscovery")
   }

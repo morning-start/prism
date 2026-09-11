@@ -8,12 +8,12 @@ pub struct ValidateResult {
 
 ///|
 pub fn ValidateResult::ok() -> ValidateResult {
-  { valid: true, errors: [], warnings: [] }
+  { valid: true, errors: [], warnings: [], }
 }
 
 ///|
 pub fn ValidateResult::error(msg : String) -> ValidateResult {
-  { valid: false, errors: [msg], warnings: [] }
+  { valid: false, errors: [msg], warnings: [], }
 }
 
 ///|
@@ -54,7 +54,7 @@ pub fn LucentRequest::validate(self : LucentRequest) -> ValidateResult {
       }
     None => ()
   }
-  { valid: errors.length() == 0, errors, warnings }
+  { valid: errors.length() == 0, errors, warnings, }
 }
 
 ///|
@@ -70,7 +70,7 @@ pub fn LucentResponse::validate(self : LucentResponse) -> ValidateResult {
   if self.choices.length() == 0 {
     errors.push("response must have at least one choice")
   }
-  { valid: errors.length() == 0, errors, warnings: [] }
+  { valid: errors.length() == 0, errors, warnings: [], }
 }
 
 ///|
@@ -88,7 +88,7 @@ pub fn LucentRequest::with_stream(
   self : LucentRequest,
   stream : Bool,
 ) -> LucentRequest {
-  { ..self, options: { ..self.options, stream, } }
+  { ..self, options: { ..self.options, stream, }, }
 }
 
 ///|
@@ -178,7 +178,7 @@ pub fn LucentSafetyRating::new(
   category : String,
   probability : String,
 ) -> LucentSafetyRating {
-  { category, probability }
+  { category, probability, }
 }
 
 ///|
@@ -188,7 +188,7 @@ pub fn LucentChoice::new(
   finish_reason : LucentFinishReason,
   safety_ratings : Array[LucentSafetyRating]?,
 ) -> LucentChoice {
-  { index, message, finish_reason, safety_ratings }
+  { index, message, finish_reason, safety_ratings, }
 }
 
 ///|
@@ -217,7 +217,7 @@ pub fn LucentResponse::with_provider_payload(
   self : LucentResponse,
   payload : Json?,
 ) -> LucentResponse {
-  { ..self, provider_payload: payload }
+  { ..self, provider_payload: payload, }
 }
 
 ///|

@@ -21,7 +21,7 @@ pub struct SdkMessage {
 
 ///|
 pub fn SdkMessage::new(role : String, content : String) -> SdkMessage {
-  { role, content, tool_use_id: None, is_error: None }
+  { role, content, tool_use_id: None, is_error: None, }
 }
 
 ///|
@@ -53,7 +53,7 @@ pub fn SdkTool::new(
   description : String,
   parameters_json : String,
 ) -> SdkTool {
-  { name, description, parameters_json }
+  { name, description, parameters_json, }
 }
 
 ///|
@@ -66,13 +66,13 @@ pub struct Context {
 
 ///|
 pub fn Context::new() -> Context {
-  { system_prompt: None, messages: [], tools: None }
+  { system_prompt: None, messages: [], tools: None, }
 }
 
 ///|
 /// 设置系统指令
 pub fn Context::add_system(self : Context, prompt : String) -> Context {
-  { ..self, system_prompt: Some(prompt) }
+  { ..self, system_prompt: Some(prompt), }
 }
 
 ///|
@@ -90,7 +90,7 @@ pub fn Context::add_assistant(self : Context, text : String) -> Context {
 ///|
 /// 添加工具
 pub fn Context::add_tools(self : Context, tools : Array[SdkTool]) -> Context {
-  { ..self, tools: Some(tools) }
+  { ..self, tools: Some(tools), }
 }
 
 ///|
@@ -100,7 +100,7 @@ pub fn Context::add_tools(self : Context, tools : Array[SdkTool]) -> Context {
 fn Context::push_msg(self : Context, msg : SdkMessage) -> Context {
   let new_msgs = self.messages.copy()
   new_msgs.push(msg)
-  { ..self, messages: new_msgs }
+  { ..self, messages: new_msgs, }
 }
 
 ///|

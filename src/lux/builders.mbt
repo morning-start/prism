@@ -56,7 +56,7 @@ pub fn LucentMultimedia::new(
   media_type : String,
   source : LucentMediaSource,
 ) -> LucentMultimedia {
-  { media_type, source }
+  { media_type, source, }
 }
 
 ///|
@@ -67,7 +67,7 @@ pub fn LucentAnnotation::new(
   start : Int?,
   end : Int?,
 ) -> LucentAnnotation {
-  { kind, text, reference, start, end }
+  { kind, text, reference, start, end, }
 }
 
 ///|
@@ -77,7 +77,7 @@ pub fn LucentThinking::new(
   redacted : Bool,
   summary : Array[LucentContent]?,
 ) -> LucentThinking {
-  { text, signature, redacted, summary }
+  { text, signature, redacted, summary, }
 }
 
 ///|
@@ -85,12 +85,12 @@ pub fn LucentThinking::visible(
   text : String,
   signature : String?,
 ) -> LucentThinking {
-  { text, signature, redacted: false, summary: None }
+  { text, signature, redacted: false, summary: None, }
 }
 
 ///|
 pub fn LucentThinking::redacted(signature : String?) -> LucentThinking {
-  { text: "", signature, redacted: true, summary: None }
+  { text: "", signature, redacted: true, summary: None, }
 }
 
 ///|
@@ -100,7 +100,7 @@ pub fn LucentToolUse::new(
   arguments_json : String,
   arguments_value : Json?,
 ) -> LucentToolUse {
-  { id, name, arguments_json, arguments_value }
+  { id, name, arguments_json, arguments_value, }
 }
 
 ///|
@@ -109,7 +109,7 @@ pub fn LucentToolResult::new(
   content : Array[LucentContent],
   is_error : Bool,
 ) -> LucentToolResult {
-  { tool_use_id, content, is_error }
+  { tool_use_id, content, is_error, }
 }
 
 ///|
@@ -117,7 +117,7 @@ pub fn LucentToolResult::ok(
   tool_use_id : String,
   content : Array[LucentContent],
 ) -> LucentToolResult {
-  { tool_use_id, content, is_error: false }
+  { tool_use_id, content, is_error: false, }
 }
 
 ///|
@@ -125,7 +125,7 @@ pub fn LucentToolResult::error(
   tool_use_id : String,
   content : Array[LucentContent],
 ) -> LucentToolResult {
-  { tool_use_id, content, is_error: true }
+  { tool_use_id, content, is_error: true, }
 }
 
 ///|
@@ -138,7 +138,7 @@ pub fn LucentAgentAction::new(
   result : String?,
   provider_payload : Json?,
 ) -> LucentAgentAction {
-  { kind, id, call_id, name, arguments_json, result, provider_payload }
+  { kind, id, call_id, name, arguments_json, result, provider_payload, }
 }
 
 ///|
@@ -161,7 +161,7 @@ pub fn LucentContent::tool_use(
   arguments_json : String,
   arguments_value : Json?,
 ) -> LucentContent {
-  ToolUse({ id, name, arguments_json, arguments_value })
+  ToolUse({ id, name, arguments_json, arguments_value, })
 }
 
 ///|
@@ -169,7 +169,7 @@ pub fn LucentContent::tool_result(
   tool_use_id : String,
   content : Array[LucentContent],
 ) -> LucentContent {
-  ToolResult({ tool_use_id, content, is_error: false })
+  ToolResult({ tool_use_id, content, is_error: false, })
 }
 
 ///|
@@ -177,7 +177,7 @@ pub fn LucentContent::tool_result_error(
   tool_use_id : String,
   content : Array[LucentContent],
 ) -> LucentContent {
-  ToolResult({ tool_use_id, content, is_error: true })
+  ToolResult({ tool_use_id, content, is_error: true, })
 }
 
 ///|
@@ -185,12 +185,12 @@ pub fn LucentContent::thinking(
   text : String,
   signature : String?,
 ) -> LucentContent {
-  Thinking({ text, signature, redacted: false, summary: None })
+  Thinking({ text, signature, redacted: false, summary: None, })
 }
 
 ///|
 pub fn LucentContent::redacted_thinking(signature : String?) -> LucentContent {
-  Thinking({ text: "", signature, redacted: true, summary: None })
+  Thinking({ text: "", signature, redacted: true, summary: None, })
 }
 
 ///|
@@ -203,7 +203,7 @@ pub fn LucentContent::image(
   media_type : String,
   source : LucentMediaSource,
 ) -> LucentContent {
-  Image({ media_type, source })
+  Image({ media_type, source, })
 }
 
 ///|
@@ -212,7 +212,7 @@ pub fn LucentContent::file(
   media_type : String,
   source : LucentMediaSource,
 ) -> LucentContent {
-  File({ media_type, source })
+  File({ media_type, source, })
 }
 
 ///|
@@ -220,7 +220,7 @@ pub fn LucentContent::audio(
   media_type : String,
   source : LucentMediaSource,
 ) -> LucentContent {
-  Audio({ media_type, source })
+  Audio({ media_type, source, })
 }
 
 ///|
@@ -228,7 +228,7 @@ pub fn LucentContent::video(
   media_type : String,
   source : LucentMediaSource,
 ) -> LucentContent {
-  Video({ media_type, source })
+  Video({ media_type, source, })
 }
 
 ///|
@@ -241,7 +241,7 @@ pub fn LucentMessage::new(
   role : LucentRole,
   content : Array[LucentContent],
 ) -> LucentMessage {
-  { role, content, phase: None, reasoning: None }
+  { role, content, phase: None, reasoning: None, }
 }
 
 ///|
@@ -250,7 +250,7 @@ pub fn LucentMessage::with_phase(
   content : Array[LucentContent],
   phase : String?,
 ) -> LucentMessage {
-  { role, content, phase, reasoning: None }
+  { role, content, phase, reasoning: None, }
 }
 
 ///|
@@ -260,7 +260,7 @@ pub fn LucentMessage::with_reasoning(
   content : Array[LucentContent],
   reasoning : LucentThinking?,
 ) -> LucentMessage {
-  { role, content, phase: None, reasoning }
+  { role, content, phase: None, reasoning, }
 }
 
 ///|
@@ -318,7 +318,7 @@ pub fn LucentTool::new(
   strict : Bool?,
   kind : LucentToolKind,
 ) -> LucentTool {
-  { name, description, parameters_json, strict, kind }
+  { name, description, parameters_json, strict, kind, }
 }
 
 ///|
@@ -417,7 +417,7 @@ pub fn LucentCapabilities::create(
 
 ///|
 pub fn LucentReasoningConfig::enabled(budget : Int?) -> LucentReasoningConfig {
-  { enabled: true, budget_tokens: budget, effort: None, summary: None }
+  { enabled: true, budget_tokens: budget, effort: None, summary: None, }
 }
 
 ///|
@@ -425,12 +425,12 @@ pub fn LucentReasoningConfig::new(
   effort : LucentReasoningEffort?,
   summary : LucentReasoningSummary?,
 ) -> LucentReasoningConfig {
-  { enabled: true, budget_tokens: None, effort, summary }
+  { enabled: true, budget_tokens: None, effort, summary, }
 }
 
 ///|
 pub fn LucentReasoningConfig::disabled() -> LucentReasoningConfig {
-  { enabled: false, budget_tokens: None, effort: None, summary: None }
+  { enabled: false, budget_tokens: None, effort: None, summary: None, }
 }
 
 ///|

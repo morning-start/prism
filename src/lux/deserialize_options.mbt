@@ -112,7 +112,7 @@ pub fn LucentReasoningConfig::from_json(
           }
         None => None
       }
-      Ok({ enabled, budget_tokens, effort, summary })
+      Ok({ enabled, budget_tokens, effort, summary, })
     }
     _ => Err("expected object for LucentReasoningConfig")
   }

@@ -155,7 +155,7 @@ pub fn LucentMessage::from_json(jv : Json) -> Result[LucentMessage, String] {
           }
         None => None
       }
-      Ok({ role, content, phase: get_str_opt(m, "phase"), reasoning })
+      Ok({ role, content, phase: get_str_opt(m, "phase"), reasoning, })
     }
     _ => Err("expected object for LucentMessage")
   }

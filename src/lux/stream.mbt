@@ -115,12 +115,12 @@ pub fn LucentError::new(
   message : String,
   provider_code : String?,
 ) -> LucentError {
-  { kind, message, provider_code }
+  { kind, message, provider_code, }
 }
 
 ///|
 pub fn LucentError::simple(message : String) -> LucentError {
-  { kind: Native(""), message, provider_code: None }
+  { kind: Native(""), message, provider_code: None, }
 }
 
 ///|
@@ -129,7 +129,7 @@ pub fn LucentConversationMeta::new(
   model : String?,
   usage_input : Int?,
 ) -> LucentConversationMeta {
-  { id, model, usage_input, created_at: None, extra: None }
+  { id, model, usage_input, created_at: None, extra: None, }
 }
 
 ///|
@@ -141,7 +141,7 @@ pub fn LucentConversationMeta::new_full(
   created_at : Int?,
   extra : Json?,
 ) -> LucentConversationMeta {
-  { id, model, usage_input, created_at, extra }
+  { id, model, usage_input, created_at, extra, }
 }
 
 ///|

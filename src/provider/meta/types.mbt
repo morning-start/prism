@@ -29,7 +29,7 @@ pub fn FieldConstraint::new(
   required : Bool,
   allowed_values : Array[String]?,
 ) -> FieldConstraint {
-  { min_val, max_val, required, allowed_values }
+  { min_val, max_val, required, allowed_values, }
 }
 
 ///|
@@ -405,7 +405,7 @@ pub fn ProviderMeta::new(
   capability : @lux.ProviderCapability,
   schema : ProviderSchema,
 ) -> ProviderMeta {
-  { name, aliases, model_pattern, capability, schema }
+  { name, aliases, model_pattern, capability, schema, }
 }
 
 ///|

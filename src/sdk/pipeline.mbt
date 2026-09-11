@@ -99,7 +99,7 @@ fn lucent_events_to_prism(
         )
       BlockStart(_, Thinking) => ()
       BlockDelta(_, ThinkingDelta(s)) =>
-        result.push(Thinking({ text: s, signature: None, redacted: false }))
+        result.push(Thinking({ text: s, signature: None, redacted: false, }))
       Finish(fr) => {
         let pfr = match fr {
           Stop => Stop

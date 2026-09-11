@@ -32,7 +32,7 @@ pub fn LucentTool::from_json(jv : Json) -> Result[LucentTool, String] {
         Some(s) => Native(s)
         _ => Function
       }
-      Ok({ name, description, parameters_json, strict, kind })
+      Ok({ name, description, parameters_json, strict, kind, })
     }
     _ => Err("expected object for LucentTool")
   }

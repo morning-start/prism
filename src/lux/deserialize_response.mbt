@@ -57,7 +57,7 @@ pub fn LucentSafetyRating::from_json(
         Ok(s) => s
         Err(e) => return Err(e)
       }
-      Ok({ category, probability })
+      Ok({ category, probability, })
     }
     _ => Err("expected object for LucentSafetyRating")
   }
@@ -97,7 +97,7 @@ pub fn LucentChoice::from_json(jv : Json) -> Result[LucentChoice, String] {
           }
         _ => None
       }
-      Ok({ index, message, finish_reason, safety_ratings })
+      Ok({ index, message, finish_reason, safety_ratings, })
     }
     _ => Err("expected object for LucentChoice")
   }
@@ -178,7 +178,7 @@ pub fn LucentError::from_json(jv : Json) -> Result[LucentError, String] {
         Err(e) => return Err(e)
       }
       let provider_code = get_str_opt(m, "provider_code")
-      Ok({ kind, message, provider_code })
+      Ok({ kind, message, provider_code, })
     }
     _ => Err("expected object for LucentError")
   }
@@ -196,7 +196,7 @@ pub fn LucentConversationMeta::from_json(
       let usage_input = get_int_opt(m, "usage_input")
       let created_at = get_int_opt(m, "created_at")
       let extra = m.get("extra")
-      Ok({ id, model, usage_input, created_at, extra })
+      Ok({ id, model, usage_input, created_at, extra, })
     }
     _ => Err("expected object for LucentConversationMeta")
   }

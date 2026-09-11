@@ -29,15 +29,15 @@ pub fn parse_sse_line(line : StringView) -> SseLine? {
   }
   // 检查 "event: " 前缀
   if l_str.has_prefix("event: ") {
-    return Some({ event: Some(l_str[7:].to_owned()), data: None })
+    return Some({ event: Some(l_str[7:].to_owned()), data: None, })
   }
   // 检查 "data: " 前缀（带空格）
   if l_str.has_prefix("data: ") {
-    return Some({ event: None, data: Some(l_str[6:].to_owned()) })
+    return Some({ event: None, data: Some(l_str[6:].to_owned()), })
   }
   // 检查无空格 "data:"
   if l_str.has_prefix("data:") {
-    return Some({ event: None, data: Some(l_str[5:].to_owned()) })
+    return Some({ event: None, data: Some(l_str[5:].to_owned()), })
   }
   None
 }
@@ -133,7 +133,7 @@ pub fn parse_sse_message(msg_block : String) -> SseMessage? {
   if data_parts.length() == 0 {
     return None
   }
-  Some({ event_type, data: data_parts.join("\n") })
+  Some({ event_type, data: data_parts.join("\n"), })
 }
 
 ///|
