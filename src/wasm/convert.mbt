@@ -133,6 +133,7 @@ pub fn wasm_events_to_sse(provider : String, json_str : String) -> String {
 
 ///|
 /// 无诊断信封：{"value":...,"diagnostics":[]}（形状与带诊断信封一致）
+
 ///|
 /// === SDK 层 API ===
 

@@ -666,7 +666,9 @@ test "wasm_sdk_capability - returns envelope with value and diagnostics" {
 /// 错误信息包含引号时，WASM 仍必须返回合法 JSON envelope。
 test "wasm errors escape JSON string content" {
   let result = @wasm.wasm_to_lux_request("bad\"provider", "{}")
-  let jv = @json.parse(result) catch { _ => fail("expected valid JSON error envelope") }
+  let jv = @json.parse(result) catch {
+    _ => fail("expected valid JSON error envelope")
+  }
   match jv {
     Object(map) =>
       match map.get("error") {

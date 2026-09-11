@@ -101,8 +101,8 @@ pub struct SseMessage {
 /// 返回 None 表示空块或纯注释块。
 pub fn parse_sse_message(msg_block : String) -> SseMessage? {
   let normalized = msg_block
-    .replace(old="\r\n", new="\n")
-    .replace(old="\r", new="\n")
+    .replace_all(old="\r\n", new="\n")
+    .replace_all(old="\r", new="\n")
   let lines = normalized.split("\n").to_array()
   let mut event_type : String? = None
   let data_parts : Array[String] = []
@@ -144,9 +144,11 @@ pub fn parse_sse_message(msg_block : String) -> SseMessage? {
 pub fn parse_sse_messages(sse_str : String) -> Array[SseMessage] {
   let messages : Array[SseMessage] = []
   // HTTP/SSE streams commonly use CRLF; normalize all line endings first.
+  // 注意：必须用 replace_all —— String::replace 只替换首次出现（MoonBit 语义），
+  // 用 replace 会导致第 2 个及以后的 CRLF 残留，使多帧流被并成一块。
   let normalized = sse_str
-    .replace(old="\r\n", new="\n")
-    .replace(old="\r", new="\n")
+    .replace_all(old="\r\n", new="\n")
+    .replace_all(old="\r", new="\n")
   let blocks = normalized.split("\n\n").to_array()
   for raw_block in blocks {
     let block = raw_block.to_owned()

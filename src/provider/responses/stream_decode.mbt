@@ -12,9 +12,10 @@ pub fn responses_sse_to_events(
   let events : Array[@lux.LucentStreamEvent] = []
   let diagnostics : Array[@lux.ConversionDiagnostic] = []
   // 统一换行符：CRLF → LF，再用统一 SSE 解析
+  // 必须 replace_all：String::replace 只替换首次出现，残留 CRLF 会让多帧并块
   let normalized = sse_str
-    .replace(old="\r\n", new="\n")
-    .replace(old="\r", new="\n")
+    .replace_all(old="\r\n", new="\n")
+    .replace_all(old="\r", new="\n")
   let messages = @internal.parse_sse_messages(normalized)
   let mut i = 0
   while i < messages.length() {

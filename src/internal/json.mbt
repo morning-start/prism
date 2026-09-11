@@ -83,8 +83,8 @@ pub fn clean_sse_heartbeat(s : String) -> String {
   let heartbeat_words = ["keep-alive", "heartbeat"]
   for prefix in escaped_prefixes {
     for word in heartbeat_words {
-      result = result.replace(old=prefix + word + ".", new="")
-      result = result.replace(old=prefix + word, new="")
+      result = result.replace_all(old=prefix + word + ".", new="")
+      result = result.replace_all(old=prefix + word, new="")
     }
   }
   // 第二类：无反斜杠心跳标记，仅移除字符串末尾

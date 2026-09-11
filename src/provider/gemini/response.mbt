@@ -1,4 +1,16 @@
 ///|
+/// Google Gemini — 响应解码 / 编码
+///
+/// 官方 schema 依据（v1beta discovery）：
+///   - `GenerateContentResponse` 字段为 `responseId` / `modelVersion` /
+///     `candidates` / `usageMetadata` / `promptFeedback` / `modelStatus`
+///     —— **没有顶层 `model` 字段**
+///   - `Candidate.finishReason` 为全大写枚举（STOP / MAX_TOKENS / SAFETY / ...）
+///
+/// 因此：解码时响应 ID 取 `responseId`，模型版本取 `modelVersion`；
+/// 编码时输出 `responseId` + `modelVersion`，不再输出不存在的 `model`。
+
+///|
 /// 3. gemini_to_lux_response — 响应解码
 pub fn gemini_to_lux_response(
   json_str : String,
@@ -8,8 +20,9 @@ pub fn gemini_to_lux_response(
     Err(e) => return Err(e)
   }
   let diagnostics : Array[@lux.ConversionDiagnostic] = []
-  let id = @internal.field_str(jv, "model").unwrap_or("")
-  let model = @internal.field_str(jv, "modelVersion").unwrap_or(id)
+  // 官方 GenerateContentResponse.responseId 是响应标识；modelVersion 才是模型
+  let id = @internal.field_str(jv, "responseId").unwrap_or("")
+  let model = @internal.field_str(jv, "modelVersion").unwrap_or("")
   // candidates
   let choices : Array[@lux.LucentChoice] = []
   match @internal.field_arr(jv, "candidates") {
@@ -131,14 +144,7 @@ pub fn lux_response_to_gemini(
       match c.message.content[j] {
         Text(s, _) =>
           parts.push("{\"text\":\"" + @internal.json_escape(s) + "\"}")
-        ToolUse(tu) =>
-          parts.push(
-            "{\"functionCall\":{\"name\":\"" +
-            @internal.json_escape(tu.name) +
-            "\",\"args\":" +
-            tu.arguments_json +
-            "}}",
-          )
+        ToolUse(tu) => parts.push(function_call_part(tu))
         Thinking(th) => {
           // thought part + thoughtSignature（Gemini 跨轮思考延续凭证）
           let sig_part = match th.signature {
@@ -154,21 +160,45 @@ pub fn lux_response_to_gemini(
             "}",
           )
         }
-        File(mm) =>
-          parts.push(
-            "{\"fileData\":{\"mimeType\":\"" +
-            @internal.json_escape(mm.media_type) +
-            "\",\"fileUri\":\"" +
-            @internal.json_escape(
-              match mm.source {
-                Url(u) => u
-                FileUri(u) => u
-                Inline(_) => ""
-              },
-            ) +
-            "\"}}",
+        File(mm) => parts.push(media_part(mm, "file", diagnostics))
+        Image(mm) => parts.push(media_part(mm, "image", diagnostics))
+        Audio(mm) => parts.push(media_part(mm, "audio", diagnostics))
+        Video(mm) => parts.push(media_part(mm, "video", diagnostics))
+        ToolResult(tr) => {
+          // assistant 轮次中出现工具结果属异常编排，但不得静默丢弃
+          diagnostics.push(
+            @lux.ConversionDiagnostic::degraded(
+              "choices.content.tool_result",
+              Some(
+                "tool_result inside an assistant candidate is re-encoded as functionResponse",
+              ),
+            ),
           )
-        _ => ()
+          parts.push(
+            function_response_part(
+              tr.tool_use_id,
+              tr.tool_use_id,
+              @lux.lucent_content_to_text(tr.content),
+            ),
+          )
+        }
+        Refusal(text) =>
+          diagnostics.push(
+            @lux.ConversionDiagnostic::unsupported(
+              "choices.content.refusal",
+              Some(
+                "gemini has no refusal content block; refusal text dropped: " +
+                text,
+              ),
+            ),
+          )
+        Native(tag, _) =>
+          diagnostics.push(
+            @lux.ConversionDiagnostic::unsupported(
+              "choices.content.native",
+              Some("native content (" + tag + ") not supported by gemini"),
+            ),
+          )
       }
       j = j + 1
     }
@@ -220,10 +250,16 @@ pub fn lux_response_to_gemini(
       "}"
     None => ""
   }
+  // GenerateContentResponse 无 model 字段：只输出 responseId + modelVersion
+  let id_part = if resp.id == "" {
+    ""
+  } else {
+    "\"responseId\":\"" + @internal.json_escape(resp.id) + "\","
+  }
   let result = @lux.ConversionResult::new(
-    "{\"model\":\"" +
-    @internal.json_escape(resp.id) +
-    "\",\"modelVersion\":\"" +
+    "{" +
+    id_part +
+    "\"modelVersion\":\"" +
     @internal.json_escape(resp.model) +
     "\",\"candidates\":[" +
     cands.join(",") +

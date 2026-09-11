@@ -262,3 +262,26 @@ test "parse_sse_message - strips CR from event and data" {
     None => fail("expected SSE message")
   }
 }
+
+///|
+/// 回归：CRLF 归一化必须替换**全部**出现（String::replace 只替换首次出现）。
+/// 若误用 replace，第 2 个及以后的 `\r\n` 会残留，导致多帧被并进一个块。
+test "parse_sse_messages - three CRLF frames stay three messages" {
+  let messages = @internal.parse_sse_messages(
+    "data: {\"x\":1}\r\n\r\ndata: {\"x\":2}\r\n\r\ndata: {\"x\":3}\r\n\r\n",
+  )
+  assert_eq(messages.length(), 3)
+  assert_eq(messages[0].data, "{\"x\":1}")
+  assert_eq(messages[1].data, "{\"x\":2}")
+  assert_eq(messages[2].data, "{\"x\":3}")
+}
+
+///|
+/// 回归：LF 分隔的三帧也必须各自成块（不得两帧并块）。
+test "parse_sse_messages - multiple LF frames do not merge" {
+  let messages = @internal.parse_sse_messages(
+    "data: a\n\ndata: b\n\ndata: c\n\n",
+  )
+  assert_eq(messages.length(), 3)
+  assert_eq(messages[2].data, "c")
+}
