@@ -38,13 +38,13 @@ pub struct SdkMessage {
   tool_use_id : String?
   /// 工具结果专用：是否执行出错（默认 false）
   is_error : Bool?
-  /// assistant 工具调用专用：None 表示普通消息（见 SdkMessage::tool_call）
-  tool_call : SdkToolCall?
+  /// assistant 工具调用专用：空数组表示普通消息（见 SdkMessage::tool_call）
+  tool_calls : Array[SdkToolCall]
 }
 
 ///|
 pub fn SdkMessage::new(role : String, content : String) -> SdkMessage {
-  { role, content, tool_use_id: None, is_error: None, tool_call: None, }
+  { role, content, tool_use_id: None, is_error: None, tool_calls: [], }
 }
 
 ///|
@@ -59,12 +59,12 @@ pub fn SdkMessage::tool_result(
     content,
     tool_use_id: Some(tool_use_id),
     is_error: Some(is_error),
-    tool_call: None,
+    tool_calls: [],
   }
 }
 
 ///|
-/// 构造 assistant 工具调用消息（Agent 循环第一轮回填用）
+/// 构造 assistant 工具调用消息（Agent 循环第一轮回填用，单个调用）
 ///
 /// role 固定为 "assistant"；content 可携带同回合的文本（混合输出）。
 pub fn SdkMessage::tool_call(
@@ -73,13 +73,21 @@ pub fn SdkMessage::tool_call(
   arguments_json : String,
   content : String,
 ) -> SdkMessage {
-  {
-    role: "assistant",
-    content,
-    tool_use_id: None,
-    is_error: None,
-    tool_call: Some(SdkToolCall::new(id, name, arguments_json)),
-  }
+  SdkMessage::assistant_turn(content, [
+    SdkToolCall::new(id, name, arguments_json),
+  ])
+}
+
+///|
+/// 构造 assistant 回合消息（文本 + 任意数量工具调用合并为一条消息）
+///
+/// 回合级语义：一个 assistant 回合的文本与全部 tool_use 必须在同一条
+/// 消息里，provider（Anthropic/OpenAI）才接受紧随其后的 tool_result。
+pub fn SdkMessage::assistant_turn(
+  content : String,
+  tool_calls : Array[SdkToolCall],
+) -> SdkMessage {
+  { role: "assistant", content, tool_use_id: None, is_error: None, tool_calls, }
 }
 
 ///|
@@ -172,6 +180,18 @@ pub fn Context::add_tool_call(
 }
 
 ///|
+/// 回填整个 assistant 回合（文本 + 任意数量工具调用合并为一条消息）
+///
+/// Agent 循环回填闭环用：`Prism::events_to_context` 内部调用。
+pub fn Context::add_assistant_turn(
+  self : Context,
+  text : String,
+  tool_calls : Array[SdkToolCall],
+) -> Context {
+  self.push_msg(SdkMessage::assistant_turn(text, tool_calls))
+}
+
+///|
 /// 将 Context 转为 LucentRequest（SDK 内部使用）
 pub fn context_to_lux_request(
   ctx : Context,
@@ -198,14 +218,14 @@ pub fn context_to_lux_request(
         )
       }
       None =>
-        // assistant 工具调用回合 → Message{Assistant, [Text?, ToolUse]}
+        // assistant 工具调用回合 → Message{Assistant, [Text?, ToolUse...]}
         // 与 provider 入站解码形态一致（openai append_tool_calls）
-        match msg.tool_call {
-          Some(tc) => {
-            let content : Array[@lux.LucentContent] = []
-            if msg.content != "" {
-              content.push(@lux.LucentContent::text(msg.content))
-            }
+        if msg.tool_calls.length() > 0 {
+          let content : Array[@lux.LucentContent] = []
+          if msg.content != "" {
+            content.push(@lux.LucentContent::text(msg.content))
+          }
+          for tc in msg.tool_calls {
             content.push(
               @lux.LucentContent::tool_use(
                 tc.id,
@@ -214,21 +234,20 @@ pub fn context_to_lux_request(
                 None,
               ),
             )
-            let lmsg = @lux.LucentMessage::new(Assistant, content)
-            items.push(@lux.LucentConversationItem::message(lmsg))
           }
-          None => {
-            let role = match msg.role {
-              "system" => @lux.System
-              "user" => User
-              "assistant" => Assistant
-              "tool" => Tool
-              _ => User
-            }
-            let content = [@lux.LucentContent::text(msg.content)]
-            let lmsg = @lux.LucentMessage::new(role, content)
-            items.push(@lux.LucentConversationItem::message(lmsg))
+          let lmsg = @lux.LucentMessage::new(Assistant, content)
+          items.push(@lux.LucentConversationItem::message(lmsg))
+        } else {
+          let role = match msg.role {
+            "system" => @lux.System
+            "user" => User
+            "assistant" => Assistant
+            "tool" => Tool
+            _ => User
           }
+          let content = [@lux.LucentContent::text(msg.content)]
+          let lmsg = @lux.LucentMessage::new(role, content)
+          items.push(@lux.LucentConversationItem::message(lmsg))
         }
     }
   }

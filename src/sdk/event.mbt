@@ -16,6 +16,16 @@ pub struct PrismToolCall {
 }
 
 ///|
+/// 构造器（SDK 消费者自建 mock transport / 回放事件流时需要）
+pub fn PrismToolCall::new(
+  id : String,
+  name : String,
+  arguments_json : String,
+) -> PrismToolCall {
+  { id, name, arguments_json, }
+}
+
+///|
 /// PrismToolResult — 工具结果
 pub struct PrismToolResult {
   tool_use_id : String

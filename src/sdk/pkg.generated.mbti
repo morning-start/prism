@@ -40,6 +40,7 @@ pub struct Context {
   tools : Array[SdkTool]?
 }
 pub fn Context::add_assistant(Self, String) -> Self
+pub fn Context::add_assistant_turn(Self, String, Array[SdkToolCall]) -> Self
 pub fn Context::add_system(Self, String) -> Self
 pub fn Context::add_tool_call(Self, String, String, String, String) -> Self
 pub fn Context::add_tool_result(Self, String, String, Bool) -> Self
@@ -90,6 +91,7 @@ pub fn Prism::decode_sse(Self, String) -> Result[Array[PrismEvent], String]
 pub fn Prism::encode_request(Self, String, PrismOptions) -> Result[String, String]
 pub fn Prism::encode_request_with_diagnostics(Self, String, PrismOptions) -> Result[@lux.ConversionResult[String], String]
 pub fn Prism::encode_stream_request(Self, String, PrismOptions) -> Result[String, String]
+pub fn Prism::events_to_context(Self, Context, Array[PrismEvent]) -> Context
 pub fn Prism::new() -> Self
 pub fn Prism::stream(Self, Context, (String) -> Result[String, String]) -> Result[Array[PrismEvent], String]
 pub fn Prism::with_provider(Self, String) -> Self
@@ -131,6 +133,7 @@ pub struct PrismToolCall {
   name : String
   arguments_json : String
 }
+pub fn PrismToolCall::new(String, String, String) -> Self
 
 pub struct PrismToolResult {
   tool_use_id : String
@@ -178,8 +181,9 @@ pub struct SdkMessage {
   content : String
   tool_use_id : String?
   is_error : Bool?
-  tool_call : SdkToolCall?
+  tool_calls : Array[SdkToolCall]
 }
+pub fn SdkMessage::assistant_turn(String, Array[SdkToolCall]) -> Self
 pub fn SdkMessage::new(String, String) -> Self
 pub fn SdkMessage::tool_call(String, String, String, String) -> Self
 pub fn SdkMessage::tool_result(String, String, Bool) -> Self

@@ -269,6 +269,45 @@ pub fn Prism::stream(
 }
 
 ///|
+/// Agent 循环回填闭环：把流事件累积为 assistant 回合并追加到 Context
+///
+/// 用法（与 add_tool_result 配对）：
+/// ```moonbit nocheck
+/// let events = prism.stream(ctx, send)?
+/// let ctx = prism.events_to_context(ctx, events)  // 回填 assistant 回合
+/// // 执行工具…
+/// let ctx = ctx.add_tool_result(id, result, false)  // 注入结果
+/// // 第二轮请求（provider 不再拒绝 tool_result）
+/// ```
+///
+/// 语义：TextDelta 合并为一个 Text 块；每个 ToolCall 事件产生一个 ToolUse
+/// 块（含累积后的完整 arguments_json）；Thinking 不回填（v1）。
+/// 空回合（无文本无工具调用）不追加消息。
+pub fn Prism::events_to_context(
+  _self : Prism,
+  ctx : Context,
+  events : Array[PrismEvent],
+) -> Context {
+  let mut text = ""
+  let tool_calls : Array[SdkToolCall] = []
+  for ev in events {
+    match ev {
+      TextDelta(s) => text = text + s
+      ToolCall(tc) =>
+        tool_calls.push(SdkToolCall::new(tc.id, tc.name, tc.arguments_json))
+      Thinking(_) => ()
+      ToolResult(_) => ()
+      Finish(_) => ()
+    }
+  }
+  if text == "" && tool_calls.length() == 0 {
+    ctx
+  } else {
+    ctx.add_assistant_turn(text, tool_calls)
+  }
+}
+
+///|
 /// === 能力查询 ===
 
 ///|
