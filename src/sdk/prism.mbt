@@ -51,12 +51,29 @@ pub fn DecodedResponse::new(
 
 ///|
 /// PrismOptions — SDK 请求选项
+///
+/// 字段分两组：
+/// - 基础五项（model/temperature/max_tokens/store/extras）：`new()` 位置参数
+/// - T3 扩展项（tool_choice/reasoning/structured_output/parallel_tool_calls）：
+///   全部可选，经 `with_*` builder 设置；缺省 None 时编码输出与扩展前
+///   逐字节一致（有回归门禁测试）。
 pub struct PrismOptions {
   model : String?
   temperature : Double?
   max_tokens : Int?
   store : Bool?
   extras : Map[String, Json]?
+  /// 工具选择（IR 标准字段：Auto/None/Required/SpecificTool）
+  tool_choice : @lux.LucentToolChoice?
+  /// 推理开关（None = 不表达；Some(true/false) 显式声明）
+  reasoning_enabled : Bool?
+  /// 推理力度（设置即隐含启用，除非 reasoning_enabled=Some(false)）
+  reasoning_effort : @lux.LucentReasoningEffort?
+  /// 结构化输出（IR 标准字段：JsonObject/Text/JsonSchema）
+  structured_output : @lux.LucentStructuredOutput?
+  /// 并行工具调用；经 extras 语义反传给各 provider
+  /// （messages: disable_parallel_tool_use；openai: parallel_tool_calls）
+  parallel_tool_calls : Bool?
 }
 
 ///|
@@ -67,6 +84,11 @@ pub fn PrismOptions::default() -> PrismOptions {
     max_tokens: None,
     store: None,
     extras: None,
+    tool_choice: None,
+    reasoning_enabled: None,
+    reasoning_effort: None,
+    structured_output: None,
+    parallel_tool_calls: None,
   }
 }
 
@@ -78,7 +100,55 @@ pub fn PrismOptions::new(
   store : Bool?,
   extras : Map[String, Json]?,
 ) -> PrismOptions {
-  { model, temperature, max_tokens, store, extras, }
+  {
+    model,
+    temperature,
+    max_tokens,
+    store,
+    extras,
+    tool_choice: None,
+    reasoning_enabled: None,
+    reasoning_effort: None,
+    structured_output: None,
+    parallel_tool_calls: None,
+  }
+}
+
+///|
+/// 设置工具选择（builder 风格，其余字段保留）
+pub fn PrismOptions::with_tool_choice(
+  self : PrismOptions,
+  choice : @lux.LucentToolChoice,
+) -> PrismOptions {
+  { ..self, tool_choice: Some(choice), }
+}
+
+///|
+/// 设置推理配置（enabled=None 时仅设置 effort，隐含启用）
+pub fn PrismOptions::with_reasoning(
+  self : PrismOptions,
+  enabled : Bool?,
+  effort : @lux.LucentReasoningEffort?,
+) -> PrismOptions {
+  { ..self, reasoning_enabled: enabled, reasoning_effort: effort, }
+}
+
+///|
+/// 设置结构化输出
+pub fn PrismOptions::with_structured_output(
+  self : PrismOptions,
+  output : @lux.LucentStructuredOutput,
+) -> PrismOptions {
+  { ..self, structured_output: Some(output), }
+}
+
+///|
+/// 设置并行工具调用（经 extras 语义反传，见字段注释）
+pub fn PrismOptions::with_parallel_tool_calls(
+  self : PrismOptions,
+  enabled : Bool,
+) -> PrismOptions {
+  { ..self, parallel_tool_calls: Some(enabled), }
 }
 
 ///|

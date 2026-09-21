@@ -271,10 +271,22 @@ pub fn context_to_lux_request(
     None,
     false,
     None,
-    None,
+    opts.structured_output,
     opts.store,
-    opts.extras,
+    // parallel_tool_calls 经 extras 语义反传（openai 直接消费；
+    // messages 消费反向的 disable_parallel_tool_use，由编码端换算）
+    merge_parallel_tool_extras(opts),
   )
+  // reasoning：显式关闭优先；否则 effort 或 enabled 任一设置即启用
+  let reasoning : @lux.LucentReasoningConfig? = match opts.reasoning_enabled {
+    Some(false) => Some(@lux.LucentReasoningConfig::disabled())
+    _ =>
+      if opts.reasoning_enabled is None && opts.reasoning_effort is None {
+        None
+      } else {
+        Some(@lux.LucentReasoningConfig::new(opts.reasoning_effort, None))
+      }
+  }
   @lux.LucentRequest::new(
     model,
     match ctx.system_prompt {
@@ -283,11 +295,37 @@ pub fn context_to_lux_request(
     },
     items,
     tools_arr,
-    None,
+    opts.tool_choice,
     lux_opts,
     None,
-    None,
+    reasoning,
     None,
     None,
   )
+}
+
+///|
+/// 合并 parallel_tool_calls 到 extras（T3）
+///
+/// 用户 extras 优先保留；parallel_tool_calls 仅在用户未显式设置同名键时
+/// 注入（Extension 字段规则：可选、不覆盖用户数据）。未设置时原样返回
+/// 用户 extras——保证缺省路径输出不变。
+fn merge_parallel_tool_extras(opts : PrismOptions) -> Map[String, Json]? {
+  match opts.parallel_tool_calls {
+    None => opts.extras
+    Some(enabled) => {
+      let merged : Map[String, Json] = match opts.extras {
+        Some(m) => m.copy()
+        None => Map([])
+      }
+      // 用户已显式通过 extras 设置则不覆盖
+      match merged.get("parallel_tool_calls") {
+        Some(_) => Some(merged)
+        None => {
+          merged["parallel_tool_calls"] = Json::boolean(enabled)
+          Some(merged)
+        }
+      }
+    }
+  }
 }

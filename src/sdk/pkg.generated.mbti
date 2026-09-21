@@ -118,9 +118,18 @@ pub struct PrismOptions {
   max_tokens : Int?
   store : Bool?
   extras : Map[String, Json]?
+  tool_choice : @lux.LucentToolChoice?
+  reasoning_enabled : Bool?
+  reasoning_effort : @lux.LucentReasoningEffort?
+  structured_output : @lux.LucentStructuredOutput?
+  parallel_tool_calls : Bool?
 }
 pub fn PrismOptions::default() -> Self
 pub fn PrismOptions::new(String?, Double?, Int?, Bool?, Map[String, Json]?) -> Self
+pub fn PrismOptions::with_parallel_tool_calls(Self, Bool) -> Self
+pub fn PrismOptions::with_reasoning(Self, Bool?, @lux.LucentReasoningEffort?) -> Self
+pub fn PrismOptions::with_structured_output(Self, @lux.LucentStructuredOutput) -> Self
+pub fn PrismOptions::with_tool_choice(Self, @lux.LucentToolChoice) -> Self
 
 pub struct PrismThinking {
   text : String
