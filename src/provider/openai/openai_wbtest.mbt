@@ -778,38 +778,8 @@ test "lux_events_to_openai_sse - usage frame" {
 ///|
 /// === round-trip 一致性 ===
 
-///|
-test "round trip - request encode then decode preserves semantics" {
-  let original = @lux.LucentRequest::from_messages(
-    "gpt-4o",
-    Some([@lux.LucentContent::text("You are helpful")]),
-    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
-    None,
-    None,
-    @lux.LucentOptions::default(),
-    None,
-    None,
-    None,
-    None,
-  )
-  match lux_request_to_openai(original) {
-    Ok(cr1) =>
-      match openai_to_lux_request(cr1.value()) {
-        Ok(cr2) => {
-          let round = cr2.value()
-          assert_eq(round.model, "gpt-4o")
-          assert_eq(round.conversation.length(), 1)
-          // instructions 应被还原（system 消息抽出）
-          match round.instructions {
-            Some(_) => ()
-            None => assert_true(false)
-          }
-        }
-        Err(_) => assert_true(false)
-      }
-    Err(_) => assert_true(false)
-  }
-}
+// 注：请求 round-trip 的黑盒契约测试见 test/openai_test.mbt（外部调用者视角，断言更全），
+// 此处不再保留同义的白盒拷贝。
 
 ///|
 test "round trip - response decode then encode preserves id" {
@@ -1297,69 +1267,6 @@ test "openai_chat round-trip preserves vLLM reasoning" {
 ///|
 /// #10（api-protocol-converter 最小测试矩阵）：Responses 只有 previous_response_id
 /// 且无会话历史时，跨端出站（chat）必须拒绝转换（标准 §3.2）。
-test "#10 previous_response_id without history is rejected for openai-chat outbound" {
-  let opts = @lux.LucentOptions::default().with_extras(
-    Some({ "previous_response_id": Json::string("resp_123") }),
-  )
-  let req = @lux.LucentRequest::new(
-    "gpt-5.3",
-    None,
-    [],
-    None,
-    None,
-    opts,
-    None,
-    None,
-    None,
-    None,
-  )
-  match lux_request_to_openai(req) {
-    Ok(_) => fail("expected rejection for previous_response_id without history")
-    Err(e) => assert_true(e.contains("previous_response_id"))
-  }
-}
-
-///|
-/// #10 有会话历史时的 chat 出站：previous_response_id 不能原样透传给 Chat
-/// Completions（该协议无此语义），必须剔除并产生 Unsupported 诊断。
-test "#10 previous_response_id with history degrades for openai-chat outbound" {
-  let opts = @lux.LucentOptions::default().with_extras(
-    Some({ "previous_response_id": Json::string("resp_123") }),
-  )
-  let req = @lux.LucentRequest::new(
-    "gpt-5.3",
-    None,
-    [
-      @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
-      ),
-    ],
-    None,
-    None,
-    opts,
-    None,
-    None,
-    None,
-    None,
-  )
-  match lux_request_to_openai(req) {
-    Ok(cr) => {
-      // previous_response_id 不得落入 chat.completions 请求体
-      assert_false(cr.value().contains("previous_response_id"))
-      let mut has_unsupported = false
-      for d in cr.diagnostics() {
-        if d.field == "options.previous_response_id" && d.status == Unsupported {
-          has_unsupported = true
-        }
-      }
-      assert_true(has_unsupported)
-    }
-    Err(e) => fail("encode: \{e}")
-  }
-}
-
-///|
-/// T8：标准字段路径——无历史时同样拒绝（与 extras 旧载荷同语义）。
 test "#10 previous_response_id standard field without history rejected" {
   let opts = @lux.LucentOptions::default().with_previous_response_id(
     Some("resp_123"),

@@ -1,10 +1,13 @@
 ///|
-/// SDK 基础示例测试
+/// SDK 基础示例测试 — 冒烟集
+///
+/// 只保留 README 快速开始场景的端到端验证：编码请求、切换 provider、
+/// mock transport 完整往返。SDK 门面的完整行为覆盖见
+/// `src/sdk/test/sdk_test.mbt`（含 context/tools/stream/error/capability），
+/// 此处不再重复同义断言；示例本身的可编译性由 moon check 门禁保证。
 
 ///|
-/// === L1 API 测试 ===
-
-///|
+/// 快速开始：Prism 编码请求返回合法 JSON
 test "L1 - encode request returns valid JSON" {
   let prism = @sdk.Prism::new().with_provider("openai")
   let result = prism.encode_request("Hello", @sdk.PrismOptions::default())
@@ -19,6 +22,7 @@ test "L1 - encode request returns valid JSON" {
 }
 
 ///|
+/// 切换 provider 只改一个名字，输出格式随之变化
 test "L1 - switch provider changes format" {
   let openai = @sdk.Prism::new().with_provider("responses")
   let anthropic = @sdk.Prism::new().with_provider("messages")
@@ -43,6 +47,7 @@ test "L1 - switch provider changes format" {
 }
 
 ///|
+/// 完整调用：文本进、文本出（mock transport，见 USAGE.md）
 test "L1 - complete with mock transport" {
   let prism = @sdk.Prism::new().with_provider("openai")
 
@@ -56,120 +61,5 @@ test "L1 - complete with mock transport" {
   match result {
     Ok(text) => assert_eq(text, "Hi there!")
     Err(e) => fail("complete failed: " + e)
-  }
-}
-
-///|
-/// === L2 API 测试 ===
-
-///|
-test "L2 - context with system prompt" {
-  let ctx = @sdk.Context::new().add_system("You are helpful").add_user("Hello")
-
-  let req = @sdk.context_to_lux_request(
-    ctx,
-    "gpt-4o",
-    @sdk.PrismOptions::default(),
-  )
-  match req.instructions {
-    Some(content) => assert_eq(content.length(), 1)
-    None => fail("Expected system prompt")
-  }
-}
-
-///|
-test "L2 - context with tools" {
-  let tools = [
-    @sdk.SdkTool::new("test_tool", "A test tool", "{\"type\":\"object\"}"),
-  ]
-
-  let ctx = @sdk.Context::new().add_user("Use the tool").add_tools(tools)
-
-  let req = @sdk.context_to_lux_request(
-    ctx,
-    "gpt-4o",
-    @sdk.PrismOptions::default(),
-  )
-  match req.tools {
-    Some(t) => assert_eq(t.length(), 1)
-    None => fail("Expected tools")
-  }
-}
-
-///|
-test "L2 - tool result injection" {
-  let ctx = @sdk.Context::new()
-    .add_user("What's the weather?")
-    .add_tool_result("tool_1", "Sunny", false)
-
-  let req = @sdk.context_to_lux_request(
-    ctx,
-    "gpt-4o",
-    @sdk.PrismOptions::default(),
-  )
-  assert_eq(req.conversation.length(), 2)
-  match req.conversation[1] {
-    ToolResult(tr) => {
-      assert_eq(tr.tool_use_id, "tool_1")
-      assert_eq(tr.is_error, false)
-    }
-    _ => fail("Expected ToolResult")
-  }
-}
-
-///|
-test "L2 - stream decode returns events" {
-  let prism = @sdk.Prism::new().with_provider("openai")
-
-  let sse = "data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hi\"},\"finish_reason\":null}]}\n\ndata: [DONE]\n"
-
-  let result = prism.decode_sse(sse)
-  match result {
-    Ok(events) => assert_true(events.length() > 0)
-    Err(e) => fail("decode_sse failed: " + e)
-  }
-}
-
-///|
-/// === Error Handling 测试 ===
-
-///|
-test "Error - unknown provider returns error" {
-  let prism = @sdk.Prism::new().with_provider("nonexistent")
-  let result = prism.encode_request("Hello", @sdk.PrismOptions::default())
-  match result {
-    Ok(_) => fail("Expected error")
-    Err(e) => assert_true(e.contains("unknown provider"))
-  }
-}
-
-///|
-test "Error - decode invalid JSON returns error" {
-  let prism = @sdk.Prism::new().with_provider("openai")
-  let result = prism.decode_response("not json")
-  match result {
-    Ok(_) => fail("Expected error")
-    Err(e) => assert_true(e.length() > 0)
-  }
-}
-
-///|
-/// === Capability 测试 ===
-
-///|
-test "Capability - known provider returns Some" {
-  let prism = @sdk.Prism::new()
-  match prism.capability("openai") {
-    Some(_) => assert_true(true)
-    None => fail("Expected Some for openai")
-  }
-}
-
-///|
-test "Capability - unknown provider returns None" {
-  let prism = @sdk.Prism::new()
-  match prism.capability("nonexistent") {
-    Some(_) => fail("Expected None")
-    None => assert_true(true)
   }
 }

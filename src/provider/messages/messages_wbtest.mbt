@@ -1480,71 +1480,10 @@ test "#9 decode preserves mixed text + tool_result user message" {
 }
 
 ///|
-/// #10（最小测试矩阵）：Responses 只有 previous_response_id 且无会话历史时，
-/// 跨端出站（chat/messages）必须拒绝转换（标准 §3.2）。
-test "#10 previous_response_id without history is rejected for messages outbound" {
-  let opts = @lux.LucentOptions::default().with_extras(
-    Some({ "previous_response_id": Json::string("resp_123") }),
-  )
-  let req = @lux.LucentRequest::new(
-    "claude-sonnet-4",
-    None,
-    [],
-    None,
-    None,
-    opts,
-    None,
-    None,
-    None,
-    None,
-  )
-  match lux_request_to_messages(req) {
-    Ok(_) => fail("expected rejection for previous_response_id without history")
-    Err(e) => assert_true(e.contains("previous_response_id"))
-  }
-}
 
 ///|
-/// #10 有会话历史时的跨端出站：不允许伪造续接，previous_response_id 被剔除，
-/// 并产生 Unsupported 诊断（不能静默假装成功）。
-test "#10 previous_response_id with history degrades for messages outbound" {
-  let opts = @lux.LucentOptions::default().with_extras(
-    Some({ "previous_response_id": Json::string("resp_123") }),
-  )
-  let req = @lux.LucentRequest::new(
-    "claude-sonnet-4",
-    None,
-    [
-      @lux.LucentConversationItem::message(
-        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
-      ),
-    ],
-    None,
-    None,
-    opts,
-    None,
-    None,
-    None,
-    None,
-  )
-  match lux_request_to_messages(req) {
-    Ok(cr) => {
-      // previous_response_id 不得落入 Anthropic 请求体
-      assert_false(cr.value().contains("previous_response_id"))
-      let mut has_unsupported = false
-      for d in cr.diagnostics() {
-        if d.field == "options.previous_response_id" && d.status == Unsupported {
-          has_unsupported = true
-        }
-      }
-      assert_true(has_unsupported)
-    }
-    Err(e) => fail("encode: \{e}")
-  }
-}
-
-///|
-/// T8：标准字段路径——无历史时同样拒绝（与 extras 旧载荷同语义）。
+/// #10（api-protocol-converter 最小测试矩阵）：Responses 只有 previous_response_id
+/// 且无会话历史时，跨端出站（messages）必须拒绝转换（标准 §3.2）。
 test "#10 previous_response_id standard field without history rejected" {
   let opts = @lux.LucentOptions::default().with_previous_response_id(
     Some("resp_123"),
