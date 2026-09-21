@@ -1544,3 +1544,64 @@ test "#10 previous_response_id with history degrades for messages outbound" {
     Err(e) => fail("encode: \{e}")
   }
 }
+
+///|
+/// T8：标准字段路径——无历史时同样拒绝（与 extras 旧载荷同语义）。
+test "#10 previous_response_id standard field without history rejected" {
+  let opts = @lux.LucentOptions::default().with_previous_response_id(
+    Some("resp_123"),
+  )
+  let req = @lux.LucentRequest::new(
+    "claude-sonnet-4",
+    None,
+    [],
+    None,
+    None,
+    opts,
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_messages(req) {
+    Ok(_) => fail("expected rejection for previous_response_id without history")
+    Err(e) => assert_true(e.contains("previous_response_id"))
+  }
+}
+
+///|
+/// T8：标准字段路径——有历史时剔除并打 Unsupported 诊断。
+test "#10 previous_response_id standard field with history degrades" {
+  let opts = @lux.LucentOptions::default().with_previous_response_id(
+    Some("resp_123"),
+  )
+  let req = @lux.LucentRequest::new(
+    "claude-sonnet-4",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
+      ),
+    ],
+    None,
+    None,
+    opts,
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_messages(req) {
+    Ok(cr) => {
+      assert_false(cr.value().contains("previous_response_id"))
+      let mut has_unsupported = false
+      for d in cr.diagnostics() {
+        if d.field == "options.previous_response_id" && d.status == Unsupported {
+          has_unsupported = true
+        }
+      }
+      assert_true(has_unsupported)
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}

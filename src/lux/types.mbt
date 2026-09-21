@@ -189,6 +189,9 @@ pub struct LucentOptions {
   candidate_count : Int?
   structured_output : LucentStructuredOutput?
   store : Bool?
+  /// Responses 有状态续接载体（T8 标准可选字段）：上一轮 response id。
+  /// 无状态端点（chat/messages/gemini）出站时由目标端拒绝或降级。
+  previous_response_id : String?
   extras : Map[String, Json]?
 } derive(Eq, Debug)
 
@@ -207,6 +210,22 @@ pub(all) enum LucentReasoningSummary {
   Auto
   Concise
   Detailed
+} derive(Eq, Debug)
+
+///|
+/// ConversationSnapshot — 中间件本地会话存储单元（T8）
+///
+/// 背景：Responses 的 previous_response_id 是有状态续接——客户端第二轮
+/// 只带新 input + 上一轮 response id，历史在服务端。跨端转到无状态
+/// 端点（chat/messages/gemini）时必须由中间件本地保存并还原历史。
+/// 本类型是存储单元：某次 response_id 对应的请求上下文（还原所需）
+/// 与可选响应文本（审计/调试用）。不参与 wire 编解码；
+/// to_json/from_json 供宿主持久化（IR 提案见
+/// .agent-workplace/docs/report/ir-proposal-previous-response-id.md）。
+pub struct ConversationSnapshot {
+  response_id : String
+  request : LucentRequest
+  response_text : String?
 } derive(Eq, Debug)
 
 ///|

@@ -348,6 +348,7 @@ pub fn LucentOptions::default() -> LucentOptions {
     candidate_count: None,
     structured_output: None,
     store: None,
+    previous_response_id: None,
     extras: None,
   }
 }
@@ -375,8 +376,30 @@ pub fn LucentOptions::new(
     candidate_count,
     structured_output,
     store,
+    // T8 标准可选字段经 with_previous_response_id 设置（new 保持不变，
+    // 避免破坏既有 10 参数调用点）
+    previous_response_id: None,
     extras,
   }
+}
+
+///|
+/// 设置 previous_response_id（T8；Responses 有状态续接载体）
+pub fn LucentOptions::with_previous_response_id(
+  self : LucentOptions,
+  id : String?,
+) -> LucentOptions {
+  { ..self, previous_response_id: id, }
+}
+
+///|
+/// ConversationSnapshot 构造器（T8）
+pub fn ConversationSnapshot::new(
+  response_id : String,
+  request : LucentRequest,
+  response_text : String?,
+) -> ConversationSnapshot {
+  { response_id, request, response_text, }
 }
 
 ///|

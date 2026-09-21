@@ -261,9 +261,19 @@
         "stream": { "type": "boolean" },
         "candidate_count": { "type": "integer" },
         "seed": { "type": "integer" },
-        "structured_output": { "$ref": "#/definitions/LucentStructuredOutput" }
+        "structured_output": { "$ref": "#/definitions/LucentStructuredOutput" },
+        "previous_response_id": { "type": "string" }
       },
       "required": ["stream"]
+    },
+    "ConversationSnapshot": {
+      "type": "object",
+      "properties": {
+        "response_id": { "type": "string" },
+        "request": { "$ref": "#/definitions/LucentRequest" },
+        "response_text": { "type": "string" }
+      },
+      "required": ["response_id", "request"]
     },
     "LucentReasoningEffort": {
       "type": "string",

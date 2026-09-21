@@ -809,33 +809,62 @@ test "responses_sse_to_events - heartbeat line merged as data: : keep-alive row"
 
 ///|
 /// #10（api-protocol-converter 最小测试矩阵）：解码时 previous_response_id 必须
-/// 保留在 extras 中（不再静默丢弃），供 responses → responses 原样透传；
-/// 跨端出站（chat/messages）时由目标端编码器拒绝或降级（标准 §3.2）。
-test "#10 decode keeps previous_response_id in extras" {
+/// 保留（T8 起为 IR 标准可选字段，不再落 extras——消除双载体），供
+/// responses → responses 原样透传；跨端出站（chat/messages）时由目标端
+/// 编码器拒绝或降级（标准 §3.2）。
+test "#10 decode keeps previous_response_id as standard field" {
   let json = "{\"model\":\"gpt-5.3\",\"previous_response_id\":\"resp_prev_9\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"Hi\"}]}]}"
   match responses_to_lux_request(json) {
     Ok(cr) => {
       let req = cr.value()
-      let mut found = false
+      // T8：标准可选字段承载
+      assert_eq(req.options.previous_response_id, Some("resp_prev_9"))
+      // 不再双载体：extras 中不应出现
       match req.options.extras {
-        Some(m) =>
-          match m.get("previous_response_id") {
-            Some(String(s)) => found = s == "resp_prev_9"
-            _ => ()
-          }
+        Some(m) => assert_true(m.get("previous_response_id") is None)
         None => ()
       }
-      assert_true(found)
     }
     Err(e) => fail("unexpected Err: \{e}")
   }
 }
 
 ///|
-/// #10 responses → responses 往返：extras 中的 previous_response_id 必须原样透传。
-test "#10 encode round-trips previous_response_id to responses" {
+/// #10 兼容门禁：旧 extras 载荷（T8 前的持久化数据）仍被编码识别。
+test "#10 encode round-trips previous_response_id from extras (legacy)" {
   let opts = @lux.LucentOptions::default().with_extras(
     Some({ "previous_response_id": Json::string("resp_prev_9") }),
+  )
+  let req = @lux.LucentRequest::new(
+    "gpt-5.3",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
+      ),
+    ],
+    None,
+    None,
+    opts,
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_responses(req) {
+    Ok(cr) => {
+      assert_true(cr.value().contains("previous_response_id"))
+      assert_true(cr.value().contains("resp_prev_9"))
+    }
+    Err(e) => fail("unexpected Err: \{e}")
+  }
+}
+
+///|
+/// #10 responses → responses 往返：标准字段 previous_response_id 原样透传。
+test "#10 encode round-trips previous_response_id standard field" {
+  let opts = @lux.LucentOptions::default().with_previous_response_id(
+    Some("resp_prev_9"),
   )
   let req = @lux.LucentRequest::new(
     "gpt-5.3",

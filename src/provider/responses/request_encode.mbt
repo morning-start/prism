@@ -372,9 +372,29 @@ pub fn lux_request_to_responses(
     Some(b) => parts.push("\"store\":" + b.to_string())
     None => ()
   }
+  // previous_response_id（T8）：标准字段优先；extras 旧载荷回退（兼容）。
+  // 两者都消费掉，不落入 merge_extras 的透传（避免双写）。
+  let prev_id : String? = match opts.previous_response_id {
+    Some(id) => Some(id)
+    None =>
+      match opts.extras {
+        Some(m) =>
+          match m.get("previous_response_id") {
+            Some(String(id)) => Some(id)
+            _ => None
+          }
+        None => None
+      }
+  }
+  match prev_id {
+    Some(id) =>
+      parts.push(
+        "\"previous_response_id\":\"" + @internal.json_escape(id) + "\"",
+      )
+    None => ()
+  }
   // disable_parallel_tool_use（Anthropic 系）→ parallel_tool_calls（语义反向，标准 §2）
   // extras 中透传的 disable_parallel_tool_use 由本分支消费，不落入输出 JSON。
-  // previous_response_id 保留在 extras 中原样透传（responses → responses 往返）。
   let mut merged_extras = opts.extras
   match opts.extras {
     Some(m) =>
@@ -397,6 +417,9 @@ pub fn lux_request_to_responses(
       }
     None => ()
   }
+  merged_extras = @internal.extras_without(
+    merged_extras, "previous_response_id",
+  )
   @internal.merge_extras_json(parts, merged_extras)
   let result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
   Ok(result.with_diagnostics(diagnostics))

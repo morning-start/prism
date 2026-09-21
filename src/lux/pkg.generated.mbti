@@ -51,6 +51,15 @@ pub fn BlockAccumulator::flush_block(Self, Int, Array[LucentContent], LucentThin
 pub fn BlockAccumulator::flush_remaining(Self, Array[LucentContent], LucentThinking?) -> LucentThinking?
 pub fn BlockAccumulator::new() -> Self
 
+pub struct ConversationSnapshot {
+  response_id : String
+  request : LucentRequest
+  response_text : String?
+} derive(Eq, @debug.Debug)
+pub fn ConversationSnapshot::from_json(Json) -> Result[Self, String]
+pub fn ConversationSnapshot::new(String, LucentRequest, String?) -> Self
+pub fn ConversationSnapshot::to_json(Self) -> Json
+
 pub struct ConversionDiagnostic {
   field : String
   status : ConversionStatus
@@ -333,6 +342,7 @@ pub struct LucentOptions {
   candidate_count : Int?
   structured_output : LucentStructuredOutput?
   store : Bool?
+  previous_response_id : String?
   extras : Map[String, Json]?
 } derive(Eq, @debug.Debug)
 pub fn LucentOptions::default() -> Self
@@ -340,6 +350,7 @@ pub fn LucentOptions::from_json(Json) -> Result[Self, String]
 pub fn LucentOptions::new(Double?, Double?, Int?, Int?, Array[String]?, Bool, Int?, LucentStructuredOutput?, Bool?, Map[String, Json]?) -> Self
 pub fn LucentOptions::to_json(Self) -> Json
 pub fn LucentOptions::with_extras(Self, Map[String, Json]?) -> Self
+pub fn LucentOptions::with_previous_response_id(Self, String?) -> Self
 pub fn LucentOptions::with_store(Self, Bool?) -> Self
 
 pub struct LucentReasoningConfig {

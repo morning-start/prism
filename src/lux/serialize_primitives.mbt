@@ -348,6 +348,11 @@ pub fn LucentOptions::to_json(self : LucentOptions) -> Json {
     Some(s) => fields["store"] = s.to_json()
     None => ()
   }
+  // previous_response_id（T8 标准可选字段）：Responses 有状态续接载体
+  match self.previous_response_id {
+    Some(id) => fields["previous_response_id"] = Json::string(id)
+    None => ()
+  }
   match self.extras {
     Some(ext) => fields["extras"] = Json::object(ext)
     None => ()

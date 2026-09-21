@@ -63,6 +63,8 @@ pub fn LucentOptions::from_json(jv : Json) -> Result[LucentOptions, String] {
         None => None
       }
       let store = get_bool_opt(m, "store")
+      // previous_response_id（T8 标准可选字段；缺失/非法软失败为 None）
+      let previous_response_id = get_str_opt(m, "previous_response_id")
       let extras = match m.get("extras") {
         Some(Object(entries)) => Some(entries)
         _ => None
@@ -77,6 +79,7 @@ pub fn LucentOptions::from_json(jv : Json) -> Result[LucentOptions, String] {
         candidate_count,
         structured_output,
         store,
+        previous_response_id,
         extras,
       })
     }

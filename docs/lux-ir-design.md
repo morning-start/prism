@@ -71,6 +71,22 @@ Heterogeneous flat list — messages, tool calls, tool results, reasoning, and a
 | `Reasoning` | `LucentThinking` | Standalone reasoning block |
 | `AgentAction` | `LucentAgentAction` | Agent action placeholder |
 
+### ConversationSnapshot (T8)
+
+Middleware-local session storage unit for stateless continuation. OpenAI
+Responses' `previous_response_id` is a server-side stateful continuation;
+converting it to stateless endpoints (chat/messages/gemini) requires the
+middleware to locally store and restore history. This type is the storage
+unit — not part of any wire protocol; `to_json`/`from_json` exist for host
+persistence. IR proposal:
+`.agent-workplace/docs/report/ir-proposal-previous-response-id.md`.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `response_id` | `String` | The Responses API response id this snapshot belongs to |
+| `request` | `LucentRequest` | Request context that produced the response (restore source) |
+| `response_text` | `String?` | Optional response text (audit/debug) |
+
 ### LucentMessage
 
 | Field | Type | Notes |

@@ -98,4 +98,30 @@ pub fn LucentRequest::from_json(jv : Json) -> Result[LucentRequest, String] {
 }
 
 ///|
+/// ConversationSnapshot 反序列化（T8；缺失字段软失败为 Err 由调用方处置）
+pub fn ConversationSnapshot::from_json(
+  jv : Json,
+) -> Result[ConversationSnapshot, String] {
+  match jv {
+    Object(m) => {
+      let response_id = match get_str(m, "response_id") {
+        Ok(s) => s
+        Err(e) => return Err(e)
+      }
+      let request = match m.get("request") {
+        Some(r) =>
+          match LucentRequest::from_json(r) {
+            Ok(v) => v
+            Err(e) => return Err(e)
+          }
+        None => return Err("missing request")
+      }
+      let response_text = get_str_opt(m, "response_text")
+      Ok({ response_id, request, response_text, })
+    }
+    _ => Err("expected object for ConversationSnapshot")
+  }
+}
+
+///|
 /// === LucentUsage ===

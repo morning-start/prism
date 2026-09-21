@@ -434,8 +434,10 @@ pub fn responses_to_lux_request(
   let store = @internal.field_bool(jv, "store")
   let extras = @internal.collect_extra_fields(jv, [
     "model", "instructions", "input", "tools", "tool_choice", "temperature", "top_p",
-    "max_output_tokens", "stream", "reasoning", "text", "store",
+    "max_output_tokens", "stream", "reasoning", "text", "store", "previous_response_id",
   ])
+  // previous_response_id（T8）：提升为 IR 标准可选字段，不再落 extras
+  //（消除双载体）。旧 extras 载荷在 encode 侧回退识别（兼容）。
   let opts = @lux.LucentOptions::new(
     temperature,
     top_p,
@@ -447,10 +449,7 @@ pub fn responses_to_lux_request(
     structured,
     store,
     extras,
-  )
-  // previous_response_id 保留在 extras 中（不再静默丢弃）：
-  // - responses → responses 原样透传（merge_extras）
-  // - responses → chat/messages 出站时由目标端编码器拒绝或降级（标准 §3.2）
+  ).with_previous_response_id(@internal.field_str(jv, "previous_response_id"))
   let result = @lux.ConversionResult::new(
     @lux.LucentRequest::new(
       model,

@@ -573,28 +573,32 @@ pub fn lux_request_to_messages(
     None => ()
   }
   // previous_response_id：仅 Responses 有语义；跨端出站时若无可恢复历史必须拒绝（标准 §3.2）
-  match merged_extras {
+  // T8：标准字段优先判定；extras 旧载荷回退（兼容）。两者都从输出中剔除。
+  let prev_id_extras : String? = match merged_extras {
     Some(m) =>
       match m.get("previous_response_id") {
-        Some(_) => {
-          if req.conversation.length() == 0 {
-            return Err(
-              "previous_response_id without conversation history cannot be converted to anthropic-messages",
-            )
-          }
-          diagnostics.push(
-            @lux.ConversionDiagnostic::unsupported(
-              "options.previous_response_id",
-              Some("previous_response_id not preserved by anthropic-messages"),
-            ),
-          )
-          merged_extras = @internal.extras_without(
-            merged_extras, "previous_response_id",
-          )
-        }
-        None => ()
+        Some(String(id)) => Some(id)
+        _ => None
       }
-    None => ()
+    None => None
+  }
+  let has_prev_id = opts.previous_response_id is Some(_) ||
+    prev_id_extras is Some(_)
+  if has_prev_id {
+    if req.conversation.length() == 0 {
+      return Err(
+        "previous_response_id without conversation history cannot be converted to anthropic-messages",
+      )
+    }
+    diagnostics.push(
+      @lux.ConversionDiagnostic::unsupported(
+        "options.previous_response_id",
+        Some("previous_response_id not preserved by anthropic-messages"),
+      ),
+    )
+    merged_extras = @internal.extras_without(
+      merged_extras, "previous_response_id",
+    )
   }
   // extras：合并进请求 JSON 顶层
   @internal.merge_extras_json(parts, merged_extras)

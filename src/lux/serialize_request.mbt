@@ -59,3 +59,17 @@ pub fn LucentRequest::to_json(self : LucentRequest) -> Json {
   }
   Json::object(fields)
 }
+
+///|
+/// ConversationSnapshot 序列化（T8；宿主持久化用，不参与 wire）
+pub fn ConversationSnapshot::to_json(self : ConversationSnapshot) -> Json {
+  let fields : Map[String, Json] = {
+    "response_id": Json::string(self.response_id),
+    "request": self.request.to_json(),
+  }
+  match self.response_text {
+    Some(t) => fields["response_text"] = Json::string(t)
+    None => ()
+  }
+  Json::object(fields)
+}
