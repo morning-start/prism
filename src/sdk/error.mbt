@@ -21,6 +21,20 @@ pub struct PrismError {
 } derive(Eq, Debug)
 
 ///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend PrismError with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend PrismError with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend PrismError with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 pub fn PrismError::new(
   kind : @lux.LucentErrorKind,
   message : String,

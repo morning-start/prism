@@ -6,4 +6,5 @@ import {
   "morning-start/prism/provider/openai",
   "morning-start/prism/provider/messages",
   "morning-start/prism/provider/gemini",
+  "moonbitlang/core/debug",
 }

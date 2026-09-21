@@ -16,12 +16,40 @@ pub(all) enum LucentErrorKind {
 } derive(Eq, Debug)
 
 ///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentErrorKind with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentErrorKind with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentErrorKind with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// LucentError — 错误结构化
 pub struct LucentError {
   kind : LucentErrorKind
   message : String
   provider_code : String?
 } derive(Eq, Debug)
+
+///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentError with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentError with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentError with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// LucentConversationMeta — 会话元信息（ConversationStart 携带）
@@ -42,6 +70,20 @@ pub struct LucentConversationMeta {
 } derive(Eq, Debug)
 
 ///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentConversationMeta with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentConversationMeta with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentConversationMeta with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// LucentBlockType — 块类型（类型化，替代字符串）
 pub(all) enum LucentBlockType {
   Text
@@ -55,6 +97,20 @@ pub(all) enum LucentBlockType {
 } derive(Eq, Debug)
 
 ///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentBlockType with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentBlockType with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentBlockType with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// LucentBlockDelta — 块增量（类型化）
 pub(all) enum LucentBlockDelta {
   TextDelta(String)
@@ -64,6 +120,20 @@ pub(all) enum LucentBlockDelta {
   RefusalDelta(String)
   NativeDelta(String, Json) // 厂商私有增量
 } derive(Eq, Debug)
+
+///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentBlockDelta with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentBlockDelta with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentBlockDelta with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// LucentStreamEvent — 流事件（canonical：块生命周期）
@@ -93,6 +163,20 @@ pub(all) enum LucentStreamEvent {
   /// 流结束
   Done
 } derive(Eq, Debug)
+
+///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentStreamEvent with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentStreamEvent with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentStreamEvent with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// 构造器与辅助
@@ -231,6 +315,20 @@ pub struct AccumulatedResponse {
   agent_actions : Array[LucentAgentAction]
   diagnostics : Array[ConversionDiagnostic]
 } derive(Eq, Debug)
+
+///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend AccumulatedResponse with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend AccumulatedResponse with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend AccumulatedResponse with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// BlockAccumulator — 块状态跟踪器

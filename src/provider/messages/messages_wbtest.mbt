@@ -1065,9 +1065,7 @@ test "encode - native media yields Unsupported diagnostic not empty string" {
         @lux.LucentMessage::new(User, [
           @lux.LucentContent::native(
             "vendor-x",
-            @json.parse("\"raw\"") catch {
-              _ => Json::null()
-            },
+            @internal.parse_json_opt("\"raw\"").unwrap_or(Json::null()),
           ),
         ]),
       ),

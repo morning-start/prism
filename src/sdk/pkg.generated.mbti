@@ -136,6 +136,7 @@ pub struct DiagnosticCounts {
   mut invalid : Int
 } derive(Eq, @debug.Debug)
 pub fn DiagnosticCounts::default() -> Self
+pub fn DiagnosticCounts::equal(Self, Self) -> Bool
 pub fn DiagnosticCounts::total(Self) -> Int
 
 pub(all) enum DiagnosticPolicy {
@@ -143,6 +144,7 @@ pub(all) enum DiagnosticPolicy {
   FailOnUnsupported
   FailOnDegraded
 } derive(Eq, @debug.Debug)
+pub fn DiagnosticPolicy::equal(Self, Self) -> Bool
 
 pub struct FieldConstraint {
   min_val : Double?
@@ -179,6 +181,7 @@ pub struct PrismError {
   message : String
   provider : String?
 } derive(Eq, @debug.Debug)
+pub fn PrismError::equal(Self, Self) -> Bool
 pub fn PrismError::from_string(String) -> Self
 pub fn PrismError::is_retryable(Self) -> Bool
 pub fn PrismError::message(Self) -> String

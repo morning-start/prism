@@ -92,6 +92,7 @@ pub struct SseMessage {
   event_type : String?
   data : String
 } derive(Eq, @debug.Debug)
+pub fn SseMessage::equal(Self, Self) -> Bool
 
 // Type aliases
 

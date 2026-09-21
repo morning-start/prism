@@ -190,7 +190,7 @@ test "lux_request_to_openai - simple user message" {
   match lux_request_to_openai(req) {
     Ok(cr) => {
       let s = cr.value()
-      let jv = @json.parse(s)
+      let jv = @internal.parse_json_opt(s).unwrap()
       match @internal.obj_get(jv, "model") {
         Some(String("gpt-4o")) => ()
         _ => assert_true(false)
@@ -221,7 +221,7 @@ test "lux_request_to_openai - instructions prepended as system message" {
   match lux_request_to_openai(req) {
     Ok(cr) => {
       let s = cr.value()
-      let jv = @json.parse(s)
+      let jv = @internal.parse_json_opt(s).unwrap()
       match @internal.field_arr(jv, "messages") {
         Some(arr) => {
           assert_eq(arr.length(), 2)
@@ -259,7 +259,7 @@ test "lux_request_to_openai - tool_use encoded as tool_calls" {
   match lux_request_to_openai(req) {
     Ok(cr) => {
       let s = cr.value()
-      let jv = @json.parse(s)
+      let jv = @internal.parse_json_opt(s).unwrap()
       match @internal.field_arr(jv, "messages") {
         Some(arr) =>
           match @internal.obj_get(arr[0], "tool_calls") {
@@ -296,7 +296,7 @@ test "lux_request_to_openai - tool_result encoded as tool role" {
   match lux_request_to_openai(req) {
     Ok(cr) => {
       let s = cr.value()
-      let jv = @json.parse(s)
+      let jv = @internal.parse_json_opt(s).unwrap()
       match @internal.field_arr(jv, "messages") {
         Some(arr) =>
           match @internal.field_str(arr[0], "role") {
@@ -327,7 +327,7 @@ test "lux_request_to_openai - tools encoded" {
   match lux_request_to_openai(req) {
     Ok(cr) => {
       let s = cr.value()
-      let jv = @json.parse(s)
+      let jv = @internal.parse_json_opt(s).unwrap()
       match @internal.field_arr(jv, "tools") {
         Some(arr) => assert_eq(arr.length(), 1)
         None => assert_true(false)
@@ -470,7 +470,7 @@ test "lux_response_to_openai - text response" {
   match lux_response_to_openai(resp) {
     Ok(cr) => {
       let s = cr.value()
-      let jv = @json.parse(s)
+      let jv = @internal.parse_json_opt(s).unwrap()
       match @internal.field_str(jv, "object") {
         Some("chat.completion") => ()
         _ => assert_true(false)
@@ -510,7 +510,7 @@ test "lux_response_to_openai - tool_calls encoded" {
   match lux_response_to_openai(resp) {
     Ok(cr) => {
       let s = cr.value()
-      let jv = @json.parse(s)
+      let jv = @internal.parse_json_opt(s).unwrap()
       match @internal.field_arr(jv, "choices") {
         Some(arr) =>
           match @internal.obj_get(arr[0], "message") {
@@ -548,7 +548,7 @@ test "lux_response_to_openai - refusal encoded" {
   match lux_response_to_openai(resp) {
     Ok(cr) => {
       let s = cr.value()
-      let jv = @json.parse(s)
+      let jv = @internal.parse_json_opt(s).unwrap()
       match @internal.field_arr(jv, "choices") {
         Some(arr) =>
           match @internal.obj_get(arr[0], "message") {
@@ -818,7 +818,7 @@ test "round trip - response decode then encode preserves id" {
     Ok(cr1) =>
       match lux_response_to_openai(cr1.value()) {
         Ok(cr2) => {
-          let jv = @json.parse(cr2.value())
+          let jv = @internal.parse_json_opt(cr2.value()).unwrap()
           match @internal.field_str(jv, "id") {
             Some("c-1") => ()
             _ => assert_true(false)
@@ -970,7 +970,7 @@ test "lux_request_to_openai - reasoning config emits reasoning_effort" {
   )
   match lux_request_to_openai(req) {
     Ok(cr) => {
-      let jv = @json.parse(cr.value())
+      let jv = @internal.parse_json_opt(cr.value()).unwrap()
       assert_eq(@internal.field_str(jv, "reasoning_effort"), Some("high"))
     }
     Err(_) => assert_true(false)
@@ -1182,7 +1182,7 @@ test "lux_response_to_openai - reasoning emitted as message.reasoning" {
   )
   match lux_response_to_openai(resp) {
     Ok(cr) => {
-      let jv = @json.parse(cr.value())
+      let jv = @internal.parse_json_opt(cr.value()).unwrap()
       match @internal.obj_get(jv, "choices") {
         Some(Array(cs)) =>
           match @internal.obj_get(cs[0], "message") {
@@ -1212,11 +1212,13 @@ test "lux_response_to_openai - reasoning_field switches to reasoning_content" {
     None,
     [@lux.LucentChoice::new(0, msg, Stop, None)],
     None,
-    Some({ "reasoning_field": @json.parse("\"reasoning_content\"") }),
+    Some({
+      "reasoning_field": @internal.parse_json_opt("\"reasoning_content\"").unwrap(),
+    }),
   )
   match lux_response_to_openai(resp) {
     Ok(cr) => {
-      let jv = @json.parse(cr.value())
+      let jv = @internal.parse_json_opt(cr.value()).unwrap()
       match @internal.obj_get(jv, "choices") {
         Some(Array(cs)) =>
           match @internal.obj_get(cs[0], "message") {
@@ -1250,7 +1252,7 @@ test "lux_response_to_openai - no reasoning yields plain message" {
   )
   match lux_response_to_openai(resp) {
     Ok(cr) => {
-      let jv = @json.parse(cr.value())
+      let jv = @internal.parse_json_opt(cr.value()).unwrap()
       match @internal.obj_get(jv, "choices") {
         Some(Array(cs)) =>
           match @internal.obj_get(cs[0], "message") {
@@ -1272,7 +1274,7 @@ test "openai_chat round-trip preserves vLLM reasoning" {
     Ok(cr) =>
       match lux_response_to_openai(cr.value()) {
         Ok(out) => {
-          let jv = @json.parse(out.value())
+          let jv = @internal.parse_json_opt(out.value()).unwrap()
           match @internal.obj_get(jv, "choices") {
             Some(Array(cs)) =>
               match @internal.obj_get(cs[0], "message") {

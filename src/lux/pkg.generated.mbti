@@ -36,6 +36,7 @@ pub struct AccumulatedResponse {
   agent_actions : Array[LucentAgentAction]
   diagnostics : Array[ConversionDiagnostic]
 } derive(Eq, @debug.Debug)
+pub fn AccumulatedResponse::equal(Self, Self) -> Bool
 
 pub(all) struct BlockAccumulator {
   block_types : Array[LucentBlockType]
@@ -56,6 +57,7 @@ pub struct ConversationSnapshot {
   request : LucentRequest
   response_text : String?
 } derive(Eq, @debug.Debug)
+pub fn ConversationSnapshot::equal(Self, Self) -> Bool
 pub fn ConversationSnapshot::from_json(Json) -> Result[Self, String]
 pub fn ConversationSnapshot::new(String, LucentRequest, String?) -> Self
 pub fn ConversationSnapshot::to_json(Self) -> Json
@@ -66,6 +68,7 @@ pub struct ConversionDiagnostic {
   detail : String?
 } derive(Eq, @debug.Debug)
 pub fn ConversionDiagnostic::degraded(String, String?) -> Self
+pub fn ConversionDiagnostic::equal(Self, Self) -> Bool
 pub fn ConversionDiagnostic::from_json(Json) -> Result[Self, String]
 pub fn ConversionDiagnostic::new(String, ConversionStatus, String?) -> Self
 pub fn ConversionDiagnostic::status(Self) -> ConversionStatus
@@ -78,6 +81,7 @@ pub struct ConversionResult[T] {
 } derive(Eq, @debug.Debug)
 pub fn[T] ConversionResult::diagnostics(Self[T]) -> Array[ConversionDiagnostic]
 pub fn[T] ConversionResult::envelope_json(Self[T], Json) -> Json
+pub fn[T : Eq] ConversionResult::equal(Self[T], Self[T]) -> Bool
 pub fn[T] ConversionResult::from_json(Json, (Json) -> Result[T, String]) -> Result[Self[T], String]
 pub fn[T] ConversionResult::new(T) -> Self[T]
 pub fn[T] ConversionResult::to_json(Self[T], (T) -> Json) -> Json
@@ -91,6 +95,7 @@ pub(all) enum ConversionStatus {
   Unsupported
   Invalid
 } derive(Eq, @debug.Debug)
+pub fn ConversionStatus::equal(Self, Self) -> Bool
 pub fn ConversionStatus::from_json(Json) -> Result[Self, String]
 pub fn ConversionStatus::to_json(Self) -> Json
 
@@ -103,6 +108,7 @@ pub struct LucentAgentAction {
   result : String?
   provider_payload : Json?
 } derive(Eq, @debug.Debug)
+pub fn LucentAgentAction::equal(Self, Self) -> Bool
 pub fn LucentAgentAction::from_json(Json) -> Result[Self, String]
 pub fn LucentAgentAction::new(String, String, String?, String?, String?, String?, Json?) -> Self
 pub fn LucentAgentAction::to_json(Self) -> Json
@@ -114,6 +120,7 @@ pub struct LucentAnnotation {
   start : Int?
   end : Int?
 } derive(Eq, @debug.Debug)
+pub fn LucentAnnotation::equal(Self, Self) -> Bool
 pub fn LucentAnnotation::from_json(Json) -> Result[Self, String]
 pub fn LucentAnnotation::new(LucentAnnotationKind, String?, String?, Int?, Int?) -> Self
 pub fn LucentAnnotation::to_json(Self) -> Json
@@ -124,6 +131,7 @@ pub(all) enum LucentAnnotationKind {
   WebSearchCitation
   Native(String)
 } derive(Eq, @debug.Debug)
+pub fn LucentAnnotationKind::equal(Self, Self) -> Bool
 pub fn LucentAnnotationKind::from_json(Json) -> Result[Self, String]
 pub fn LucentAnnotationKind::to_json(Self) -> String
 
@@ -135,6 +143,7 @@ pub(all) enum LucentBlockDelta {
   RefusalDelta(String)
   NativeDelta(String, Json)
 } derive(Eq, @debug.Debug)
+pub fn LucentBlockDelta::equal(Self, Self) -> Bool
 pub fn LucentBlockDelta::from_json(Json) -> Result[Self, String]
 pub fn LucentBlockDelta::native_delta(String, Json) -> Self
 pub fn LucentBlockDelta::refusal_delta(String) -> Self
@@ -154,6 +163,7 @@ pub(all) enum LucentBlockType {
   Video
   Native(String)
 } derive(Eq, @debug.Debug)
+pub fn LucentBlockType::equal(Self, Self) -> Bool
 pub fn LucentBlockType::from_json(Json) -> Result[Self, String]
 pub fn LucentBlockType::native(String) -> Self
 pub fn LucentBlockType::refusal() -> Self
@@ -173,6 +183,7 @@ pub struct LucentCapabilities {
 } derive(Eq, @debug.Debug)
 pub fn LucentCapabilities::create(SupportLevel, SupportLevel, SupportLevel, SupportLevel, SupportLevel, Array[LucentModality], Array[LucentModality]) -> Self
 pub fn LucentCapabilities::default() -> Self
+pub fn LucentCapabilities::equal(Self, Self) -> Bool
 pub fn LucentCapabilities::from_json(Json) -> Result[Self, String]
 pub fn LucentCapabilities::to_json(Self) -> Json
 
@@ -182,6 +193,7 @@ pub struct LucentChoice {
   finish_reason : LucentFinishReason
   safety_ratings : Array[LucentSafetyRating]?
 } derive(Eq, @debug.Debug)
+pub fn LucentChoice::equal(Self, Self) -> Bool
 pub fn LucentChoice::from_json(Json) -> Result[Self, String]
 pub fn LucentChoice::new(Int, LucentMessage, LucentFinishReason, Array[LucentSafetyRating]?) -> Self
 pub fn LucentChoice::to_json(Self) -> Json
@@ -199,6 +211,7 @@ pub(all) enum LucentContent {
   Native(String, Json)
 } derive(Eq, @debug.Debug)
 pub fn LucentContent::audio(String, LucentMediaSource) -> Self
+pub fn LucentContent::equal(Self, Self) -> Bool
 pub fn LucentContent::file(String, LucentMediaSource) -> Self
 pub fn LucentContent::from_json(Json) -> Result[Self, String]
 pub fn LucentContent::image(String, LucentMediaSource) -> Self
@@ -222,6 +235,7 @@ pub(all) enum LucentConversationItem {
   AgentAction(LucentAgentAction)
 } derive(Eq, @debug.Debug)
 pub fn LucentConversationItem::agent_action(LucentAgentAction) -> Self
+pub fn LucentConversationItem::equal(Self, Self) -> Bool
 pub fn LucentConversationItem::from_json(Json) -> Result[Self, String]
 pub fn LucentConversationItem::message(LucentMessage) -> Self
 pub fn LucentConversationItem::reasoning(LucentThinking) -> Self
@@ -236,6 +250,7 @@ pub struct LucentConversationMeta {
   created_at : Int?
   extra : Json?
 } derive(Eq, @debug.Debug)
+pub fn LucentConversationMeta::equal(Self, Self) -> Bool
 pub fn LucentConversationMeta::from_json(Json) -> Result[Self, String]
 pub fn LucentConversationMeta::new(String?, String?, Int?) -> Self
 pub fn LucentConversationMeta::new_full(String?, String?, Int?, Int?, Json?) -> Self
@@ -247,6 +262,7 @@ pub struct LucentDiscovery {
   schema_url : String
   providers : Array[ProviderCapability]
 } derive(Eq, @debug.Debug)
+pub fn LucentDiscovery::equal(Self, Self) -> Bool
 pub fn LucentDiscovery::from_json(Json) -> Result[Self, String]
 pub fn LucentDiscovery::new(String, String, Array[ProviderCapability]) -> Self
 pub fn LucentDiscovery::to_json(Self) -> Json
@@ -256,6 +272,7 @@ pub struct LucentError {
   message : String
   provider_code : String?
 } derive(Eq, @debug.Debug)
+pub fn LucentError::equal(Self, Self) -> Bool
 pub fn LucentError::from_json(Json) -> Result[Self, String]
 pub fn LucentError::new(LucentErrorKind, String, String?) -> Self
 pub fn LucentError::simple(String) -> Self
@@ -269,6 +286,7 @@ pub(all) enum LucentErrorKind {
   ContentFilter
   Native(String)
 } derive(Eq, @debug.Debug)
+pub fn LucentErrorKind::equal(Self, Self) -> Bool
 pub fn LucentErrorKind::from_json(Json) -> Result[Self, String]
 pub fn LucentErrorKind::from_string(String) -> Self
 pub fn LucentErrorKind::to_json(Self) -> Json
@@ -284,6 +302,7 @@ pub(all) enum LucentFinishReason {
   Error
   Native(String)
 } derive(Eq, @debug.Debug)
+pub fn LucentFinishReason::equal(Self, Self) -> Bool
 pub fn LucentFinishReason::from_json(Json) -> Result[Self, String]
 pub fn LucentFinishReason::from_string(String) -> Self
 pub fn LucentFinishReason::to_json(Self) -> Json
@@ -294,6 +313,7 @@ pub(all) enum LucentMediaSource {
   Url(String)
   FileUri(String)
 } derive(Eq, @debug.Debug)
+pub fn LucentMediaSource::equal(Self, Self) -> Bool
 pub fn LucentMediaSource::file_uri(String) -> Self
 pub fn LucentMediaSource::from_json(Json) -> Result[Self, String]
 pub fn LucentMediaSource::inline(String) -> Self
@@ -306,6 +326,7 @@ pub struct LucentMessage {
   phase : String?
   reasoning : LucentThinking?
 } derive(Eq, @debug.Debug)
+pub fn LucentMessage::equal(Self, Self) -> Bool
 pub fn LucentMessage::from_json(Json) -> Result[Self, String]
 pub fn LucentMessage::new(LucentRole, Array[LucentContent]) -> Self
 pub fn LucentMessage::to_json(Self) -> Json
@@ -320,6 +341,7 @@ pub(all) enum LucentModality {
   Pdf
   Native(String)
 } derive(Eq, @debug.Debug)
+pub fn LucentModality::equal(Self, Self) -> Bool
 pub fn LucentModality::from_json(Json) -> Result[Self, String]
 pub fn LucentModality::from_string(String) -> Self?
 pub fn LucentModality::to_json(Self) -> Json
@@ -328,6 +350,7 @@ pub struct LucentMultimedia {
   media_type : String
   source : LucentMediaSource
 } derive(Eq, @debug.Debug)
+pub fn LucentMultimedia::equal(Self, Self) -> Bool
 pub fn LucentMultimedia::from_json(Json) -> Result[Self, String]
 pub fn LucentMultimedia::new(String, LucentMediaSource) -> Self
 pub fn LucentMultimedia::to_json(Self) -> Json
@@ -346,6 +369,7 @@ pub struct LucentOptions {
   extras : Map[String, Json]?
 } derive(Eq, @debug.Debug)
 pub fn LucentOptions::default() -> Self
+pub fn LucentOptions::equal(Self, Self) -> Bool
 pub fn LucentOptions::from_json(Json) -> Result[Self, String]
 pub fn LucentOptions::new(Double?, Double?, Int?, Int?, Array[String]?, Bool, Int?, LucentStructuredOutput?, Bool?, Map[String, Json]?) -> Self
 pub fn LucentOptions::to_json(Self) -> Json
@@ -362,6 +386,7 @@ pub struct LucentReasoningConfig {
 pub fn LucentReasoningConfig::copy_with_budget(Self, Int?) -> Self
 pub fn LucentReasoningConfig::disabled() -> Self
 pub fn LucentReasoningConfig::enabled(Int?) -> Self
+pub fn LucentReasoningConfig::equal(Self, Self) -> Bool
 pub fn LucentReasoningConfig::from_json(Json) -> Result[Self, String]
 pub fn LucentReasoningConfig::new(LucentReasoningEffort?, LucentReasoningSummary?) -> Self
 pub fn LucentReasoningConfig::to_json(Self) -> Json
@@ -372,6 +397,7 @@ pub(all) enum LucentReasoningEffort {
   High
   XHigh
 } derive(Eq, @debug.Debug)
+pub fn LucentReasoningEffort::equal(Self, Self) -> Bool
 pub fn LucentReasoningEffort::from_json(Json) -> Result[Self, String]
 pub fn LucentReasoningEffort::to_string(Self) -> String
 
@@ -380,6 +406,7 @@ pub(all) enum LucentReasoningSummary {
   Concise
   Detailed
 } derive(Eq, @debug.Debug)
+pub fn LucentReasoningSummary::equal(Self, Self) -> Bool
 pub fn LucentReasoningSummary::from_json(Json) -> Result[Self, String]
 
 pub struct LucentRequest {
@@ -395,6 +422,7 @@ pub struct LucentRequest {
   metadata : Map[String, String]?
   extra : Map[String, Json]?
 } derive(Eq, @debug.Debug)
+pub fn LucentRequest::equal(Self, Self) -> Bool
 pub fn LucentRequest::from_json(Json) -> Result[Self, String]
 pub fn LucentRequest::from_messages(String, Array[LucentContent]?, Array[LucentMessage], Array[LucentTool]?, LucentToolChoice?, LucentOptions, LucentCapabilities?, LucentReasoningConfig?, Map[String, String]?, Map[String, Json]?) -> Self
 pub fn LucentRequest::new(String, Array[LucentContent]?, Array[LucentConversationItem], Array[LucentTool]?, LucentToolChoice?, LucentOptions, LucentCapabilities?, LucentReasoningConfig?, Map[String, String]?, Map[String, Json]?) -> Self
@@ -412,6 +440,7 @@ pub struct LucentResponse {
   usage : LucentUsage?
   provider_payload : Json?
 } derive(Eq, @debug.Debug)
+pub fn LucentResponse::equal(Self, Self) -> Bool
 pub fn LucentResponse::from_json(Json) -> Result[Self, String]
 pub fn LucentResponse::get_text(Self) -> String
 pub fn LucentResponse::new(String, String, Int?, Array[LucentChoice], LucentUsage?, Json?) -> Self
@@ -429,6 +458,7 @@ pub(all) enum LucentRole {
   Developer
   Native(String)
 } derive(Eq, @debug.Debug)
+pub fn LucentRole::equal(Self, Self) -> Bool
 pub fn LucentRole::from_json(Json) -> Result[Self, String]
 pub fn LucentRole::from_string(String) -> Self?
 pub fn LucentRole::to_json(Self) -> Json
@@ -438,6 +468,7 @@ pub struct LucentSafetyRating {
   category : String
   probability : String
 } derive(Eq, @debug.Debug)
+pub fn LucentSafetyRating::equal(Self, Self) -> Bool
 pub fn LucentSafetyRating::from_json(Json) -> Result[Self, String]
 pub fn LucentSafetyRating::new(String, String) -> Self
 pub fn LucentSafetyRating::to_json(Self) -> Json
@@ -456,6 +487,7 @@ pub(all) enum LucentStreamEvent {
   Error(LucentError)
   Done
 } derive(Eq, @debug.Debug)
+pub fn LucentStreamEvent::equal(Self, Self) -> Bool
 pub fn LucentStreamEvent::from_json(Json) -> Result[Self, String]
 pub fn LucentStreamEvent::to_json(Self) -> Json
 
@@ -464,6 +496,7 @@ pub(all) enum LucentStructuredOutput {
   Text
   JsonSchema(String)
 } derive(Eq, @debug.Debug)
+pub fn LucentStructuredOutput::equal(Self, Self) -> Bool
 pub fn LucentStructuredOutput::from_json(Json) -> Result[Self, String]
 pub fn LucentStructuredOutput::to_json(Self) -> Json
 
@@ -473,6 +506,7 @@ pub struct LucentThinking {
   redacted : Bool
   summary : Array[LucentContent]?
 } derive(Eq, @debug.Debug)
+pub fn LucentThinking::equal(Self, Self) -> Bool
 pub fn LucentThinking::from_json(Json) -> Result[Self, String]
 pub fn LucentThinking::new(String, String?, Bool, Array[LucentContent]?) -> Self
 pub fn LucentThinking::redacted(String?) -> Self
@@ -486,6 +520,7 @@ pub struct LucentTool {
   strict : Bool?
   kind : LucentToolKind
 } derive(Eq, @debug.Debug)
+pub fn LucentTool::equal(Self, Self) -> Bool
 pub fn LucentTool::from_json(Json) -> Result[Self, String]
 pub fn LucentTool::new(String, String?, String, Bool?, LucentToolKind) -> Self
 pub fn LucentTool::simple(String, String, String) -> Self
@@ -497,6 +532,7 @@ pub(all) enum LucentToolChoice {
   Required
   SpecificTool(String)
 } derive(Eq, @debug.Debug)
+pub fn LucentToolChoice::equal(Self, Self) -> Bool
 pub fn LucentToolChoice::from_json(Json) -> Result[Self, String]
 pub fn LucentToolChoice::to_json(Self) -> Json
 
@@ -512,12 +548,14 @@ pub(all) enum LucentToolKind {
   MCP
   Native(String)
 } derive(Eq, @debug.Debug)
+pub fn LucentToolKind::equal(Self, Self) -> Bool
 
 pub struct LucentToolResult {
   tool_use_id : String
   content : Array[LucentContent]
   is_error : Bool
 } derive(Eq, @debug.Debug)
+pub fn LucentToolResult::equal(Self, Self) -> Bool
 pub fn LucentToolResult::error(String, Array[LucentContent]) -> Self
 pub fn LucentToolResult::from_json(Json) -> Result[Self, String]
 pub fn LucentToolResult::new(String, Array[LucentContent], Bool) -> Self
@@ -530,6 +568,7 @@ pub struct LucentToolUse {
   arguments_json : String
   arguments_value : Json?
 } derive(Eq, @debug.Debug)
+pub fn LucentToolUse::equal(Self, Self) -> Bool
 pub fn LucentToolUse::from_json(Json) -> Result[Self, String]
 pub fn LucentToolUse::new(String, String, String, Json?) -> Self
 pub fn LucentToolUse::to_json(Self) -> Json
@@ -542,6 +581,7 @@ pub(all) struct LucentUsage {
   cached_tokens : Int?
   cache_creation_tokens : Int?
 } derive(Eq, @debug.Debug)
+pub fn LucentUsage::equal(Self, Self) -> Bool
 pub fn LucentUsage::from_json(Json) -> Result[Self, String]
 pub fn LucentUsage::full(Int, Int, Int, Int?, Int?, Int?) -> Self
 pub fn LucentUsage::new(Int, Int, Int) -> Self
@@ -554,6 +594,7 @@ pub struct ProviderCapability {
   capabilities : LucentCapabilities
   extra_params : Map[String, Json]?
 } derive(Eq, @debug.Debug)
+pub fn ProviderCapability::equal(Self, Self) -> Bool
 pub fn ProviderCapability::from_json(Json) -> Result[Self, String]
 pub fn ProviderCapability::new(String, String, LucentCapabilities, Map[String, Json]?) -> Self
 pub fn ProviderCapability::to_json(Self) -> Json
@@ -563,6 +604,7 @@ pub(all) enum SupportLevel {
   Partial
   Absent
 } derive(Eq, @debug.Debug)
+pub fn SupportLevel::equal(Self, Self) -> Bool
 pub fn SupportLevel::from_json(Json) -> Result[Self, String]
 pub fn SupportLevel::from_string(String) -> Self?
 pub fn SupportLevel::to_json(Self) -> Json

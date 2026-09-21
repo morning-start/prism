@@ -18,6 +18,20 @@ pub(all) enum LucentRole {
 } derive(Eq, Debug)
 
 ///|
+/// 显式声明 Eq::equal 保留为常规方法（隐式提升已弃用，见 E0079）
+pub extend LucentRole with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentRole with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentRole with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// LucentModality — 模态声明
 pub(all) enum LucentModality {
   Text
@@ -29,12 +43,40 @@ pub(all) enum LucentModality {
 } derive(Eq, Debug)
 
 ///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentModality with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentModality with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentModality with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// LucentMediaSource — 多模态来源三选一
 pub(all) enum LucentMediaSource {
   Inline(String)
   Url(String)
   FileUri(String)
 } derive(Eq, Debug)
+
+///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentMediaSource with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentMediaSource with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentMediaSource with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// LucentMultimedia — 多模态媒体块
@@ -44,6 +86,20 @@ pub struct LucentMultimedia {
 } derive(Eq, Debug)
 
 ///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentMultimedia with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentMultimedia with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentMultimedia with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// LucentAnnotationKind — 标注类型
 pub(all) enum LucentAnnotationKind {
   Url
@@ -51,6 +107,20 @@ pub(all) enum LucentAnnotationKind {
   WebSearchCitation
   Native(String)
 } derive(Eq, Debug)
+
+///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentAnnotationKind with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentAnnotationKind with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentAnnotationKind with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// LucentAnnotation — 标注侧信道
@@ -63,6 +133,20 @@ pub struct LucentAnnotation {
 } derive(Eq, Debug)
 
 ///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentAnnotation with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentAnnotation with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentAnnotation with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// LucentThinking — 推理内容
 pub struct LucentThinking {
   text : String
@@ -70,6 +154,20 @@ pub struct LucentThinking {
   redacted : Bool
   summary : Array[LucentContent]?
 } derive(Eq, Debug)
+
+///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentThinking with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentThinking with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentThinking with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// LucentToolUse — 工具调用（结构化）
@@ -81,12 +179,40 @@ pub struct LucentToolUse {
 } derive(Eq, Debug)
 
 ///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentToolUse with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentToolUse with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentToolUse with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// LucentToolResult — 工具结果（多块内容）
 pub struct LucentToolResult {
   tool_use_id : String
   content : Array[LucentContent]
   is_error : Bool
 } derive(Eq, Debug)
+
+///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentToolResult with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentToolResult with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentToolResult with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// LucentAgentAction — Agent 动作占位（v1 仅类型化，参数走 provider_payload）
@@ -99,6 +225,20 @@ pub struct LucentAgentAction {
   result : String?
   provider_payload : Json?
 } derive(Eq, Debug)
+
+///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentAgentAction with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentAgentAction with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentAgentAction with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// LucentContent — 内容块主枚举
@@ -116,6 +256,20 @@ pub(all) enum LucentContent {
 } derive(Eq, Debug)
 
 ///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentContent with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentContent with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentContent with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// LucentMessage — 消息特例（role + content 块数组）
 pub struct LucentMessage {
   role : LucentRole
@@ -126,6 +280,20 @@ pub struct LucentMessage {
 } derive(Eq, Debug)
 
 ///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentMessage with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentMessage with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentMessage with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// LucentConversationItem — 会话项异质平级
 pub(all) enum LucentConversationItem {
   Message(LucentMessage)
@@ -134,6 +302,20 @@ pub(all) enum LucentConversationItem {
   Reasoning(LucentThinking)
   AgentAction(LucentAgentAction)
 } derive(Eq, Debug)
+
+///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentConversationItem with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentConversationItem with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentConversationItem with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// LucentToolKind — 工具类型（消费方处理逻辑不同）
@@ -151,6 +333,20 @@ pub(all) enum LucentToolKind {
 } derive(Eq, Debug)
 
 ///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentToolKind with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentToolKind with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentToolKind with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// LucentTool — 工具定义
 pub struct LucentTool {
   name : String
@@ -159,6 +355,20 @@ pub struct LucentTool {
   strict : Bool?
   kind : LucentToolKind
 } derive(Eq, Debug)
+
+///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentTool with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentTool with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentTool with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// LucentToolChoice — 工具选择（类型化）
@@ -170,12 +380,40 @@ pub(all) enum LucentToolChoice {
 } derive(Eq, Debug)
 
 ///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentToolChoice with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentToolChoice with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentToolChoice with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// LucentStructuredOutput — 结构化输出
 pub(all) enum LucentStructuredOutput {
   JsonObject
   Text
   JsonSchema(String)
 } derive(Eq, Debug)
+
+///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentStructuredOutput with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentStructuredOutput with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentStructuredOutput with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// LucentOptions — 生成参数
@@ -196,6 +434,20 @@ pub struct LucentOptions {
 } derive(Eq, Debug)
 
 ///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentOptions with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentOptions with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentOptions with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// LucentReasoningEffort — 推理力度
 pub(all) enum LucentReasoningEffort {
   Low
@@ -205,12 +457,40 @@ pub(all) enum LucentReasoningEffort {
 } derive(Eq, Debug)
 
 ///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentReasoningEffort with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentReasoningEffort with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentReasoningEffort with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// LucentReasoningSummary — 推理摘要详细度
 pub(all) enum LucentReasoningSummary {
   Auto
   Concise
   Detailed
 } derive(Eq, Debug)
+
+///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentReasoningSummary with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentReasoningSummary with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentReasoningSummary with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// ConversationSnapshot — 中间件本地会话存储单元（T8）
@@ -229,6 +509,20 @@ pub struct ConversationSnapshot {
 } derive(Eq, Debug)
 
 ///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend ConversationSnapshot with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend ConversationSnapshot with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend ConversationSnapshot with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// LucentReasoningConfig — 推理配置
 pub struct LucentReasoningConfig {
   enabled : Bool
@@ -236,6 +530,20 @@ pub struct LucentReasoningConfig {
   effort : LucentReasoningEffort?
   summary : LucentReasoningSummary?
 } derive(Eq, Debug)
+
+///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentReasoningConfig with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentReasoningConfig with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentReasoningConfig with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// SupportLevel — 能力支持级别
@@ -246,6 +554,20 @@ pub(all) enum SupportLevel {
   Partial
   Absent
 } derive(Eq, Debug)
+
+///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend SupportLevel with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend SupportLevel with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend SupportLevel with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 pub fn SupportLevel::from_string(s : String) -> SupportLevel? {
@@ -279,6 +601,20 @@ pub struct LucentCapabilities {
 } derive(Eq, Debug)
 
 ///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentCapabilities with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentCapabilities with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentCapabilities with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// LucentRequest — 完整 LLM 请求
 pub struct LucentRequest {
   schema_version : String
@@ -295,6 +631,20 @@ pub struct LucentRequest {
 } derive(Eq, Debug)
 
 ///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentRequest with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentRequest with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentRequest with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// LucentUsage — Token 用量（面向 reasoning 时代）
 pub(all) struct LucentUsage {
   prompt_tokens : Int
@@ -304,6 +654,20 @@ pub(all) struct LucentUsage {
   cached_tokens : Int?
   cache_creation_tokens : Int?
 } derive(Eq, Debug)
+
+///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentUsage with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentUsage with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentUsage with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// LucentFinishReason — 结束原因
@@ -320,11 +684,39 @@ pub(all) enum LucentFinishReason {
 } derive(Eq, Debug)
 
 ///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentFinishReason with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentFinishReason with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentFinishReason with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// LucentSafetyRating — 安全评级
 pub struct LucentSafetyRating {
   category : String
   probability : String
 } derive(Eq, Debug)
+
+///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentSafetyRating with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentSafetyRating with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentSafetyRating with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// LucentChoice — 候选回复
@@ -334,6 +726,20 @@ pub struct LucentChoice {
   finish_reason : LucentFinishReason
   safety_ratings : Array[LucentSafetyRating]?
 } derive(Eq, Debug)
+
+///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentChoice with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentChoice with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentChoice with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// LucentResponse — 非流式 LLM 响应
@@ -348,6 +754,20 @@ pub struct LucentResponse {
 } derive(Eq, Debug)
 
 ///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentResponse with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentResponse with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentResponse with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// ProviderCapability — 适配器能力声明（SDK 自省用）
 pub struct ProviderCapability {
   model_pattern : String
@@ -355,6 +775,20 @@ pub struct ProviderCapability {
   capabilities : LucentCapabilities
   extra_params : Map[String, Json]?
 } derive(Eq, Debug)
+
+///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend ProviderCapability with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend ProviderCapability with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend ProviderCapability with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 pub fn ProviderCapability::new(
@@ -376,12 +810,40 @@ pub(all) enum ConversionStatus {
 } derive(Eq, Debug)
 
 ///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend ConversionStatus with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend ConversionStatus with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend ConversionStatus with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// ConversionDiagnostic — 单个字段的转换结果诊断
 pub struct ConversionDiagnostic {
   field : String
   status : ConversionStatus
   detail : String?
 } derive(Eq, Debug)
+
+///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend ConversionDiagnostic with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend ConversionDiagnostic with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend ConversionDiagnostic with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 pub fn ConversionDiagnostic::new(
@@ -399,6 +861,20 @@ pub struct ConversionResult[T] {
   value : T
   diagnostics : Array[ConversionDiagnostic]
 } derive(Eq, Debug)
+
+///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend ConversionResult with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend ConversionResult with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend ConversionResult with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 pub fn[T] ConversionResult::new(value : T) -> ConversionResult[T] {
@@ -481,6 +957,20 @@ pub struct LucentDiscovery {
   schema_url : String
   providers : Array[ProviderCapability]
 } derive(Eq, Debug)
+
+///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend LucentDiscovery with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentDiscovery with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend LucentDiscovery with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 pub fn LucentDiscovery::new(

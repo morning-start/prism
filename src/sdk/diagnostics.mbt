@@ -33,6 +33,20 @@ pub(all) enum DiagnosticPolicy {
 } derive(Eq, Debug)
 
 ///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend DiagnosticPolicy with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend DiagnosticPolicy with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend DiagnosticPolicy with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// 诊断严重度排序（数值越大越重）：Exact < Degraded < Unsupported < Invalid
 fn status_severity(status : @lux.ConversionStatus) -> Int {
   match status {
@@ -110,6 +124,20 @@ pub struct DiagnosticCounts {
   mut unsupported : Int
   mut invalid : Int
 } derive(Eq, Debug)
+
+///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend DiagnosticCounts with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend DiagnosticCounts with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend DiagnosticCounts with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 pub fn DiagnosticCounts::default() -> DiagnosticCounts {

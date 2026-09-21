@@ -93,6 +93,20 @@ pub struct SseMessage {
 } derive(Eq, Debug)
 
 ///|
+/// explicit: Eq::equal kept as a regular method (implicit promotion is deprecated, E0079)
+pub extend SseMessage with Eq::{equal}
+
+///|
+#deprecated("Use `!=` instead", skip_current_package=true)
+#doc(hidden)
+pub extend SseMessage with Eq::{not_equal}
+
+///|
+#deprecated("Use `Debug::to_repr` instead", skip_current_package=true)
+#doc(hidden)
+pub extend SseMessage with @moonbitlang/core/debug.Debug::{to_repr}
+
+///|
 /// 解析单个 SSE 消息块为 SseMessage
 ///
 /// 输入为一个消息块的文本（不含尾部空行），例如：
