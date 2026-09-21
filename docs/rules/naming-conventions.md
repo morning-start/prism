@@ -175,7 +175,7 @@ MoonBit 目录 = 包，**包内不再建子目录**（同包平铺编译）。�
 - `docs/lux-ir-design.md`（类型定义引用）
 - `docs/status.md`（测试清单与文件布局）
 - `docs/architecture.md`（Current decisions / adapter 布局）
-- `AGENTS.md` / `CLAUDE.md`（如涉及结构描述）
+- `AGENTS.md`（如涉及结构描述）
 
 ## 9. 验收
 

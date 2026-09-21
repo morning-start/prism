@@ -2,7 +2,60 @@
 
 This is a [MoonBit](https://docs.moonbitlang.com) project.
 
-## Project Structure
+## Overview
+
+Prism implements a neutral intermediate protocol — the **Lucent IR** (a.k.a.
+Lux IR) — that decouples AI agent frameworks and transit middleware from
+vendor-specific API formats. Any wire format is first decoded into the IR, then
+encoded out to the target; there are never pairwise converters between
+providers:
+
+```
+OpenAI JSON  ──[decode]──►  Lucent IR  ──[encode]──►  Anthropic JSON
+Gemini JSON  ◄──[encode]──  Lucent IR  ◄──[decode]──  OpenAI JSON
+                                │
+                   your code here (audit / rewrite / route / filter)
+```
+
+You can browse and install extra MoonBit skills here:
+<https://github.com/moonbitlang/skills>
+
+## Repository layout
+
+- `src/lux/` — Lucent IR core: types, serialization, diagnostics, stream events
+  (no IO, no vendor binding).
+- `src/provider/` — one package per wire protocol: `openai` (Chat Completions),
+  `responses` (OpenAI Responses), `messages` (Anthropic Messages, incl.
+  extended thinking), `gemini` (Google Gemini); `meta` holds provider metadata
+  shared by the registry.
+- `src/sdk/` — `Prism` facade + provider registry + routing + Context building
+  (the single convergence point).
+- `src/internal/` — shared primitives: JSON field access, SSE frame parsing,
+  extras merging.
+- `src/wasm/` + `src/cmd/main/` — WASM string-ABI exports (String in/out, zero
+  provider coupling).
+- `src/conformance/` — protocol conformance checkers (test toolkit).
+- `schemas/` — JSON Schema, the source of truth for the protocol.
+
+## Two consumer types
+
+| Role | Providers used | Flow |
+|---|---|---|
+| Agent framework SDK | 1 provider | `Lux → ProviderA` (send) + `ProviderA → Lux` (receive) |
+| Transit middleware | 2+ providers | `PA → Lux → PB`, or `PA → Lux → PA` (audit/filter/throttle) |
+
+Both consume `src/lux/` as the common language and `src/provider/*` as
+translators — an SDK usually bundles one provider, middleware bundles N.
+
+## Architecture layers
+
+1. Core (MoonBit) — `src/lux/`
+2. Adapters — `src/provider/*`
+3. SDK — `Prism` facade + registry (`src/sdk/`)
+4. Transport — `src/wasm/` / HTTP / IPC (future)
+5. Framework integration — LangChain, CrewAI, etc. (future)
+
+## MoonBit project structure
 
 - Each directory is a MoonBit package with a `moon.pkg` file listing its
   dependencies.
@@ -16,90 +69,142 @@ This is a [MoonBit](https://docs.moonbitlang.com) project.
 
 ## Context & Planning (flowstate)
 
-When starting work, restore context from, in order:
+When starting work on this project, read these in order to restore context:
 
-- `.agent-workplace/` — private workspace (gitignored): `docs/plan/`,
-  `docs/task/`, `docs/report/`, `shared/architecture.md`,
-  `state/checkpoint.json`
-- `.moonbit-pipeline.json` — session checkpoint (phase, plan pointer, progress)
-- `docs/architecture.md` — source of truth for design decisions
-- `docs/status.md` — project status and module completion tracking
-- `docs/rules/lucent-ir-evolution.md` — governance for Lucent IR changes
+- `.agent-workplace/` — agent private workspace (gitignored). Contains:
+  - `modes/README.md` — flowstate mode definitions (Graph + Plan/Spec/Task/Goal)
+  - `docs/plan/` — plan mode output
+  - `docs/spec/` — spec mode output (spec + tasks + checklist)
+  - `docs/task/` — task mode output (numbered checkbox task lists)
+  - `docs/report/` — reports
+  - `shared/architecture.md`
+  - `state/checkpoint.json` — breakpoint resume state + artifact registry
+- `.moonbit-pipeline.json` — pipeline state (current phase, plan file pointer,
+  task progress). Use it as the session checkpoint.
+- `docs/architecture.md` — dual-scenario architecture design (IR hub +
+  developer SDK / relay server), the source of truth for design decisions.
+- `docs/status.md` — current project status, test inventory, and module
+  completion tracking.
+- `docs/rules/lucent-ir-evolution.md` — mandatory governance before changing
+  any Lucent IR field, enum variant, stream event, capability, or payload.
 
 Progress convention: one feature per commit, commit after each task, pass
-`moon fmt --check` / `moon check` / `moon test` before committing. Once a
-task passes acceptance verification, the agent may commit on its own.
+`moon fmt --check` / `moon check` / `moon test` before committing. Once a task
+has passed acceptance verification (its acceptance checklist is fully green),
+the agent may commit to git on its own — no need to ask the user first.
 
 ## Coding convention
 
-- MoonBit code is organized in block style, each block separated by `///|`;
-  block order is irrelevant, and refactorings can process block by block.
-- Keep deprecated blocks in `deprecated.mbt` in each directory.
+- MoonBit code is organized in block style, each block is separated by `///|`,
+  the order of each block is irrelevant. In some refactorings, you can process
+  block by block independently.
+
+- Try to keep deprecated blocks in file called `deprecated.mbt` in each
+  directory.
 
 ## Lucent IR evolution
 
-- Before changing any Lucent IR field, enum variant, tool model, stream event,
-  capability, request extension, or response payload, read and follow
-  [`docs/rules/lucent-ir-evolution.md`](docs/rules/lucent-ir-evolution.md).
-- Every proposal MUST state whether it affects protocol conversion, SDK/Agent
-  consumption, or both. `Exact`/`Degraded`/`Unsupported` fidelity boundaries
-  are hard gates; SDK ergonomics come after.
-- `docs/lux-ir-design.md` is the formal schema spec; the evolution rule above
-  governs it. Never change one without reconciling the other.
+- Before adding or changing any Lucent IR field, enum variant, tool model,
+  stream event, capability, request extension, or response payload, read and
+  follow [`docs/rules/lucent-ir-evolution.md`](docs/rules/lucent-ir-evolution.md).
+- Every Lucent IR proposal MUST identify whether it affects protocol conversion,
+  SDK/Agent consumption, or both. Conversion fidelity and explicit
+  `Exact`/`Degraded`/`Unsupported` boundaries are hard gates; SDK ergonomics are
+  evaluated only after those gates pass.
+- Treat `docs/lux-ir-design.md` as the current formal schema specification and
+  `docs/rules/lucent-ir-evolution.md` as the mandatory governance process for
+  evolving that specification. Do not change one without reconciling the other.
 
 ## Field classification: standard vs extension
 
-Every IR field is one of:
+Every IR field (request, response, stream event, capability, or payload) belongs
+to exactly one of two classes:
 
-- **Standard** — defined by the official spec (`docs/lux-ir-design.md`,
-  `schemas/lux-ir-v1.json`); required/optional status is fixed and every
-  provider must support them.
-- **Extension** — third-party / provider-specific (e.g. `extra`, `Native`,
-  `provider_payload`); not guaranteed to be supported by any target.
+- **Standard fields** — defined by the official spec (`docs/lux-ir-design.md`,
+  `schemas/lux-ir-v1.json`). Their required/optional status is fixed by the spec,
+  and every provider target must support them.
+- **Extension fields** — third-party / provider-specific (e.g. `extra`,
+  `Native`, `provider_payload`). They carry data outside the official spec and
+  are NOT guaranteed to be supported by any given target.
 
 Hard rules:
 
-- Extension fields MUST always be optional (`T?` or empty-by-default map).
-- Deserialization must never fail on a missing/unknown extension field; degrade
-  gracefully (drop, or preserve via `extra`/`provider_payload`/diagnostics).
-- Changing a standard field's required status, or adding a required standard
-  field, is a breaking change — follow the IR evolution governance first.
-- Preserve unknown extension data where practical.
+- Extension fields MUST always be optional: nullable (`T?`) or an empty-by-default
+  map. Never introduce a required extension field — a target provider may not
+  support it.
+- Deserialization must never fail because an extension field is missing or unknown;
+  conversion must degrade gracefully (drop, or preserve via `extra` /
+  `provider_payload` / diagnostics) instead of erroring.
+- Changing a standard field's required status, or adding a new required standard
+  field, is a breaking change — follow `docs/rules/lucent-ir-evolution.md` first.
+- Preserve unknown extension data where practical instead of silently discarding it.
 
-## Protocol conversion (3-endpoint hub)
+## Protocol conversion (hub)
 
-Prism converts between the Lucent IR and three wire protocols — OpenAI
-`/v1/chat/completions`, `/v1/responses`, and Anthropic `/v1/messages`.
-Adapters live under `src/provider/<name>/` (see `docs/provider-guide.md`).
+Prism converts between the Lucent IR and the supported wire protocols — the
+formal 3-endpoint contract covers OpenAI `/v1/chat/completions`, OpenAI
+`/v1/responses`, and Anthropic `/v1/messages` (Google Gemini is supported as a
+fourth adapter). Adapters live under `src/provider/<name>/`, each implementing
+the same 6-function encode/decode contract (request / response / stream ×
+decode / encode — see `docs/provider-guide.md`).
 
-Rules (details: `docs/api-protocol-converter.md` — the formal 3-endpoint
-conversion contract; research notes in
+Design principles:
+
+- **Round-trip safety**: Provider → Lux → Provider must preserve all semantics.
+- **JSON Schema as source of truth**: `schemas/lux-ir-v1.json` defines the
+  protocol; MoonBit is one reference implementation.
+- **`extra` / `provider_payload`** are the safety valves for provider-specific
+  fields.
+- **Provider adapters are pure functions**: `ext_to_lux_request` /
+  `lux_request_to_ext` — zero side effects, testable in isolation.
+
+Conversion rules (details: `docs/api-protocol-converter.md` — the formal
+3-endpoint conversion contract; research notes in
 `.agent-workplace/research/api-protocol-converter/`):
 
-- Normalize into the IR first, then encode IR → target; never pairwise
-  converters between providers.
-- External side is the client's expected format; internal side is the target
-  API's native format.
-- Unsupported capabilities MUST fail explicitly, never silently drop data.
-- Implement the common intersection first (text, tool calls, streaming).
-- Streaming conversion maintains: content block index, tool call index,
-  partial JSON, and stop reason.
+- Normalize into the IR first, then encode IR → target endpoint. Never write
+  pairwise converters between providers.
+- External side is always the client's expected format; internal side is always
+  the target API's native format.
+- Unsupported capabilities MUST fail explicitly (`Exact`/`Degraded`/`Unsupported`),
+  never silently drop data.
+- Implement the common intersection first (text, tool calls, streaming), then
+  extend advanced capabilities.
+- Streaming conversion must maintain: content block index, tool call index,
+  accumulated partial JSON arguments, and current stop reason.
 - Provider-specific experimental features (thinking, server tools, audio, ...)
-  are extension fields: optional, never required.
-- Before claiming "3-endpoint interop", pass the 12-case minimum test matrix
-  in `docs/api-protocol-converter.md`.
+  are extension fields: optional, never required (see Field classification above).
+- Before claiming "3-endpoint interop", pass the 12-case minimum test matrix in
+  `docs/api-protocol-converter.md`.
 
 ## Tooling
 
-- `moon fmt` — formats code.
-- `moon ide` — navigation helpers (`peek-def`, `outline`, `find-references`).
-- `moon info` — updates the generated `.mbti` interface per package; no diff
-  means a safe refactoring.
-- Last step: run `moon info && moon fmt` and check `.mbti` diffs are expected.
-- `moon test` — run tests; use `moon test --update` to refresh snapshots.
-- Prefer `assert_eq` / `assert_true(pattern is ...)` for stable results; derive
-  `Debug` + `debug_inspect` (not `Show`) for snapshot-style debugging output.
-  `moon coverage analyze > uncovered.log` shows uncovered code.
+- `moon fmt` is used to format your code properly.
+
+- `moon ide` provides project navigation helpers like `peek-def`, `outline`, and
+  `find-references`. See $moonbit-agent-guide for details.
+
+- `moon info` is used to update the generated interface of the package, each
+  package has a generated interface file `.mbti`, it is a brief formal
+  description of the package. If nothing in `.mbti` changes, this means your
+  change does not bring the visible changes to the external package users, it is
+  typically a safe refactoring.
+
+- In the last step, run `moon info && moon fmt` to update the interface and
+  format the code. Check the diffs of `.mbti` file to see if the changes are
+  expected.
+
+- Run `moon test` to check tests pass (native + wasm-gc). MoonBit supports
+  snapshot testing; when changes affect outputs, run `moon test --update` to
+  refresh snapshots.
+
+- Prefer `assert_eq` or `assert_true(pattern is Pattern(...))` for results that
+  are stable or very unlikely to change. For snapshot tests that record
+  structured debugging output, derive `Debug` and use `debug_inspect`, rather
+  than deriving `Show` for debugging. For solid, well-defined results (e.g.
+  scientific computations), prefer assertion tests. You can use
+  `moon coverage analyze > uncovered.log` to see which parts of your code are
+  not covered by tests.
 
 
 <!-- headroom:rtk-instructions -->
@@ -133,7 +238,7 @@ rtk summary <cmd>       rtk deps                rtk env
 rtk gh pr view <n>      rtk gh run list         rtk gh issue list
 
 # Infrastructure (85% savings)
-rtk docker ps           rtk kubectl get         rtk docker logs <c>
+rtk docker ps           rtk kubectl get         rtk docker logs <n>
 
 # Package managers (70-90% savings)
 rtk pip list            rtk pnpm install        rtk npm run <script>
