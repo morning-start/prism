@@ -12,6 +12,7 @@
 | [`status.md`](status.md) | 模块完成进度、已知限制、构建/验证命令 |
 | [`lux-ir-design.md`](lux-ir-design.md) | Lucent IR 正式类型规范（schema spec） |
 | [`api-protocol-converter.md`](api-protocol-converter.md) | 3 端点协议转换契约（12-case 测试矩阵 + 6 函数契约） |
+| [`fidelity-matrix.md`](fidelity-matrix.md) | 4×4 provider 转换保真度矩阵（切流决策依据） |
 | [`provider-guide.md`](provider-guide.md) | Adapter 实现指南 |
 
 ## 规则
