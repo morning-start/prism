@@ -1,4 +1,5 @@
 import {
+  "morning-start/prism/internal",
   "morning-start/prism/lux",
   "morning-start/prism/provider/meta",
   "morning-start/prism/provider/responses",

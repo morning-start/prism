@@ -3,6 +3,20 @@
 pub fn lux_events_to_responses_sse(
   events : Array[@lux.LucentStreamEvent],
 ) -> Result[@lux.ConversionResult[String], String] {
+  lux_events_to_responses_sse_with_ctx(events, None)
+}
+
+///|
+/// 带流上下文的 responses 流编码（T5 增量转换入口）
+///
+/// ctx 提供跨帧会话元信息：逐帧转换时后续帧不含 ConversationStart，
+/// 用 ctx 的 id 保证 response.completed 等收尾帧的 id 与首帧一致；
+/// 帧内 ConversationStart 优先覆盖 ctx。
+/// ctx=None 时与 lux_events_to_responses_sse 行为逐字节一致。
+pub fn lux_events_to_responses_sse_with_ctx(
+  events : Array[@lux.LucentStreamEvent],
+  ctx : @lux.LucentConversationMeta?,
+) -> Result[@lux.ConversionResult[String], String] {
   let lines : Array[String] = []
   // Responses 流状态（标准 §10.2）：output_index 与 content_index 是独立空间。
   // - output_index：output item 索引（ItemStart 提供，或自动分配）
@@ -20,6 +34,15 @@ pub fn lux_events_to_responses_sse(
   let mut item_counter = 0
   let block_item_id : Map[Int, String] = Map([]) // block idx → item id
   let mut resp_id = "resp_0" // response.created 生成的 id，Finish 时复用
+  // ctx 预置（逐帧转换跨帧复用 id）：帧内 ConversationStart 会覆盖
+  match ctx {
+    Some(meta) =>
+      match meta.id {
+        Some(id) => resp_id = id
+        None => ()
+      }
+    None => ()
+  }
   let mut i = 0
   while i < events.length() {
     // Track output_index for item_start events

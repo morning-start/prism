@@ -218,3 +218,124 @@ pub fn parse_sse_frame_with_reason(data_raw : String) -> (Json?, String?) {
   }
   (Some(jv), None)
 }
+
+///|
+/// ═══ 增量帧分割（T5，流式宿主逐 chunk 喂入）═══
+/// 既有 parse_sse_messages 是全缓冲版（split("\n\n")）；本组提供
+/// chunk-boundary-safe 的增量分割器，供中转中间件逐 chunk 转发。
+
+///|
+/// 查找第一个空行分隔符（"\n\n"）的位置；未找到返回 None
+fn find_blank_line(s : String) -> Int? {
+  let mut i = 0
+  while i + 1 < s.length() {
+    if s[i] == '\n' && s[i + 1] == '\n' {
+      return Some(i)
+    }
+    i = i + 1
+  }
+  None
+}
+
+///|
+/// SseFrameSplitter — 增量 SSE 帧分割器
+///
+/// 喂入任意边界的 chunk，输出完整帧（消息块文本，不含空行分隔符）；
+/// 跨 chunk 的半帧在内部缓冲。特性：
+/// - CRLF / CR / LF 三种行尾统一归一化为 LF
+/// - 正确处理切在 `\r`|`\n` 边界的 chunk（pending_cr 挂起机制：
+///    chunk 尾部独立 `\r` 挂起，下一 chunk 首字符为 `\n` 则配对消费，
+///   否则该 `\r` 是独立行尾，补一个 `\n`）
+/// - 空帧（纯注释/空白）不产出
+///
+/// 用法：
+/// ```moonbit nocheck
+/// let splitter = SseFrameSplitter::new()
+///
+/// let frames = splitter.feed(chunk) // 可能为空（半帧缓冲中）
+///
+/// let tail = splitter.flush() // 流结束冲刷尾部半帧
+/// ```
+pub struct SseFrameSplitter {
+  mut buffer : String
+  mut pending_cr : Bool
+}
+
+///|
+pub fn SseFrameSplitter::new() -> SseFrameSplitter {
+  { buffer: "", pending_cr: false, }
+}
+
+///|
+/// 喂入一个 chunk，返回其中包含的完整帧数组（可能为空）
+pub fn SseFrameSplitter::feed(
+  self : SseFrameSplitter,
+  chunk : String,
+) -> Array[String] {
+  let mut s = chunk
+  // 上一 chunk 挂起的 \r：与首字符 \n 配对则吃掉重复，否则补独立行尾
+  if self.pending_cr {
+    self.pending_cr = false
+    if s.length() > 0 && s[0] == '\n' {
+      s = s[1:].to_owned()
+    }
+    s = "\n" + s
+  }
+  // 本 chunk 以 \r 结尾：挂起等下一 chunk（避免 \r|\n 被切成两个行尾）
+  if s.length() > 0 && s[s.length() - 1] == '\r' {
+    self.pending_cr = true
+    s = s[0:s.length() - 1].to_owned()
+  }
+  let normalized = s
+    .replace_all(old="\r\n", new="\n")
+    .replace_all(old="\r", new="\n")
+  self.buffer = self.buffer + normalized
+  self.extract_frames()
+}
+
+///|
+/// 从缓冲区切出所有完整帧（空行分隔）；纯注释/空白帧不产出
+/// （复用 parse_sse_message 的语义：None 表示空块或纯注释块）
+fn SseFrameSplitter::extract_frames(self : SseFrameSplitter) -> Array[String] {
+  let frames : Array[String] = []
+  while true {
+    match find_blank_line(self.buffer) {
+      Some(pos) => {
+        let frame = self.buffer[0:pos].to_owned()
+        self.buffer = self.buffer[pos + 2:].to_owned()
+        match parse_sse_message(frame) {
+          Some(_) => frames.push(frame)
+          None => ()
+        }
+      }
+      None => break
+    }
+  }
+  frames
+}
+
+///|
+/// 流结束：冲刷缓冲区中剩余的不完整帧（无尾部空行的流）
+///
+/// 挂起的 pending_cr 是一个未完结的行尾，先补 "\n" 再切帧，
+/// 避免尾部半帧的行尾信息丢失。
+pub fn SseFrameSplitter::flush(self : SseFrameSplitter) -> Array[String] {
+  if self.pending_cr {
+    self.buffer = self.buffer + "\n"
+    self.pending_cr = false
+  }
+  let frames = self.extract_frames()
+  let rest = self.buffer
+  self.buffer = ""
+  if rest.trim() == "" {
+    frames
+  } else {
+    match parse_sse_message(rest) {
+      Some(_) => {
+        frames.push(rest)
+        frames
+      }
+      None => frames
+    }
+  }
+}

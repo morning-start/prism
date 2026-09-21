@@ -75,6 +75,14 @@ pub fn[T] serialize_content_with_text_optimization(Array[T], (T) -> Bool, (T) ->
 // Errors
 
 // Types and methods
+pub struct SseFrameSplitter {
+  mut buffer : String
+  mut pending_cr : Bool
+}
+pub fn SseFrameSplitter::feed(Self, String) -> Array[String]
+pub fn SseFrameSplitter::flush(Self) -> Array[String]
+pub fn SseFrameSplitter::new() -> Self
+
 pub struct SseLine {
   event : String?
   data : String?

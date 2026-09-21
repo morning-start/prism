@@ -11,6 +11,8 @@ pub fn capability() -> @lux.ProviderCapability
 
 pub fn lux_events_to_openai_sse(Array[@lux.LucentStreamEvent]) -> Result[@lux.ConversionResult[String], String]
 
+pub fn lux_events_to_openai_sse_with_ctx(Array[@lux.LucentStreamEvent], @lux.LucentConversationMeta?) -> Result[@lux.ConversionResult[String], String]
+
 pub fn lux_request_to_openai(@lux.LucentRequest) -> Result[@lux.ConversionResult[String], String]
 
 pub fn lux_response_to_openai(@lux.LucentResponse) -> Result[@lux.ConversionResult[String], String]

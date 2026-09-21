@@ -2,6 +2,7 @@
 package "morning-start/prism/sdk"
 
 import {
+  "morning-start/prism/internal",
   "morning-start/prism/lux",
   "morning-start/prism/provider/meta",
 }
@@ -178,9 +179,10 @@ pub struct ProviderRegistration {
   response_encode : (@lux.LucentResponse) -> Result[@lux.ConversionResult[String], String]
   events_decode : (String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String]
   events_encode : (Array[@lux.LucentStreamEvent]) -> Result[@lux.ConversionResult[String], String]
+  events_encode_with_ctx : (Array[@lux.LucentStreamEvent], @lux.LucentConversationMeta?) -> Result[@lux.ConversionResult[String], String]
 }
-pub fn ProviderRegistration::from_metadata(@meta.ProviderMeta, (String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String], (@lux.LucentRequest) -> Result[@lux.ConversionResult[String], String], (String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String], (@lux.LucentResponse) -> Result[@lux.ConversionResult[String], String], (String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String], (Array[@lux.LucentStreamEvent]) -> Result[@lux.ConversionResult[String], String]) -> Self
-pub fn ProviderRegistration::new(String, Array[String], @lux.ProviderCapability, String, @meta.ProviderSchema, (String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String], (@lux.LucentRequest) -> Result[@lux.ConversionResult[String], String], (String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String], (@lux.LucentResponse) -> Result[@lux.ConversionResult[String], String], (String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String], (Array[@lux.LucentStreamEvent]) -> Result[@lux.ConversionResult[String], String]) -> Self
+pub fn ProviderRegistration::from_metadata(@meta.ProviderMeta, (String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String], (@lux.LucentRequest) -> Result[@lux.ConversionResult[String], String], (String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String], (@lux.LucentResponse) -> Result[@lux.ConversionResult[String], String], (String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String], (Array[@lux.LucentStreamEvent]) -> Result[@lux.ConversionResult[String], String], (Array[@lux.LucentStreamEvent], @lux.LucentConversationMeta?) -> Result[@lux.ConversionResult[String], String]) -> Self
+pub fn ProviderRegistration::new(String, Array[String], @lux.ProviderCapability, String, @meta.ProviderSchema, (String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String], (@lux.LucentRequest) -> Result[@lux.ConversionResult[String], String], (String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String], (@lux.LucentResponse) -> Result[@lux.ConversionResult[String], String], (String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String], (Array[@lux.LucentStreamEvent]) -> Result[@lux.ConversionResult[String], String], (Array[@lux.LucentStreamEvent], @lux.LucentConversationMeta?) -> Result[@lux.ConversionResult[String], String]) -> Self
 
 pub struct ProviderSchema {
   provider_name : String
@@ -226,6 +228,18 @@ pub struct SdkToolCall {
   arguments_json : String
 }
 pub fn SdkToolCall::new(String, String, String) -> Self
+
+pub struct StreamConverter {
+  source : ProviderRegistration
+  target : ProviderRegistration
+  splitter : @internal.SseFrameSplitter
+  mut stream_ctx : @lux.LucentConversationMeta?
+  mut open_blocks : Array[Int]
+  mut held_events : Array[@lux.LucentStreamEvent]
+}
+pub fn StreamConverter::feed(Self, String) -> Result[Array[String], String]
+pub fn StreamConverter::finish(Self) -> Result[Array[String], String]
+pub fn StreamConverter::new(String, String) -> Result[Self, String]
 
 // Type aliases
 pub type SdkRequestHook = (@lux.LucentRequest, Array[@lux.ConversionDiagnostic]) -> @lux.LucentRequest

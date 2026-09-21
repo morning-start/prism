@@ -26,12 +26,34 @@ fn chunk_prefix(id : String, model : String, created : Int) -> String {
 pub fn lux_events_to_openai_sse(
   events : Array[@lux.LucentStreamEvent],
 ) -> Result[@lux.ConversionResult[String], String] {
+  lux_events_to_openai_sse_with_ctx(events, None)
+}
+
+///|
+/// 带流上下文的 openai 流编码（T5 增量转换入口）
+///
+/// ctx 提供跨帧会话元信息（id/model/created_at）：逐帧转换时后续帧
+/// 不含 ConversationStart，用 ctx 保证每个 chunk 的 id/model 与首帧
+/// 一致；帧内 ConversationStart 优先覆盖 ctx。
+/// ctx=None 时与 lux_events_to_openai_sse 行为逐字节一致。
+pub fn lux_events_to_openai_sse_with_ctx(
+  events : Array[@lux.LucentStreamEvent],
+  ctx : @lux.LucentConversationMeta?,
+) -> Result[@lux.ConversionResult[String], String] {
   let out : Array[String] = []
   let mut i = 0
-  // 从 ConversationStart 提取，注入每个 chunk
+  // 从 ConversationStart 提取，注入每个 chunk；ctx 预置供逐帧转换跨帧复用
   let mut chat_id = ""
   let mut chat_model = ""
   let mut chat_created : Int = 0
+  match ctx {
+    Some(meta) => {
+      chat_id = meta.id.unwrap_or("chatcmpl-0")
+      chat_model = meta.model.unwrap_or("")
+      chat_created = meta.created_at.unwrap_or(0)
+    }
+    None => ()
+  }
   while i < events.length() {
     match events[i] {
       ConversationStart(meta) => {

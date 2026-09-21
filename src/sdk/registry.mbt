@@ -52,6 +52,12 @@ pub struct ProviderRegistration {
     @lux.ConversionResult[String],
     String,
   ]
+  /// 流式编码（ctx 感知，T5 增量转换用）：逐帧转换时跨帧复用首帧
+  /// 会话元信息（openai/responses 需要；messages/gemini 无状态，忽略 ctx）
+  events_encode_with_ctx : (
+    Array[@lux.LucentStreamEvent],
+    @lux.LucentConversationMeta?,
+  ) -> Result[@lux.ConversionResult[String], String]
 }
 
 ///|
@@ -85,6 +91,10 @@ pub fn ProviderRegistration::new(
     @lux.ConversionResult[String],
     String,
   ],
+  events_encode_with_ctx : (
+    Array[@lux.LucentStreamEvent],
+    @lux.LucentConversationMeta?,
+  ) -> Result[@lux.ConversionResult[String], String],
 ) -> ProviderRegistration {
   {
     name,
@@ -98,6 +108,7 @@ pub fn ProviderRegistration::new(
     response_encode,
     events_decode,
     events_encode,
+    events_encode_with_ctx,
   }
 }
 
@@ -129,6 +140,10 @@ pub fn ProviderRegistration::from_metadata(
     @lux.ConversionResult[String],
     String,
   ],
+  events_encode_with_ctx : (
+    Array[@lux.LucentStreamEvent],
+    @lux.LucentConversationMeta?,
+  ) -> Result[@lux.ConversionResult[String], String],
 ) -> ProviderRegistration {
   ProviderRegistration::new(
     metadata.name(),
@@ -142,6 +157,7 @@ pub fn ProviderRegistration::from_metadata(
     response_encode,
     events_decode,
     events_encode,
+    events_encode_with_ctx,
   )
 }
 
@@ -183,6 +199,7 @@ fn build_providers() -> Array[ProviderRegistration] {
       @responses.lux_response_to_responses,
       @responses.responses_sse_to_events,
       @responses.lux_events_to_responses_sse,
+      @responses.lux_events_to_responses_sse_with_ctx,
     ),
     // OpenAI Chat Completions
     ProviderRegistration::from_metadata(
@@ -193,6 +210,7 @@ fn build_providers() -> Array[ProviderRegistration] {
       @openai.lux_response_to_openai,
       @openai.openai_sse_to_events,
       @openai.lux_events_to_openai_sse,
+      @openai.lux_events_to_openai_sse_with_ctx,
     ),
     // Anthropic Messages
     ProviderRegistration::from_metadata(
@@ -203,6 +221,13 @@ fn build_providers() -> Array[ProviderRegistration] {
       @messages.lux_response_to_messages,
       @messages.messages_sse_to_events,
       @messages.lux_events_to_messages_sse,
+      // messages 编码无跨帧状态，忽略 ctx
+      fn(
+        events : Array[@lux.LucentStreamEvent],
+        _ctx : @lux.LucentConversationMeta?,
+      ) -> Result[@lux.ConversionResult[String], String] {
+        @messages.lux_events_to_messages_sse(events)
+      },
     ),
     // Google Gemini（REST API）
     ProviderRegistration::from_metadata(
@@ -213,6 +238,13 @@ fn build_providers() -> Array[ProviderRegistration] {
       @gemini.lux_response_to_gemini,
       @gemini.gemini_sse_to_events,
       @gemini.lux_events_to_gemini_sse,
+      // gemini 编码无跨帧状态，忽略 ctx
+      fn(
+        events : Array[@lux.LucentStreamEvent],
+        _ctx : @lux.LucentConversationMeta?,
+      ) -> Result[@lux.ConversionResult[String], String] {
+        @gemini.lux_events_to_gemini_sse(events)
+      },
     ),
   ]
 }
