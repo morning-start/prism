@@ -515,8 +515,36 @@ pub fn lux_request_to_gemini(
       )
     None => ()
   }
+  // previous_response_id（T8）：Gemini 无有状态续接语义。标准字段与
+  // extras 旧载荷都不静默丢弃：无可恢复历史时拒绝，有历史时剔除并打
+  // Unsupported 诊断。
+  let prev_id_extras : String? = match opts.extras {
+    Some(m) =>
+      match m.get("previous_response_id") {
+        Some(String(id)) => Some(id)
+        _ => None
+      }
+    None => None
+  }
+  if opts.previous_response_id is Some(_) || prev_id_extras is Some(_) {
+    if req.conversation.length() == 0 {
+      return Err(
+        "previous_response_id without conversation history cannot be converted to gemini",
+      )
+    }
+    diagnostics.push(
+      @lux.ConversionDiagnostic::unsupported(
+        "options.previous_response_id",
+        Some("previous_response_id not preserved by gemini"),
+      ),
+    )
+  }
+  let stripped_extras = @internal.extras_without(
+    opts.extras,
+    "previous_response_id",
+  )
   // extras：合并进 generationConfig
-  @internal.merge_extras_json(gc_parts, opts.extras)
+  @internal.merge_extras_json(gc_parts, stripped_extras)
   if gc_parts.length() > 0 {
     parts.push("\"generationConfig\":{" + gc_parts.join(",") + "}")
   }

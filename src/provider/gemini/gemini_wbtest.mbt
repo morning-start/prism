@@ -335,6 +335,94 @@ test "gemini store unsupported diagnostic" {
 }
 
 ///|
+/// T8：previous_response_id 标准字段——无历史拒绝，有历史剔除+诊断
+test "gemini previous_response_id standard field rejected without history" {
+  let opts = @lux.LucentOptions::default().with_previous_response_id(
+    Some("resp_1"),
+  )
+  let req = @lux.LucentRequest::new(
+    "gemini-2.0-flash",
+    None,
+    [],
+    None,
+    None,
+    opts,
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_gemini(req) {
+    Ok(_) => fail("expected rejection without history")
+    Err(e) => assert_true(e.contains("previous_response_id"))
+  }
+}
+
+///|
+test "gemini previous_response_id standard field degrades with history" {
+  let opts = @lux.LucentOptions::default().with_previous_response_id(
+    Some("resp_1"),
+  )
+  let req = @lux.LucentRequest::new(
+    "gemini-2.0-flash",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
+      ),
+    ],
+    None,
+    None,
+    opts,
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_gemini(req) {
+    Ok(cr) => {
+      assert_false(cr.value().contains("previous_response_id"))
+      let mut has_unsupported = false
+      for d in cr.diagnostics() {
+        if d.field == "options.previous_response_id" && d.status == Unsupported {
+          has_unsupported = true
+        }
+      }
+      assert_true(has_unsupported)
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// T8：extras 旧载荷回退——同样剔除，不落入 generationConfig
+test "gemini previous_response_id legacy extras stripped" {
+  let opts = @lux.LucentOptions::default().with_extras(
+    Some({ "previous_response_id": Json::string("resp_legacy") }),
+  )
+  let req = @lux.LucentRequest::new(
+    "gemini-2.0-flash",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
+      ),
+    ],
+    None,
+    None,
+    opts,
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_gemini(req) {
+    Ok(cr) => assert_false(cr.value().contains("previous_response_id"))
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
 test "gemini non-function tool kind unsupported" {
   let req = @lux.LucentRequest::from_messages(
     "gemini-2.0-flash",
