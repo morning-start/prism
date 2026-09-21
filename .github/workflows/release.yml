@@ -1,10 +1,25 @@
 name: Release WASM
 
-# 推送 v* 标签（如 v0.1.4）时：验证 → 构建 classic wasm → 发布为 GitHub Release 资产
+# 推送 v* 标签（如 v0.1.4）时：质量门禁 → 构建 classic wasm（release）→ 发布 GitHub Release 资产
+# 也支持 workflow_dispatch 手动重跑某个已存在 tag 的发布（输入 tag 名）
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '已存在的 tag 名，如 v0.1.4'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# 同一 tag 的发布串行执行（避免重复创建/覆盖 Release）；不同 tag 之间互不取消
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   verify:
@@ -15,6 +30,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
 
       - name: Set up MoonBit
         uses: hustcer/setup-moonbit@v1
@@ -40,6 +57,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
 
       - name: Set up MoonBit
         uses: hustcer/setup-moonbit@v1
@@ -47,37 +66,118 @@ jobs:
       - name: Update dependencies
         run: moon update
 
-      - name: Build classic WASM (wrapper ABI)
-        run: moon build --target wasm
-
-      - name: Stage release artifact
+      - name: Verify tag matches moon.mod version
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
-          WASM="_build/wasm/debug/build/cmd/main/main.wasm"
-          if [ ! -f "$WASM" ]; then
-            # 防御性回退：产物路径随 moon 版本可能变化
-            WASM="$(find _build target -path '*build/cmd/main/main.wasm' -name '*.wasm' 2>/dev/null | head -1)"
+          MOD_VERSION="$(sed -n 's/^version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' moon.mod)"
+          if [ -z "${MOD_VERSION}" ]; then
+            echo "::error::Cannot parse version from moon.mod"
+            exit 1
           fi
-          if [ -z "$WASM" ] || [ ! -f "$WASM" ]; then
+          if [ "${TAG#v}" != "${MOD_VERSION}" ]; then
+            echo "::error::Tag ${TAG} does not match moon.mod version ${MOD_VERSION}"
+            echo "::error::Fix: bump moon.mod version to ${TAG#v}, commit, then retag and re-run."
+            exit 1
+          fi
+          echo "Tag ${TAG} matches moon.mod version ${MOD_VERSION}"
+          echo "MOD_VERSION=${MOD_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Build classic WASM (release, string ABI)
+        run: moon build --target wasm --release
+
+      - name: Stage release artifacts
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          WASM="_build/wasm/release/build/cmd/main/main.wasm"
+          if [ ! -f "${WASM}" ]; then
+            # 防御性回退：产物路径随 moon 版本可能变化
+            # （|| true 防止 pipefail 下 find 被 head 提前关闭触发 SIGPIPE）
+            WASM="$(find _build target -path '*cmd/main*' -name 'main.wasm' 2>/dev/null | head -1 || true)"
+          fi
+          if [ -z "${WASM}" ] || [ ! -f "${WASM}" ]; then
             echo "::error::WASM artifact not found after moon build"
             exit 1
           fi
-          cp "$WASM" prism.wasm
+          cp "${WASM}" prism.wasm
+          SIZE="$(stat -c%s prism.wasm)"
+          if [ "${SIZE}" -lt 10240 ]; then
+            echo "::error::prism.wasm is suspiciously small (${SIZE} bytes) — refusing to publish"
+            exit 1
+          fi
+          # ABI 冒烟：导出表必须包含版本探测函数，防止发布陈旧/残缺产物
+          if ! grep -aq 'wasm_abi_version' prism.wasm; then
+            echo "::error::prism.wasm is missing the wasm_abi_version export — refusing to publish"
+            exit 1
+          fi
           sha256sum prism.wasm > prism.wasm.sha256
-          echo "Artifact: prism.wasm ($(stat -c%s prism.wasm) bytes)"
+          EXPORTS="$(grep -c '"wasm_' src/cmd/main/moon.pkg)"
+          moon version > "${RUNNER_TEMP}/moonbit-version.txt" 2>&1
+          MOONBIT="$(head -n1 "${RUNNER_TEMP}/moonbit-version.txt")"
+          COMMIT="$(git rev-parse HEAD)"
+          jq -n \
+            --arg tag "${TAG}" \
+            --arg module "morning-start/prism" \
+            --arg module_version "${MOD_VERSION}" \
+            --arg target "wasm" \
+            --arg commit "${COMMIT}" \
+            --arg built_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg moonbit "${MOONBIT}" \
+            --arg sha256 "$(cut -d' ' -f1 prism.wasm.sha256)" \
+            --argjson bytes "${SIZE}" \
+            --argjson exports "${EXPORTS}" \
+            '{artifact: "prism.wasm",
+              tag: $tag,
+              module: $module,
+              module_version: $module_version,
+              target: $target,
+              commit: $commit,
+              built_at: $built_at,
+              moonbit: $moonbit,
+              sha256: $sha256,
+              bytes: $bytes,
+              exports: $exports,
+              abi_probe: "wasm_abi_version"}' > prism.release.json
+          echo "Artifact: prism.wasm (${SIZE} bytes, ${EXPORTS} wasm_* exports)"
           cat prism.wasm.sha256
+          cat prism.release.json
+
+      - name: Upload build artifacts (debug aid)
+        uses: actions/upload-artifact@v4
+        with:
+          name: prism-wasm-${{ inputs.tag || github.ref_name }}
+          path: |
+            prism.wasm
+            prism.wasm.sha256
+            prism.release.json
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: ${{ github.ref_name }}
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          name: ${{ inputs.tag || github.ref_name }}
+          generate_release_notes: true
           body: |
-            Prism ${{ github.ref_name }} — classic wasm 构建（wrapper ABI）。
+            Prism ${{ inputs.tag || github.ref_name }} — classic WASM 构建（release 模式，string ABI）。
 
-            - `prism.wasm`：Go / TypeScript wrapper 加载的运行时产物
-            - `prism.wasm.sha256`：产物校验和
+            ## 资产
+            - `prism.wasm` — 运行时产物，宿主直接加载（无 wrapper 依赖）；导出清单见 `src/cmd/main/moon.pkg`
+            - `prism.wasm.sha256` — SHA-256 校验和
+            - `prism.release.json` — 构建清单（commit / moonbit 版本 / 导出数 / 大小 / 校验和）
+
+            ## ABI 兼容性
+            宿主加载后应先调用 `wasm_abi_version()` 探测 ABI 与 IR schema 版本，再进行业务调用。
+
+            ## 使用方式
+            见 `USAGE.md` 与 `skills/prism-wasm/`（Go / TypeScript / Python 直接加载 `prism.wasm` 的示例）。
           files: |
             prism.wasm
             prism.wasm.sha256
-          prerelease: ${{ contains(github.ref_name, '-') }}
+            prism.release.json
+          prerelease: ${{ contains(inputs.tag || github.ref_name, '-') }}
           fail_on_unmatched_files: true

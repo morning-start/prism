@@ -70,10 +70,10 @@ fn main {
 
 | 注册名      | 别名                            | 协议                                           | 状态 |
 | ----------- | ------------------------------- | ---------------------------------------------- | ---- |
-| `openai`    | `chat`                          | OpenAI Chat Completions                        | ✅   |
-| `responses` | `openai-responses`              | OpenAI Responses API                           | ✅   |
-| `messages`  | `anthropic` · `claude-messages` | Anthropic Messages API（含 extended thinking） | ✅   |
-| `gemini`    | `google`                        | Google Gemini API                              | ✅   |
+| `openai`    | `chat`                          | OpenAI Chat Completions                        | ✅    |
+| `responses` | `openai-responses`              | OpenAI Responses API                           | ✅    |
+| `messages`  | `anthropic` · `claude-messages` | Anthropic Messages API（含 extended thinking） | ✅    |
+| `gemini`    | `google`                        | Google Gemini API                              | ✅    |
 
 每个适配器实现同一套 **6 函数接口**（请求 / 响应 / 流 × 解码 / 编码），
 新增协议只需在 `src/sdk/registry.mbt` 追加一个注册条目。
@@ -144,3 +144,10 @@ match prism.decode_sse(sse_text) {
 
 - [Akanyi](https://linux.do/u/akanyi) 佬赞助的公益API
 - [atomcode](https://atomgit.com/atomgit_atomcode/atomcode) 的dpv4的额度
+- <p>
+  本项目的 AI API 支持由
+  <a href="https://tokeness.io">
+    Tokeness.io
+  </a>
+  赞助提供。
+</p>
