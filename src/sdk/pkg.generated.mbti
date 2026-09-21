@@ -48,6 +48,10 @@ pub fn match_by_model(String) -> ProviderRegistration?
 
 pub fn match_provider_name(String) -> ProviderRegistration?
 
+pub fn register_provider(ProviderRegistration) -> Unit
+
+pub fn unregister_provider(String) -> Bool
+
 // Errors
 
 // Types and methods
@@ -108,6 +112,7 @@ pub fn Prism::decode_sse(Self, String) -> Result[Array[PrismEvent], String]
 pub fn Prism::encode_request(Self, String, PrismOptions) -> Result[String, String]
 pub fn Prism::encode_request_with_diagnostics(Self, String, PrismOptions) -> Result[@lux.ConversionResult[String], String]
 pub fn Prism::encode_stream_request(Self, String, PrismOptions) -> Result[String, String]
+pub fn Prism::endpoint(Self, String) -> SdkProviderEndpoint?
 pub fn Prism::events_to_context(Self, Context, Array[PrismEvent]) -> Context
 pub fn Prism::new() -> Self
 pub fn Prism::stream(Self, Context, (String) -> Result[String, String]) -> Result[Array[PrismEvent], String]
@@ -180,9 +185,13 @@ pub struct ProviderRegistration {
   events_decode : (String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String]
   events_encode : (Array[@lux.LucentStreamEvent]) -> Result[@lux.ConversionResult[String], String]
   events_encode_with_ctx : (Array[@lux.LucentStreamEvent], @lux.LucentConversationMeta?) -> Result[@lux.ConversionResult[String], String]
+  base_url : String?
+  auth_header : String?
+  api_version : String?
 }
-pub fn ProviderRegistration::from_metadata(@meta.ProviderMeta, (String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String], (@lux.LucentRequest) -> Result[@lux.ConversionResult[String], String], (String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String], (@lux.LucentResponse) -> Result[@lux.ConversionResult[String], String], (String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String], (Array[@lux.LucentStreamEvent]) -> Result[@lux.ConversionResult[String], String], (Array[@lux.LucentStreamEvent], @lux.LucentConversationMeta?) -> Result[@lux.ConversionResult[String], String]) -> Self
-pub fn ProviderRegistration::new(String, Array[String], @lux.ProviderCapability, String, @meta.ProviderSchema, (String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String], (@lux.LucentRequest) -> Result[@lux.ConversionResult[String], String], (String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String], (@lux.LucentResponse) -> Result[@lux.ConversionResult[String], String], (String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String], (Array[@lux.LucentStreamEvent]) -> Result[@lux.ConversionResult[String], String], (Array[@lux.LucentStreamEvent], @lux.LucentConversationMeta?) -> Result[@lux.ConversionResult[String], String]) -> Self
+pub fn ProviderRegistration::from_metadata(@meta.ProviderMeta, (String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String], (@lux.LucentRequest) -> Result[@lux.ConversionResult[String], String], (String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String], (@lux.LucentResponse) -> Result[@lux.ConversionResult[String], String], (String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String], (Array[@lux.LucentStreamEvent]) -> Result[@lux.ConversionResult[String], String], (Array[@lux.LucentStreamEvent], @lux.LucentConversationMeta?) -> Result[@lux.ConversionResult[String], String], String?, String?, String?) -> Self
+pub fn ProviderRegistration::new(String, Array[String], @lux.ProviderCapability, String, @meta.ProviderSchema, (String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String], (@lux.LucentRequest) -> Result[@lux.ConversionResult[String], String], (String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String], (@lux.LucentResponse) -> Result[@lux.ConversionResult[String], String], (String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String], (Array[@lux.LucentStreamEvent]) -> Result[@lux.ConversionResult[String], String], (Array[@lux.LucentStreamEvent], @lux.LucentConversationMeta?) -> Result[@lux.ConversionResult[String], String], String?, String?, String?) -> Self
+pub fn ProviderRegistration::with_overrides(Self, RegistrationOverrides) -> Self
 
 pub struct ProviderSchema {
   provider_name : String
@@ -203,6 +212,16 @@ pub fn ProviderSchema::openai() -> Self
 pub fn ProviderSchema::validate_request(Self, @lux.LucentRequest) -> Array[String]
 pub fn ProviderSchema::validate_response(Self, @lux.LucentResponse) -> Array[String]
 
+pub struct RegistrationOverrides {
+  name : String?
+  aliases : Array[String]?
+  model_pattern : String?
+  base_url : String?
+  auth_header : String?
+  api_version : String?
+}
+pub fn RegistrationOverrides::default() -> Self
+
 pub struct SdkMessage {
   role : String
   content : String
@@ -214,6 +233,12 @@ pub fn SdkMessage::assistant_turn(String, Array[SdkToolCall]) -> Self
 pub fn SdkMessage::new(String, String) -> Self
 pub fn SdkMessage::tool_call(String, String, String, String) -> Self
 pub fn SdkMessage::tool_result(String, String, Bool) -> Self
+
+pub struct SdkProviderEndpoint {
+  base_url : String?
+  auth_header : String?
+  api_version : String?
+}
 
 pub struct SdkTool {
   name : String

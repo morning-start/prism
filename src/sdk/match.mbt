@@ -8,18 +8,16 @@
 ///
 /// 从 provider_capability.mbt 拆分，职责单一：字符串匹配逻辑。
 /// Go 最佳实践：小文件、单一职责，匹配逻辑与注册表解耦。
+///
+/// T6：匹配叠加动态注册表（register_provider 注册的部署态条目）——
+/// 静态表优先、动态表兜底；无动态注册时行为与此前完全一致。
 
 ///|
-/// 根据名称匹配 Provider
-///
-/// 匹配策略：
-///   1. 精确匹配 name
-///   2. 均未命中时，把输入当作模型名走 `match_by_model` 回退
-///
-/// 若只想按模型名匹配，直接调用 `match_by_model`。
-pub fn match_provider_name(provider_name : String) -> ProviderRegistration? {
-  let provider_key = provider_name.trim().to_owned()
-  let providers = providers_cache
+/// 在给定注册数组中按名称匹配（精确主名 → 别名）
+fn match_name_in(
+  providers : Array[ProviderRegistration],
+  provider_key : String,
+) -> ProviderRegistration? {
   let mut i = 0
   while i < providers.length() {
     let reg = providers[i]
@@ -37,18 +35,60 @@ pub fn match_provider_name(provider_name : String) -> ProviderRegistration? {
     }
     i = i + 1
   }
-  // 3. 未命中名称时，把输入当作模型名匹配最具体的注册项
-  match_by_model(provider_key)
+  None
+}
+
+///|
+/// 根据名称匹配 Provider
+///
+/// 匹配策略：
+///   1. 静态表精确匹配 name / 别名
+///   2. 动态表（register_provider）精确匹配 name / 别名
+///   3. 均未命中时，把输入当作模型名走 `match_by_model` 回退
+///
+/// 若只想按模型名匹配，直接调用 `match_by_model`。
+pub fn match_provider_name(provider_name : String) -> ProviderRegistration? {
+  let provider_key = provider_name.trim().to_owned()
+  // 1+2. 静态表优先，动态表兜底
+  match match_name_in(providers_cache, provider_key) {
+    Some(reg) => Some(reg)
+    None =>
+      match match_name_in(dynamic_providers, provider_key) {
+        Some(reg) => Some(reg)
+        // 3. 未命中名称时，把输入当作模型名匹配最具体的注册项
+        None => match_by_model(provider_key)
+      }
+  }
 }
 
 ///|
 /// 根据 model_name 匹配 Provider（通过 model_pattern 子串匹配）
 ///
 /// 返回最具体的匹配（pattern 中 * 越多越优先），或 None。
+/// 静态表与动态表联合评分：特异性严格大于才替换（同分静态优先）。
 pub fn match_by_model(model_name : String) -> ProviderRegistration? {
-  let providers = providers_cache
-  let mut best : ProviderRegistration? = None
-  let mut best_score = 0
+  let (best_static, score_static) = scan_by_model(
+    providers_cache,
+    model_name,
+    None,
+    0,
+  )
+  let (best_final, _) = scan_by_model(
+    dynamic_providers, model_name, best_static, score_static,
+  )
+  best_final
+}
+
+///|
+/// 扫描一张表按 model_pattern 评分，返回（最优项, 最优分）
+fn scan_by_model(
+  providers : Array[ProviderRegistration],
+  model_name : String,
+  initial_best : ProviderRegistration?,
+  initial_score : Int,
+) -> (ProviderRegistration?, Int) {
+  let mut best = initial_best
+  let mut best_score = initial_score
   let mut i = 0
   while i < providers.length() {
     let reg = providers[i]
@@ -61,18 +101,18 @@ pub fn match_by_model(model_name : String) -> ProviderRegistration? {
     }
     i = i + 1
   }
-  best
+  (best, best_score)
 }
 
 ///|
-/// 获取所有 Provider 的主名称列表
+/// 获取所有 Provider 的主名称列表（静态表 + 动态表，动态在后）
 pub fn list_provider_names() -> Array[String] {
-  let providers = providers_cache
   let result : Array[String] = []
-  let mut i = 0
-  while i < providers.length() {
-    result.push(providers[i].name)
-    i = i + 1
+  for reg in providers_cache {
+    result.push(reg.name)
+  }
+  for reg in dynamic_providers {
+    result.push(reg.name)
   }
   result
 }

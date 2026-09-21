@@ -381,6 +381,34 @@ pub fn Prism::events_to_context(
 /// === 能力查询 ===
 
 ///|
+/// SdkProviderEndpoint — 部署态端点配置投影（T6）
+///
+/// Extension 字段：全部可选。SDK 不发起 HTTP（宿主注入 send），
+/// 端点配置供宿主路由/鉴权读取；None 表示该 provider 未声明。
+pub struct SdkProviderEndpoint {
+  base_url : String?
+  auth_header : String?
+  api_version : String?
+}
+
+///|
+/// 查询指定 provider 的部署态端点配置（基于注册表，含动态注册）
+pub fn Prism::endpoint(
+  _self : Prism,
+  provider_name : String,
+) -> SdkProviderEndpoint? {
+  match match_provider_name(provider_name) {
+    Some(reg) =>
+      Some({
+        base_url: reg.base_url,
+        auth_header: reg.auth_header,
+        api_version: reg.api_version,
+      })
+    None => None
+  }
+}
+
+///|
 /// 查询指定 provider 的能力声明（基于注册表）
 pub fn Prism::capability(
   _self : Prism,
