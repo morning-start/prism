@@ -17,13 +17,29 @@ pub fn context_to_lux_request(Context, String, PrismOptions) -> @lux.LucentReque
 
 pub fn convert_request(String, String, String) -> Result[@lux.ConversionResult[String], String]
 
+pub fn convert_request_with_hooks(String, String, String, Array[(@lux.LucentRequest, Array[@lux.ConversionDiagnostic]) -> @lux.LucentRequest]) -> Result[@lux.ConversionResult[String], String]
+
 pub fn convert_response(String, String, String) -> Result[@lux.ConversionResult[String], String]
+
+pub fn convert_response_with_hooks(String, String, String, Array[(@lux.LucentResponse, Array[@lux.ConversionDiagnostic]) -> @lux.LucentResponse]) -> Result[@lux.ConversionResult[String], String]
 
 pub fn convert_response_with_meta(String, String, String) -> Result[ConvertMetaResult, String]
 
 pub fn convert_stream(String, String, String) -> Result[@lux.ConversionResult[String], String]
 
+pub fn convert_stream_with_hooks(String, String, String, Array[(Array[@lux.LucentStreamEvent], Array[@lux.ConversionDiagnostic]) -> Array[@lux.LucentStreamEvent]]) -> Result[@lux.ConversionResult[String], String]
+
 pub fn get_schema(String) -> ProviderSchema?
+
+pub fn hook_append_instructions(String) -> (@lux.LucentRequest, Array[@lux.ConversionDiagnostic]) -> @lux.LucentRequest
+
+pub fn hook_clamp_max_tokens(Int) -> (@lux.LucentRequest, Array[@lux.ConversionDiagnostic]) -> @lux.LucentRequest
+
+pub fn hook_filter_tools(Array[String]) -> (@lux.LucentRequest, Array[@lux.ConversionDiagnostic]) -> @lux.LucentRequest
+
+pub fn hook_set_model(String) -> (@lux.LucentRequest, Array[@lux.ConversionDiagnostic]) -> @lux.LucentRequest
+
+pub fn hook_stream_drop_after_error() -> (Array[@lux.LucentStreamEvent], Array[@lux.ConversionDiagnostic]) -> Array[@lux.LucentStreamEvent]
 
 pub fn list_provider_names() -> Array[String]
 
@@ -212,5 +228,10 @@ pub struct SdkToolCall {
 pub fn SdkToolCall::new(String, String, String) -> Self
 
 // Type aliases
+pub type SdkRequestHook = (@lux.LucentRequest, Array[@lux.ConversionDiagnostic]) -> @lux.LucentRequest
+
+pub type SdkResponseHook = (@lux.LucentResponse, Array[@lux.ConversionDiagnostic]) -> @lux.LucentResponse
+
+pub type SdkStreamHook = (Array[@lux.LucentStreamEvent], Array[@lux.ConversionDiagnostic]) -> Array[@lux.LucentStreamEvent]
 
 // Traits
