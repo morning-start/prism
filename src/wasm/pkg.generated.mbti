@@ -2,6 +2,10 @@
 package "morning-start/prism/wasm"
 
 // Values
+pub const WASM_ABI_VERSION : String = "1"
+
+pub fn wasm_abi_version() -> String
+
 pub fn wasm_convert_req_trace(String, String, String, Int, Int) -> String
 
 pub fn wasm_convert_request(String, String, String) -> String

@@ -36,6 +36,7 @@ options(
         "wasm_stream_feed",
         "wasm_stream_finish",
         "wasm_stream_free",
+        "wasm_abi_version",
       ],
       "export-memory-name": "memory",
     },

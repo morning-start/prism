@@ -321,3 +321,34 @@ pub fn wasm_list_providers() -> String {
   let arr : Array[Json] = names.map(fn(n) { Json::string(n) })
   Json::array(arr).stringify()
 }
+
+///|
+/// ABI 版本（T11）
+///
+/// wasm 导出契约的版本标识 + IR schema 版本。中间件滚动升级时先探测：
+/// 不匹配即拒绝加载，而非静默错位（审计 P2：ABI/IR 版本协商）。
+/// - `abi`：导出签名（名称/参数/返回信封）变化时递增
+/// - `ir_schema`：从真实 LucentRequest 读取（避免与实现漂移），
+///   随 Lucent IR 演进（docs/rules/lucent-ir-evolution.md）
+pub const WASM_ABI_VERSION : String = "1"
+
+///|
+pub fn wasm_abi_version() -> String {
+  let probe = @lux.LucentRequest::new(
+    "",
+    None,
+    [],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  let fields : Map[String, Json] = {
+    "abi": Json::string(WASM_ABI_VERSION),
+    "ir_schema": Json::string(probe.schema_version),
+  }
+  wasm_envelope(Json::object(fields))
+}

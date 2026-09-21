@@ -149,6 +149,12 @@ pub fn wasm_list_providers() -> String {
 }
 
 ///|
+/// ABI 版本 + IR schema 版本（T11）
+pub fn wasm_abi_version() -> String {
+  @wasm.wasm_abi_version()
+}
+
+///|
 /// === 纯 WASM 大字符串支持 ===
 
 ///|
