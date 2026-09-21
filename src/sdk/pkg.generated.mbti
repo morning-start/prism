@@ -39,6 +39,8 @@ pub fn convert_stream_typed(String, String, String) -> Result[@lux.ConversionRes
 
 pub fn convert_stream_with_hooks(String, String, String, Array[(Array[@lux.LucentStreamEvent], Array[@lux.ConversionDiagnostic]) -> Array[@lux.LucentStreamEvent]]) -> Result[@lux.ConversionResult[String], String]
 
+pub fn[T] enforce_policy(T, Array[@lux.ConversionDiagnostic], DiagnosticPolicy) -> Result[T, String]
+
 pub fn get_schema(String) -> ProviderSchema?
 
 pub fn hook_append_instructions(String) -> (@lux.LucentRequest, Array[@lux.ConversionDiagnostic]) -> @lux.LucentRequest
@@ -111,6 +113,36 @@ pub struct DecodedResponse {
   meta : ConversionMeta
 }
 pub fn DecodedResponse::new(String, ConversionMeta) -> Self
+
+pub struct DiagnosticCollector {
+  all : Array[@lux.ConversionDiagnostic]
+}
+pub fn DiagnosticCollector::add_all(Self, Array[@lux.ConversionDiagnostic]) -> Unit
+pub fn DiagnosticCollector::count_by_field(Self, String) -> Int
+pub fn DiagnosticCollector::count_by_status(Self) -> DiagnosticCounts
+pub fn DiagnosticCollector::diagnostics(Self) -> Array[@lux.ConversionDiagnostic]
+pub fn DiagnosticCollector::enforce(Self, DiagnosticPolicy) -> Result[Unit, String]
+pub fn DiagnosticCollector::new() -> Self
+pub fn DiagnosticCollector::push(Self, @lux.ConversionDiagnostic) -> Unit
+pub fn DiagnosticCollector::reset(Self) -> Unit
+pub fn DiagnosticCollector::summary(Self) -> String
+pub fn DiagnosticCollector::total(Self) -> Int
+pub fn DiagnosticCollector::worst_status(Self) -> @lux.ConversionStatus?
+
+pub struct DiagnosticCounts {
+  mut exact : Int
+  mut degraded : Int
+  mut unsupported : Int
+  mut invalid : Int
+} derive(Eq, @debug.Debug)
+pub fn DiagnosticCounts::default() -> Self
+pub fn DiagnosticCounts::total(Self) -> Int
+
+pub(all) enum DiagnosticPolicy {
+  ReportOnly
+  FailOnUnsupported
+  FailOnDegraded
+} derive(Eq, @debug.Debug)
 
 pub struct FieldConstraint {
   min_val : Double?
