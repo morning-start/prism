@@ -113,6 +113,33 @@ pub fn wasm_convert_stream(
 }
 
 ///|
+/// === 增量流转换会话（T5，句柄式 ABI）===
+
+///|
+/// 创建增量流转换会话 → {"value": handle}
+pub fn wasm_stream_new(source : String, target : String) -> String {
+  @wasm.wasm_stream_new(source, target)
+}
+
+///|
+/// 喂入上游 chunk → {"value": [目标 SSE 帧...]}
+pub fn wasm_stream_feed(handle : Int, chunk : String) -> String {
+  @wasm.wasm_stream_feed(handle, chunk)
+}
+
+///|
+/// 流结束：冲刷尾部半帧 + 保持的 Finish 帧
+pub fn wasm_stream_finish(handle : Int) -> String {
+  @wasm.wasm_stream_finish(handle)
+}
+
+///|
+/// 释放会话句柄
+pub fn wasm_stream_free(handle : Int) -> String {
+  @wasm.wasm_stream_free(handle)
+}
+
+///|
 /// === 查询 ===
 
 ///|

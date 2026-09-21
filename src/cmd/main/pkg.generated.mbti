@@ -44,6 +44,14 @@ pub fn wasm_sdk_encode_stream(String, String) -> String
 
 pub fn wasm_sse_to_events(String, String) -> String
 
+pub fn wasm_stream_feed(Int, String) -> String
+
+pub fn wasm_stream_finish(Int) -> String
+
+pub fn wasm_stream_free(Int) -> String
+
+pub fn wasm_stream_new(String, String) -> String
+
 pub fn wasm_to_lux_req(String, String) -> String
 
 pub fn wasm_to_lux_resp(String, String) -> String
