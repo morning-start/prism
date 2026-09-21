@@ -23,6 +23,8 @@ pub fn convert_request_typed(String, String, String) -> Result[@lux.ConversionRe
 
 pub fn convert_request_with_hooks(String, String, String, Array[(@lux.LucentRequest, Array[@lux.ConversionDiagnostic]) -> @lux.LucentRequest]) -> Result[@lux.ConversionResult[String], String]
 
+pub fn convert_request_with_store(String, String, String, ConversationStore) -> Result[@lux.ConversionResult[String], String]
+
 pub fn convert_response(String, String, String) -> Result[@lux.ConversionResult[String], String]
 
 pub fn convert_response_typed(String, String, String) -> Result[@lux.ConversionResult[String], PrismError]
@@ -55,7 +57,13 @@ pub fn match_by_model(String) -> ProviderRegistration?
 
 pub fn match_provider_name(String) -> ProviderRegistration?
 
+pub fn previous_response_id_of(@lux.LucentRequest) -> String?
+
 pub fn register_provider(ProviderRegistration) -> Unit
+
+pub fn restore_request_from_snapshot(@lux.LucentRequest, @lux.ConversationSnapshot) -> @lux.LucentRequest
+
+pub fn store_snapshot_from_response(ConversationStore, @lux.LucentRequest, @lux.LucentResponse) -> Unit
 
 pub fn unregister_provider(String) -> Bool
 
@@ -75,6 +83,12 @@ pub fn Context::add_tool_result(Self, String, String, Bool) -> Self
 pub fn Context::add_tools(Self, Array[SdkTool]) -> Self
 pub fn Context::add_user(Self, String) -> Self
 pub fn Context::new() -> Self
+
+pub struct ConversationStore {
+  get : (String) -> @lux.ConversationSnapshot?
+  put : (@lux.ConversationSnapshot) -> Unit
+}
+pub fn ConversationStore::new((String) -> @lux.ConversationSnapshot?, (@lux.ConversationSnapshot) -> Unit) -> Self
 
 pub struct ConversionMeta {
   source_provider : String
