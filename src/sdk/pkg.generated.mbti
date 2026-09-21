@@ -41,6 +41,7 @@ pub struct Context {
 }
 pub fn Context::add_assistant(Self, String) -> Self
 pub fn Context::add_system(Self, String) -> Self
+pub fn Context::add_tool_call(Self, String, String, String, String) -> Self
 pub fn Context::add_tool_result(Self, String, String, Bool) -> Self
 pub fn Context::add_tools(Self, Array[SdkTool]) -> Self
 pub fn Context::add_user(Self, String) -> Self
@@ -177,8 +178,10 @@ pub struct SdkMessage {
   content : String
   tool_use_id : String?
   is_error : Bool?
+  tool_call : SdkToolCall?
 }
 pub fn SdkMessage::new(String, String) -> Self
+pub fn SdkMessage::tool_call(String, String, String, String) -> Self
 pub fn SdkMessage::tool_result(String, String, Bool) -> Self
 
 pub struct SdkTool {
@@ -187,6 +190,13 @@ pub struct SdkTool {
   parameters_json : String
 }
 pub fn SdkTool::new(String, String, String) -> Self
+
+pub struct SdkToolCall {
+  id : String
+  name : String
+  arguments_json : String
+}
+pub fn SdkToolCall::new(String, String, String) -> Self
 
 // Type aliases
 

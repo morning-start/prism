@@ -9,6 +9,27 @@
 /// 内部将用户输入转换为 LucentConversationItem。
 
 ///|
+/// SdkToolCall — SDK 层的 assistant 工具调用回合
+///
+/// Agent 循环第二轮必需：模型发出 tool_call 后，transcript 中必须先有
+/// 对应的 assistant tool_use 回合，provider（Anthropic/OpenAI 均硬校验）
+/// 才接受紧随其后的 tool_result。
+pub struct SdkToolCall {
+  id : String
+  name : String
+  arguments_json : String
+}
+
+///|
+pub fn SdkToolCall::new(
+  id : String,
+  name : String,
+  arguments_json : String,
+) -> SdkToolCall {
+  { id, name, arguments_json, }
+}
+
+///|
 /// SdkMessage — SDK 层的消息表示
 pub struct SdkMessage {
   role : String
@@ -17,11 +38,13 @@ pub struct SdkMessage {
   tool_use_id : String?
   /// 工具结果专用：是否执行出错（默认 false）
   is_error : Bool?
+  /// assistant 工具调用专用：None 表示普通消息（见 SdkMessage::tool_call）
+  tool_call : SdkToolCall?
 }
 
 ///|
 pub fn SdkMessage::new(role : String, content : String) -> SdkMessage {
-  { role, content, tool_use_id: None, is_error: None, }
+  { role, content, tool_use_id: None, is_error: None, tool_call: None, }
 }
 
 ///|
@@ -36,6 +59,26 @@ pub fn SdkMessage::tool_result(
     content,
     tool_use_id: Some(tool_use_id),
     is_error: Some(is_error),
+    tool_call: None,
+  }
+}
+
+///|
+/// 构造 assistant 工具调用消息（Agent 循环第一轮回填用）
+///
+/// role 固定为 "assistant"；content 可携带同回合的文本（混合输出）。
+pub fn SdkMessage::tool_call(
+  id : String,
+  name : String,
+  arguments_json : String,
+  content : String,
+) -> SdkMessage {
+  {
+    role: "assistant",
+    content,
+    tool_use_id: None,
+    is_error: None,
+    tool_call: Some(SdkToolCall::new(id, name, arguments_json)),
   }
 }
 
@@ -115,6 +158,20 @@ pub fn Context::add_tool_result(
 }
 
 ///|
+/// 回填 assistant 工具调用回合（Agent 循环：模型要求调用工具后、
+/// 注入 tool_result 之前，必须先补这一回合，否则第二轮请求会被
+/// provider 拒绝——tool_result 必须紧跟含 tool_use 的 assistant 消息）
+pub fn Context::add_tool_call(
+  self : Context,
+  id : String,
+  name : String,
+  arguments_json : String,
+  content : String,
+) -> Context {
+  self.push_msg(SdkMessage::tool_call(id, name, arguments_json, content))
+}
+
+///|
 /// 将 Context 转为 LucentRequest（SDK 内部使用）
 pub fn context_to_lux_request(
   ctx : Context,
@@ -140,18 +197,39 @@ pub fn context_to_lux_request(
           ),
         )
       }
-      None => {
-        let role = match msg.role {
-          "system" => @lux.System
-          "user" => User
-          "assistant" => Assistant
-          "tool" => Tool
-          _ => User
+      None =>
+        // assistant 工具调用回合 → Message{Assistant, [Text?, ToolUse]}
+        // 与 provider 入站解码形态一致（openai append_tool_calls）
+        match msg.tool_call {
+          Some(tc) => {
+            let content : Array[@lux.LucentContent] = []
+            if msg.content != "" {
+              content.push(@lux.LucentContent::text(msg.content))
+            }
+            content.push(
+              @lux.LucentContent::tool_use(
+                tc.id,
+                tc.name,
+                tc.arguments_json,
+                None,
+              ),
+            )
+            let lmsg = @lux.LucentMessage::new(Assistant, content)
+            items.push(@lux.LucentConversationItem::message(lmsg))
+          }
+          None => {
+            let role = match msg.role {
+              "system" => @lux.System
+              "user" => User
+              "assistant" => Assistant
+              "tool" => Tool
+              _ => User
+            }
+            let content = [@lux.LucentContent::text(msg.content)]
+            let lmsg = @lux.LucentMessage::new(role, content)
+            items.push(@lux.LucentConversationItem::message(lmsg))
+          }
         }
-        let content = [@lux.LucentContent::text(msg.content)]
-        let lmsg = @lux.LucentMessage::new(role, content)
-        items.push(@lux.LucentConversationItem::message(lmsg))
-      }
     }
   }
   let tools_arr = match ctx.tools {
