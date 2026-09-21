@@ -191,6 +191,60 @@ pub fn Prism::decode_response(
 }
 
 ///|
+/// 运行时解析的规范 provider 名（精确/别名/模型模式命中后的主名称）
+fn Prism::resolved_provider_name(self : Prism) -> String {
+  match match_provider_name(self.provider) {
+    Some(reg) => reg.name
+    None => self.provider
+  }
+}
+
+///|
+/// 把 String 错误升级为带 provider 的 PrismError（类型化入口共用）
+fn Prism::to_typed_error(self : Prism, message : String) -> PrismError {
+  PrismError::from_string(message).with_provider(
+    Some(self.resolved_provider_name()),
+  )
+}
+
+///|
+/// 文本请求编码（类型化错误版；成功路径与 encode_request 一致）
+pub fn Prism::encode_request_typed(
+  self : Prism,
+  text : String,
+  opts : PrismOptions,
+) -> Result[String, PrismError] {
+  match self.encode_request(text, opts) {
+    Ok(json) => Ok(json)
+    Err(e) => Err(self.to_typed_error(e))
+  }
+}
+
+///|
+/// 响应解码为 DecodedResponse（类型化错误版）
+pub fn Prism::decode_response_typed(
+  self : Prism,
+  json_str : String,
+) -> Result[DecodedResponse, PrismError] {
+  match self.decode_response_with_meta(json_str) {
+    Ok(v) => Ok(v)
+    Err(e) => Err(self.to_typed_error(e))
+  }
+}
+
+///|
+/// SSE 解码为事件数组（类型化错误版）
+pub fn Prism::decode_sse_typed(
+  self : Prism,
+  sse_str : String,
+) -> Result[Array[PrismEvent], PrismError] {
+  match self.decode_sse(sse_str) {
+    Ok(events) => Ok(events)
+    Err(e) => Err(self.to_typed_error(e))
+  }
+}
+
+///|
 /// 将提供商 JSON 响应解码为 DecodedResponse（文本 + 来源元信息）。
 ///
 /// meta.source_provider 为运行时从注册表解析的规范 provider 名

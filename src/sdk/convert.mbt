@@ -123,6 +123,50 @@ pub fn convert_stream(
 }
 
 ///|
+/// ═══ 类型化错误入口（T7）═══
+/// 既有 String 错误 API 全部保留；以下入口把错误升级为 PrismError
+/// （kind 供重试/熔断按类型匹配），成功路径与无类型版一致。
+
+///|
+/// 请求转换（类型化错误版）
+pub fn convert_request_typed(
+  source : String,
+  json_str : String,
+  target : String,
+) -> Result[@lux.ConversionResult[String], PrismError] {
+  match convert_request(source, json_str, target) {
+    Ok(cr) => Ok(cr)
+    Err(e) => Err(PrismError::from_string(e).with_provider(Some(source)))
+  }
+}
+
+///|
+/// 响应转换（类型化错误版）
+pub fn convert_response_typed(
+  source : String,
+  json_str : String,
+  target : String,
+) -> Result[@lux.ConversionResult[String], PrismError] {
+  match convert_response(source, json_str, target) {
+    Ok(cr) => Ok(cr)
+    Err(e) => Err(PrismError::from_string(e).with_provider(Some(source)))
+  }
+}
+
+///|
+/// 流转换（类型化错误版）
+pub fn convert_stream_typed(
+  source : String,
+  sse_str : String,
+  target : String,
+) -> Result[@lux.ConversionResult[String], PrismError] {
+  match convert_stream(source, sse_str, target) {
+    Ok(cr) => Ok(cr)
+    Err(e) => Err(PrismError::from_string(e).with_provider(Some(source)))
+  }
+}
+
+///|
 /// ═══ 增量流转换（T5，中间件逐帧转发）═══
 
 ///|

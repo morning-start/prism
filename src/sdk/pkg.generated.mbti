@@ -2,6 +2,7 @@
 package "morning-start/prism/sdk"
 
 import {
+  "moonbitlang/core/debug",
   "morning-start/prism/internal",
   "morning-start/prism/lux",
   "morning-start/prism/provider/meta",
@@ -18,15 +19,21 @@ pub fn context_to_lux_request(Context, String, PrismOptions) -> @lux.LucentReque
 
 pub fn convert_request(String, String, String) -> Result[@lux.ConversionResult[String], String]
 
+pub fn convert_request_typed(String, String, String) -> Result[@lux.ConversionResult[String], PrismError]
+
 pub fn convert_request_with_hooks(String, String, String, Array[(@lux.LucentRequest, Array[@lux.ConversionDiagnostic]) -> @lux.LucentRequest]) -> Result[@lux.ConversionResult[String], String]
 
 pub fn convert_response(String, String, String) -> Result[@lux.ConversionResult[String], String]
+
+pub fn convert_response_typed(String, String, String) -> Result[@lux.ConversionResult[String], PrismError]
 
 pub fn convert_response_with_hooks(String, String, String, Array[(@lux.LucentResponse, Array[@lux.ConversionDiagnostic]) -> @lux.LucentResponse]) -> Result[@lux.ConversionResult[String], String]
 
 pub fn convert_response_with_meta(String, String, String) -> Result[ConvertMetaResult, String]
 
 pub fn convert_stream(String, String, String) -> Result[@lux.ConversionResult[String], String]
+
+pub fn convert_stream_typed(String, String, String) -> Result[@lux.ConversionResult[String], PrismError]
 
 pub fn convert_stream_with_hooks(String, String, String, Array[(Array[@lux.LucentStreamEvent], Array[@lux.ConversionDiagnostic]) -> Array[@lux.LucentStreamEvent]]) -> Result[@lux.ConversionResult[String], String]
 
@@ -106,10 +113,13 @@ pub fn Prism::capability(Self, String) -> @lux.ProviderCapability?
 pub fn Prism::check_capability(Self, @lux.LucentRequest) -> Array[@lux.ConversionDiagnostic]
 pub fn Prism::complete(Self, String, PrismOptions, (String) -> Result[String, String]) -> Result[String, String]
 pub fn Prism::decode_response(Self, String) -> Result[String, String]
+pub fn Prism::decode_response_typed(Self, String) -> Result[DecodedResponse, PrismError]
 pub fn Prism::decode_response_with_diagnostics(Self, String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String]
 pub fn Prism::decode_response_with_meta(Self, String) -> Result[DecodedResponse, String]
 pub fn Prism::decode_sse(Self, String) -> Result[Array[PrismEvent], String]
+pub fn Prism::decode_sse_typed(Self, String) -> Result[Array[PrismEvent], PrismError]
 pub fn Prism::encode_request(Self, String, PrismOptions) -> Result[String, String]
+pub fn Prism::encode_request_typed(Self, String, PrismOptions) -> Result[String, PrismError]
 pub fn Prism::encode_request_with_diagnostics(Self, String, PrismOptions) -> Result[@lux.ConversionResult[String], String]
 pub fn Prism::encode_stream_request(Self, String, PrismOptions) -> Result[String, String]
 pub fn Prism::endpoint(Self, String) -> SdkProviderEndpoint?
@@ -117,6 +127,17 @@ pub fn Prism::events_to_context(Self, Context, Array[PrismEvent]) -> Context
 pub fn Prism::new() -> Self
 pub fn Prism::stream(Self, Context, (String) -> Result[String, String]) -> Result[Array[PrismEvent], String]
 pub fn Prism::with_provider(Self, String) -> Self
+
+pub struct PrismError {
+  kind : @lux.LucentErrorKind
+  message : String
+  provider : String?
+} derive(Eq, @debug.Debug)
+pub fn PrismError::from_string(String) -> Self
+pub fn PrismError::is_retryable(Self) -> Bool
+pub fn PrismError::message(Self) -> String
+pub fn PrismError::new(@lux.LucentErrorKind, String, String?) -> Self
+pub fn PrismError::with_provider(Self, String?) -> Self
 
 pub(all) enum PrismEvent {
   TextDelta(String)
