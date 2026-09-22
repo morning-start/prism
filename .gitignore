@@ -380,3 +380,10 @@ $RECYCLE.BIN/
 # Agent private workspace (flowstate)
 .agent-workplace/
 .workbuddy/memory/
+
+# moon coverage / verify scratch output (moon writes these at the repo root by default)
+/cov.txt
+/cov.utf8.txt
+/cov.utf16.txt
+/uncovered.log
+/uncovered.txt

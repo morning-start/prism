@@ -1542,3 +1542,366 @@ test "#10 previous_response_id standard field with history degrades" {
     Err(e) => fail("encode: \{e}")
   }
 }
+
+///|
+/// thinking_to_block 的 th.redacted == true 分支（request_encode.mbt 此前整段未覆盖）：
+/// signature 有值 / 无值两种子情况都要命中。
+test "encode - redacted_thinking with and without signature" {
+  let with_sig = thinking_to_block(
+    @lux.LucentThinking::redacted(Some("sig-redacted")),
+  )
+  assert_eq(
+    with_sig, "{\"type\":\"redacted_thinking\",\"signature\":\"sig-redacted\"}",
+  )
+  let without_sig = thinking_to_block(@lux.LucentThinking::redacted(None))
+  assert_eq(without_sig, "{\"type\":\"redacted_thinking\",\"signature\":null}")
+}
+
+///|
+/// stream_encode：ConversationStart 的 meta.usage_input = Some(n) → message_start 帧
+/// 携带 "usage":{"input_tokens":n}（None => 0 分支已由既有用例覆盖）。
+test "encode - stream conversation start emits input usage" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new(
+        Some("msg_usage"),
+        Some("claude-sonnet-4"),
+        Some(1234),
+      ),
+    ),
+    Done,
+  ]
+  match lux_events_to_messages_sse(events) {
+    Ok(cr) =>
+      assert_true(cr.value().contains("\"usage\":{\"input_tokens\":1234}"))
+    Err(e) => fail("encode error: \{e}")
+  }
+}
+
+///|
+/// stream_encode：BlockStart 的 Refusal 分支、BlockDelta 的 RefusalDelta 与 NativeDelta
+/// 分支（此前均未覆盖）。Native 块类型 + NativeDelta 一并纳入。
+test "encode - stream refusal and native block waves" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new(
+        Some("msg_r"),
+        Some("claude-sonnet-4"),
+        None,
+      ),
+    ),
+    BlockStart(0, Refusal),
+    BlockDelta(0, @lux.LucentBlockDelta::refusal_delta("I cannot help")),
+    BlockEnd(0),
+    BlockStart(1, @lux.LucentBlockType::native("my_native_block")),
+    BlockDelta(
+      1,
+      @lux.LucentBlockDelta::native_delta("my_native_delta", Json::null()),
+    ),
+    BlockEnd(1),
+    // BlockStart Image → 命中 Image | Audio | Video 合并分支（空 text 块）
+    BlockStart(2, Image),
+    BlockEnd(2),
+    Done,
+  ]
+  match lux_events_to_messages_sse(events) {
+    Ok(cr) => {
+      let sse = cr.value()
+      // BlockStart Refusal → content_block_start 携带空 text 块
+      assert_true(
+        sse.contains("\"content_block\":{\"type\":\"text\",\"text\":\"\"}"),
+      )
+      // BlockDelta RefusalDelta → text_delta
+      assert_true(
+        sse.contains("\"type\":\"text_delta\",\"text\":\"I cannot help\""),
+      )
+      // BlockStart Native → content_block_start 携带原生类型
+      assert_true(
+        sse.contains("\"content_block\":{\"type\":\"my_native_block\"}"),
+      )
+      // BlockDelta NativeDelta → delta 仅保留 type 标签
+      assert_true(sse.contains("\"delta\":{\"type\":\"my_native_delta\"}"))
+    }
+    Err(e) => fail("encode error: \{e}")
+  }
+}
+
+///|
+/// stream_encode：整个 Error(e) 分支 —— error.type 由 e.kind 派生，六种 kind 全覆盖：
+/// RateLimit→rate_limit_error、InvalidRequest→invalid_request_error、
+/// Authentication→authentication_error、ServerError→api_error、
+/// ContentFilter→invalid_request_error、Native(tag)→tag。
+test "encode - stream error event maps kind to anthropic error type" {
+  let cases : Array[(@lux.LucentErrorKind, String)] = [
+    (RateLimit, "rate_limit_error"),
+    (InvalidRequest, "invalid_request_error"),
+    (Authentication, "authentication_error"),
+    (ServerError, "api_error"),
+    (ContentFilter, "invalid_request_error"),
+    (Native("vendor_error"), "vendor_error"),
+  ]
+  for kv in cases {
+    let (kind, expected) = kv
+    let events : Array[@lux.LucentStreamEvent] = [
+      Error(@lux.LucentError::new(kind, "boom", None)),
+      Done,
+    ]
+    match lux_events_to_messages_sse(events) {
+      Ok(cr) =>
+        assert_true(
+          cr.value().contains("\"error\":{\"type\":\"" + expected + "\""),
+        )
+      Err(e) => fail("encode error: \{e}")
+    }
+  }
+}
+
+///|
+/// request_encode：content_to_block 的多内容类型分支 —— Refusal、媒体 base64（image/file
+/// Inline）、Video/FileUri Unsupported。合并覆盖以压降 request_encode.mbt 未覆盖行。
+test "encode - content block variety covers refusal media and unsupported kinds" {
+  let req = @lux.LucentRequest::from_messages(
+    "claude-sonnet-4",
+    None,
+    [
+      @lux.LucentMessage::new(Assistant, [
+        @lux.LucentContent::refusal("I cannot assist"),
+        @lux.LucentContent::video("video/mp4", Url("https://x.com/v.mp4")),
+        @lux.LucentContent::image("image/png", Inline("YmFzZTY0ZGF0YQ==")),
+        @lux.LucentContent::file("application/pdf", Inline("cGRmZGF0YQ==")),
+        @lux.LucentContent::file(
+          "application/pdf",
+          FileUri("file:///tmp/a.pdf"),
+        ),
+      ]),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_messages(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      // Refusal → text 块（保留文本）
+      assert_true(s.contains("\"type\":\"text\",\"text\":\"I cannot assist\""))
+      // image Inline(base64) → base64 image block
+      assert_true(
+        s.contains("\"type\":\"image\",\"source\":{\"type\":\"base64\""),
+      )
+      // file Inline(base64) → base64 document block
+      assert_true(
+        s.contains("\"type\":\"document\",\"source\":{\"type\":\"base64\""),
+      )
+      // Video / FileUri → Unsupported 诊断（不得产出空/泄漏块）
+      assert_false(s.contains("\"text\":\"video/mp4\""))
+      let mut unsupported_count = 0
+      for d in cr.diagnostics() {
+        if d.status == Unsupported {
+          unsupported_count = unsupported_count + 1
+        }
+      }
+      assert_true(unsupported_count >= 2)
+    }
+    Err(e) => fail("encode error: \{e}")
+  }
+}
+
+///|
+/// request_encode：options 的 top_p / top_k / stop_sequences / stream=true 分支
+/// （四处此前未覆盖）。单个请求同时携带四个字段。
+test "encode - options map top_p top_k stop sequences and stream" {
+  let opts = @lux.LucentOptions::new(
+    None,
+    Some(0.9),
+    Some(40),
+    Some(1024),
+    Some(["STOP", "HALT"]),
+    true,
+    None,
+    None,
+    None,
+    None,
+  )
+  let req = @lux.LucentRequest::from_messages(
+    "claude-sonnet-4",
+    None,
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
+    None,
+    None,
+    opts,
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_messages(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      assert_true(s.contains("\"top_p\":"))
+      assert_true(s.contains("\"top_k\":40"))
+      assert_true(s.contains("\"stop_sequences\":[\"STOP\",\"HALT\"]"))
+      assert_true(s.contains("\"stream\":true"))
+    }
+    Err(e) => fail("encode error: \{e}")
+  }
+}
+
+///|
+/// request_encode：structured_output 的 JsonObject 与 Text 两分支（并入单个 output_config）。
+/// 断言形状相同，用 Array 循环展开为两个用例。
+test "encode - structured output emits output_config format" {
+  let cases : Array[(@lux.LucentStructuredOutput, String)] = [
+    (JsonObject, "\"schema\":{}"),
+    (Text, "\"format\":{\"type\":\"text\"}"),
+  ]
+  for kv in cases {
+    let (variant, expected) = kv
+    let opts = @lux.LucentOptions::new(
+      None,
+      None,
+      None,
+      Some(1024),
+      None,
+      false,
+      None,
+      Some(variant),
+      None,
+      None,
+    )
+    let req = @lux.LucentRequest::from_messages(
+      "claude-sonnet-4",
+      None,
+      [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
+      None,
+      None,
+      opts,
+      None,
+      None,
+      None,
+      None,
+    )
+    match lux_request_to_messages(req) {
+      Ok(cr) => {
+        let s = cr.value()
+        assert_true(s.contains("\"output_config\":{"))
+        assert_true(s.contains(expected))
+      }
+      Err(e) => fail("encode error: \{e}")
+    }
+  }
+}
+
+///|
+/// request_encode：tools 的 Native kind 分支 → {"type":"<tag>","name":...}。
+test "encode - native tool kind emits vendor type tag" {
+  let req = @lux.LucentRequest::from_messages(
+    "claude-sonnet-4",
+    None,
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
+    Some([
+      @lux.LucentTool::new(
+        "vendor_tool",
+        Some("a vendor tool"),
+        "{\"type\":\"object\"}",
+        None,
+        Native("vendor_kind"),
+      ),
+    ]),
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_messages(req) {
+    Ok(cr) =>
+      assert_true(
+        cr.value().contains("\"type\":\"vendor_kind\",\"name\":\"vendor_tool\""),
+      )
+    Err(e) => fail("encode error: \{e}")
+  }
+}
+
+///|
+/// request_encode：reasoning.enabled 但 budget_tokens=None 且 effort=None →
+/// adaptive thinking 分支内的 effort None 子分支。
+test "encode - adaptive reasoning without effort still emits adaptive thinking" {
+  let req = @lux.LucentRequest::from_messages(
+    "claude-sonnet-4",
+    None,
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    Some(@lux.LucentReasoningConfig::enabled(None)),
+    None,
+    None,
+  )
+  match lux_request_to_messages(req) {
+    Ok(cr) =>
+      assert_true(cr.value().contains("\"thinking\":{\"type\":\"adaptive\"}"))
+    Err(e) => fail("encode error: \{e}")
+  }
+}
+
+///|
+/// request_encode：instructions 含非 Text 内容（image）→ 系统抽取循环的 _ 分支
+/// （不产 system 字段，也不报错）。
+test "encode - instructions with non-text block is skipped for system" {
+  let req = @lux.LucentRequest::from_messages(
+    "claude-sonnet-4",
+    Some([@lux.LucentContent::image("image/png", Url("https://x.com/i.png"))]),
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_messages(req) {
+    Ok(cr) => assert_false(cr.value().contains("\"system\":"))
+    Err(e) => fail("encode error: \{e}")
+  }
+}
+
+///|
+/// request_encode：legacy 路径 —— extras 中的 previous_response_id（String）在有历史时
+/// 命中 prev_id_extras 的 Some(String(id)) 分支，随后剔除并打 Unsupported 诊断。
+test "encode - previous_response_id in extras with history degrades and strips" {
+  let opts = @lux.LucentOptions::default().with_extras(
+    Some({ "previous_response_id": Json::string("resp_legacy") }),
+  )
+  let req = @lux.LucentRequest::from_messages(
+    "claude-sonnet-4",
+    None,
+    [@lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")])],
+    None,
+    None,
+    opts,
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_messages(req) {
+    Ok(cr) => {
+      assert_false(cr.value().contains("resp_legacy"))
+      let mut has_unsupported = false
+      for d in cr.diagnostics() {
+        if d.field == "options.previous_response_id" && d.status == Unsupported {
+          has_unsupported = true
+        }
+      }
+      assert_true(has_unsupported)
+    }
+    Err(e) => fail("encode error: \{e}")
+  }
+}

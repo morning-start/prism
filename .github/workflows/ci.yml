@@ -135,10 +135,14 @@ jobs:
           moon coverage analyze 2>&1 | tee coverage.log
           UNCOVERED=$(grep -oE 'Total: [0-9]+ uncovered' coverage.log | grep -oE '[0-9]+' | head -1)
           echo "uncovered lines: ${UNCOVERED}"
-          # 基线 888（2026-09-04，native 目标，wbtest 不参与统计）；允许 +15% 波动
+          # 基线 173（2026-09-22，native 目标，wbtest 不参与统计）；允许 +15% 波动
+          # 其中 149 行是结构性不可测，不会因补测而下降，只会在新增代码时被突破：
+          #   src/examples/sdk-basic/main.mbt  82  println 演示体
+          #   src/wasm/memory.mbt             38  %identity 指针双关 ABI
+          #   src/cmd/main/main.mbt           29  进程级 CLI 导出入口
           # 超过阈值说明新增代码未配测试，需要补测或显式更新基线
-          if [ -n "${UNCOVERED}" ] && [ "${UNCOVERED}" -gt 1020 ]; then
-            echo "::error::Coverage regression: ${UNCOVERED} uncovered lines (baseline 888, threshold 1020)"
+          if [ -n "${UNCOVERED}" ] && [ "${UNCOVERED}" -gt 200 ]; then
+            echo "::error::Coverage regression: ${UNCOVERED} uncovered lines (baseline 173, threshold 200)"
             exit 1
           fi
 

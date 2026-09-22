@@ -687,3 +687,161 @@ test "conformance - gemini response violation branches" {
     assert_violation(@conformance.check_gemini_response(c.0), c.1, c.0)
   }
 }
+
+///|
+/// === 测试：合法输入的"放行"分支（正例覆盖）===
+///
+/// 前面的负例只驱动违规检出分支。但验证器里同样存在**合法输入才会走到**
+/// 的分支——`Some(Array(_)) => ()`、`Some(Null) => ()`、`Some(True) | Some(False) => ()`
+/// 以及各 `match tp { ... _ => () }` 的"该类型不做深度校验"兜底臂（responses 的
+/// reasoning、messages 的 image/thinking、responses 响应侧的 reasoning /
+/// function_call_output）。只写违规用例永远碰不到它们，等于留白。
+/// 本组每个用例都给**完全合法**的 JSON 文档，断言违规列表为空。
+
+///|
+/// 与 assert_violation 对称的正例断言：合法输入必须返回空违规列表。
+/// 不直接插值 violations 数组（Show 已弃用），先 join 成 String。
+fn assert_no_violation(
+  violations : Array[String],
+  input : String,
+) -> Unit raise {
+  if violations.length() != 0 {
+    let joined = violations.join(" | ")
+    fail("expected no violations but got [\{joined}] | input: \{input}")
+  }
+}
+
+///|
+/// check_openai_request：messages[].content 为数组、stream 为布尔值
+/// （validators.mbt L247 `Some(Array(_)) => ()` / L311 `Some(True) | Some(False) => ()`）
+test "conformance - openai request accepts array content and boolean stream" {
+  let cases : Array[String] = [
+    "{\"model\":\"m\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]}]}",
+    "{\"model\":\"m\",\"messages\":[{\"role\":\"tool\",\"content\":[\"a\"]}],\"stream\":true}",
+    "{\"model\":\"m\",\"messages\":[],\"stream\":false}", "{\"model\":\"m\",\"messages\":[{\"role\":\"assistant\",\"content\":[\"x\"],\"tool_calls\":[{\"id\":\"t1\",\"function\":{\"name\":\"f\",\"arguments\":\"{}\"}}]}],\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"f\",\"parameters\":{}}}]}",
+  ]
+  for c in cases {
+    assert_no_violation(@conformance.check_openai_request(c), c)
+  }
+}
+
+///|
+/// check_openai_response：message.content 为 null 合法放行
+/// （validators.mbt L354 `Some(Null) => ()`）
+test "conformance - openai response accepts null content and full usage" {
+  let cases : Array[String] = [
+    "{\"id\":\"r1\",\"object\":\"chat.completion\",\"model\":\"m\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":null},\"finish_reason\":\"stop\"}]}",
+    "{\"id\":\"r1\",\"object\":\"chat.completion\",\"model\":\"m\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":null},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":2,\"total_tokens\":3}}",
+    "{\"id\":\"r1\",\"object\":\"chat.completion\",\"model\":\"m\",\"choices\":[{\"index\":1,\"message\":{\"role\":\"tool\",\"content\":[{\"type\":\"text\",\"text\":\"t\"}]},\"finish_reason\":\"tool_calls\"}]}",
+  ]
+  for c in cases {
+    assert_no_violation(@conformance.check_openai_response(c), c)
+  }
+}
+
+///|
+/// check_responses_request：input 项 type 为 "reasoning"（不做深度校验）
+/// （validators.mbt L456 `"reasoning" => ()`）
+test "conformance - responses request accepts reasoning input items" {
+  let cases : Array[String] = [
+    "{\"model\":\"m\",\"input\":[{\"type\":\"reasoning\"}]}", "{\"model\":\"m\",\"input\":[{\"type\":\"reasoning\",\"summary\":[]},{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"hi\"}]}]}",
+  ]
+  for c in cases {
+    assert_no_violation(@conformance.check_responses_request(c), c)
+  }
+}
+
+///|
+/// check_responses_response：output 项 type 为 reasoning / function_call_output
+/// （validators.mbt L551 兜底臂 `_ => ()`）
+test "conformance - responses response accepts reasoning and function_call_output items" {
+  let cases : Array[String] = [
+    "{\"id\":\"r1\",\"object\":\"response\",\"status\":\"completed\",\"model\":\"m\",\"output\":[{\"type\":\"reasoning\"}]}",
+    "{\"id\":\"r1\",\"object\":\"response\",\"status\":\"incomplete\",\"model\":\"m\",\"output\":[{\"type\":\"reasoning\",\"summary\":[]},{\"type\":\"function_call_output\",\"call_id\":\"c1\",\"output\":\"done\"}]}",
+  ]
+  for c in cases {
+    assert_no_violation(@conformance.check_responses_response(c), c)
+  }
+}
+
+///|
+/// check_messages_request：content 块 type 为 image / thinking（未做深度校验）
+/// （validators.mbt L628 兜底臂 `_ => ()`）
+test "conformance - messages request accepts image and thinking blocks" {
+  let cases : Array[String] = [
+    "{\"model\":\"m\",\"max_tokens\":10,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"image\",\"source\":{\"type\":\"base64\",\"data\":\"x\"}}]}]}",
+    "{\"model\":\"m\",\"max_tokens\":10,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"t\",\"signature\":\"s\"}]}]}",
+    "{\"model\":\"m\",\"max_tokens\":10,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"tu_1\"},{\"type\":\"image\",\"source\":{}}]}]}",
+  ]
+  for c in cases {
+    assert_no_violation(@conformance.check_messages_request(c), c)
+  }
+}
+
+///|
+/// check_messages_response：content 块 type 为 thinking（未做深度校验）
+/// （validators.mbt L700 兜底臂 `_ => ()`）
+test "conformance - messages response accepts thinking blocks" {
+  let cases : Array[String] = [
+    "{\"id\":\"r1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"t\"}],\"stop_reason\":\"end_turn\"}",
+    "{\"id\":\"r1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"content\":[{\"type\":\"thinking\"},{\"type\":\"text\",\"text\":\"t\"},{\"type\":\"tool_use\",\"id\":\"tu_1\",\"name\":\"f\"}],\"stop_reason\":\"tool_use\"}",
+  ]
+  for c in cases {
+    assert_no_violation(@conformance.check_messages_response(c), c)
+  }
+}
+
+///|
+/// check_gemini_request：part 含 inlineData / fileData 对象（合法放行）
+/// （validators.mbt L805 / L810 `Some(Object(_)) => ()`）
+test "conformance - gemini request accepts inlineData and fileData parts" {
+  let cases : Array[String] = [
+    "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"x\"}}]}]}",
+    "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"fileData\":{\"mimeType\":\"text/plain\",\"fileUri\":\"u\"}}]}]}",
+    "{\"contents\":[{\"role\":\"model\",\"parts\":[{\"text\":\"hi\"},{\"functionCall\":{\"name\":\"f\",\"args\":{}}},{\"functionResponse\":{\"name\":\"f\",\"response\":{}}},{\"inlineData\":{}},{\"fileData\":{}}]}]}",
+  ]
+  for c in cases {
+    assert_no_violation(@conformance.check_gemini_request(c), c)
+  }
+}
+
+///|
+/// check_gemini_response：part 含 functionCall 对象（合法放行）
+/// （validators.mbt L856 `Some(Object(_)) => ()`）
+test "conformance - gemini response accepts functionCall parts" {
+  let cases : Array[String] = [
+    "{\"candidates\":[{\"content\":{\"parts\":[{\"functionCall\":{\"name\":\"f\",\"args\":{}}}]},\"finishReason\":\"STOP\"}]}",
+    "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"hi\"},{\"functionCall\":{\"name\":\"f\",\"args\":{}}}]},\"finishReason\":\"MAX_TOKENS\"}]}",
+  ]
+  for c in cases {
+    assert_no_violation(@conformance.check_gemini_response(c), c)
+  }
+}
+
+///|
+/// check_gemini_request：functionCall/functionResponse 子对象 name 字段的
+/// 空值 + 非字符串分支（require_map_str 的 Some("") / Some(错误类型)）
+/// （validators.mbt L92 `val_err(... "must not be empty")` / L98 `type_err(...)`）
+test "conformance - gemini request function name field violation branches" {
+  let cases : Array[(String, String)] = [
+    (
+      "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"functionCall\":{\"name\":\"\",\"args\":{}}}]}]}",
+      "req.contents[0].parts[0].functionCall.name must not be empty",
+    ),
+    (
+      "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"functionCall\":{\"name\":42,\"args\":{}}}]}]}",
+      "req.contents[0].parts[0].functionCall.name must be a string",
+    ),
+    (
+      "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"functionResponse\":{\"name\":\"\",\"response\":{}}}]}]}",
+      "req.contents[0].parts[0].functionResponse.name must not be empty",
+    ),
+    (
+      "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"functionResponse\":{\"name\":null,\"response\":{}}}]}]}",
+      "req.contents[0].parts[0].functionResponse.name must be a string",
+    ),
+  ]
+  for c in cases {
+    assert_violation(@conformance.check_gemini_request(c.0), c.1, c.0)
+  }
+}

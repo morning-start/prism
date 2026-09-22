@@ -395,3 +395,113 @@ test "SseFrameSplitter - empty and comment frames skipped" {
   assert_eq(frames.length(), 1)
   assert_eq(frames[0], "data: real")
 }
+
+///|
+/// === extract_sse_events - data: 无空格 / 无尾部空行 ===
+/// sse.mbt L72（`data:` 后无空格）与 L78（流尾事件 flush）
+test "internal sse - data line without space and multiline payload" {
+  // data: 后无空格 → line[5:]
+  let no_space = @internal.extract_sse_events("data:{\"a\":1}\n\n")
+  assert_eq(no_space.length(), 1)
+  assert_eq(no_space[0], "{\"a\":1}")
+
+  // 多行 data，且无尾部空行 → 循环结束后 flush 当前事件
+  let multiline = @internal.extract_sse_events("data: line1\ndata: line2")
+  assert_eq(multiline.length(), 1)
+  assert_eq(multiline[0], "line1\nline2")
+
+  // 无空格 + 多行 + 无尾部空行
+  let mixed = @internal.extract_sse_events("data:a\ndata:b")
+  assert_eq(mixed.length(), 1)
+  assert_eq(mixed[0], "a\nb")
+}
+
+///|
+/// === parse_sse_message / parse_sse_messages - 非 SSE 行 ===
+/// sse.mbt L144：parse_sse_line 返回 None 的行被跳过
+test "internal sse - non-sse lines are skipped in message parsing" {
+  // id: 不是 SSE 字段 → parse_sse_line None → 跳过，其余行照常解析
+  let messages = @internal.parse_sse_messages("id: 1\ndata: {\"x\":1}\n\n")
+  assert_eq(messages.length(), 1)
+  assert_eq(messages[0].data, "{\"x\":1}")
+
+  // 纯非 SSE 块 → 不产出消息
+  assert_eq(@internal.parse_sse_messages("garbage only\n\n").length(), 0)
+  assert_eq(@internal.parse_sse_messages("id: 1\nretry: 500\n\n").length(), 0)
+
+  // 混合块：非 SSE 行 + 多行 data
+  match @internal.parse_sse_message("id: 7\ndata: a\ndata: b") {
+    Some(message) => {
+      assert_eq(message.event_type, None)
+      assert_eq(message.data, "a\nb")
+    }
+    None => fail("expected SSE message")
+  }
+}
+
+///|
+/// === parse_sse_frame ===
+/// sse.mbt L194：空帧（trim 后为空）→ None
+test "internal sse - parse_sse_frame skips empty and blank frames" {
+  assert_true(@internal.parse_sse_frame("") is None)
+  assert_true(@internal.parse_sse_frame("   ") is None)
+  assert_true(@internal.parse_sse_frame("\n\t ") is None)
+
+  // 心跳清理后为空 → 也跳过
+  assert_true(@internal.parse_sse_frame(": keep-alive.") is None)
+  assert_true(@internal.parse_sse_frame(": heartbeat") is None)
+
+  // 截断帧 → 跳过
+  assert_true(@internal.parse_sse_frame("{\"a\":") is None)
+
+  // 合法帧仍可解析
+  match @internal.parse_sse_frame("{\"a\":1}") {
+    Some(_) => assert_true(true)
+    None => fail("expected parsed frame")
+  }
+}
+
+///|
+/// === parse_sse_frame_with_reason ===
+/// sse.mbt L218（空帧静默跳过）与 L225（截断 JSON 诊断）
+test "internal sse - parse_sse_frame_with_reason empty and truncated" {
+  // 空帧 / 空白帧 → (None, None)，静默跳过
+  match @internal.parse_sse_frame_with_reason("") {
+    (None, None) => assert_true(true)
+    _ => fail("expected (None, None) for empty frame")
+  }
+  match @internal.parse_sse_frame_with_reason("  \n ") {
+    (None, None) => assert_true(true)
+    _ => fail("expected (None, None) for blank frame")
+  }
+
+  // 截断帧 → (None, Some(reason))
+  match @internal.parse_sse_frame_with_reason("{\"type\":\"x\",\"a\":") {
+    (None, Some(reason)) =>
+      assert_true(reason.contains("truncated JSON in SSE data"))
+    _ => fail("expected truncated diagnostic")
+  }
+
+  // 合法帧 → (Some(jv), None)
+  match @internal.parse_sse_frame_with_reason("{\"a\":1}") {
+    (Some(_), None) => assert_true(true)
+    _ => fail("expected parsed frame")
+  }
+}
+
+///|
+/// === SseFrameSplitter::flush ===
+/// sse.mbt L352：尾部缓冲非空但解析不出 SSE 消息 → 不产出帧
+test "internal sse - splitter flush drops non-sse tail" {
+  let splitter = @internal.SseFrameSplitter::new()
+  let frames = splitter.feed("data: {\"a\":1}\n\ngarbage tail")
+  assert_eq(frames.length(), 1)
+  assert_eq(frames[0], "data: {\"a\":1}")
+  assert_eq(splitter.flush().length(), 0)
+
+  // 尾部只有 event: 行（无 data）→ 同样不产出帧
+  let s2 = @internal.SseFrameSplitter::new()
+  let f2 = s2.feed("data: {\"a\":1}\n\nevent: ping")
+  assert_eq(f2.length(), 1)
+  assert_eq(s2.flush().length(), 0)
+}

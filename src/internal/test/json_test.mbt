@@ -462,3 +462,197 @@ test "clean_sse_heartbeat - removes escaped heartbeat in real response.created p
   let result = @internal.clean_sse_heartbeat(input)
   assert_true(!result.contains("keep-alive"))
 }
+
+///|
+/// === parse_content_polymorphic ===
+/// content 的三种形态：裸字符串 / 数组 / 其他（json.mbt L304-L320）
+test "internal json - parse_content_polymorphic string array and fallback" {
+  // 每个元素产出 2-3 个 item，覆盖内层 while 的重复 push
+  fn cov_item(jv : Json) -> Array[Json] {
+    match jv {
+      String(_) => [parse("\"s1\""), parse("\"s2\"")]
+      _ => [parse("\"o1\""), parse("\"o2\""), parse("\"o3\"")]
+    }
+  }
+
+  // 1) 裸字符串 → [Json::string(s)]
+  let from_string = @internal.parse_content_polymorphic(
+    parse("{\"content\":\"hello\"}"),
+    "content",
+    cov_item,
+  )
+  assert_eq(from_string.length(), 1)
+  assert_eq(from_string[0], parse("\"hello\""))
+
+  // 2) 数组 → parse_item 的每个输出逐项 push（外层 + 内层 while）
+  let from_array = @internal.parse_content_polymorphic(
+    parse("{\"content\":[\"a\",{\"b\":1}]}"),
+    "content",
+    cov_item,
+  )
+  assert_eq(from_array.length(), 5)
+  assert_eq(from_array[0], parse("\"s1\""))
+  assert_eq(from_array[1], parse("\"s2\""))
+  assert_eq(from_array[2], parse("\"o1\""))
+  assert_eq(from_array[3], parse("\"o2\""))
+  assert_eq(from_array[4], parse("\"o3\""))
+
+  // 3) 对象 / 数字 / null / 字段缺失 → []
+  let non_polymorphic = [
+    "{\"content\":{\"b\":1}}", "{\"content\":42}", "{\"content\":null}", "{\"other\":1}",
+  ]
+  for c in non_polymorphic {
+    assert_eq(
+      @internal.parse_content_polymorphic(parse(c), "content", cov_item).length(),
+      0,
+    )
+  }
+}
+
+///|
+/// === extract_text_content ===
+/// string / array（含 Object 有无 text）/ 其他（json.mbt L330-L349）
+test "internal json - extract_text_content string array and fallback" {
+  // 裸字符串
+  assert_eq(
+    @internal.extract_text_content(parse("{\"content\":\"hello\"}"), "content"),
+    ["hello"],
+  )
+
+  // 数组：String 直接收集、带 text 的 Object 取 text、
+  // 不带 text 的 Object 跳过、数字跳过
+  assert_eq(
+    @internal.extract_text_content(
+      parse("{\"content\":[\"a\",{\"text\":\"t1\"},{\"other\":1},42]}"),
+      "content",
+    ),
+    ["a", "t1"],
+  )
+
+  // 空数组 → []
+  assert_eq(
+    @internal.extract_text_content(parse("{\"content\":[]}"), "content").length(),
+    0,
+  )
+
+  // 对象 / 数字 / 字段缺失 → []
+  for c in ["{\"content\":{\"b\":1}}", "{\"content\":42}", "{\"other\":1}"] {
+    assert_eq(@internal.extract_text_content(parse(c), "content").length(), 0)
+  }
+}
+
+///|
+/// === serialize_content_with_text_optimization ===
+/// 单 text part 快速路径 / 多 part 数组序列化（json.mbt L372 / L375）
+test "internal json - serialize_content_with_text_optimization single and multi" {
+  fn cov_is_text(s : String) -> Bool {
+    s.has_prefix("t:")
+  }
+
+  fn cov_get_text(s : String) -> String {
+    if s.has_prefix("t:") {
+      s[2:].to_owned()
+    } else {
+      s
+    }
+  }
+
+  fn cov_serialize_array(arr : Array[String]) -> String {
+    "[" + arr.map(cov_get_text).join(",") + "]"
+  }
+
+  // 单个 text part → 直接返回纯字符串
+  assert_eq(
+    @internal.serialize_content_with_text_optimization(
+      ["t:hello"],
+      cov_is_text,
+      cov_get_text,
+      cov_serialize_array,
+    ),
+    "hello",
+  )
+
+  // 多个 part → 数组序列化
+  assert_eq(
+    @internal.serialize_content_with_text_optimization(
+      ["t:a", "t:b"],
+      cov_is_text,
+      cov_get_text,
+      cov_serialize_array,
+    ),
+    "[a,b]",
+  )
+
+  // 单个非 text part → 数组序列化
+  assert_eq(
+    @internal.serialize_content_with_text_optimization(
+      ["x:only"],
+      cov_is_text,
+      cov_get_text,
+      cov_serialize_array,
+    ),
+    "[x:only]",
+  )
+
+  // 空数组 → 数组序列化
+  let no_parts : Array[String] = []
+  assert_eq(
+    @internal.serialize_content_with_text_optimization(
+      no_parts, cov_is_text, cov_get_text, cov_serialize_array,
+    ),
+    "[]",
+  )
+}
+
+///|
+/// === parse_string_array ===
+/// 数组内含非字符串元素被跳过，结果为空时返回 None（json.mbt L397 / L404）
+test "internal json - parse_string_array skips non-strings and empty result" {
+  // 裸字符串 → Some([s])
+  match @internal.parse_string_array(parse("{\"stop\":\"END\"}"), "stop") {
+    Some(arr) => assert_eq(arr, ["END"])
+    None => fail("expected Some for bare string")
+  }
+
+  // 数组：字符串元素收集，非字符串元素跳过
+  match
+    @internal.parse_string_array(
+      parse("{\"stop\":[\"a\",42,true,null,\"b\"]}"),
+      "stop",
+    ) {
+    Some(arr) => assert_eq(arr, ["a", "b"])
+    None => fail("expected Some for mixed array")
+  }
+
+  // 数组内全是非字符串 / 空数组 → 结果为空 → None
+  assert_true(
+    @internal.parse_string_array(parse("{\"stop\":[1,2,3]}"), "stop") is None,
+  )
+  assert_true(
+    @internal.parse_string_array(parse("{\"stop\":[]}"), "stop") is None,
+  )
+
+  // 非数组、字段缺失、null → None
+  assert_true(
+    @internal.parse_string_array(parse("{\"stop\":{\"a\":1}}"), "stop") is None,
+  )
+  assert_true(
+    @internal.parse_string_array(parse("{\"other\":1}"), "stop") is None,
+  )
+  assert_true(
+    @internal.parse_string_array(parse("{\"stop\":null}"), "stop") is None,
+  )
+}
+
+///|
+/// === json_escape ===
+/// 低位十六进制分支（a-f）已由 regr_json_escape_control_chars 覆盖；
+/// 这里补充窄控制字符与 \v / US 等低位分支的稳定性检查。
+test "internal json - json_escape hex escape branch low nibble" {
+  // n % 16 >= 10 → 走 0x61 + n % 16 - 10 分支（\v = 0x0b）
+  assert_eq(@internal.json_escape("\u{0b}"), "\\u000b")
+  // n % 16 < 10 → 走 0x30 + n % 16 分支
+  assert_eq(@internal.json_escape("\u{01}"), "\\u0001")
+  // ASCII 区间内可打印字符不受影响
+  assert_eq(@internal.json_escape("A"), "A")
+}

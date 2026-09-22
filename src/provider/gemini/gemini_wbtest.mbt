@@ -963,3 +963,693 @@ test "capability - parallel tool calls declared full" {
   assert_eq(caps.parallel_tool_calls, Full)
   assert_eq(caps.tool_calling, Full)
 }
+
+///|
+/// === 6. 编码白盒：request_encode 未覆盖分支 ===
+
+///|
+/// tool_response_name 的 None 分支：ToolResult 的 tool_use_id 无配对 ToolCall，
+/// 无法回查函数名 → Degraded，且 name 回退为 tool_use_id。
+test "encode - tool result without matching tool call degrades name" {
+  let result = @lux.LucentToolResult::ok("orphan_1", [
+    @lux.LucentContent::text("25C"),
+  ])
+  let req = @lux.LucentRequest::new(
+    "gemini-2.0-flash",
+    None,
+    [@lux.LucentConversationItem::tool_result(result)],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_gemini(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      let mut has_degraded = false
+      let mut detail_text = ""
+      for d in cr.diagnostics() {
+        if d.field == "content.tool_result.name" && d.status == Degraded {
+          has_degraded = true
+          detail_text = match d.detail {
+            Some(m) => m
+            None => ""
+          }
+        }
+      }
+      assert_true(has_degraded)
+      assert_true(detail_text.contains("without matching ToolCall"))
+      // name 回退为 tool_use_id，functionResponse 两端都填 orphan_1
+      assert_true(
+        s.contains(
+          "\"functionResponse\":{\"name\":\"orphan_1\",\"id\":\"orphan_1\"",
+        ),
+      )
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// function_call_part 空 id 分支：tu.id == "" → id_part 为空，
+/// functionCall 不带 "id" 键。
+test "encode - tool use with empty id omits id field" {
+  let call = @lux.LucentToolUse::new("", "no_id_tool", "{\"x\":1}", None)
+  let req = @lux.LucentRequest::new(
+    "gemini-2.0-flash",
+    None,
+    [@lux.LucentConversationItem::tool_call(call)],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_gemini(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      assert_true(!s.contains("\"id\""))
+      assert_true(
+        s.contains(
+          "\"functionCall\":{\"name\":\"no_id_tool\",\"args\":{\"x\":1}}",
+        ),
+      )
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// function_response_part 空 id 分支：tool_use_id == "" → 不输出 "id" 键
+/// （name 回退也为空，同时再次覆盖 tool_response_name 的 None 分支）。
+test "encode - function response with empty tool id omits id key" {
+  let result = @lux.LucentToolResult::ok("", [@lux.LucentContent::text("25C")])
+  let req = @lux.LucentRequest::new(
+    "gemini-2.0-flash",
+    None,
+    [@lux.LucentConversationItem::tool_result(result)],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_gemini(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      assert_true(!s.contains("\"id\""))
+      assert_true(s.contains("\"functionResponse\""))
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// generationConfig 分支：temperature / top_p / top_k / max_output_tokens /
+/// candidate_count / stopSequences / structured_output=JsonObject。
+test "encode - generationConfig emits sampling, stop, and structured output" {
+  let opts = @lux.LucentOptions::new(
+    Some(0.5),
+    Some(0.9),
+    Some(40),
+    Some(1024),
+    Some(["STOP", "END"]),
+    false,
+    Some(2),
+    Some(JsonObject),
+    None,
+    None,
+  )
+  let req = @lux.LucentRequest::new(
+    "gemini-2.0-flash",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
+      ),
+    ],
+    None,
+    None,
+    opts,
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_gemini(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      assert_true(s.contains("\"temperature\":"))
+      assert_true(s.contains("\"topP\":"))
+      assert_true(s.contains("\"topK\":40"))
+      assert_true(s.contains("\"maxOutputTokens\":1024"))
+      assert_true(s.contains("\"candidateCount\":2"))
+      assert_true(s.contains("\"stopSequences\":[\"STOP\",\"END\"]"))
+      assert_true(s.contains("\"responseMimeType\":\"application/json\""))
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// toolConfig 分支：Required → mode=ANY；None → mode=NONE。
+test "encode - tool choice required and none map to calling modes" {
+  let cases : Array[(@lux.LucentToolChoice, String)] = [
+    (Required, "ANY"),
+    (None, "NONE"),
+  ]
+  for c in cases {
+    let choice = c.0
+    let expect_mode = c.1
+    let req = @lux.LucentRequest::new(
+      "gemini-2.0-flash",
+      None,
+      [
+        @lux.LucentConversationItem::message(
+          @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
+        ),
+      ],
+      None,
+      Some(choice),
+      @lux.LucentOptions::default(),
+      None,
+      None,
+      None,
+      None,
+    )
+    match lux_request_to_gemini(req) {
+      Ok(cr) =>
+        assert_true(
+          cr
+          .value()
+          .contains(
+            "\"functionCallingConfig\":{\"mode\":\"" + expect_mode + "\"}",
+          ),
+        )
+      Err(e) => fail("encode: \{e}")
+    }
+  }
+}
+
+///|
+/// Thinking 内容块签名分支：content 内 Thinking(th) 且 th.signature 有值 →
+/// 输出 thoughtSignature。
+test "encode - thinking content block emits thoughtSignature" {
+  let req = @lux.LucentRequest::new(
+    "gemini-2.0-flash",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(Assistant, [
+          @lux.LucentContent::thinking("chain", Some("sig-inline")),
+        ]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_gemini(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      assert_true(
+        s.contains(
+          "{\"text\":\"chain\",\"thought\":true,\"thoughtSignature\":\"sig-inline\"}",
+        ),
+      )
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// Reasoning 独立轮次签名分支：Reasoning(th) 且 th.signature 为 None →
+/// thought:true part 但不带 thoughtSignature。
+test "encode - reasoning item omits thoughtSignature when unset" {
+  let req = @lux.LucentRequest::new(
+    "gemini-2.0-flash",
+    None,
+    [
+      @lux.LucentConversationItem::reasoning(
+        @lux.LucentThinking::visible("reasoning text", None),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_gemini(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      assert_true(s.contains("{\"text\":\"reasoning text\",\"thought\":true}"))
+      assert_true(!s.contains("thoughtSignature"))
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// thinkingConfig 分支：reasoning.enabled 且无 effort、无 budget →
+/// 仅输出 includeThoughts。
+test "encode - bare thinkingConfig when reasoning has no effort or budget" {
+  let req = @lux.LucentRequest::new(
+    "gemini-2.0-flash",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    Some(@lux.LucentReasoningConfig::enabled(None)),
+    None,
+    None,
+  )
+  match lux_request_to_gemini(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      assert_true(s.contains("\"thinkingConfig\":{\"includeThoughts\":true}"))
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// Video 内容块 + Refusal 内容块分支：video → inlineData part；
+/// refusal → Unsupported 诊断。
+test "encode - video and refusal content blocks" {
+  let req = @lux.LucentRequest::new(
+    "gemini-2.0-flash",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(Assistant, [
+          @lux.LucentContent::video("video/mp4", Inline("AAAA")),
+          @lux.LucentContent::refusal("I cannot"),
+        ]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_gemini(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      assert_true(
+        s.contains(
+          "\"inlineData\":{\"mimeType\":\"video/mp4\",\"data\":\"AAAA\"}",
+        ),
+      )
+      let mut has_unsupported = false
+      for d in cr.diagnostics() {
+        if d.field == "content.refusal" && d.status == Unsupported {
+          has_unsupported = true
+        }
+      }
+      assert_true(has_unsupported)
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// systemInstruction 非文本内容分支：指令内容非 Text 时跳过，无文本则不输出 systemInstruction。
+test "encode - systemInstruction skips non-text content" {
+  let req = @lux.LucentRequest::new(
+    "gemini-2.0-flash",
+    Some([@lux.LucentContent::image("image/png", Inline("AA"))]),
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_gemini(req) {
+    Ok(cr) => assert_true(!cr.value().contains("systemInstruction"))
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// === 7. 编码白盒：stream_encode 未覆盖分支 ===
+
+///|
+/// normalize_tool_args 三条分支（经 lux_events_to_gemini_sse 触发）：
+///   空片段 → {}（无诊断）；解析成功但非 object → Degraded "not a JSON object"；
+///   解析失败 → Degraded "not valid JSON"。均回退 args:{}。
+test "encode - stream tool arguments normalization branches" {
+  let cases : Array[(String, String)] = [
+    ("", ""),
+    ("5", "not a JSON object"),
+    ("[]", "not a JSON object"),
+    ("\"str\"", "not a JSON object"),
+    ("{oops", "not valid JSON"),
+    ("abc", "not valid JSON"),
+  ]
+  for c in cases {
+    let payload = c.0
+    let expect_sub = c.1
+    let events : Array[@lux.LucentStreamEvent] = [
+      BlockStart(0, @lux.LucentBlockType::tool_call("call_1", "search")),
+      BlockDelta(0, @lux.LucentBlockDelta::tool_arguments_delta(payload)),
+      BlockEnd(0),
+      Finish(Stop),
+    ]
+    match lux_events_to_gemini_sse(events) {
+      Ok(cr) => {
+        let s = cr.value()
+        assert_true(s.contains("\"args\":{}"))
+        let mut count = 0
+        let mut detail_text = ""
+        for d in cr.diagnostics() {
+          if d.field == "stream.tool_arguments" {
+            count = count + 1
+            detail_text = match d.detail {
+              Some(m) => m
+              None => ""
+            }
+          }
+        }
+        if expect_sub == "" {
+          assert_eq(count, 0)
+        } else {
+          assert_true(count > 0)
+          assert_true(detail_text.contains(expect_sub))
+        }
+      }
+      Err(e) => fail("encode: \{e}")
+    }
+  }
+}
+
+///|
+/// ThinkingDelta / SignatureDelta 增量分支：thinking → thought:true part；
+/// signature → 累积后带 thoughtSignature。
+test "encode - stream thinking and signature deltas pass through" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    BlockDelta(0, @lux.LucentBlockDelta::thinking_delta("reasoning")),
+    BlockDelta(0, @lux.LucentBlockDelta::signature_delta("sig-tok")),
+    Finish(Stop),
+  ]
+  match lux_events_to_gemini_sse(events) {
+    Ok(cr) => {
+      let s = cr.value()
+      assert_true(s.contains("{\"text\":\"reasoning\",\"thought\":true}"))
+      assert_true(s.contains("\"thoughtSignature\":\"sig-tok\""))
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// ToolArgumentsDelta 无前置 BlockStart 分支：pending 未开 → Degraded
+/// "tool arguments delta without a preceding tool_call block start"。
+test "encode - stream tool arguments delta without block start degrades" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    BlockDelta(0, @lux.LucentBlockDelta::tool_arguments_delta("{\"x\":1}")),
+    Finish(Stop),
+  ]
+  match lux_events_to_gemini_sse(events) {
+    Ok(cr) => {
+      let mut has_degraded = false
+      let mut detail_text = ""
+      for d in cr.diagnostics() {
+        if d.field == "stream.tool_arguments" {
+          has_degraded = true
+          detail_text = match d.detail {
+            Some(m) => m
+            None => ""
+          }
+        }
+      }
+      assert_true(has_degraded)
+      assert_true(detail_text.contains("without a preceding"))
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// BlockStart 补发分支：前一工具块未 BlockEnd 又来一个 BlockStart →
+/// 先补发前一块（不含 id），再开新块。
+test "encode - stream block start flushes previous unclosed tool" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    BlockStart(0, @lux.LucentBlockType::tool_call("id_a", "fn_a")),
+    BlockDelta(0, @lux.LucentBlockDelta::tool_arguments_delta("{\"a\":1}")),
+    BlockStart(1, @lux.LucentBlockType::tool_call("id_b", "fn_b")),
+    BlockDelta(1, @lux.LucentBlockDelta::tool_arguments_delta("{\"b\":2}")),
+    BlockEnd(1),
+    Finish(Stop),
+  ]
+  match lux_events_to_gemini_sse(events) {
+    Ok(cr) => {
+      let s = cr.value()
+      // 补发 block 0：无 id，args 为累积值
+      assert_true(
+        s.contains("\"functionCall\":{\"name\":\"fn_a\",\"args\":{\"a\":1}}"),
+      )
+      // block 1 正常结束：带 id 与 args
+      assert_true(
+        s.contains(
+          "\"functionCall\":{\"name\":\"fn_b\",\"id\":\"id_b\",\"args\":{\"b\":2}}",
+        ),
+      )
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// BlockEnd 空 id 分支：pending_tool_id == "" → 输出 functionCall 不带 "id" 键。
+test "encode - stream BlockEnd with empty tool id omits id key" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    BlockStart(0, @lux.LucentBlockType::tool_call("", "search")),
+    BlockDelta(0, @lux.LucentBlockDelta::tool_arguments_delta("{\"q\":1}")),
+    BlockEnd(0),
+    Finish(Stop),
+  ]
+  match lux_events_to_gemini_sse(events) {
+    Ok(cr) => {
+      let s = cr.value()
+      assert_true(!s.contains("\"id\""))
+      assert_true(
+        s.contains("\"functionCall\":{\"name\":\"search\",\"args\":{\"q\":1}}"),
+      )
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// RefusalDelta / NativeDelta / BlockDiscard 分支：refusal、native → Unsupported；
+/// block_discard → Degraded（含 index N）。
+test "encode - stream refusal native and block discard diagnostics" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    BlockDelta(0, @lux.LucentBlockDelta::refusal_delta("cannot")),
+    BlockDelta(
+      1,
+      @lux.LucentBlockDelta::native_delta("vendor", Json::string("raw")),
+    ),
+    BlockDiscard(2),
+    Finish(Stop),
+  ]
+  match lux_events_to_gemini_sse(events) {
+    Ok(cr) => {
+      let mut has_refusal = false
+      let mut has_native = false
+      let mut has_discard = false
+      let mut discard_detail = ""
+      for d in cr.diagnostics() {
+        if d.field == "stream.refusal" && d.status == Unsupported {
+          has_refusal = true
+        }
+        if d.field == "stream.native" && d.status == Unsupported {
+          has_native = true
+        }
+        if d.field == "stream.block_discard" && d.status == Degraded {
+          has_discard = true
+          discard_detail = match d.detail {
+            Some(m) => m
+            None => ""
+          }
+        }
+      }
+      assert_true(has_refusal)
+      assert_true(has_native)
+      assert_true(has_discard)
+      assert_true(discard_detail.contains("index 2"))
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// Finish 补发 + finish_reason 分支：未 BlockEnd 的工具块在 Finish 时补发
+/// （空 / 非空 id 两条子分支），Length → MAX_TOKENS。
+test "encode - stream finish flushes unclosed tool and maps length reason" {
+  let ids : Array[String] = ["", "call_flush"]
+  for id in ids {
+    let events : Array[@lux.LucentStreamEvent] = [
+      BlockStart(0, @lux.LucentBlockType::tool_call(id, "search")),
+      BlockDelta(0, @lux.LucentBlockDelta::tool_arguments_delta("{\"q\":1}")),
+      Finish(Length),
+    ]
+    match lux_events_to_gemini_sse(events) {
+      Ok(cr) => {
+        let s = cr.value()
+        assert_true(s.contains("\"functionCall\":{\"name\":\"search\""))
+        assert_true(s.contains("\"args\":{\"q\":1}"))
+        assert_true(s.contains("\"finishReason\":\"MAX_TOKENS\""))
+        if id == "" {
+          assert_true(!s.contains("\"id\""))
+        } else {
+          assert_true(s.contains("\"id\":\"call_flush\""))
+        }
+      }
+      Err(e) => fail("encode: \{e}")
+    }
+  }
+}
+
+///|
+/// Usage 分支：reasoning_tokens / cached_tokens 有值 → thoughtsTokenCount /
+/// cachedContentTokenCount。
+test "encode - stream usage emits reasoning and cached token counts" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    Usage(@lux.LucentUsage::full(10, 5, 15, Some(30), Some(40), None)),
+    Finish(Stop),
+  ]
+  match lux_events_to_gemini_sse(events) {
+    Ok(cr) => {
+      let s = cr.value()
+      assert_true(s.contains("\"thoughtsTokenCount\":30"))
+      assert_true(s.contains("\"cachedContentTokenCount\":40"))
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// 流末兜底分支：无 BlockEnd/Finish 的未闭合工具块在流结束时补发
+/// （空 / 非空 id 两条子分支）。
+test "encode - stream flushes unclosed tool at end without finish" {
+  let ids : Array[String] = ["", "call_end"]
+  for id in ids {
+    let events : Array[@lux.LucentStreamEvent] = [
+      BlockStart(0, @lux.LucentBlockType::tool_call(id, "search")),
+      BlockDelta(0, @lux.LucentBlockDelta::tool_arguments_delta("{\"q\":1}")),
+    ]
+    match lux_events_to_gemini_sse(events) {
+      Ok(cr) => {
+        let s = cr.value()
+        assert_true(s.contains("\"functionCall\":{\"name\":\"search\""))
+        assert_true(s.contains("\"args\":{\"q\":1}"))
+        if id == "" {
+          assert_true(!s.contains("\"id\""))
+        } else {
+          assert_true(s.contains("\"id\":\"call_end\""))
+        }
+      }
+      Err(e) => fail("encode: \{e}")
+    }
+  }
+}
+
+///|
+/// structured_output=JsonSchema 分支：responseMimeType + responseSchema。
+test "encode - structured output json schema emits responseSchema" {
+  let opts = @lux.LucentOptions::new(
+    None,
+    None,
+    None,
+    None,
+    None,
+    false,
+    None,
+    Some(JsonSchema("{\"type\":\"object\"}")),
+    None,
+    None,
+  )
+  let req = @lux.LucentRequest::new(
+    "gemini-2.0-flash",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
+      ),
+    ],
+    None,
+    None,
+    opts,
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_gemini(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      assert_true(s.contains("\"responseMimeType\":\"application/json\""))
+      assert_true(s.contains("\"responseSchema\":{\"type\":\"object\"}"))
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// finish_reason 映射全覆盖：每个显式 LucentFinishReason 变体逐一锁定映射字符串，
+/// ContentFilter / Native 走兜底 `_ => "STOP"`。不依赖他处测试的偶然覆盖，
+/// 使 finish match 的所有分支稳定覆盖。
+test "encode - stream finish reason mapping covers all variants" {
+  let cases : Array[(@lux.LucentFinishReason, String)] = [
+    (Stop, "STOP"),
+    (Length, "MAX_TOKENS"),
+    (ToolCalls, "STOP"),
+    (Safety, "SAFETY"),
+    (Recitation, "RECITATION"),
+    (MalformedToolCall, "MALFORMED_FUNCTION_CALL"),
+    (Error, "OTHER"),
+    (ContentFilter, "STOP"),
+    (Native("nft"), "STOP"),
+  ]
+  for c in cases {
+    let reason = c.0
+    let expect = c.1
+    let events : Array[@lux.LucentStreamEvent] = [Finish(reason)]
+    match lux_events_to_gemini_sse(events) {
+      Ok(cr) =>
+        assert_true(cr.value().contains("\"finishReason\":\"" + expect + "\""))
+      Err(e) => fail("encode: \{e}")
+    }
+  }
+}

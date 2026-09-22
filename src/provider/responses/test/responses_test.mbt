@@ -329,10 +329,11 @@ test "responses decode - typeless item role and content fallbacks" {
     "{\"role\":\"developer\",\"content\":\"dev string\"}," +
     "{\"role\":\"user\",\"content\":42}," +
     "{\"role\":\"user\",\"content\":\"plain string\"}," +
+    "{\"role\":\"weird\",\"content\":\"unknown role\"}," +
     "{\"foo\":\"bar\"}" +
     "]}",
   )
-  assert_eq(req.conversation.length(), 4)
+  assert_eq(req.conversation.length(), 5)
   match req.conversation[0] {
     Message(m) => {
       assert_eq(m.role, Assistant)
@@ -359,6 +360,17 @@ test "responses decode - typeless item role and content fallbacks" {
         _ => fail("expected Text content")
       }
     _ => fail("expected Message item 3")
+  }
+  // 未知 role（无 type）→ 保守回退 User
+  match req.conversation[4] {
+    Message(m) => {
+      assert_eq(m.role, User)
+      match m.content[0] {
+        Text(t, _) => assert_eq(t, "unknown role")
+        _ => fail("expected Text content")
+      }
+    }
+    _ => fail("expected Message item 4")
   }
 }
 
@@ -784,7 +796,14 @@ test "responses decode - response encode covers thinking tool refusal and usage"
     "reasoned",
     Some("sig_enc"),
     false,
-    Some([@lux.LucentContent::text("part1")]),
+    Some([
+      @lux.LucentContent::text("part1"),
+      // 非 Text 块在 reasoning summary 序列化时被跳过
+      @lux.LucentContent::image(
+        "image/png",
+        @lux.LucentMediaSource::url("https://x/skip.png"),
+      ),
+    ]),
   )
   let msg = @lux.LucentMessage::new(Assistant, [
     Thinking(th),
@@ -826,6 +845,46 @@ test "responses decode - response encode covers thinking tool refusal and usage"
       assert_true(s.contains("\"reasoning_tokens\":3"))
       assert_true(s.contains("\"cached_tokens\":7"))
     }
+    Err(e) => fail("encode failed: \{e}")
+  }
+  // Error finish reason → failed 状态
+  let err_resp = @lux.LucentResponse::new(
+    "resp_10",
+    "gpt-5",
+    None,
+    [
+      @lux.LucentChoice::new(
+        0,
+        @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("boom")]),
+        Error,
+        None,
+      ),
+    ],
+    None,
+    None,
+  )
+  match @responses.lux_response_to_responses(err_resp) {
+    Ok(cr) => assert_true(cr.value().contains("\"status\":\"failed\""))
+    Err(e) => fail("encode failed: \{e}")
+  }
+  // 其他 finish reason（非 stop / length / error）→ completed
+  let tc_resp = @lux.LucentResponse::new(
+    "resp_11",
+    "gpt-5",
+    None,
+    [
+      @lux.LucentChoice::new(
+        0,
+        @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("call")]),
+        ToolCalls,
+        None,
+      ),
+    ],
+    None,
+    None,
+  )
+  match @responses.lux_response_to_responses(tc_resp) {
+    Ok(cr) => assert_true(cr.value().contains("\"status\":\"completed\""))
     Err(e) => fail("encode failed: \{e}")
   }
 }

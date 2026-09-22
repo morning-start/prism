@@ -475,3 +475,237 @@ test "messages decode - metadata keeps only string values" {
     None => fail("expected metadata")
   }
 }
+
+///|
+/// === SSE 解码覆盖补齐：畸形帧 / error 事件 / 未知事件类型 ===
+///
+/// stream_decode.mbt（messages_sse_to_events）此前只被白盒 SSE 测试覆盖了
+/// text / tool / done 的主路径；以下黑盒测试补齐「合法事件类型 + 字段缺失或类型
+/// 错误 → 静默跳过」「error 事件（对象无 message / 无 error 键）」「未知 event
+/// 类型」三条分支。契约：任何畸形帧都不抛错，只是在事件流中不产生对应事件。
+
+///|
+/// 构造单个标准 Anthropic SSE 帧（event + data + 空行分隔），与线上线格式一致。
+fn sse_frame(event_type : String, data : String) -> String {
+  "event: " + event_type + "\n" + "data: " + data + "\n\n"
+}
+
+///|
+/// 流解码成功快捷方式（失败即 fail）。
+fn sse_events_ok(sse : String) -> Array[@lux.LucentStreamEvent] raise {
+  match @messages.messages_sse_to_events(sse) {
+    Ok(cr) => cr.value()
+    Err(e) => fail("expected Ok, got Err: \{e}")
+  }
+}
+
+///|
+/// 事件类型合法、但缺字段或字段类型不符 → 整帧被安全跳过，不产生任何事件。
+test "messages decode - sse frames missing required fields emit no events" {
+  let sse = sse_frame("message_start", "{\"type\":\"message_start\"}") +
+    sse_frame(
+      "content_block_start", "{\"type\":\"content_block_start\",\"index\":0}",
+    ) +
+    sse_frame(
+      "content_block_start", "{\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"image\"}}",
+    ) +
+    sse_frame(
+      "content_block_delta", "{\"type\":\"content_block_delta\",\"index\":0}",
+    ) +
+    sse_frame(
+      "content_block_delta", "{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\"}}",
+    ) +
+    sse_frame(
+      "content_block_delta", "{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\"}}",
+    ) +
+    sse_frame(
+      "content_block_delta", "{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"signature_delta\"}}",
+    ) +
+    sse_frame(
+      "content_block_delta", "{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\"}}",
+    ) +
+    sse_frame(
+      "content_block_delta", "{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"mystery_delta\"}}",
+    ) +
+    sse_frame("message_delta", "{\"type\":\"message_delta\"}")
+  assert_eq(sse_events_ok(sse).length(), 0)
+}
+
+///|
+/// error 事件：error 对象缺 message → 用 error.type 兜底为 message；
+/// error 为字符串（非对象）→ type/message 均取不到 → "unknown error"；
+/// 顶层无 error 键 → None 分支静默跳过。三者都不抛错。
+test "messages decode - sse error events without message and without error key" {
+  // error 对象有 type 无 message → message 回退为 type
+  let type_only = sse_frame(
+    "error", "{\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\"}}",
+  )
+  // error 为字符串（非对象）→ type/message 均取不到 → "unknown error" 兜底
+  let string_error = sse_frame(
+    "error", "{\"type\":\"error\",\"error\":\"boom\"}",
+  )
+  // 顶层无 error 键 → None 分支静默跳过，不产生事件
+  let no_error_key = sse_frame("error", "{\"type\":\"error\"}")
+  let events = sse_events_ok(type_only + string_error + no_error_key)
+  let msgs : Array[String] = []
+  for ev in events {
+    match ev {
+      Error(e) => msgs.push(e.message)
+      _ => ()
+    }
+  }
+  // 前两帧各产一个 Error（分别是 type 兜底 / "unknown error"），无 error 键的帧被跳过。
+  assert_eq(msgs, ["overloaded_error", "unknown error"])
+}
+
+///|
+/// 未知 event 类型（Anthropic 心跳 ping / 未来新事件）→ 顶层 match 默认分支，
+/// 不产生任何事件。
+test "messages decode - sse unknown event type is ignored" {
+  let sse = sse_frame("ping", "{\"type\":\"ping\"}")
+  assert_eq(sse_events_ok(sse).length(), 0)
+}
+
+///|
+/// 响应解码辅助：按 stop_reason 字符串解码（空串 = 省略 stop_reason 字段），
+/// 返回 choice.finish_reason。
+fn decode_resp_finish(stop_reason : String) -> @lux.LucentFinishReason raise {
+  let tail = if stop_reason == "" {
+    ""
+  } else {
+    ",\"stop_reason\":\"" + stop_reason + "\""
+  }
+  let json = "{\"id\":\"m\",\"model\":\"mm\",\"content\":[{\"type\":\"text\",\"text\":\"hi\"}]" +
+    tail +
+    "}"
+  match @messages.messages_to_lux_response(json) {
+    Ok(cr) => cr.value().choices[0].finish_reason
+    Err(e) => fail("unexpected Err: \{e}")
+  }
+}
+
+///|
+/// 响应解码：无 content 字段 → 空内容数组；stop_reason 全谱系 → finish_reason
+/// （已知映射 / 未知 Native 透传 / 缺失 → Stop）。
+test "messages decode - response without content and stop_reason mapping" {
+  match
+    @messages.messages_to_lux_response(
+      "{\"id\":\"m\",\"model\":\"mm\",\"stop_reason\":\"end_turn\"}",
+    ) {
+    Ok(cr) => {
+      let resp = cr.value()
+      assert_eq(resp.choices.length(), 1)
+      assert_eq(resp.choices[0].message.content.length(), 0)
+    }
+    Err(e) => fail("unexpected Err: \{e}")
+  }
+  assert_eq(decode_resp_finish("end_turn"), Stop)
+  assert_eq(decode_resp_finish("max_tokens"), Length)
+  assert_eq(decode_resp_finish("tool_use"), ToolCalls)
+  assert_eq(decode_resp_finish("stop_sequence"), Stop)
+  // 未知 stop_reason → Native 透传
+  match decode_resp_finish("pause_turn") {
+    Native(s) => assert_eq(s, "pause_turn")
+    _ => fail("expected Native finish reason")
+  }
+  // stop_reason 缺失 → Stop
+  assert_eq(decode_resp_finish(""), Stop)
+}
+
+///|
+/// 响应编码辅助：按 finish_reason + usage 组装 LucentResponse，编码为 Anthropic 出站体。
+fn encode_resp(
+  finish : @lux.LucentFinishReason,
+  usage : @lux.LucentUsage?,
+) -> String raise {
+  let resp = @lux.LucentResponse::new(
+    "msg_x",
+    "claude-sonnet-4",
+    None,
+    [
+      @lux.LucentChoice::new(
+        0,
+        @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("hi")]),
+        finish,
+        None,
+      ),
+    ],
+    usage,
+    None,
+  )
+  match @messages.lux_response_to_messages(resp) {
+    Ok(cr) => cr.value()
+    Err(e) => fail("unexpected Err: \{e}")
+  }
+}
+
+///|
+/// 响应编码：finish_reason 全谱系 → Anthropic stop_reason（已知映射 / 无对等值收敛为
+/// "end_turn" / Native 透传）；usage 携带 cache_creation / cached tokens →
+/// cache_creation_input_tokens / cache_read_input_tokens。
+test "messages encode - response finish reason and cache usage details" {
+  let cases : Array[(@lux.LucentFinishReason, String)] = [
+    (Stop, "end_turn"),
+    (Length, "max_tokens"),
+    (ToolCalls, "tool_use"),
+    (ContentFilter, "refusal"),
+    (Safety, "end_turn"),
+    (Recitation, "end_turn"),
+    (MalformedToolCall, "end_turn"),
+    (Error, "end_turn"),
+    (Native("vendor_x"), "vendor_x"),
+  ]
+  for c in cases {
+    assert_true(
+      encode_resp(c.0, None).contains("\"stop_reason\":\"" + c.1 + "\""),
+    )
+  }
+  let cache_json = encode_resp(
+    Stop,
+    Some(@lux.LucentUsage::full(100, 20, 120, None, Some(30), Some(50))),
+  )
+  assert_true(cache_json.contains("\"cache_creation_input_tokens\":50"))
+  assert_true(cache_json.contains("\"cache_read_input_tokens\":30"))
+}
+
+///|
+/// tool_result 的 content 数组内含畸形块 → 该块被静默跳过（Err 分支）；
+/// tool_result 缺 content 字段 → 空内容数组。二者均落为独立 ToolResult item。
+test "messages decode - tool_result malformed and missing content become empty result" {
+  let cases = [
+    "{\"model\":\"m\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"t1\",\"content\":[{\"type\":\"text\"}]}]}]}",
+    "{\"model\":\"m\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"t1\"}]}]}",
+  ]
+  for json in cases {
+    let req = decode_ok(json)
+    match req.conversation[0] {
+      ToolResult(tr) => assert_eq(tr.content.length(), 0)
+      _ => fail("expected ToolResult item")
+    }
+  }
+}
+
+///|
+/// content 块无 type 字段 → parse_content_block 返回 Err，经 parse_content_blocks
+/// 转 Degraded 诊断并跳过，整体仍 Ok 返回。
+test "messages decode - content block missing type degrades with diagnostic" {
+  match
+    @messages.messages_to_lux_request(
+      "{\"model\":\"m\",\"messages\":[{\"role\":\"user\",\"content\":[{\"data\":\"x\"}]}]}",
+    ) {
+    Ok(cr) => {
+      diag_contains(cr, "content block missing 'type' field")
+      match cr.value().conversation[0] {
+        Message(m) => assert_eq(m.content.length(), 0)
+        _ => fail("expected Message item")
+      }
+    }
+    Err(e) => fail("unexpected Err: \{e}")
+  }
+}
+
+///|
+/// 请求无 messages 字段 → field_arr None 分支，conversation 为空。
+test "messages decode - request without messages yields empty conversation" {
+  assert_eq(decode_ok("{\"model\":\"m\"}").conversation.length(), 0)
+}

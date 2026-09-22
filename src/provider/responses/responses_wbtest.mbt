@@ -1007,3 +1007,750 @@ test "lux_events_to_responses_sse - error frame" {
     Err(e) => fail("encode error: \{e}")
   }
 }
+
+///|
+/// request_encode 的私有 helper reasoning_item_json：summary 数组中 Text 片段
+/// 的逐个序列化（非 Text 片段跳过）、signature 的追加，以及两者均缺省时
+/// None 分支不产出字段；同时覆盖经 Reasoning 会话项的调用点。
+test "encode - reasoning item summary and signature" {
+  // summary + signature 齐全（中间夹一个非 Text 片段 → 被跳过）
+  let full = @lux.LucentThinking::new(
+    "hidden",
+    Some("sig_full"),
+    false,
+    Some([
+      @lux.LucentContent::text("step one"),
+      @lux.LucentContent::thinking("skipped", None),
+      @lux.LucentContent::text("step two"),
+    ]),
+  )
+  let s_full = reasoning_item_json(full)
+  assert_true(s_full.contains("\"type\":\"reasoning\""))
+  assert_true(
+    s_full.contains(
+      "\"summary\":[{\"type\":\"summary_text\",\"text\":\"step one\"}," +
+      "{\"type\":\"summary_text\",\"text\":\"step two\"}]",
+    ),
+  )
+  assert_true(s_full.contains("\"signature\":\"sig_full\""))
+
+  // summary = None 且 signature = None：两个 None 分支
+  let bare = @lux.LucentThinking::new("t", None, false, None)
+  assert_eq(reasoning_item_json(bare), "{\"type\":\"reasoning\"}")
+
+  // summary 为空数组：summary_parts.length() > 0 不成立 → 无 summary 字段
+  let empty_summary = @lux.LucentThinking::new(
+    "t",
+    Some("sig_only"),
+    false,
+    Some([]),
+  )
+  let s_empty = reasoning_item_json(empty_summary)
+  assert_false(s_empty.contains("\"summary\""))
+  assert_true(s_empty.contains("\"signature\":\"sig_only\""))
+
+  // summary 仅有非 Text 片段：循环体执行但 parts 为空 → 同样无 summary 字段
+  let only_non_text = @lux.LucentThinking::new(
+    "t",
+    None,
+    false,
+    Some([@lux.LucentContent::thinking("inner", None)]),
+  )
+  assert_false(reasoning_item_json(only_non_text).contains("\"summary\""))
+
+  // 经 lux_request_to_responses 的 Reasoning 会话项复用同一 helper
+  let req = @lux.LucentRequest::new(
+    "gpt-5",
+    None,
+    [@lux.LucentConversationItem::reasoning(full)],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_responses(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      assert_true(s.contains("\"type\":\"reasoning\""))
+      assert_true(
+        s.contains("{\"type\":\"summary_text\",\"text\":\"step one\"}"),
+      )
+      assert_true(s.contains("\"signature\":\"sig_full\""))
+    }
+    Err(e) => fail("encode failed: \{e}")
+  }
+}
+
+///|
+/// request_encode 消息内容分支：Refusal / Video 无 Responses 消息块载体 →
+/// 静默跳过；File(Url) / File(FileUri) 无对应载体 → 显式 Unsupported 诊断
+/// （不伪装 Exact）。
+test "encode - request content kinds refusal video and file url" {
+  let req = @lux.LucentRequest::new(
+    "gpt-5",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [
+          @lux.LucentContent::refusal("no"),
+          @lux.LucentContent::video("video/mp4", Url("https://x/v.mp4")),
+          @lux.LucentContent::file("application/pdf", Url("https://x/a.pdf")),
+          @lux.LucentContent::file(
+            "application/pdf",
+            FileUri("file:///tmp/a.pdf"),
+          ),
+        ]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_responses(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      // refusal / video 均无 input_text / input_image 载体 → 消息体为空
+      assert_false(s.contains("input_text"))
+      assert_false(s.contains("input_image"))
+      assert_false(s.contains("v.mp4"))
+      assert_false(s.contains("a.pdf"))
+      // url 与 file_uri 两种来源各自一条 Unsupported 诊断
+      let mut unsupported_count = 0
+      for d in cr.diagnostics() {
+        if d.field == "content.file" && d.status == Unsupported {
+          unsupported_count = unsupported_count + 1
+        }
+      }
+      assert_eq(unsupported_count, 2)
+    }
+    Err(e) => fail("encode failed: \{e}")
+  }
+}
+
+///|
+/// request_encode tools 分支：FileSearch / ComputerUse / Native kind 的 emit，
+/// 以及 CodeExecution / Shell / ApplyPatch 无 Responses 原生工具类型 →
+/// 显式 Unsupported 诊断（不静默降级为 function）。
+test "encode - request tool kinds file_search computer_use native and unsupported" {
+  let req = @lux.LucentRequest::new(
+    "gpt-5",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
+      ),
+    ],
+    Some([
+      @lux.LucentTool::new("fs", Some("find docs"), "{}", None, FileSearch),
+      @lux.LucentTool::new("cu", None, "{}", None, ComputerUse),
+      @lux.LucentTool::new(
+        "vendor_tool",
+        None,
+        "{}",
+        None,
+        Native("vendor_tag"),
+      ),
+      @lux.LucentTool::new("code_run", None, "{}", None, CodeExecution),
+      @lux.LucentTool::new("sh", None, "{}", None, Shell),
+      @lux.LucentTool::new("apply", None, "{}", None, ApplyPatch),
+    ]),
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_responses(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      assert_true(
+        s.contains(
+          "\"type\":\"file_search\",\"name\":\"fs\",\"description\":\"find docs\"",
+        ),
+      )
+      assert_true(s.contains("\"type\":\"computer_use\",\"name\":\"cu\""))
+      assert_true(
+        s.contains("\"type\":\"vendor_tag\",\"name\":\"vendor_tool\""),
+      )
+      let mut unsupported_count = 0
+      for d in cr.diagnostics() {
+        if d.field == "tools.kind" && d.status == Unsupported {
+          unsupported_count = unsupported_count + 1
+        }
+      }
+      assert_eq(unsupported_count, 3)
+    }
+    Err(e) => fail("encode failed: \{e}")
+  }
+}
+
+///|
+/// request_encode options 分支：top_p、reasoning summary=auto、
+/// structured_output（json_object / json_schema），以及 extras 中
+/// disable_parallel_tool_use → parallel_tool_calls 的语义反向映射。
+test "encode - request options top_p reasoning summary structured output and parallel" {
+  let mk = fn(
+    so : @lux.LucentStructuredOutput?,
+    rc : @lux.LucentReasoningConfig?,
+    extras : Map[String, Json]?,
+  ) -> @lux.LucentRequest {
+    @lux.LucentRequest::new(
+      "gpt-5",
+      None,
+      [
+        @lux.LucentConversationItem::message(
+          @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
+        ),
+      ],
+      None,
+      None,
+      @lux.LucentOptions::new(
+        None,
+        Some(0.5),
+        None,
+        None,
+        None,
+        false,
+        None,
+        so,
+        None,
+        extras,
+      ),
+      None,
+      rc,
+      None,
+      None,
+    )
+  }
+  // top_p + reasoning summary=auto（effort 缺省 → 仅有 summary 字段）
+  match
+    lux_request_to_responses(
+      mk(None, Some(@lux.LucentReasoningConfig::new(None, Some(Auto))), None),
+    ) {
+    Ok(cr) => {
+      let s = cr.value()
+      assert_true(s.contains("\"top_p\":0.5"))
+      assert_true(s.contains("\"reasoning\":{\"summary\":\"auto\"}"))
+    }
+    Err(e) => fail("encode failed: \{e}")
+  }
+  // structured_output = json_object
+  match lux_request_to_responses(mk(Some(JsonObject), None, None)) {
+    Ok(cr) =>
+      assert_true(
+        cr.value().contains("\"text\":{\"format\":{\"type\":\"json_object\"}}"),
+      )
+    Err(e) => fail("encode failed: \{e}")
+  }
+  // structured_output = text（显式纯文本格式）
+  match lux_request_to_responses(mk(Some(Text), None, None)) {
+    Ok(cr) =>
+      assert_true(
+        cr.value().contains("\"text\":{\"format\":{\"type\":\"text\"}}"),
+      )
+    Err(e) => fail("encode failed: \{e}")
+  }
+  // structured_output = json_schema
+  match
+    lux_request_to_responses(
+      mk(Some(JsonSchema("{\"type\":\"object\"}")), None, None),
+    ) {
+    Ok(cr) =>
+      assert_true(
+        cr
+        .value()
+        .contains(
+          "\"text\":{\"format\":{\"type\":\"json_schema\",\"schema\":{\"type\":\"object\"}}",
+        ),
+      )
+    Err(e) => fail("encode failed: \{e}")
+  }
+  // extras disable_parallel_tool_use=true → parallel_tool_calls:false（语义反向）
+  match
+    lux_request_to_responses(
+      mk(None, None, Some({ "disable_parallel_tool_use": Json::boolean(true) })),
+    ) {
+    Ok(cr) => {
+      let s = cr.value()
+      assert_true(s.contains("\"parallel_tool_calls\":false"))
+      assert_false(s.contains("disable_parallel_tool_use"))
+    }
+    Err(e) => fail("encode failed: \{e}")
+  }
+  // extras disable_parallel_tool_use=false → parallel_tool_calls:true
+  match
+    lux_request_to_responses(
+      mk(
+        None,
+        None,
+        Some({ "disable_parallel_tool_use": Json::boolean(false) }),
+      ),
+    ) {
+    Ok(cr) => assert_true(cr.value().contains("\"parallel_tool_calls\":true"))
+    Err(e) => fail("encode failed: \{e}")
+  }
+}
+
+///|
+/// lux_events_to_responses_sse_with_ctx：ctx 预置 response id（帧内无
+/// ConversationStart 时复用），ConversationStart.extra 非标准字段合并进
+/// response.created，以及 extra 非 Object 时静默不合并。
+test "encode - stream ctx and conversation start extra fields" {
+  // ctx Some(meta) 且 meta.id Some(id)：无 ConversationStart → 收尾帧复用该 id
+  let ctx = @lux.LucentConversationMeta::new_full(
+    Some("resp_ctx_7"),
+    Some("gpt-5"),
+    None,
+    None,
+    None,
+  )
+  let no_start : Array[@lux.LucentStreamEvent] = [Finish(Stop), Done]
+  match lux_events_to_responses_sse_with_ctx(no_start, Some(ctx)) {
+    Ok(cr) => {
+      let sse = cr.value()
+      assert_true(sse.contains("event: response.completed"))
+      assert_true(sse.contains("\"id\":\"resp_ctx_7\""))
+      assert_true(sse.contains("\"status\":\"completed\""))
+    }
+    Err(e) => fail("encode error: \{e}")
+  }
+
+  // ctx Some(meta) 但 meta.id = None：None 分支不改写 resp_id，回落默认 resp_0
+  let id_less_ctx = @lux.LucentConversationMeta::new(None, Some("gpt-5"), None)
+  match lux_events_to_responses_sse_with_ctx(no_start, Some(id_less_ctx)) {
+    Ok(cr) => assert_true(cr.value().contains("\"id\":\"resp_0\""))
+    Err(e) => fail("encode error: \{e}")
+  }
+
+  // ConversationStart.extra = Object：非标准字段逐条合并进 response.created
+  let with_extra : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new_full(
+        Some("resp_x_1"),
+        Some("gpt-5"),
+        None,
+        Some(1700000000),
+        Some(
+          Json::object({
+            "instructions": Json::string("be brief"),
+            "service_tier": Json::string("priority"),
+            "parallel_tool_calls": Json::boolean(true),
+          }),
+        ),
+      ),
+    ),
+    Done,
+  ]
+  match lux_events_to_responses_sse_with_ctx(with_extra, None) {
+    Ok(cr) => {
+      let sse = cr.value()
+      assert_true(sse.contains("\"created_at\":1700000000"))
+      assert_true(sse.contains("\"instructions\":\"be brief\""))
+      assert_true(sse.contains("\"service_tier\":\"priority\""))
+      assert_true(sse.contains("\"parallel_tool_calls\":true"))
+    }
+    Err(e) => fail("encode error: \{e}")
+  }
+
+  // ConversationStart.extra 非 Object（裸字符串）→ _ => () 分支，不合并
+  let plain_extra : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new_full(
+        Some("resp_x_2"),
+        Some("gpt-5"),
+        None,
+        None,
+        Some(Json::string("not-an-object")),
+      ),
+    ),
+    Done,
+  ]
+  match lux_events_to_responses_sse_with_ctx(plain_extra, None) {
+    Ok(cr) => {
+      let sse = cr.value()
+      assert_true(sse.contains("event: response.created"))
+      assert_false(sse.contains("not-an-object"))
+    }
+    Err(e) => fail("encode error: \{e}")
+  }
+}
+
+///|
+/// ItemStart 各 item 变体的 output_item.added 序列化：Message（非 Text 内容块
+/// 跳过）、ToolCall、ToolResult、Reasoning（summary+signature / 均缺省）、
+/// AgentAction。
+test "encode - stream output item additions per item kind" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new(Some("r_items"), Some("gpt-5"), None),
+    ),
+    // Message：非 Text 内容块被跳过 → content 为空数组
+    ItemStart(
+      0,
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(Assistant, [@lux.LucentContent::refusal("no")]),
+      ),
+    ),
+    // ToolCall：使用 tu.id 作为 item id
+    ItemStart(
+      1,
+      @lux.LucentConversationItem::tool_call(
+        @lux.LucentToolUse::new("fc_1", "search", "{}", None),
+      ),
+    ),
+    // ToolResult
+    ItemStart(
+      2,
+      @lux.LucentConversationItem::tool_result(
+        @lux.LucentToolResult::ok("call_1", [@lux.LucentContent::text("result")]),
+      ),
+    ),
+    // Reasoning：summary + signature（中间夹一个非 Text 片段 → 被跳过）
+    ItemStart(
+      3,
+      @lux.LucentConversationItem::reasoning(
+        @lux.LucentThinking::new(
+          "t",
+          Some("sig_it"),
+          false,
+          Some([
+            @lux.LucentContent::text("sum"),
+            @lux.LucentContent::thinking("skipped", None),
+          ]),
+        ),
+      ),
+    ),
+    // Reasoning：summary=None、signature=None → 两个 None 子分支
+    ItemStart(
+      4,
+      @lux.LucentConversationItem::reasoning(
+        @lux.LucentThinking::new("t", None, false, None),
+      ),
+    ),
+    // AgentAction → computer_call 占位 item
+    ItemStart(
+      5,
+      @lux.LucentConversationItem::agent_action(
+        @lux.LucentAgentAction::new(
+          "computer_use",
+          "cu_1",
+          None,
+          None,
+          None,
+          None,
+          None,
+        ),
+      ),
+    ),
+    Done,
+  ]
+  match lux_events_to_responses_sse(events) {
+    Ok(cr) => {
+      let sse = cr.value()
+      assert_true(
+        sse.contains(
+          "\"output_index\":0,\"item\":{\"id\":\"msg_0\",\"type\":\"message\"" +
+          ",\"role\":\"assistant\",\"content\":[]}",
+        ),
+      )
+      assert_true(
+        sse.contains(
+          "\"output_index\":1,\"item\":{\"id\":\"fc_1\",\"type\":\"function_call\"" +
+          ",\"call_id\":\"fc_1\",\"name\":\"search\",\"arguments\":\"\"}",
+        ),
+      )
+      assert_true(
+        sse.contains(
+          "\"output_index\":2,\"item\":{\"type\":\"function_call_output\"" +
+          ",\"call_id\":\"call_1\",\"output\":\"result\"}",
+        ),
+      )
+      assert_true(
+        sse.contains(
+          "\"output_index\":3,\"item\":{\"id\":\"msg_3\",\"type\":\"reasoning\"" +
+          ",\"summary\":[{\"type\":\"summary_text\",\"text\":\"sum\"}]" +
+          ",\"signature\":\"sig_it\"}",
+        ),
+      )
+      assert_true(
+        sse.contains(
+          "\"output_index\":4,\"item\":{\"id\":\"msg_4\",\"type\":\"reasoning\"}",
+        ),
+      )
+      assert_true(
+        sse.contains(
+          "\"output_index\":5,\"item\":{\"id\":\"cu_1\",\"type\":\"computer_call\"}",
+        ),
+      )
+    }
+    Err(e) => fail("encode error: \{e}")
+  }
+}
+
+///|
+/// BlockStart ToolCall 的 id 为空串 → 合成 fc_<counter> id（并递增 item_counter），
+/// 后续 arguments delta / done 帧沿用同一合成 id。
+test "encode - stream tool call block synthetic id" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new(Some("r_syn"), Some("gpt-5"), None),
+    ),
+    BlockStart(0, @lux.LucentBlockType::tool_call("", "auto_tool")),
+    BlockDelta(0, @lux.LucentBlockDelta::tool_arguments_delta("{\"a\":1}")),
+    BlockEnd(0),
+    Finish(ToolCalls),
+    Done,
+  ]
+  match lux_events_to_responses_sse(events) {
+    Ok(cr) => {
+      let sse = cr.value()
+      // tid == "" → 合成 id fc_0（item_counter 自 0 起，ConversationStart 未消耗）
+      assert_true(
+        sse.contains(
+          "\"id\":\"fc_0\",\"type\":\"function_call\",\"call_id\":\"fc_0\"" +
+          ",\"name\":\"auto_tool\"",
+        ),
+      )
+      assert_true(
+        sse.contains(
+          "\"item_id\":\"fc_0\",\"output_index\":0,\"delta\":\"{\\\"a\\\":1}\"",
+        ),
+      )
+      assert_true(
+        sse.contains(
+          "\"item_id\":\"fc_0\",\"output_index\":0,\"arguments\":\"\"",
+        ),
+      )
+    }
+    Err(e) => fail("encode error: \{e}")
+  }
+}
+
+///|
+/// BlockStart Refusal → {"type":"refusal","refusal":""} 内容块；
+/// BlockDelta RefusalDelta → response.refusal.delta 帧。
+test "encode - stream refusal block and delta" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new(Some("r_ref"), Some("gpt-5"), None),
+    ),
+    BlockStart(0, @lux.LucentBlockType::refusal()),
+    BlockDelta(0, @lux.LucentBlockDelta::refusal_delta("I cannot comply")),
+    BlockEnd(0),
+    Finish(Stop),
+    Done,
+  ]
+  match lux_events_to_responses_sse(events) {
+    Ok(cr) => {
+      let sse = cr.value()
+      assert_true(
+        sse.contains(
+          "\"output_index\":0,\"content_index\":0,\"part\":" +
+          "{\"type\":\"refusal\",\"refusal\":\"\"}",
+        ),
+      )
+      assert_true(sse.contains("event: response.refusal.delta"))
+      assert_true(
+        sse.contains(
+          "\"item_id\":\"msg_0\",\"output_index\":0,\"content_index\":0" +
+          ",\"delta\":\"I cannot comply\"",
+        ),
+      )
+    }
+    Err(e) => fail("encode error: \{e}")
+  }
+}
+
+///|
+/// BlockDelta / BlockEnd 无前置 BlockStart：block_output / block_content /
+/// block_item_id 三个映射全部走 None 回退（idx 与 "item_"+out）。
+test "encode - stream delta fallbacks without block start" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new(Some("r_fb"), Some("gpt-5"), None),
+    ),
+    BlockDelta(3, @lux.LucentBlockDelta::text_delta("orphan")),
+    BlockEnd(3),
+    Finish(Stop),
+    Done,
+  ]
+  match lux_events_to_responses_sse(events) {
+    Ok(cr) => {
+      let sse = cr.value()
+      // delta 帧：output_index / content_index 均回退为 block 索引 3
+      assert_true(
+        sse.contains(
+          "\"item_id\":\"item_3\",\"output_index\":3,\"content_index\":3" +
+          ",\"delta\":\"orphan\"",
+        ),
+      )
+      // 非 tool / 非 thinking → output_text.done（同样走回退索引）
+      assert_true(
+        sse.contains(
+          "\"item_id\":\"item_3\",\"output_index\":3,\"content_index\":3}",
+        ),
+      )
+      assert_true(sse.contains("\"type\":\"message\",\"role\":\"assistant\"}}"))
+      // 未注册的块不产出 output_item.added
+      assert_false(sse.contains("event: response.output_item.added"))
+    }
+    Err(e) => fail("encode error: \{e}")
+  }
+}
+
+///|
+/// BlockDelta 的 NativeDelta 落入 catch-all；BlockDiscard / Annotations 均无帧；
+/// Finish(Length) → incomplete 状态；Error(InvalidRequest) → invalid_request_error。
+test "encode - stream silent events incomplete finish and invalid request error" {
+  let silent : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new(Some("r_silent"), Some("gpt-5"), None),
+    ),
+    BlockDelta(
+      1,
+      @lux.LucentBlockDelta::native_delta("vendor_x", Json::string("raw")),
+    ),
+    BlockDiscard(1),
+    Annotations(1, []),
+    ItemEnd(1),
+    Finish(Length),
+    Done,
+  ]
+  match lux_events_to_responses_sse(silent) {
+    Ok(cr) => {
+      let sse = cr.value()
+      assert_true(sse.contains("event: response.created"))
+      // Finish(Length) → incomplete
+      assert_true(sse.contains("\"status\":\"incomplete\""))
+      // NativeDelta / BlockDiscard / Annotations / ItemEnd 均不产出帧
+      assert_false(sse.contains("response.output_text.delta"))
+      assert_false(sse.contains("vendor_x"))
+    }
+    Err(e) => fail("encode error: \{e}")
+  }
+  let err_events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new(Some("r_err"), Some("gpt-5"), None),
+    ),
+    Error(@lux.LucentError::new(InvalidRequest, "bad request", Some("400"))),
+    Done,
+  ]
+  match lux_events_to_responses_sse(err_events) {
+    Ok(cr) => {
+      let sse = cr.value()
+      assert_true(sse.contains("event: error"))
+      assert_true(sse.contains("\"code\":\"invalid_request_error\""))
+      assert_true(sse.contains("\"message\":\"bad request\""))
+    }
+    Err(e) => fail("encode error: \{e}")
+  }
+  // Authentication → invalid_api_key
+  let auth_events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new(Some("r_auth"), Some("gpt-5"), None),
+    ),
+    Error(@lux.LucentError::new(Authentication, "no key", Some("401"))),
+    Done,
+  ]
+  match lux_events_to_responses_sse(auth_events) {
+    Ok(cr) => {
+      let sse = cr.value()
+      assert_true(sse.contains("\"code\":\"invalid_api_key\""))
+      assert_true(sse.contains("\"message\":\"no key\""))
+    }
+    Err(e) => fail("encode error: \{e}")
+  }
+  // ServerError → server_error
+  let server_events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new(Some("r_srv"), Some("gpt-5"), None),
+    ),
+    Error(@lux.LucentError::new(ServerError, "boom", Some("500"))),
+    Done,
+  ]
+  match lux_events_to_responses_sse(server_events) {
+    Ok(cr) => {
+      let sse = cr.value()
+      assert_true(sse.contains("\"code\":\"server_error\""))
+      assert_true(sse.contains("\"message\":\"boom\""))
+    }
+    Err(e) => fail("encode error: \{e}")
+  }
+  // ContentFilter → content_filter
+  let cf_events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new(Some("r_cf"), Some("gpt-5"), None),
+    ),
+    Error(@lux.LucentError::new(ContentFilter, "blocked", None)),
+    Done,
+  ]
+  match lux_events_to_responses_sse(cf_events) {
+    Ok(cr) => {
+      let sse = cr.value()
+      assert_true(sse.contains("\"code\":\"content_filter\""))
+      assert_true(sse.contains("\"message\":\"blocked\""))
+    }
+    Err(e) => fail("encode error: \{e}")
+  }
+  // Native(tag) → 原样透传厂商 code
+  let native_events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new(Some("r_nat"), Some("gpt-5"), None),
+    ),
+    Error(@lux.LucentError::new(Native("vendor_499"), "vendor boom", None)),
+    Done,
+  ]
+  match lux_events_to_responses_sse(native_events) {
+    Ok(cr) => {
+      let sse = cr.value()
+      assert_true(sse.contains("\"code\":\"vendor_499\""))
+      assert_true(sse.contains("\"message\":\"vendor boom\""))
+    }
+    Err(e) => fail("encode error: \{e}")
+  }
+}
+
+///|
+/// BlockStart 的非 Text / 非 Refusal / 非 ToolCall / 非 Thinking 块类型
+/// （Image）落到输出文本 part 的兜底分支；Finish(Error) → failed 状态。
+test "encode - stream non text block start and error finish" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new(Some("r_img"), Some("gpt-5"), None),
+    ),
+    BlockStart(0, Image),
+    BlockDelta(0, @lux.LucentBlockDelta::text_delta("img block")),
+    BlockEnd(0),
+    Finish(Error),
+    Done,
+  ]
+  match lux_events_to_responses_sse(events) {
+    Ok(cr) => {
+      let sse = cr.value()
+      // 块类型既非 Text 也非 Refusal → part 兜底为 output_text
+      assert_true(
+        sse.contains(
+          "\"output_index\":0,\"content_index\":0,\"part\":" +
+          "{\"type\":\"output_text\",\"text\":\"\"}",
+        ),
+      )
+      assert_true(
+        sse.contains(
+          "\"item_id\":\"msg_0\",\"output_index\":0,\"content_index\":0" +
+          ",\"delta\":\"img block\"",
+        ),
+      )
+      // Finish(Error) → failed
+      assert_true(sse.contains("\"status\":\"failed\""))
+    }
+    Err(e) => fail("encode error: \{e}")
+  }
+}

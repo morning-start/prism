@@ -1363,3 +1363,811 @@ test "#6 openai_sse_to_events - multi tool call stream with deltas" {
     Err(_) => assert_true(false)
   }
 }
+
+///|
+/// === 补充白盒覆盖：请求编码未覆盖分支 ===
+
+///|
+/// tool_choice_to_json：None 与 SpecificTool 两个分支
+/// （Auto / Required 已由 openai_to_lux_request - tool_choice variants 等覆盖）
+test "encode - tool_choice none and specific_tool variants" {
+  let cases : Array[(String, @lux.LucentToolChoice, String)] = [
+    ("none", None, "\"tool_choice\":\"none\""),
+    (
+      "specific_tool",
+      SpecificTool("get_weather"),
+      "\"tool_choice\":{\"type\":\"function\",\"function\":{\"name\":\"get_weather\"}}",
+    ),
+  ]
+  for tc in cases {
+    let (label, choice, expect) = tc
+    let req = @lux.LucentRequest::from_messages(
+      "gpt-4o",
+      None,
+      [@lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")])],
+      None,
+      Some(choice),
+      @lux.LucentOptions::default(),
+      None,
+      None,
+      None,
+      None,
+    )
+    match lux_request_to_openai(req) {
+      Ok(cr) =>
+        if !cr.value().contains(expect) {
+          fail("tool_choice \{label} not encoded")
+        }
+      Err(e) => fail("encode \{label} failed: \{e}")
+    }
+  }
+}
+
+///|
+/// content_field_to_json / content_part_to_json 的 file / audio / video 分支：
+/// openai-chat 无载体 → 显式 Unsupported 诊断，不静默丢弃。
+/// 其中 video 同时走进「needs_array」数组分支（content_field_to_json）与
+/// 逐 part 分支（content_part_to_json），file / audio 走字符串分支。
+test "encode - unsupported content kinds emit explicit diagnostics" {
+  let cases : Array[(Array[@lux.LucentContent], String)] = [
+    (
+      [@lux.LucentContent::file("application/pdf", Url("https://x.com/a.pdf"))],
+      "content.file",
+    ),
+    (
+      [@lux.LucentContent::audio("audio/mp3", Url("https://x.com/a.mp3"))],
+      "content.audio",
+    ),
+    (
+      [
+        @lux.LucentContent::image("image/png", Url("https://x.com/a.png")),
+        @lux.LucentContent::video("video/mp4", Url("https://x.com/a.mp4")),
+      ],
+      "content.video",
+    ),
+  ]
+  for pair in cases {
+    let (content, field) = pair
+    let req = @lux.LucentRequest::new(
+      "gpt-4o",
+      None,
+      [
+        @lux.LucentConversationItem::message(
+          @lux.LucentMessage::new(User, content),
+        ),
+      ],
+      None,
+      None,
+      @lux.LucentOptions::default(),
+      None,
+      None,
+      None,
+      None,
+    )
+    match lux_request_to_openai(req) {
+      Ok(cr) => {
+        let mut found = false
+        for d in cr.diagnostics() {
+          if d.field == field && d.status == Unsupported {
+            found = true
+          }
+        }
+        assert_true(found)
+      }
+      Err(e) => fail("encode \{field} failed: \{e}")
+    }
+  }
+}
+
+///|
+/// content_part_to_json 的 Refusal 分支 + message_to_json 的 refusal 字段拼接：
+/// 请求侧 assistant 消息的 refusal 入独立字段，不入 content。
+test "encode - refusal content in request message" {
+  let req = @lux.LucentRequest::new(
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(Assistant, [
+          @lux.LucentContent::text("partial"),
+          @lux.LucentContent::refusal("cannot help with that"),
+        ]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai(req) {
+    Ok(cr) =>
+      assert_true(cr.value().contains("\"refusal\":\"cannot help with that\""))
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// ToolResult 的两种摆放：
+/// - tool 角色消息只取 ToolResult，其余 part 走 message_to_json 的 `_ => ()`
+/// - 非 tool 角色消息里的 ToolResult 被 content_part_to_json 丢弃（不入 content）
+test "encode - tool_result routed by message role" {
+  let tool_role = @lux.LucentRequest::new(
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(Tool, [
+          @lux.LucentContent::text("orphan"),
+          @lux.LucentContent::tool_result("c1", [@lux.LucentContent::text("r")]),
+        ]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai(tool_role) {
+    Ok(cr) => {
+      assert_true(cr.value().contains("\"tool_call_id\":\"c1\""))
+      assert_true(cr.value().contains("\"content\":\"r\""))
+    }
+    Err(e) => fail("encode tool role: \{e}")
+  }
+  let user_role = @lux.LucentRequest::new(
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [
+          @lux.LucentContent::tool_result("c1", [@lux.LucentContent::text("r")]),
+          @lux.LucentContent::text("tail"),
+        ]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai(user_role) {
+    Ok(cr) => assert_true(cr.value().contains("\"content\":\"tail\""))
+    Err(e) => fail("encode user role: \{e}")
+  }
+}
+
+///|
+/// tools 构造：description 缺省时省略该字段（LucentTool::simple 总带 description）
+test "encode - function tool without description omits field" {
+  let req = @lux.LucentRequest::new(
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
+      ),
+    ],
+    Some([
+      @lux.LucentTool::new("f", None, "{\"type\":\"object\"}", None, Function),
+    ]),
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai(req) {
+    Ok(cr) => {
+      assert_true(cr.value().contains("\"function\":{\"name\":\"f\""))
+      assert_false(cr.value().contains("\"description\""))
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// options 分支：top_p / stop 数组 / structured_output=Text
+test "encode - options top_p stop and structured output variants" {
+  let cases : Array[(String, @lux.LucentOptions, String)] = [
+    (
+      "top_p",
+      @lux.LucentOptions::new(
+        None,
+        Some(0.9),
+        None,
+        None,
+        None,
+        false,
+        None,
+        None,
+        None,
+        None,
+      ),
+      "\"top_p\":0.9",
+    ),
+    (
+      "stop",
+      @lux.LucentOptions::new(
+        None,
+        None,
+        None,
+        None,
+        Some(["END", "STOP"]),
+        false,
+        None,
+        None,
+        None,
+        None,
+      ),
+      "\"stop\":[\"END\",\"STOP\"]",
+    ),
+    (
+      "structured_output",
+      @lux.LucentOptions::new(
+        None,
+        None,
+        None,
+        None,
+        None,
+        false,
+        None,
+        Some(Text),
+        None,
+        None,
+      ),
+      "\"response_format\":{\"type\":\"text\"}",
+    ),
+  ]
+  for c in cases {
+    let (label, opts, expect) = c
+    let req = @lux.LucentRequest::new(
+      "gpt-4o",
+      None,
+      [
+        @lux.LucentConversationItem::message(
+          @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
+        ),
+      ],
+      None,
+      None,
+      opts,
+      None,
+      None,
+      None,
+      None,
+    )
+    match lux_request_to_openai(req) {
+      Ok(cr) =>
+        if !cr.value().contains(expect) {
+          fail("option \{label} not encoded")
+        }
+      Err(e) => fail("encode \{label} failed: \{e}")
+    }
+  }
+}
+
+///|
+/// reasoning disabled → 保守省略 reasoning_effort（o-series 无禁用值）
+test "encode - reasoning disabled omits reasoning_effort" {
+  let req = @lux.LucentRequest::new(
+    "o3",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    Some(@lux.LucentReasoningConfig::disabled()),
+    None,
+    None,
+  )
+  match lux_request_to_openai(req) {
+    Ok(cr) => assert_false(cr.value().contains("reasoning_effort"))
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// structured_output=JsonSchema：name / strict 从 extras 消费（标准 §6）
+test "encode - json_schema consumes name and strict extras" {
+  let opts = @lux.LucentOptions::new(
+    None,
+    None,
+    None,
+    None,
+    None,
+    false,
+    None,
+    Some(JsonSchema("{\"type\":\"object\"}")),
+    None,
+    Some({
+      "json_schema_name": Json::string("answer"),
+      "json_schema_strict": Json::boolean(true),
+    }),
+  )
+  let req = @lux.LucentRequest::new(
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
+      ),
+    ],
+    None,
+    None,
+    opts,
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai(req) {
+    Ok(cr) =>
+      assert_true(
+        cr
+        .value()
+        .contains(
+          "\"response_format\":{\"type\":\"json_schema\",\"json_schema\":{" +
+          "\"name\":\"answer\",\"strict\":true,\"schema\":{\"type\":\"object\"}}}",
+        ),
+      )
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// extras 的 disable_parallel_tool_use（Anthropic 系）→ parallel_tool_calls（语义反向）
+test "encode - extras disable_parallel_tool_use maps to parallel_tool_calls" {
+  let cases : Array[(String, Json, String)] = [
+    ("true", Json::boolean(true), "\"parallel_tool_calls\":false"),
+    ("false", Json::boolean(false), "\"parallel_tool_calls\":true"),
+  ]
+  for c in cases {
+    let (label, value, expect) = c
+    let opts = @lux.LucentOptions::new(
+      None,
+      None,
+      None,
+      None,
+      None,
+      false,
+      None,
+      None,
+      None,
+      Some({ "disable_parallel_tool_use": value }),
+    )
+    let req = @lux.LucentRequest::new(
+      "gpt-4o",
+      None,
+      [
+        @lux.LucentConversationItem::message(
+          @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
+        ),
+      ],
+      None,
+      None,
+      opts,
+      None,
+      None,
+      None,
+      None,
+    )
+    match lux_request_to_openai(req) {
+      Ok(cr) => {
+        assert_true(cr.value().contains(expect))
+        // 被消费，不得残留在输出 JSON
+        assert_false(cr.value().contains("disable_parallel_tool_use"))
+      }
+      Err(e) => fail("encode \{label} failed: \{e}")
+    }
+  }
+}
+
+///|
+/// extras 旧载荷回退：previous_response_id 从 extras 读取（标准字段路径已另测）
+test "encode - extras previous_response_id degrades to diagnostic" {
+  let opts = @lux.LucentOptions::new(
+    None,
+    None,
+    None,
+    None,
+    None,
+    false,
+    None,
+    None,
+    None,
+    Some({ "previous_response_id": Json::string("resp_extras") }),
+  )
+  let req = @lux.LucentRequest::new(
+    "gpt-5.3",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("Hi")]),
+      ),
+    ],
+    None,
+    None,
+    opts,
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai(req) {
+    Ok(cr) => {
+      assert_false(cr.value().contains("previous_response_id"))
+      let mut found = false
+      for d in cr.diagnostics() {
+        if d.field == "options.previous_response_id" && d.status == Unsupported {
+          found = true
+        }
+      }
+      assert_true(found)
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// === 补充白盒覆盖：流编码未覆盖分支 ===
+
+///|
+/// ctx 预填（逐帧转换后续帧无 ConversationStart）：id / model / created 取自 ctx，
+/// meta 缺省字段回退 chatcmpl-0 / "" / 0。
+test "encode - stream ctx prefills chunk identity" {
+  let cases : Array[(String, @lux.LucentConversationMeta, Array[String])] = [
+    (
+      "full meta",
+      @lux.LucentConversationMeta::new_full(
+        Some("chatcmpl-ctx"),
+        Some("gpt-4o-mini"),
+        None,
+        Some(1710000000),
+        None,
+      ),
+      [
+        "\"id\":\"chatcmpl-ctx\"", "\"model\":\"gpt-4o-mini\"", "\"created\":1710000000",
+      ],
+    ),
+    (
+      "defaults",
+      @lux.LucentConversationMeta::new(None, None, None),
+      ["\"id\":\"chatcmpl-0\"", "\"model\":\"\"", "\"created\":0"],
+    ),
+  ]
+  for c in cases {
+    let (label, meta, expects) = c
+    let events : Array[@lux.LucentStreamEvent] = [
+      BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
+      Finish(Stop),
+      Done,
+    ]
+    match lux_events_to_openai_sse_with_ctx(events, Some(meta)) {
+      Ok(cr) => {
+        let sse = cr.value()
+        for want in expects {
+          if !sse.contains(want) {
+            fail("ctx \{label} missing \{want}")
+          }
+        }
+      }
+      Err(e) => fail("encode \{label} failed: \{e}")
+    }
+  }
+}
+
+///|
+/// BlockDelta 的 ThinkingDelta / SignatureDelta / RefusalDelta / NativeDelta 分支，
+/// 以及 BlockStart 非 ToolCall 类型的 `_ => ()` 分支。
+test "encode - stream thinking/refusal/native deltas" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(@lux.LucentConversationMeta::new(None, None, None)),
+    BlockStart(1, Thinking),
+    BlockDelta(1, @lux.LucentBlockDelta::thinking_delta("reason")),
+    BlockDelta(1, @lux.LucentBlockDelta::signature_delta("sig-abc")),
+    BlockDelta(1, @lux.LucentBlockDelta::refusal_delta("cannot")),
+    BlockDelta(
+      1,
+      @lux.LucentBlockDelta::native_delta("vendor", Json::string("x")),
+    ),
+    BlockStart(0, Text),
+    BlockEnd(1),
+    Finish(Stop),
+    Done,
+  ]
+  match lux_events_to_openai_sse(events) {
+    Ok(cr) => {
+      let sse = cr.value()
+      // thinking → reasoning_content
+      assert_true(sse.contains("\"reasoning_content\":\"reason\""))
+      // refusal 降级为 content 增量
+      assert_true(sse.contains("\"content\":\"cannot\""))
+      // signature / native 增量在 chat 端无载体：静默丢弃
+      assert_false(sse.contains("sig-abc"))
+      assert_false(sse.contains("vendor"))
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// Usage 的 reasoning_tokens / cached_tokens 细化分支
+test "encode - stream usage detail tokens" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    Usage(@lux.LucentUsage::full(100, 50, 150, Some(30), Some(40), None)),
+    Done,
+  ]
+  match lux_events_to_openai_sse(events) {
+    Ok(cr) => {
+      let sse = cr.value()
+      assert_true(
+        sse.contains("\"completion_tokens_details\":{\"reasoning_tokens\":30}"),
+      )
+      assert_true(
+        sse.contains("\"prompt_tokens_details\":{\"cached_tokens\":40}"),
+      )
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// Error 帧 kind → OpenAI error.type 映射：RateLimit → rate_limit_error
+test "encode - stream rate limit error" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    Error(@lux.LucentError::new(RateLimit, "slow down", Some("429"))),
+    Done,
+  ]
+  match lux_events_to_openai_sse(events) {
+    Ok(cr) =>
+      assert_true(
+        cr
+        .value()
+        .contains(
+          "data: {\"error\":{\"type\":\"rate_limit_error\",\"message\":\"slow down\"}}",
+        ),
+      )
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// Error 帧 kind → OpenAI error.type 映射：InvalidRequest → invalid_request_error
+test "encode - stream invalid request error" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    Error(@lux.LucentError::new(InvalidRequest, "bad request", Some("400"))),
+    Done,
+  ]
+  match lux_events_to_openai_sse(events) {
+    Ok(cr) =>
+      assert_true(
+        cr
+        .value()
+        .contains(
+          "data: {\"error\":{\"type\":\"invalid_request_error\",\"message\":\"bad request\"}}",
+        ),
+      )
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// content_field_to_json 数组分支的兜底 `_ => ()`：
+/// 消息同时含 Image（触发 needs_array）与非 Text/Image/Audio/Video 的 part
+/// （此处 Thinking）——该 part 在数组循环中被跳过、不入 content 元素，
+/// 但 content_part_to_json 侧会为它补一条 Unsupported 诊断。
+test "encode - mixed image and non-media part takes array content form" {
+  let req = @lux.LucentRequest::new(
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [
+          @lux.LucentContent::image("image/png", Url("https://x.com/a.png")),
+          @lux.LucentContent::thinking("hidden chain", None),
+          @lux.LucentContent::text("caption"),
+        ]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai(req) {
+    Ok(cr) => {
+      let s = cr.value()
+      // needs_array 由 Image 触发 → 数组形式，text 与 image_url 各占一个元素
+      // （不依赖元素顺序：Image 在前，Text 在后）
+      assert_true(s.contains("\"content\":["))
+      assert_true(s.contains("{\"type\":\"text\",\"text\":\"caption\"}"))
+      assert_true(s.contains("\"type\":\"image_url\""))
+      // 兜底分支跳过的 Thinking 不得成为 content 元素
+      assert_false(s.contains("hidden chain"))
+      // 但不得静默丢弃：显式 Unsupported 诊断
+      let mut has_unsupported = false
+      for d in cr.diagnostics() {
+        if d.field == "content.thinking" && d.status == Unsupported {
+          has_unsupported = true
+        }
+      }
+      assert_true(has_unsupported)
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// Error 帧 kind → OpenAI error.type 全量映射
+/// （RateLimit / InvalidRequest 已由上面两个专测覆盖，此处补齐剩余 kind）
+test "encode - stream error kind maps to openai error type" {
+  let cases : Array[(@lux.LucentErrorKind, String)] = [
+    (InvalidRequest, "invalid_request_error"),
+    (Authentication, "authentication_error"),
+    (ServerError, "server_error"),
+    (ContentFilter, "invalid_request_error"),
+    (Native("vendor_timeout"), "vendor_timeout"),
+  ]
+  for c in cases {
+    let (kind, error_type) = c
+    let events : Array[@lux.LucentStreamEvent] = [
+      Error(@lux.LucentError::new(kind, "boom", None)),
+      Done,
+    ]
+    match lux_events_to_openai_sse(events) {
+      Ok(cr) =>
+        assert_true(
+          cr
+          .value()
+          .contains(
+            "data: {\"error\":{\"type\":\"" +
+            error_type +
+            "\",\"message\":\"boom\"}}",
+          ),
+        )
+      Err(e) => fail("encode \{error_type} failed: \{e}")
+    }
+  }
+}
+
+///|
+/// structured_output=JsonSchema 且 extras.json_schema_strict 为 false：
+/// 显式下发 "strict":false（缺省/其他值才省略）
+test "encode - json_schema strict false emits strict false" {
+  let opts = @lux.LucentOptions::new(
+    None,
+    None,
+    None,
+    None,
+    None,
+    false,
+    None,
+    Some(JsonSchema("{\"type\":\"object\"}")),
+    None,
+    Some({
+      "json_schema_name": Json::string("answer"),
+      "json_schema_strict": Json::boolean(false),
+    }),
+  )
+  let req = @lux.LucentRequest::new(
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
+      ),
+    ],
+    None,
+    None,
+    opts,
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai(req) {
+    Ok(cr) =>
+      assert_true(
+        cr
+        .value()
+        .contains(
+          "\"response_format\":{\"type\":\"json_schema\",\"json_schema\":{" +
+          "\"name\":\"answer\",\"strict\":false,\"schema\":{\"type\":\"object\"}}}",
+        ),
+      )
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// 出站：LucentUsage.reasoning_tokens / cached_tokens →
+/// usage.completion_tokens_details / usage.prompt_tokens_details
+/// （encode 方向：IR 有细化用量时必须下发 details 子对象，与 decode 测试对偶）
+test "encode - usage details with reasoning and cached tokens emitted" {
+  let usage = @lux.LucentUsage::full(100, 50, 150, Some(30), Some(40), None)
+  let resp = @lux.LucentResponse::new(
+    "c-1",
+    "o3",
+    None,
+    [
+      @lux.LucentChoice::new(
+        0,
+        @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("Hi")]),
+        Stop,
+        None,
+      ),
+    ],
+    Some(usage),
+    None,
+  )
+  match lux_response_to_openai(resp) {
+    Ok(cr) => {
+      let s = cr.value()
+      assert_true(s.contains("\"usage\":{\"prompt_tokens\":100"))
+      assert_true(s.contains("\"completion_tokens\":50"))
+      assert_true(s.contains("\"total_tokens\":150"))
+      assert_true(
+        s.contains("\"completion_tokens_details\":{\"reasoning_tokens\":30}"),
+      )
+      assert_true(
+        s.contains("\"prompt_tokens_details\":{\"cached_tokens\":40}"),
+      )
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// 出站：provider_payload.reasoning_field 是无法识别的值时回落默认字段名 reasoning
+/// （match 兜底分支：Some(Object) 但值不是 String("reasoning_content")）
+test "encode - reasoning_field unrecognized falls back to reasoning" {
+  let th = @lux.LucentThinking::visible("thought", None)
+  let msg = @lux.LucentMessage::with_reasoning(
+    Assistant,
+    [@lux.LucentContent::text("answer")],
+    Some(th),
+  )
+  let resp = @lux.LucentResponse::new(
+    "c-1",
+    "gpt-4o",
+    None,
+    [@lux.LucentChoice::new(0, msg, Stop, None)],
+    None,
+    Some({ "reasoning_field": Json::string("thinking") }),
+  )
+  match lux_response_to_openai(resp) {
+    Ok(cr) => {
+      let jv = @internal.parse_json_opt(cr.value()).unwrap()
+      match @internal.obj_get(jv, "choices") {
+        Some(Array(cs)) =>
+          match @internal.obj_get(cs[0], "message") {
+            Some(m) => {
+              assert_eq(@internal.field_str(m, "reasoning"), Some("thought"))
+              assert_eq(@internal.field_str(m, "reasoning_content"), None)
+            }
+            None => assert_true(false)
+          }
+        _ => assert_true(false)
+      }
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}

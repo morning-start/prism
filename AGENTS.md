@@ -102,6 +102,55 @@ the agent may commit to git on its own — no need to ask the user first.
 - Try to keep deprecated blocks in file called `deprecated.mbt` in each
   directory.
 
+### MoonBit gotchas (each of these has actually cost a build in this repo)
+
+- **Never** write `fn f() -> T = "a string"`. A string function body is parsed as
+  INLINE WASM, not a return value. Always use braces: `fn f() -> String { "x" }`.
+- Any helper that calls `fail(...)` must declare `raise`:
+  `fn f(x : String) -> Unit raise` / `fn f(x : String) -> T raise`.
+- String interpolation `\{x}` routes through `Show`. Arrays and structs have no
+  non-deprecated `Show` — interpolating one trips a deprecation warning. Only
+  interpolate `String` and `Int` (e.g. into `fail` messages).
+- Qualified enum annotations like `@lux.LucentToolChoice::None`,
+  `@lux.LucentBlockType::Text`, `@lux.LucentFinishReason::Stop`,
+  `@lux.LucentReasoningConfig::disabled()` are **rejected by
+  `--warn-list +73 --deny-warn`** (unnecessary_annotation). Write the bare
+  constructor and let inference resolve it. When the value is ambiguous (e.g.
+  `LucentToolChoice::None` vs `Option::None`), the spelling that passes is
+  `assert_eq(x.tool_choice, Some(None))`.
+  In an array literal, keep the qualification on the FIRST element to pin the
+  type and use bare constructors afterwards.
+- In array literals, a later `@lux.LucentStreamEvent::Done` trips warning 73 once
+  the type is already pinned — write bare `Done`.
+- Map literal **values cannot contain method calls**: `{ "k": 30.to_json() }` is
+  a parse error. Use factories: `Json::boolean(true)`, `Json::string(...)`.
+- `for a, b in coll` yields `(index, element)`, NOT tuple destructuring. To walk
+  an `Array[(A, B)]` use `for pair in coll { pair.0 / pair.1 }`. Also, a `for`
+  loop takes at most 2 loop variables.
+- In a `test/` subpackage, imported type names must be qualified in annotation
+  position too (`@lux.LucentReasoningEffort`, not `LucentReasoningEffort`).
+- `Char::from_int` is deprecated — use `Byte::to_char` / `Int::to_char`.
+- `extend` accepts only `pub`, never `pub(all)`.
+- Feeding a malformed JSON *string* to `@json.parse` makes it **raise**, which
+  aborts a test with an unhandled exception instead of returning `Err`. When a
+  test asserts rejection, build a **syntactically valid but semantically wrong**
+  document and assert on the `Result`.
+
+### Verifying coverage honestly
+
+- `moon coverage analyze > cov.txt` from PowerShell writes a **UTF-16** file that
+  many tools refuse as binary; convert before grepping.
+- The report's hunk separator is a `…` that PowerShell redirection can mangle, so
+  never key parser logic on it. A separator-agnostic extractor lives at
+  `.agent-workplace/scratch/extract-uncovered.ps1`.
+- `moon test -p <pkg>` scopes a run to one package and avoids compiling every
+  other package — use it while iterating. Note the subpackage spelling:
+  `-p morning-start/prism/lux` is the whitebox package,
+  `-p morning-start/prism/lux/test` is its blackbox test package, and
+  `moon test -f "<glob>"` is a FULL-NAME glob (needs the surrounding `*`).
+- Bump coverage claims with a fresh `moon coverage analyze`; other packages'
+  tests can already cover a line you think is open.
+
 ## Lucent IR evolution
 
 - Before adding or changing any Lucent IR field, enum variant, tool model,
