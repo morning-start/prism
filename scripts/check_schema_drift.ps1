@@ -90,9 +90,9 @@ function Get-AdapterExpectedFields([string]$Adapter) {
       "source","media_type","data","url","input_schema","description","budget_tokens","effort","format",
       "schema","disable_parallel_tool_use","role","content")
     "responses" = @("model","instructions","max_output_tokens","temperature","top_p","stream",
-      "store","tools","reasoning","parallel_tool_calls","type","role","content","id","call_id",
-      "name","arguments","output","status","summary","text","image_url","file_data","description",
-      "parameters","schema","strict","format","effort","input")
+      "store","tools","reasoning","parallel_tool_calls","previous_response_id","type","role",
+      "content","id","call_id","name","arguments","output","status","summary","text","image_url",
+      "file_data","description","parameters","schema","strict","format","effort","input")
     "gemini" = @("model","systemInstruction","contents","tools","toolConfig","generationConfig",
       "role","parts","text","thought","thoughtSignature","functionCall","functionResponse",
       "fileData","fileUri","mimeType","name","args","id","response","content","functionDeclarations",
