@@ -192,3 +192,498 @@ test "conformance - validator catches empty openai id" {
   assert_true(violations.length() > 0)
   assert_true(violations.contains("resp.id must not be empty"))
 }
+
+///|
+/// === 测试：违规检出分支全覆盖（每个检测分支一个用例）===
+///
+/// 正面用例只验证"合法输入 → 0 违规"；验证器内部的分支（缺失/类型错误/
+/// 空值/非法枚举/非法 JSON 字符串/非对象输入）需要负例驱动，否则
+/// "永远通过"与"正确放行"无法区分。每个用例断言违规列表中包含精确违规串。
+
+///|
+fn assert_violation(
+  violations : Array[String],
+  expect : String,
+  input : String,
+) -> Unit raise {
+  if !violations.contains(expect) {
+    // 不插值 violations 本身：数组的 Show 插值已弃用，expect+input 足以定位用例
+    fail("expected violation: \{expect} | input: \{input}")
+  }
+}
+
+///|
+/// check_openai_request：缺失/类型/空值/枚举/arguments/stream 各分支
+test "conformance - openai request violation branches" {
+  let cases : Array[(String, String)] = [
+    ("not json", "invalid JSON"),
+    ("123", "req.model is missing"),
+    ("{\"messages\":[]}", "req.model is missing"),
+    ("{\"model\":\"\",\"messages\":[]}", "req.model must not be empty"),
+    ("{\"model\":42,\"messages\":[]}", "req.model must be a string"),
+    ("{\"model\":\"m\",\"messages\":\"x\"}", "req.messages must be an array"),
+    ("{\"model\":\"m\"}", "req.messages is missing"),
+    (
+      "{\"model\":\"m\",\"messages\":[{\"role\":\"bot\",\"content\":\"hi\"}]}", "req.messages[0].role must be one of [system, user, assistant, tool, developer], got \"bot\"",
+    ),
+    (
+      "{\"model\":\"m\",\"messages\":[{\"role\":42,\"content\":\"hi\"}]}", "req.messages[0].role must be a string",
+    ),
+    (
+      "{\"model\":\"m\",\"messages\":[{\"role\":\"user\",\"content\":42}]}", "req.messages[0].content must be a string or array",
+    ),
+    (
+      "{\"model\":\"m\",\"messages\":[{\"role\":\"user\"}]}", "req.messages[0].content is missing",
+    ),
+    (
+      "{\"model\":\"m\",\"messages\":[{\"role\":\"assistant\",\"content\":\"x\",\"tool_calls\":[{}]}]}",
+      "req.messages[0].tool_calls[0].id is missing",
+    ),
+    (
+      "{\"model\":\"m\",\"messages\":[{\"role\":\"assistant\",\"content\":\"x\",\"tool_calls\":[{\"id\":\"t1\"}]}]}",
+      "req.messages[0].tool_calls[0].function is missing",
+    ),
+    (
+      "{\"model\":\"m\",\"messages\":[{\"role\":\"assistant\",\"content\":\"x\",\"tool_calls\":[{\"id\":\"t1\",\"function\":{\"arguments\":\"oops\"}}]}]}",
+      "req.messages[0].tool_calls[0].function.arguments must be valid JSON",
+    ),
+    (
+      "{\"model\":\"m\",\"messages\":[{\"role\":\"assistant\",\"content\":\"x\",\"tool_calls\":[{\"id\":\"t1\",\"function\":{}}]}]}",
+      "req.messages[0].tool_calls[0].function.name is missing",
+    ),
+    (
+      "{\"model\":\"m\",\"messages\":[],\"tools\":[{}]}", "req.tools[0].type is missing",
+    ),
+    (
+      "{\"model\":\"m\",\"messages\":[],\"tools\":[{\"type\":\"web\"}]}", "req.tools[0].type must be one of [function], got \"web\"",
+    ),
+    (
+      "{\"model\":\"m\",\"messages\":[],\"tools\":[{\"type\":\"function\"}]}", "req.tools[0].function is missing",
+    ),
+    (
+      "{\"model\":\"m\",\"messages\":[],\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"f\",\"parameters\":\"x\"}}]}",
+      "req.tools[0].function.parameters must be an object",
+    ),
+    (
+      "{\"model\":\"m\",\"messages\":[],\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"f\"}}]}",
+      "req.tools[0].function.parameters is missing",
+    ),
+    (
+      "{\"model\":\"m\",\"messages\":[],\"stream\":\"yes\"}", "req.stream must be a boolean",
+    ),
+  ]
+  for c in cases {
+    assert_violation(@conformance.check_openai_request(c.0), c.1, c.0)
+  }
+}
+
+///|
+/// check_openai_response：object/index/message/usage 各分支
+test "conformance - openai response violation branches" {
+  let cases : Array[(String, String)] = [
+    ("not json", "invalid JSON"),
+    ("[1,2]", "resp.id is missing"),
+    (
+      "{\"id\":42,\"object\":\"chat.completion\",\"model\":\"m\",\"choices\":[]}",
+      "resp.id must be a string",
+    ),
+    (
+      "{\"id\":\"x\",\"object\":\"resp\",\"model\":\"m\",\"choices\":[]}", "resp.object must be one of [chat.completion], got \"resp\"",
+    ),
+    (
+      "{\"id\":\"x\",\"object\":\"chat.completion\",\"choices\":[]}", "resp.model is missing",
+    ),
+    (
+      "{\"id\":\"x\",\"object\":\"chat.completion\",\"model\":\"m\"}", "resp.choices is missing",
+    ),
+    (
+      "{\"id\":\"x\",\"object\":\"chat.completion\",\"model\":\"m\",\"choices\":{}}",
+      "resp.choices must be an array",
+    ),
+    (
+      "{\"id\":\"x\",\"object\":\"chat.completion\",\"model\":\"m\",\"choices\":[]}",
+      "resp.choices must not be empty",
+    ),
+    (
+      "{\"id\":\"x\",\"object\":\"chat.completion\",\"model\":\"m\",\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"x\"},\"finish_reason\":\"stop\"}]}",
+      "resp.choices[0].index is missing",
+    ),
+    (
+      "{\"id\":\"x\",\"object\":\"chat.completion\",\"model\":\"m\",\"choices\":[{\"index\":0,\"finish_reason\":\"stop\"}]}",
+      "resp.choices[0].message is missing",
+    ),
+    (
+      "{\"id\":\"x\",\"object\":\"chat.completion\",\"model\":\"m\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"bot\",\"content\":\"x\"},\"finish_reason\":\"stop\"}]}",
+      "resp.choices[0].message.role must be one of [assistant, system, user, tool], got \"bot\"",
+    ),
+    (
+      "{\"id\":\"x\",\"object\":\"chat.completion\",\"model\":\"m\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":42},\"finish_reason\":\"stop\"}]}",
+      "resp.choices[0].message.content must be a string, null or array",
+    ),
+    (
+      "{\"id\":\"x\",\"object\":\"chat.completion\",\"model\":\"m\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\"},\"finish_reason\":\"stop\"}]}",
+      "resp.choices[0].message.content is missing",
+    ),
+    (
+      "{\"id\":\"x\",\"object\":\"chat.completion\",\"model\":\"m\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"x\"},\"finish_reason\":\"halt\"}]}",
+      "resp.choices[0].finish_reason must be one of [stop, length, tool_calls, content_filter, function_call], got \"halt\"",
+    ),
+    (
+      "{\"id\":\"x\",\"object\":\"chat.completion\",\"model\":\"m\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"x\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1}}",
+      "resp.usage.completion_tokens is missing",
+    ),
+  ]
+  for c in cases {
+    assert_violation(@conformance.check_openai_response(c.0), c.1, c.0)
+  }
+}
+
+///|
+/// check_responses_request：input 四类型 / tools / continue 分支
+test "conformance - responses request violation branches" {
+  let cases : Array[(String, String)] = [
+    ("not json", "invalid JSON"),
+    ("\"str\"", "req.model is missing"),
+    ("{\"input\":[]}", "req.model is missing"),
+    ("{\"model\":\"\",\"input\":[]}", "req.model must not be empty"),
+    ("{\"model\":42,\"input\":[]}", "req.model must be a string"),
+    ("{\"model\":\"m\",\"input\":\"x\"}", "req.input must be an array"),
+    ("{\"model\":\"m\"}", "req.input is missing"),
+    (
+      "{\"model\":\"m\",\"input\":[{\"type\":\"bogus\"}]}", "req.input[0].type must be one of [message, function_call, function_call_output, reasoning], got \"bogus\"",
+    ),
+    (
+      "{\"model\":\"m\",\"input\":[{\"type\":42}]}", "req.input[0].type must be a string",
+    ),
+    (
+      "{\"model\":\"m\",\"input\":[{\"type\":\"message\",\"role\":\"bot\",\"content\":[]}]}",
+      "req.input[0].role must be one of [user, assistant, system, developer], got \"bot\"",
+    ),
+    (
+      "{\"model\":\"m\",\"input\":[{\"type\":\"message\",\"role\":\"user\"}]}", "req.input[0].content is missing",
+    ),
+    (
+      "{\"model\":\"m\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"text\":\"x\"}]}]}",
+      "req.input[0].content[0].type is missing",
+    ),
+    (
+      "{\"model\":\"m\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\"}]}]}",
+      "req.input[0].content[0].text is missing",
+    ),
+    (
+      "{\"model\":\"m\",\"input\":[{\"type\":\"function_call\",\"arguments\":\"oops\"}]}",
+      "req.input[0].id is missing",
+    ),
+    (
+      "{\"model\":\"m\",\"input\":[{\"type\":\"function_call\",\"id\":\"a\",\"call_id\":\"b\",\"name\":\"f\",\"arguments\":\"oops\"}]}",
+      "req.input[0].arguments must be valid JSON",
+    ),
+    (
+      "{\"model\":\"m\",\"input\":[{\"type\":\"function_call_output\",\"output\":\"o\"}]}",
+      "req.input[0].call_id is missing",
+    ),
+    (
+      "{\"model\":\"m\",\"input\":[{\"type\":\"function_call_output\",\"call_id\":\"c\"}]}",
+      "req.input[0].output is missing",
+    ),
+    (
+      "{\"model\":\"m\",\"input\":[],\"tools\":[{\"type\":\"nope\"}]}", "req.tools[0].type must be one of [function, file_search, web_search, code_interpreter, computer_use, mcp], got \"nope\"",
+    ),
+    (
+      "{\"model\":\"m\",\"input\":[],\"tools\":[{\"type\":\"function\"}]}", "req.tools[0].name is missing",
+    ),
+  ]
+  for c in cases {
+    assert_violation(@conformance.check_responses_request(c.0), c.1, c.0)
+  }
+}
+
+///|
+/// check_responses_response：output 类型 / message / function_call 分支
+test "conformance - responses response violation branches" {
+  let cases : Array[(String, String)] = [
+    ("not json", "invalid JSON"),
+    ("123", "resp.id is missing"),
+    (
+      "{\"object\":\"response\",\"status\":\"completed\",\"model\":\"m\",\"output\":[]}",
+      "resp.id is missing",
+    ),
+    (
+      "{\"id\":\"\",\"object\":\"response\",\"status\":\"completed\",\"model\":\"m\",\"output\":[]}",
+      "resp.id must not be empty",
+    ),
+    (
+      "{\"id\":\"x\",\"object\":\"resp\",\"status\":\"completed\",\"model\":\"m\",\"output\":[]}",
+      "resp.object must be one of [response], got \"resp\"",
+    ),
+    (
+      "{\"id\":\"x\",\"object\":\"response\",\"status\":\"weird\",\"model\":\"m\",\"output\":[]}",
+      "resp.status must be one of [completed, incomplete, failed], got \"weird\"",
+    ),
+    (
+      "{\"id\":\"x\",\"object\":\"response\",\"status\":\"completed\",\"output\":[]}",
+      "resp.model is missing",
+    ),
+    (
+      "{\"id\":\"x\",\"object\":\"response\",\"status\":\"completed\",\"model\":\"m\"}",
+      "resp.output is missing",
+    ),
+    (
+      "{\"id\":\"x\",\"object\":\"response\",\"status\":\"completed\",\"model\":\"m\",\"output\":{}}",
+      "resp.output must be an array",
+    ),
+    (
+      "{\"id\":\"x\",\"object\":\"response\",\"status\":\"completed\",\"model\":\"m\",\"output\":[{\"type\":\"bogus\"}]}",
+      "resp.output[0].type must be one of [message, function_call, reasoning, function_call_output], got \"bogus\"",
+    ),
+    (
+      "{\"id\":\"x\",\"object\":\"response\",\"status\":\"completed\",\"model\":\"m\",\"output\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[]}]}",
+      "resp.output[0].id is missing",
+    ),
+    (
+      "{\"id\":\"x\",\"object\":\"response\",\"status\":\"completed\",\"model\":\"m\",\"output\":[{\"type\":\"message\",\"id\":\"i\",\"role\":\"bot\",\"content\":[]}]}",
+      "resp.output[0].role must be one of [assistant], got \"bot\"",
+    ),
+    (
+      "{\"id\":\"x\",\"object\":\"response\",\"status\":\"completed\",\"model\":\"m\",\"output\":[{\"type\":\"message\",\"id\":\"i\",\"role\":\"assistant\"}]}",
+      "resp.output[0].content is missing",
+    ),
+    (
+      "{\"id\":\"x\",\"object\":\"response\",\"status\":\"completed\",\"model\":\"m\",\"output\":[{\"type\":\"message\",\"id\":\"i\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\"}]}]}",
+      "resp.output[0].content[0].text is missing",
+    ),
+    (
+      "{\"id\":\"x\",\"object\":\"response\",\"status\":\"completed\",\"model\":\"m\",\"output\":[{\"type\":\"function_call\",\"arguments\":\"oops\"}]}",
+      "resp.output[0].id is missing",
+    ),
+    (
+      "{\"id\":\"x\",\"object\":\"response\",\"status\":\"completed\",\"model\":\"m\",\"output\":[{\"type\":\"function_call\",\"id\":\"a\",\"call_id\":\"b\",\"name\":\"f\",\"arguments\":\"oops\"}]}",
+      "resp.output[0].arguments must be valid JSON",
+    ),
+  ]
+  for c in cases {
+    assert_violation(@conformance.check_responses_response(c.0), c.1, c.0)
+  }
+}
+
+///|
+/// check_messages_request：max_tokens / blocks 类型 / tools 分支
+test "conformance - messages request violation branches" {
+  let cases : Array[(String, String)] = [
+    ("not json", "invalid JSON"),
+    ("42", "req.model is missing"),
+    ("{\"max_tokens\":10,\"messages\":[]}", "req.model is missing"),
+    ("{\"model\":\"m\",\"messages\":[]}", "req.max_tokens is missing"),
+    (
+      "{\"model\":\"m\",\"max_tokens\":\"10\",\"messages\":[]}", "req.max_tokens must be a number",
+    ),
+    (
+      "{\"model\":\"m\",\"max_tokens\":0,\"messages\":[]}", "req.max_tokens must be >= 1",
+    ),
+    (
+      "{\"model\":\"m\",\"max_tokens\":10,\"messages\":\"x\"}", "req.messages must be an array",
+    ),
+    (
+      "{\"model\":\"m\",\"max_tokens\":10,\"messages\":[{\"role\":\"bot\",\"content\":\"hi\"}]}",
+      "req.messages[0].role must be one of [user, assistant], got \"bot\"",
+    ),
+    (
+      "{\"model\":\"m\",\"max_tokens\":10,\"messages\":[{\"role\":\"user\",\"content\":42}]}",
+      "req.messages[0].content must be a string or array",
+    ),
+    (
+      "{\"model\":\"m\",\"max_tokens\":10,\"messages\":[{\"role\":\"user\"}]}", "req.messages[0].content is missing",
+    ),
+    (
+      "{\"model\":\"m\",\"max_tokens\":10,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"bogus\"}]}]}",
+      "req.messages[0].content[0].type must be one of [text, image, tool_use, tool_result, thinking], got \"bogus\"",
+    ),
+    (
+      "{\"model\":\"m\",\"max_tokens\":10,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\"}]}]}",
+      "req.messages[0].content[0].text is missing",
+    ),
+    (
+      "{\"model\":\"m\",\"max_tokens\":10,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"tool_use\",\"name\":\"f\",\"input\":{}}]}]}",
+      "req.messages[0].content[0].id is missing",
+    ),
+    (
+      "{\"model\":\"m\",\"max_tokens\":10,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"tool_use\",\"id\":\"t\",\"input\":{}}]}]}",
+      "req.messages[0].content[0].name is missing",
+    ),
+    (
+      "{\"model\":\"m\",\"max_tokens\":10,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"tool_use\",\"id\":\"t\",\"name\":\"f\",\"input\":\"x\"}]}]}",
+      "req.messages[0].content[0].input must be an object",
+    ),
+    (
+      "{\"model\":\"m\",\"max_tokens\":10,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"tool_use\",\"id\":\"t\",\"name\":\"f\"}]}]}",
+      "req.messages[0].content[0].input is missing",
+    ),
+    (
+      "{\"model\":\"m\",\"max_tokens\":10,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"content\":\"x\"}]}]}",
+      "req.messages[0].content[0].tool_use_id is missing",
+    ),
+    (
+      "{\"model\":\"m\",\"max_tokens\":10,\"messages\":[],\"tools\":[{}]}", "req.tools[0].name is missing",
+    ),
+    (
+      "{\"model\":\"m\",\"max_tokens\":10,\"messages\":[],\"tools\":[{\"name\":\"f\",\"input_schema\":\"x\"}]}",
+      "req.tools[0].input_schema must be an object",
+    ),
+    (
+      "{\"model\":\"m\",\"max_tokens\":10,\"messages\":[],\"tools\":[{\"name\":\"f\"}]}",
+      "req.tools[0].input_schema is missing",
+    ),
+  ]
+  for c in cases {
+    assert_violation(@conformance.check_messages_request(c.0), c.1, c.0)
+  }
+}
+
+///|
+/// check_messages_response：type/role/content blocks/stop_reason 分支
+test "conformance - messages response violation branches" {
+  let cases : Array[(String, String)] = [
+    ("not json", "invalid JSON"),
+    ("true", "resp.id is missing"),
+    (
+      "{\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"content\":[],\"stop_reason\":\"end_turn\"}",
+      "resp.id is missing",
+    ),
+    (
+      "{\"id\":\"\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"content\":[],\"stop_reason\":\"end_turn\"}",
+      "resp.id must not be empty",
+    ),
+    (
+      "{\"id\":\"x\",\"type\":\"msg\",\"role\":\"assistant\",\"model\":\"m\",\"content\":[],\"stop_reason\":\"end_turn\"}",
+      "resp.type must be one of [message], got \"msg\"",
+    ),
+    (
+      "{\"id\":\"x\",\"type\":\"message\",\"role\":\"bot\",\"model\":\"m\",\"content\":[],\"stop_reason\":\"end_turn\"}",
+      "resp.role must be one of [assistant], got \"bot\"",
+    ),
+    (
+      "{\"id\":\"x\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"stop_reason\":\"end_turn\"}",
+      "resp.model is missing",
+    ),
+    (
+      "{\"id\":\"x\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"stop_reason\":\"end_turn\"}",
+      "resp.content is missing",
+    ),
+    (
+      "{\"id\":\"x\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"content\":{},\"stop_reason\":\"end_turn\"}",
+      "resp.content must be an array",
+    ),
+    (
+      "{\"id\":\"x\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"content\":[{\"type\":\"bogus\"}],\"stop_reason\":\"end_turn\"}",
+      "resp.content[0].type must be one of [text, tool_use, thinking], got \"bogus\"",
+    ),
+    (
+      "{\"id\":\"x\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"content\":[{\"type\":\"text\"}],\"stop_reason\":\"end_turn\"}",
+      "resp.content[0].text is missing",
+    ),
+    (
+      "{\"id\":\"x\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"content\":[{\"type\":\"tool_use\",\"name\":\"f\"}],\"stop_reason\":\"end_turn\"}",
+      "resp.content[0].id is missing",
+    ),
+    (
+      "{\"id\":\"x\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"content\":[{\"type\":\"tool_use\",\"id\":\"t\"}],\"stop_reason\":\"end_turn\"}",
+      "resp.content[0].name is missing",
+    ),
+    (
+      "{\"id\":\"x\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"m\",\"content\":[],\"stop_reason\":\"weird\"}",
+      "resp.stop_reason must be one of [end_turn, max_tokens, stop_sequence, tool_use, refusal], got \"weird\"",
+    ),
+  ]
+  for c in cases {
+    assert_violation(@conformance.check_messages_response(c.0), c.1, c.0)
+  }
+}
+
+///|
+/// check_gemini_request：role/parts/text/functionCall/functionResponse/inlineData/fileData 分支
+test "conformance - gemini request violation branches" {
+  let cases : Array[(String, String)] = [
+    ("not json", "invalid JSON"),
+    ("{}", "req.contents is missing"),
+    ("{\"contents\":\"x\"}", "req.contents must be an array"),
+    (
+      "{\"contents\":[{\"role\":\"bot\",\"parts\":[{\"text\":\"hi\"}]}]}", "req.contents[0].role must be one of [user, model, tool], got \"bot\"",
+    ),
+    ("{\"contents\":[{\"role\":\"user\"}]}", "req.contents[0].parts is missing"),
+    (
+      "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":42}]}]}", "req.contents[0].parts[0].text must be a string",
+    ),
+    (
+      "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"functionCall\":{\"args\":{}}}]}]}",
+      "req.contents[0].parts[0].functionCall.name is missing",
+    ),
+    (
+      "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"functionCall\":{\"name\":\"f\"}}]}]}",
+      "req.contents[0].parts[0].functionCall.args is missing",
+    ),
+    (
+      "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"functionCall\":{\"name\":\"f\",\"args\":\"x\"}}]}]}",
+      "req.contents[0].parts[0].functionCall.args must be an object",
+    ),
+    (
+      "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"functionCall\":\"x\"}]}]}",
+      "req.contents[0].parts[0].functionCall must be an object",
+    ),
+    (
+      "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"functionResponse\":{\"response\":{}}}]}]}",
+      "req.contents[0].parts[0].functionResponse.name is missing",
+    ),
+    (
+      "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"functionResponse\":{\"name\":\"f\"}}]}]}",
+      "req.contents[0].parts[0].functionResponse.response is missing",
+    ),
+    (
+      "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"functionResponse\":{\"name\":\"f\",\"response\":\"x\"}}]}]}",
+      "req.contents[0].parts[0].functionResponse.response must be an object",
+    ),
+    (
+      "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"functionResponse\":\"x\"}]}]}",
+      "req.contents[0].parts[0].functionResponse must be an object",
+    ),
+    (
+      "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"inlineData\":\"x\"}]}]}",
+      "req.contents[0].parts[0].inlineData must be an object",
+    ),
+    (
+      "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"fileData\":\"x\"}]}]}", "req.contents[0].parts[0].fileData must be an object",
+    ),
+  ]
+  for c in cases {
+    assert_violation(@conformance.check_gemini_request(c.0), c.1, c.0)
+  }
+}
+
+///|
+/// check_gemini_response：candidates/content/parts/finishReason 分支
+test "conformance - gemini response violation branches" {
+  let cases : Array[(String, String)] = [
+    ("not json", "invalid JSON"),
+    ("{}", "resp.candidates is missing"),
+    ("{\"candidates\":\"x\"}", "resp.candidates must be an array"),
+    ("{\"candidates\":[]}", "resp.candidates must not be empty"),
+    ("{\"candidates\":[{}]}", "resp.candidates[0].content is missing"),
+    (
+      "{\"candidates\":[{\"content\":{},\"finishReason\":\"STOP\"}]}", "resp.candidates[0].content.parts is missing",
+    ),
+    (
+      "{\"candidates\":[{\"content\":{\"parts\":[{\"text\":42}]},\"finishReason\":\"STOP\"}]}",
+      "resp.candidates[0].content.parts[0].text must be a string",
+    ),
+    (
+      "{\"candidates\":[{\"content\":{\"parts\":[{\"functionCall\":\"x\"}]},\"finishReason\":\"STOP\"}]}",
+      "resp.candidates[0].content.parts[0].functionCall must be an object",
+    ),
+    (
+      "{\"candidates\":[{\"content\":{\"parts\":[]},\"finishReason\":\"bogus\"}]}",
+      "resp.candidates[0].finishReason must be one of [STOP, MAX_TOKENS, SAFETY, RECITATION, OTHER], got \"bogus\"",
+    ),
+  ]
+  for c in cases {
+    assert_violation(@conformance.check_gemini_response(c.0), c.1, c.0)
+  }
+}
