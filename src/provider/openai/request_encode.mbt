@@ -485,6 +485,19 @@ pub fn lux_request_to_openai(
       merged_extras, "previous_response_id",
     )
   }
+  // CR-001 D4：流式出站请求未显式给出 stream_options 时主动索取 usage 帧。
+  // OpenAI Chat Completions 仅在 `stream_options.include_usage = true` 时于末帧
+  // 返回 usage；Anthropic / Gemini 格式的调用方无法表达该字段，不注入则中间件
+  // 场景下 usage 结构性不可得。调用方显式给出时以其为准（下方 extras 原样透传）。
+  if opts.stream {
+    let caller_has_stream_options = match merged_extras {
+      Some(m) => m.contains("stream_options")
+      None => false
+    }
+    if !caller_has_stream_options {
+      parts.push("\"stream_options\":{\"include_usage\":true}")
+    }
+  }
   @internal.merge_extras_json(parts, merged_extras)
   let result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
   Ok(result.with_diagnostics(diagnostics))
