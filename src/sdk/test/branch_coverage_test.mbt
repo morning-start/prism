@@ -284,14 +284,20 @@ test "sdk branch - stream converter failure propagation" {
 ///|
 /// === convert.mbt：normalize_events 的 BlockEnd 分支（remove_int） ===
 test "sdk branch - stream converter block end normalization" {
-  // messages 逐帧解码：content_block_start 后另帧 content_block_stop →
+  // messages 逐帧解码：content_block_start → delta → content_block_stop →
   // open_blocks 命中 → remove_int（L345 / L373 / L375）
+  // CR-001 起无事件可编码的帧不再产出空块，故 fixture 带 content delta
+  // 以保证确有可编码事件（断言不再依赖空块）。
   match @sdk.StreamConverter::new("messages", "openai") {
     Ok(conv) => {
       let sse = "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n" +
+        "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"a\"}}\n\n" +
         "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n"
       match conv.feed(sse) {
-        Ok(frames) => assert_true(frames.length() >= 1)
+        Ok(frames) => {
+          assert_true(frames.length() >= 1)
+          assert_true(frames.join("").contains("\"content\":\"a\""))
+        }
         Err(e) => fail("feed failed: " + e)
       }
       let _ = conv.finish()
@@ -355,13 +361,22 @@ test "sdk branch - typed convert remaining paths" {
 /// === convert.mbt：normalize_events 的 remove_int 多块路径（L376） ===
 test "sdk branch - stream converter multi block normalization" {
   // 两个块同时打开，随后只闭合第一个 → remove_int 必须保留另一个块索引
+  // CR-001 起无事件可编码的帧不再产出空块，故两块各带 content delta。
   match @sdk.StreamConverter::new("messages", "openai") {
     Ok(conv) => {
-      let sse = "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"a\"}}\n\n" +
-        "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"text\",\"text\":\"b\"}}\n\n" +
-        "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n"
+      let sse = "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n" +
+        "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n" +
+        "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"a\"}}\n\n" +
+        "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n" +
+        "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"text_delta\",\"text\":\"b\"}}\n\n" +
+        "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":1}\n\n"
       match conv.feed(sse) {
-        Ok(frames) => assert_true(frames.length() >= 1)
+        Ok(frames) => {
+          assert_true(frames.length() >= 2)
+          let out = frames.join("")
+          assert_true(out.contains("\"content\":\"a\""))
+          assert_true(out.contains("\"content\":\"b\""))
+        }
         Err(e) => fail("feed failed: " + e)
       }
       let _ = conv.finish()

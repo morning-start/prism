@@ -1,4 +1,20 @@
 ///|
+/// CR-001：message_delta.usage 渲染。prompt caching 的缓存计费项是 Anthropic
+/// 用量核算的核心，有值时必须透传（无值时保持既有字节形态）。
+fn messages_usage_json(u : @lux.LucentUsage) -> String {
+  let mut s = "{\"output_tokens\":" + u.completion_tokens.to_string()
+  match u.cached_tokens {
+    Some(n) => s = s + ",\"cache_read_input_tokens\":" + n.to_string()
+    None => ()
+  }
+  match u.cache_creation_tokens {
+    Some(n) => s = s + ",\"cache_creation_input_tokens\":" + n.to_string()
+    None => ()
+  }
+  s + "}"
+}
+
+///|
 /// Anthropic Messages — 流编码（LucentStreamEvent → SSE）
 ///
 /// 把 Lux 事件流编码为 Anthropic SSE 格式（同 stream_decode 的逆过程）
@@ -98,30 +114,26 @@ pub fn lux_events_to_messages_sse(
           "}",
         )
       Finish(fr) => {
-        // 向后查找 Usage 事件，合并为单个 message_delta
-        let mut output_tokens = 0
-        let mut has_usage = false
+        // 向后查找 Usage 事件，合并为单个 message_delta（取最后一个快照）
+        let mut last_usage : @lux.LucentUsage? = None
         let mut j = i + 1
         while j < events.length() {
           match events[j] {
-            Usage(u) => {
-              output_tokens = u.completion_tokens
-              has_usage = true
-            }
+            Usage(u) => last_usage = Some(u)
             _ => ()
           }
           j = j + 1
         }
-        if has_usage {
-          // 标记 Usage 已被消费（通过将 index 设为 -1 或其他方式跳过）
-          // 由于 MoonBit 的 match 需要穷尽，我们在 Usage 分支检查
+        let usage_json = match last_usage {
+          Some(u) => messages_usage_json(u)
+          None => messages_usage_json(@lux.LucentUsage::new(0, 0, 0))
         }
         lines.push(
           "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"" +
           @internal.json_escape(fr.to_string()) +
-          "\"},\"usage\":{\"output_tokens\":" +
-          output_tokens.to_string() +
-          "}}",
+          "\"},\"usage\":" +
+          usage_json +
+          "}",
         )
       }
       Usage(u) => {
@@ -138,9 +150,9 @@ pub fn lux_events_to_messages_sse(
         if !has_finish {
           // 没有 Finish 事件时，单独输出 Usage
           lines.push(
-            "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{},\"usage\":{\"output_tokens\":" +
-            u.completion_tokens.to_string() +
-            "}}",
+            "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{},\"usage\":" +
+            messages_usage_json(u) +
+            "}",
           )
         }
       }

@@ -206,11 +206,10 @@ pub fn gemini_sse_to_events(
               open_text = t2
               open_thinking = th2
               events.push(Finish(@lux.LucentFinishReason::from_string(fr)))
-              // 原生 Gemini 无 [DONE]；finishReason 即终止信号，补发 Done
-              if !done_emitted {
-                events.push(Done)
-                done_emitted = true
-              }
+              // CR-001 D3：不在此就地补 Done。Gemini 的 usageMetadata 既可能挂在
+              // 同一帧，也可能落在紧随其后的独立帧，而 Done 必须排在 usage 之后，
+              // 故统一在本段输入处理完后补发（见函数末尾的兜底）。
+              ()
             }
             None => ()
           }
@@ -241,7 +240,8 @@ pub fn gemini_sse_to_events(
     i = i + 1
   }
   let (_, _) = close_gemini_blocks(events, open_text, open_thinking)
-  // 兜底：末帧既无 finishReason 也无 usageMetadata 时（异常流）仍发 Done，避免消费者挂起
+  // 兜底：本段输入处理完仍未发过 Done 时补发（原生 Gemini 无 [DONE]，finishReason
+  // 是终止信号但 usageMetadata 可能排在它之后 —— 放在这里可保证 Done 收尾）。
   if !done_emitted {
     events.push(Done)
   }

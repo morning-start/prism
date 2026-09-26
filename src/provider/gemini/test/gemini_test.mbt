@@ -1163,10 +1163,11 @@ test "gemini decode - stream usage and done emitted once" {
   let sse = "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"x\"}]},\"finishReason\":\"MAX_TOKENS\"}]}\n" +
     "data: {\"usageMetadata\":{\"promptTokenCount\":3,\"candidatesTokenCount\":4,\"totalTokenCount\":7,\"thoughtsTokenCount\":5,\"cachedContentTokenCount\":2}}\n"
   let events = sse_ok(sse)
-  // finishReason 已发 Done，usageMetadata 帧只追加 Usage 不再发 Done
-  assert_eq(event_summary(events), "S0D0E0FXU")
+  // CR-001 D3：Done 不再贴在 finishReason 上，而是排在本段输入的 usage 之后
+  // （否则 OpenAI 目标的 usage 帧会落到 [DONE] 之后而被客户端丢弃）。
+  assert_eq(event_summary(events), "S0D0E0FUX")
   assert_eq(events[3], Finish(Length))
-  match events[5] {
+  match events[4] {
     Usage(u) => {
       assert_eq(u.prompt_tokens, 3)
       assert_eq(u.completion_tokens, 4)

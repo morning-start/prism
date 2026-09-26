@@ -206,6 +206,15 @@ pub struct StreamConverter {
   /// 编码（messages 编码器把 Finish+Usage 合并为单条 message_delta），
   /// 保证逐帧输出与整缓冲输出逐字节一致。
   mut held_events : Array[@lux.LucentStreamEvent]
+  /// CR-001 D2：会话级 Finish 去重。messages 解码器在 message_stop 帧内会补发
+  /// Finish（该帧内看不到前面的 message_delta），逐帧路径下与 message_delta 帧
+  /// 的 Finish 重复 —— 目标端会多出 finish_reason 帧，或把 message_delta 的
+  /// usage 覆盖成 0。同一会话只保留首个 Finish。
+  mut finish_seen : Bool
+  /// CR-001 D3：会话级 Done 兜底。Gemini 无 [DONE]，且其 usageMetadata 帧可能晚于
+  /// finishReason 帧（Done 必须排在 usage 之后），故 Done 由 usage 帧或收尾兜底发出；
+  /// 整场结束时若仍未见到 Done，由 `finish()` 补一个终止符，避免下游挂起。
+  mut done_seen : Bool
 }
 
 ///|
@@ -223,6 +232,8 @@ pub fn StreamConverter::new(
         stream_ctx: None,
         open_blocks: [],
         held_events: [],
+        finish_seen: false,
+        done_seen: false,
       })
     Err(e) => Err(e)
   }
@@ -245,21 +256,25 @@ pub fn StreamConverter::finish(
   let frames = self.splitter.flush()
   let out = self.convert_frames(frames)
   match out {
-    Ok(emitted) =>
+    Ok(emitted) => {
       // 冲刷保持的 Finish 帧（无后续 Usage 帧时）
-      if self.held_events.length() > 0 {
-        let pending = self.held_events
-        self.held_events = []
-        match self.encode_events(pending) {
-          Ok(sse) => {
-            emitted.push(sse)
-            Ok(emitted)
-          }
-          Err(e) => Err(e)
-        }
-      } else {
-        Ok(emitted)
+      let pending = self.held_events.copy()
+      self.held_events = []
+      // CR-001 D3：会话级 Done 兜底 —— Gemini 源没有 [DONE] 帧，其 finishReason
+      // 帧后还可能跟 usageMetadata 帧，因此 Done 不能贴在 finishReason 上；整场
+      // 结束仍未见 Done 时在此补齐，保证下游总能收到终止符。
+      if !self.done_seen {
+        pending.push(Done)
+        self.done_seen = true
       }
+      if pending.length() > 0 {
+        match self.encode_events(pending) {
+          Ok(sse) => if sse.trim().length() > 0 { emitted.push(sse) }
+          Err(e) => return Err(e)
+        }
+      }
+      Ok(emitted)
+    }
     Err(e) => Err(e)
   }
 }
@@ -291,7 +306,10 @@ fn StreamConverter::convert_frames(
           self.held_events = combined
         } else {
           match self.encode_events(combined) {
-            Ok(sse) => out.push(sse)
+            // CR-001：无事件可编码的帧（BlockStart/BlockEnd 在 Chat 系无载体）
+            // 只会产出空块；丢弃它既避免空 SSE 块，也保证逐帧输出与整缓冲
+            // 输出逐字节一致。
+            Ok(sse) => if sse.trim().length() > 0 { out.push(sse) }
             Err(e) => return Err(e)
           }
         }
@@ -311,6 +329,7 @@ fn StreamConverter::encode_events(
   for ev in events {
     match ev {
       ConversationStart(meta) => self.stream_ctx = Some(meta)
+      Done => self.done_seen = true
       _ => ()
     }
   }
@@ -351,20 +370,89 @@ fn StreamConverter::normalize_events(
           self.open_blocks = remove_int(self.open_blocks, idx)
           result.push(ev)
         }
-      Finish(_) => {
-        // 合成缺失的 BlockEnd（逆序闭合，与栈语义一致）
-        let mut k = self.open_blocks.length() - 1
-        while k >= 0 {
-          result.push(BlockEnd(self.open_blocks[k]))
-          k = k - 1
+      Finish(_) =>
+        // CR-001 D2：同一会话只保留首个 Finish。
+        if self.finish_seen {
+          ()
+        } else {
+          self.finish_seen = true
+          // 合成缺失的 BlockEnd（逆序闭合，与栈语义一致）
+          let mut k = self.open_blocks.length() - 1
+          while k >= 0 {
+            result.push(BlockEnd(self.open_blocks[k]))
+            k = k - 1
+          }
+          self.open_blocks = []
+          result.push(ev)
         }
-        self.open_blocks = []
-        result.push(ev)
-      }
+      Usage(u) =>
+        // CR-001 D1（增量路径）：逐帧解码时 message_delta 帧看不到 message_start
+        // 的 input_tokens，解出的 prompt_tokens 为 0；用会话元信息回填，
+        // 保证逐帧输出与整缓冲输出逐字节一致。
+        if u.prompt_tokens == 0 {
+          match self.stream_ctx {
+            Some(meta) =>
+              match meta.usage_input {
+                Some(n) => {
+                  let (meta_cached, meta_cache_creation) = meta_cache_usage(
+                    meta,
+                  )
+                  let cached = match u.cached_tokens {
+                    Some(c) => Some(c)
+                    None => meta_cached
+                  }
+                  let cache_creation = match u.cache_creation_tokens {
+                    Some(c) => Some(c)
+                    None => meta_cache_creation
+                  }
+                  result.push(
+                    Usage(
+                      @lux.LucentUsage::full(
+                        n,
+                        u.completion_tokens,
+                        n + u.completion_tokens,
+                        u.reasoning_tokens,
+                        cached,
+                        cache_creation,
+                      ),
+                    ),
+                  )
+                }
+                None => result.push(ev)
+              }
+            None => result.push(ev)
+          }
+        } else {
+          result.push(ev)
+        }
       _ => result.push(ev)
     }
   }
-  result
+  // CR-001 D3：Gemini 没有 [DONE]，其 Done 是"本段输入处理完"的帧级兜底；若该组
+  // 只有 Finish 而没有 Usage，Done 可能被紧随其后的 usageMetadata 帧顶到前面
+  // （usage 落到 [DONE] 之后 → 客户端停止消费 → 用量丢失）。此时延迟终止：丢掉
+  // Done，让下一个 usage 帧并入同一次编码；若始终没有 usage，`finish()` 会兜底补发。
+  let mut group_has_finish = false
+  let mut group_has_usage = false
+  for ev in result {
+    match ev {
+      Finish(_) => group_has_finish = true
+      Usage(_) => group_has_usage = true
+      _ => ()
+    }
+  }
+  if group_has_finish && !group_has_usage {
+    let filtered : Array[@lux.LucentStreamEvent] = []
+    for ev in result {
+      match ev {
+        Done => ()
+        _ => filtered.push(ev)
+      }
+    }
+    filtered
+  } else {
+    result
+  }
 }
 
 ///|
@@ -389,5 +477,19 @@ fn ends_with_finish(events : Array[@lux.LucentStreamEvent]) -> Bool {
       Finish(_) => true
       _ => false
     }
+  }
+}
+
+///|
+/// CR-001：读取会话元信息 `extra` 中透传的输入侧缓存用量（messages 解码器写入）。
+/// 非 messages 源或上游未提供时为 (None, None)，不影响其他 provider。
+fn meta_cache_usage(meta : @lux.LucentConversationMeta) -> (Int?, Int?) {
+  match meta.extra {
+    Some(jv) =>
+      (
+        @internal.field_int(jv, "usage_cached"),
+        @internal.field_int(jv, "usage_cache_creation"),
+      )
+    None => (None, None)
   }
 }
