@@ -124,6 +124,10 @@ test "CR-001 T1.2 messages to messages keeps a single usage message_delta" {
       assert_eq(s.split("event: message_delta").to_array().length() - 1, 1)
       assert_true(s.contains("\"output_tokens\":20"))
       assert_false(s.contains("\"output_tokens\":0"))
+      // acceptance 1：缓存计费项在 messages 目标端同样输出
+      // （message_delta.usage 的 cache_read / cache_creation 是 Anthropic 计费核心）
+      assert_true(s.contains("\"cache_read_input_tokens\":7"))
+      assert_true(s.contains("\"cache_creation_input_tokens\":3"))
     }
     Err(e) => fail("incremental convert failed: " + e)
   }
