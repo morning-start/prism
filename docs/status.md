@@ -42,7 +42,7 @@ compilation to reach non-public members).
 - **wasm**: `wasm_test` + `stream_session_test` + `abi_version_test` covering all exports (in `src/wasm/test/`)
 - **internal**: Coverage in `internal/test/` subdirectory（含 T5 SseFrameSplitter 测试）
 
-**Total: 995 tests passing (native + wasm-gc), 2026-09-09 iteration-009 后。**
+**Total: 1196 tests passing (native + wasm-gc), 2026-09-21 CR-001 后（`moon test` 全量）。**
 
 ## Known Limitations
 
@@ -56,6 +56,21 @@ compilation to reach non-public members).
 - `src/internal/json.mbt` exports JSON field access (`obj_get` / `field_*`) and basic tools (`json_escape` / `parse_string_array` / `parse_content_polymorphic` / …); `extras.mbt` exports `collect_extra_fields` / `merge_extras_json` / `extras_without`; `usage.mbt` exports `parse_usage_json` / `parse_reasoning_tokens` / `parse_cached_tokens` / `parse_cache_creation_tokens` / `parse_cached_tokens_gemini` — shared helpers used by all four providers
 - `src/lux/stream.mbt` exports `BlockAccumulator` (package-internal) — extracted from the 290-line stream accumulator function
 - `src/lux/helpers.mbt` exports `LucentReasoningEffort::to_string` — outbound effort tier mapping shared by openai / messages / responses (gemini keeps its own downgrade mapping)
+
+### 流式 usage（CR-001）
+
+- **已修**（变更单 [`cr/CR-001.md`](cr/CR-001.md)，回归 `src/sdk/test/stream_usage_cr001_test.mbt`）：
+  Anthropic 源流式 `prompt_tokens` 恒 0（`message_start.usage.input_tokens` 未并入 `Usage`）与
+  缓存计费项未解析；增量路径重复 Finish 把 `message_delta.usage.output_tokens` 覆盖成 0；
+  Gemini 源 usage 帧落在 `data: [DONE]` 之后被客户端丢弃；openai 出站流式请求未注入
+  `stream_options.include_usage`（上游整条流因此不带 usage）。
+- **残余**：Gemini 中间帧若携带 `usageMetadata`，逐帧路径会在该帧末尾发出 Done ⇒ 下游提前
+  收到终止符（**代码推断，未经线上核实**）；彻底修法需把终止权上移到会话层（`events_decode`
+  契约变更），待后续 CR。
+- **残余**：`message_start` 的缓存计费项无 IR 载体（`LucentConversationMeta` 仅 `usage_input`），
+  `Anthropic→Anthropic` 的 `message_start` 帧仍丢缓存项（`message_delta` 路径已修）。
+- **残余**：Gemini 流解码不发 `ConversationStart` ⇒ `gemini→messages` 输出缺 `message_start`，
+  `gemini→openai` 的 `id`/`model` 为空。
 
 ## Iteration-009 架构优化（2026-09-09）
 

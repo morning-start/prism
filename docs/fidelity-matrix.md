@@ -100,6 +100,25 @@
 | thinking + thoughtSignature | ✅ | 🟡 部分载体 | ✅ | ✅ |
 | 全量帧覆盖（BlockDiscard） | 🟡 语义近似 | 🟡 语义近似 | 🟡 语义近似 | ✅ |
 
+### 3.5 流式 usage（token 计量，CR-001）
+
+| 能力 | → responses | → openai-chat | → messages | → gemini |
+|---|---|---|---|---|
+| 流式 usage（输入 / 输出 / 缓存计费项） | ✅ | ✅ | ✅ | ✅ |
+
+- **输入侧**：Anthropic 的 `message_start.usage.input_tokens` 与
+  `cache_read_input_tokens` / `cache_creation_input_tokens` 现在会并入 `Usage` 事件
+  （此前 `prompt_tokens` 恒 0、`total_tokens` 只含输出侧）。
+- **帧序**：OpenAI 目标的 usage 帧必须早于 `data: [DONE]`；Gemini 源的 Done 收尾
+  排在 usage 之后（此前 usage 落到 `[DONE]` 之后，客户端停止消费即丢用量）。
+- **增量路径**：`StreamConverter` 逐帧输出与整缓冲 `convert_stream` 逐字节一致；
+  Anthropic 源的 `message_stop` 帧不再产生第二个 `message_delta(usage: 0)`。
+- **出站请求**：目标为 openai-chat 且 `stream=true` 且调用方未提供 `stream_options`
+  时，注入 `{"include_usage": true}`（OpenAI 仅在此时于末帧返回 usage；调用方显式
+  提供时以其为准）。
+- 测试：`src/sdk/test/stream_usage_cr001_test.mbt`（T1.1–T1.4）+ 1 字节切分一致性；
+  残余限制见 §4 第 5–8 条。
+
 ## 4. 已知技术债（不影响上表论断，随 iteration 推进）
 
 1. **ToolResult name carrier**：`LucentToolResult` 仅携带 `tool_use_id`，
@@ -112,6 +131,19 @@
 3. **parallel_tool_calls 能力声明**与协议实际能力不一致（§1 注释）。
 4. **ReasoningEffort 档位**：`minimal`（openai）与 `max`（anthropic）
    在跨端时降级到最近档位并打诊断。
+
+5. **Gemini 流终止语义**：解码器的 Done 贴在"本段输入处理完"处（保证排在 usage 之后）。
+   逐帧路径下若中间帧也带 `usageMetadata`，该帧末尾即发 Done ⇒ 下游提前收到终止符
+   （**代码推断，未经线上核实**）。彻底修法是把终止权完全上移到会话层、让 gemini
+   解码器不发 Done —— 属 `events_decode` provider 契约变更，待后续 CR。
+6. **Gemini 流元信息**：流解码不发 `ConversationStart` ⇒ `gemini→messages` 的输出缺
+   `message_start`（Anthropic 协议要求首帧），`gemini→openai` 的 `id`/`model` 为空。
+7. **messages 编码器事件序**：IR 事件序为 `[Usage, Finish]` 时用量被清零
+   （Usage 分支"前面有 Finish 就跳过" + Finish 分支输出 `output_tokens: 0`）；
+   4 个真实解码器都不产出该序，仅 SDK 手工构造事件可达。另：`message_start` 的
+   缓存计费项无 IR 载体（`LucentConversationMeta` 仅 `usage_input`）。
+8. **StreamConverter 截断流**：整场没有 Finish 事件时不会合成缺失的 `BlockEnd`
+   （对 Chat 系目标无影响，messages 目标会留下未闭合 `content_block`）。
 
 ## 5. 使用建议（中间件切流前检查单）
 
