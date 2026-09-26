@@ -15,6 +15,12 @@
 | [`fidelity-matrix.md`](fidelity-matrix.md) | 4×4 provider 转换保真度矩阵（切流决策依据） |
 | [`provider-guide.md`](provider-guide.md) | Adapter 实现指南 |
 
+## 变更单
+
+| 文件 | 用途 |
+|------|------|
+| [`cr/CR-001.md`](cr/CR-001.md) | 流式 usage 保真修复（D1 丢 `input_tokens` / D2 增量重复 Finish 覆盖 usage / D3 Done 先于 Usage / D4 未注入 `stream_options.include_usage`） |
+
 ## 规则
 
 | 文件 | 用途 |
