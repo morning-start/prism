@@ -11,6 +11,13 @@ pub fn messages_sse_to_events(
 ) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String] {
   let events : Array[@lux.LucentStreamEvent] = []
   let messages = @internal.parse_sse_messages(sse_str)
+  // CR-001 D1：跨帧累积输入侧用量。Anthropic 的 message_delta.usage 只保证
+  // output_tokens；input_tokens / 缓存计费项既可能挂在 message_start.usage，
+  // 也可能重复挂在 message_delta.usage —— 两处都读，缺失时回落到已记录值，
+  // 避免"输入侧恒 0"。
+  let mut usage_input : Int? = None
+  let mut usage_cached : Int? = None
+  let mut usage_cache_creation : Int? = None
   let mut i = 0
   while i < messages.length() {
     let event_type = messages[i].event_type.unwrap_or("")
@@ -27,13 +34,43 @@ pub fn messages_sse_to_events(
           Some(msg_jv) => {
             let id = @internal.field_str(msg_jv, "id")
             let model = @internal.field_str(msg_jv, "model")
-            let usage_input = match @internal.obj_get(msg_jv, "usage") {
-              Some(u) => @internal.field_int(u, "input_tokens")
-              None => None
+            match @internal.obj_get(msg_jv, "usage") {
+              Some(u) => {
+                usage_input = @internal.field_int(u, "input_tokens")
+                usage_cached = @internal.parse_cached_tokens(u, [])
+                usage_cache_creation = @internal.parse_cache_creation_tokens(
+                  u,
+                  [],
+                )
+              }
+              None => ()
+            }
+            // CR-001：缓存计费项随会话元信息透传（extension 载体 extra，缺失即 None）。
+            // 逐帧路径下 message_delta 帧看不到 message_start，StreamConverter 依赖
+            // 该载体回填输入侧用量，从而与整缓冲输出保持一致。
+            let cache_fields : Map[String, Json] = Map([])
+            match usage_cached {
+              Some(n) => cache_fields["usage_cached"] = n.to_json()
+              None => ()
+            }
+            match usage_cache_creation {
+              Some(n) => cache_fields["usage_cache_creation"] = n.to_json()
+              None => ()
+            }
+            let meta_extra : Json? = if cache_fields.length() > 0 {
+              Some(Json::object(cache_fields))
+            } else {
+              None
             }
             events.push(
               ConversationStart(
-                @lux.LucentConversationMeta::new(id, model, usage_input),
+                @lux.LucentConversationMeta::new_full(
+                  id,
+                  model,
+                  usage_input,
+                  None,
+                  meta_extra,
+                ),
               ),
             )
           }
@@ -124,13 +161,32 @@ pub fn messages_sse_to_events(
         }
         match @internal.obj_get(jv, "usage") {
           Some(u) => {
-            let (_, ot, _) = @internal.parse_usage_json(
-              u,
-              "input_tokens",
-              "output_tokens",
-              None,
+            let pt = match @internal.field_int(u, "input_tokens") {
+              Some(n) => n
+              None => usage_input.unwrap_or(0)
+            }
+            let ot = @internal.field_int(u, "output_tokens").unwrap_or(0)
+            let cached = match @internal.parse_cached_tokens(u, []) {
+              Some(n) => Some(n)
+              None => usage_cached
+            }
+            let cache_creation = match
+              @internal.parse_cache_creation_tokens(u, []) {
+              Some(n) => Some(n)
+              None => usage_cache_creation
+            }
+            events.push(
+              Usage(
+                @lux.LucentUsage::full(
+                  pt,
+                  ot,
+                  pt + ot,
+                  None,
+                  cached,
+                  cache_creation,
+                ),
+              ),
             )
-            events.push(Usage(@lux.LucentUsage::new(0, ot, ot)))
           }
           None => ()
         }

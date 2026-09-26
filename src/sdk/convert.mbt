@@ -206,6 +206,11 @@ pub struct StreamConverter {
   /// 编码（messages 编码器把 Finish+Usage 合并为单条 message_delta），
   /// 保证逐帧输出与整缓冲输出逐字节一致。
   mut held_events : Array[@lux.LucentStreamEvent]
+  /// CR-001 D2：会话级 Finish 去重。messages 解码器在 message_stop 帧内会补发
+  /// Finish（该帧内看不到前面的 message_delta），逐帧路径下与 message_delta 帧
+  /// 的 Finish 重复 —— 目标端会多出 finish_reason 帧，或把 message_delta 的
+  /// usage 覆盖成 0。同一会话只保留首个 Finish。
+  mut finish_seen : Bool
 }
 
 ///|
@@ -223,6 +228,7 @@ pub fn StreamConverter::new(
         stream_ctx: None,
         open_blocks: [],
         held_events: [],
+        finish_seen: false,
       })
     Err(e) => Err(e)
   }
@@ -291,7 +297,10 @@ fn StreamConverter::convert_frames(
           self.held_events = combined
         } else {
           match self.encode_events(combined) {
-            Ok(sse) => out.push(sse)
+            // CR-001：无事件可编码的帧（BlockStart/BlockEnd 在 Chat 系无载体）
+            // 只会产出空块；丢弃它既避免空 SSE 块，也保证逐帧输出与整缓冲
+            // 输出逐字节一致。
+            Ok(sse) => if sse.trim().length() > 0 { out.push(sse) }
             Err(e) => return Err(e)
           }
         }
@@ -351,16 +360,61 @@ fn StreamConverter::normalize_events(
           self.open_blocks = remove_int(self.open_blocks, idx)
           result.push(ev)
         }
-      Finish(_) => {
-        // 合成缺失的 BlockEnd（逆序闭合，与栈语义一致）
-        let mut k = self.open_blocks.length() - 1
-        while k >= 0 {
-          result.push(BlockEnd(self.open_blocks[k]))
-          k = k - 1
+      Finish(_) =>
+        // CR-001 D2：同一会话只保留首个 Finish。
+        if self.finish_seen {
+          ()
+        } else {
+          self.finish_seen = true
+          // 合成缺失的 BlockEnd（逆序闭合，与栈语义一致）
+          let mut k = self.open_blocks.length() - 1
+          while k >= 0 {
+            result.push(BlockEnd(self.open_blocks[k]))
+            k = k - 1
+          }
+          self.open_blocks = []
+          result.push(ev)
         }
-        self.open_blocks = []
-        result.push(ev)
-      }
+      Usage(u) =>
+        // CR-001 D1（增量路径）：逐帧解码时 message_delta 帧看不到 message_start
+        // 的 input_tokens，解出的 prompt_tokens 为 0；用会话元信息回填，
+        // 保证逐帧输出与整缓冲输出逐字节一致。
+        if u.prompt_tokens == 0 {
+          match self.stream_ctx {
+            Some(meta) =>
+              match meta.usage_input {
+                Some(n) => {
+                  let (meta_cached, meta_cache_creation) = meta_cache_usage(
+                    meta,
+                  )
+                  let cached = match u.cached_tokens {
+                    Some(c) => Some(c)
+                    None => meta_cached
+                  }
+                  let cache_creation = match u.cache_creation_tokens {
+                    Some(c) => Some(c)
+                    None => meta_cache_creation
+                  }
+                  result.push(
+                    Usage(
+                      @lux.LucentUsage::full(
+                        n,
+                        u.completion_tokens,
+                        n + u.completion_tokens,
+                        u.reasoning_tokens,
+                        cached,
+                        cache_creation,
+                      ),
+                    ),
+                  )
+                }
+                None => result.push(ev)
+              }
+            None => result.push(ev)
+          }
+        } else {
+          result.push(ev)
+        }
       _ => result.push(ev)
     }
   }
@@ -389,5 +443,19 @@ fn ends_with_finish(events : Array[@lux.LucentStreamEvent]) -> Bool {
       Finish(_) => true
       _ => false
     }
+  }
+}
+
+///|
+/// CR-001：读取会话元信息 `extra` 中透传的输入侧缓存用量（messages 解码器写入）。
+/// 非 messages 源或上游未提供时为 (None, None)，不影响其他 provider。
+fn meta_cache_usage(meta : @lux.LucentConversationMeta) -> (Int?, Int?) {
+  match meta.extra {
+    Some(jv) =>
+      (
+        @internal.field_int(jv, "usage_cached"),
+        @internal.field_int(jv, "usage_cache_creation"),
+      )
+    None => (None, None)
   }
 }
