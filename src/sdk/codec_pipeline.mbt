@@ -46,6 +46,43 @@ fn decode_encode_response(
 }
 
 ///|
+/// CR-002 A5：为仍打开的内容块合成 BlockEnd（截断流收尾）。
+///
+/// 整缓冲路径没有跨帧状态，故在此按事件流本身重放块的开关，逆序闭合仍打开的块
+/// —— 与 `StreamConverter::finish` 的行为一致（两条路径必须逐字节一致）。
+fn close_open_blocks(
+  events : Array[@lux.LucentStreamEvent],
+) -> Array[@lux.LucentStreamEvent] {
+  let mut open : Array[Int] = []
+  let result : Array[@lux.LucentStreamEvent] = []
+  for ev in events {
+    match ev {
+      BlockStart(idx, _) => {
+        if !open.contains(idx) {
+          open.push(idx)
+        }
+        result.push(ev)
+      }
+      BlockEnd(idx) => {
+        open = remove_int(open, idx)
+        result.push(ev)
+      }
+      BlockDiscard(idx) => {
+        open = remove_int(open, idx)
+        result.push(ev)
+      }
+      _ => result.push(ev)
+    }
+  }
+  let mut k = open.length() - 1
+  while k >= 0 {
+    result.push(BlockEnd(open[k]))
+    k = k - 1
+  }
+  result
+}
+
+///|
 /// 通用：source 事件解码 → target 事件编码（合并诊断）
 fn decode_encode_stream(
   sse_str : String,
@@ -71,8 +108,11 @@ fn decode_encode_stream(
           _ => kept.push(ev)
         }
       }
-      kept.push(Done)
-      match encode(kept) {
+      // CR-002 A5：截断流闭合仍打开的块（与 StreamConverter::finish 同构），
+      // 且必须排在终止符之前
+      let closed = close_open_blocks(kept)
+      closed.push(Done)
+      match encode(closed) {
         Ok(ecr) => Ok(merge_diagnostics(ecr, dcr.diagnostics()))
         Err(e) => Err(e)
       }

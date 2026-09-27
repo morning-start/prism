@@ -268,6 +268,14 @@ pub fn StreamConverter::finish(
       // 冲刷保持的 Finish 帧（无后续 Usage 帧时）
       let pending = self.held_events.copy()
       self.held_events = []
+      // CR-002 A5：截断流（整场没有 Finish）仍打开的块在此闭合 —— 否则 messages
+      // 目标会留下未闭合的 content_block。逆序闭合与整缓冲路径的栈语义一致。
+      let mut k = self.open_blocks.length() - 1
+      while k >= 0 {
+        pending.push(BlockEnd(self.open_blocks[k]))
+        k = k - 1
+      }
+      self.open_blocks = []
       if pending.length() > 0 {
         match self.encode_events(pending) {
           Ok(sse) => if sse.trim().length() > 0 { emitted.push(sse) }
