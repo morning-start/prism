@@ -211,10 +211,10 @@ pub struct StreamConverter {
   /// 的 Finish 重复 —— 目标端会多出 finish_reason 帧，或把 message_delta 的
   /// usage 覆盖成 0。同一会话只保留首个 Finish。
   mut finish_seen : Bool
-  /// CR-001 D3：会话级 Done 兜底。Gemini 无 [DONE]，且其 usageMetadata 帧可能晚于
-  /// finishReason 帧（Done 必须排在 usage 之后），故 Done 由 usage 帧或收尾兜底发出；
-  /// 整场结束时若仍未见到 Done，由 `finish()` 补一个终止符，避免下游挂起。
-  mut done_seen : Bool
+  /// CR-002 D5：会话是否已收尾（`finish()` 幂等）。终止符由会话层唯一产生：
+  /// 解码器在流中途发出的 Done 一律丢弃（Gemini 的帧级兜底 Done 会落在
+  /// usage/内容之前），`finish()` 在最后补且仅补一个终止符。
+  mut closed : Bool
 }
 
 ///|
@@ -233,7 +233,7 @@ pub fn StreamConverter::new(
         open_blocks: [],
         held_events: [],
         finish_seen: false,
-        done_seen: false,
+        closed: false,
       })
     Err(e) => Err(e)
   }
@@ -249,7 +249,11 @@ pub fn StreamConverter::feed(
 }
 
 ///|
-/// 流结束：冲刷尾部半帧（无结束空行的流）并转换，发射保持的 Finish 帧
+/// 流结束：冲刷尾部半帧（无结束空行的流）并转换，闭合仍打开的块，补终止符。
+///
+/// CR-002 D5：Done 由会话层唯一产生 —— 整场解码事件里的 Done 都在
+/// `normalize_events` 被丢弃，终止符在这里补发一次（幂等：`closed` 之后重复调用
+/// 只返回本次冲刷的帧）。
 pub fn StreamConverter::finish(
   self : StreamConverter,
 ) -> Result[Array[String], String] {
@@ -257,21 +261,32 @@ pub fn StreamConverter::finish(
   let out = self.convert_frames(frames)
   match out {
     Ok(emitted) => {
+      if self.closed {
+        return Ok(emitted)
+      }
+      self.closed = true
       // 冲刷保持的 Finish 帧（无后续 Usage 帧时）
       let pending = self.held_events.copy()
       self.held_events = []
-      // CR-001 D3：会话级 Done 兜底 —— Gemini 源没有 [DONE] 帧，其 finishReason
-      // 帧后还可能跟 usageMetadata 帧，因此 Done 不能贴在 finishReason 上；整场
-      // 结束仍未见 Done 时在此补齐，保证下游总能收到终止符。
-      if !self.done_seen {
-        pending.push(Done)
-        self.done_seen = true
+      // CR-002 A5：截断流（整场没有 Finish）仍打开的块在此闭合 —— 否则 messages
+      // 目标会留下未闭合的 content_block。逆序闭合与整缓冲路径的栈语义一致。
+      let mut k = self.open_blocks.length() - 1
+      while k >= 0 {
+        pending.push(BlockEnd(self.open_blocks[k]))
+        k = k - 1
       }
+      self.open_blocks = []
       if pending.length() > 0 {
         match self.encode_events(pending) {
           Ok(sse) => if sse.trim().length() > 0 { emitted.push(sse) }
           Err(e) => return Err(e)
         }
+      }
+      // 终止符：会话唯一，且必定排在最后（其后不再有内容）
+      let tail : Array[@lux.LucentStreamEvent] = [Done]
+      match self.encode_events(tail) {
+        Ok(sse) => if sse.trim().length() > 0 { emitted.push(sse) }
+        Err(e) => return Err(e)
       }
       Ok(emitted)
     }
@@ -329,7 +344,6 @@ fn StreamConverter::encode_events(
   for ev in events {
     match ev {
       ConversationStart(meta) => self.stream_ctx = Some(meta)
-      Done => self.done_seen = true
       _ => ()
     }
   }
@@ -340,12 +354,14 @@ fn StreamConverter::encode_events(
 }
 
 ///|
-/// 跨帧状态规整：块事件去重/孤儿过滤 + Finish 前合成缺失 BlockEnd
+/// 跨帧状态规整：块事件去重/孤儿过滤 + Finish 前合成缺失 BlockEnd + 丢弃 Done
 ///
 /// - BlockStart(idx)：idx 已打开 → 丢弃（解码器每帧重发）；否则记录
 /// - BlockEnd/BlockDiscard(idx)：idx 未打开 → 丢弃（孤儿）；否则移除
 /// - Finish：为仍打开的块合成 BlockEnd（整缓冲解码在 Finish 前闭合块），
 ///   合成顺序按打开顺序（与整缓冲解码的 text→thinking→tool 顺序一致）
+/// - Done：一律丢弃。Gemini 没有 [DONE]，其 Done 是"本段输入处理完"的帧级兜底，
+///   逐帧路径下会落在后续内容/usage 之前；终止符统一由 `finish()` 补（CR-002 D5）
 fn StreamConverter::normalize_events(
   self : StreamConverter,
   events : Array[@lux.LucentStreamEvent],
@@ -425,34 +441,11 @@ fn StreamConverter::normalize_events(
         } else {
           result.push(ev)
         }
+      Done => ()
       _ => result.push(ev)
     }
   }
-  // CR-001 D3：Gemini 没有 [DONE]，其 Done 是"本段输入处理完"的帧级兜底；若该组
-  // 只有 Finish 而没有 Usage，Done 可能被紧随其后的 usageMetadata 帧顶到前面
-  // （usage 落到 [DONE] 之后 → 客户端停止消费 → 用量丢失）。此时延迟终止：丢掉
-  // Done，让下一个 usage 帧并入同一次编码；若始终没有 usage，`finish()` 会兜底补发。
-  let mut group_has_finish = false
-  let mut group_has_usage = false
-  for ev in result {
-    match ev {
-      Finish(_) => group_has_finish = true
-      Usage(_) => group_has_usage = true
-      _ => ()
-    }
-  }
-  if group_has_finish && !group_has_usage {
-    let filtered : Array[@lux.LucentStreamEvent] = []
-    for ev in result {
-      match ev {
-        Done => ()
-        _ => filtered.push(ev)
-      }
-    }
-    filtered
-  } else {
-    result
-  }
+  result
 }
 
 ///|

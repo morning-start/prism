@@ -1069,37 +1069,42 @@ test "gemini decode - stream thinking and text block lifecycle" {
     "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"e\"}]}}]}\n" +
     "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"f\"}}]},\"finishReason\":\"STOP\"}]}\n"
   let events = sse_ok(sse)
+  // CR-002 A1：首个可解析帧发 ConversationStart（摘要记 "?"），其后事件整体后移一位
+  assert_eq(event_summary(events), "?S0D0E0S1D1E1S2D2D2E2S3D3D3E3S4D4E4FX")
+  assert_eq(events.length(), 20)
+  match events[0] {
+    ConversationStart(_) => ()
+    _ => fail("expected ConversationStart first")
+  }
   // 思考块与文本块互斥开闭；同类型的后续增量复用已打开的块序号
-  assert_eq(event_summary(events), "S0D0E0S1D1E1S2D2D2E2S3D3D3E3S4D4E4FX")
-  assert_eq(events.length(), 19)
-  assert_eq(events[0], BlockStart(0, Thinking))
+  assert_eq(events[1], BlockStart(0, Thinking))
   assert_eq(
-    events[1],
+    events[2],
     BlockDelta(0, @lux.LucentBlockDelta::thinking_delta("a")),
   )
-  assert_eq(events[2], BlockEnd(0))
-  assert_eq(events[3], BlockStart(1, Text))
-  assert_eq(events[4], BlockDelta(1, @lux.LucentBlockDelta::text_delta("b")))
+  assert_eq(events[3], BlockEnd(0))
+  assert_eq(events[4], BlockStart(1, Text))
+  assert_eq(events[5], BlockDelta(1, @lux.LucentBlockDelta::text_delta("b")))
   // 字符串 thought 也走思考分支；第二个 thought part 复用思考块 2
-  assert_eq(events[6], BlockStart(2, Thinking))
+  assert_eq(events[7], BlockStart(2, Thinking))
   assert_eq(
-    events[7],
+    events[8],
     BlockDelta(2, @lux.LucentBlockDelta::thinking_delta("c")),
   )
   assert_eq(
-    events[8],
+    events[9],
     BlockDelta(2, @lux.LucentBlockDelta::thinking_delta("c2")),
   )
   // 第二个文本 part 复用文本块 3
-  assert_eq(events[10], BlockStart(3, Text))
-  assert_eq(events[11], BlockDelta(3, @lux.LucentBlockDelta::text_delta("d")))
-  assert_eq(events[12], BlockDelta(3, @lux.LucentBlockDelta::text_delta("e")))
+  assert_eq(events[11], BlockStart(3, Text))
+  assert_eq(events[12], BlockDelta(3, @lux.LucentBlockDelta::text_delta("d")))
+  assert_eq(events[13], BlockDelta(3, @lux.LucentBlockDelta::text_delta("e")))
   // functionCall 之前先由 close_gemini_blocks 闭合文本块
-  assert_eq(events[13], BlockEnd(3))
-  assert_eq(events[14], BlockStart(4, ToolCall("fc_f_0", "f")))
-  assert_eq(events[16], BlockEnd(4))
-  assert_eq(events[17], Finish(Stop))
-  assert_eq(events[18], Done)
+  assert_eq(events[14], BlockEnd(3))
+  assert_eq(events[15], BlockStart(4, ToolCall("fc_f_0", "f")))
+  assert_eq(events[17], BlockEnd(4))
+  assert_eq(events[18], Finish(Stop))
+  assert_eq(events[19], Done)
 }
 
 ///|
@@ -1112,21 +1117,22 @@ test "gemini decode - stream signature delta closes open blocks" {
   let events = sse_ok(sse)
   // 无 text 的 thoughtSignature 帧：先闭合当前打开的块（文本一次、思考一次），
   // 再开一个签名 Thinking 块并立即闭合
-  assert_eq(event_summary(events), "S0D0E0S1D1E1S2D2E2S3D3E3S4D4E4X")
-  assert_eq(events.length(), 16)
+  // CR-002 A1：首帧为 ConversationStart，其后事件整体后移一位
+  assert_eq(event_summary(events), "?S0D0E0S1D1E1S2D2E2S3D3E3S4D4E4X")
+  assert_eq(events.length(), 17)
   assert_eq(
-    events[7],
+    events[8],
     BlockDelta(2, @lux.LucentBlockDelta::signature_delta("sig-1")),
   )
-  assert_eq(events[8], BlockEnd(2))
+  assert_eq(events[9], BlockEnd(2))
   // 思考块打开时收到签名帧 → close_gemini_blocks 闭合思考块
-  assert_eq(events[11], BlockEnd(3))
+  assert_eq(events[12], BlockEnd(3))
   assert_eq(
-    events[13],
+    events[14],
     BlockDelta(4, @lux.LucentBlockDelta::signature_delta("sig-2")),
   )
-  assert_eq(events[14], BlockEnd(4))
-  assert_eq(events[15], Done)
+  assert_eq(events[15], BlockEnd(4))
+  assert_eq(events[16], Done)
 }
 
 ///|
@@ -1136,7 +1142,7 @@ test "gemini decode - stream functionCall synthetic ids" {
     "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"f\",\"id\":\"call_explicit\"}}]}}]}\n" +
     "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"f\",\"id\":\"\"}}]},\"finishReason\":\"STOP\"}]}\n"
   let events = sse_ok(sse)
-  assert_eq(event_summary(events), "S0D0E0S1D1E1S2D2E2S3D3E3FX")
+  assert_eq(event_summary(events), "?S0D0E0S1D1E1S2D2E2S3D3E3FX")
   let ids : Array[String] = []
   let names : Array[String] = []
   for ev in events {
@@ -1165,9 +1171,10 @@ test "gemini decode - stream usage and done emitted once" {
   let events = sse_ok(sse)
   // CR-001 D3：Done 不再贴在 finishReason 上，而是排在本段输入的 usage 之后
   // （否则 OpenAI 目标的 usage 帧会落到 [DONE] 之后而被客户端丢弃）。
-  assert_eq(event_summary(events), "S0D0E0FUX")
-  assert_eq(events[3], Finish(Length))
-  match events[4] {
+  // CR-002 A1：首帧为 ConversationStart，其后事件整体后移一位。
+  assert_eq(event_summary(events), "?S0D0E0FUX")
+  assert_eq(events[4], Finish(Length))
+  match events[5] {
     Usage(u) => {
       assert_eq(u.prompt_tokens, 3)
       assert_eq(u.completion_tokens, 4)
@@ -1181,35 +1188,36 @@ test "gemini decode - stream usage and done emitted once" {
   let usage_only = sse_ok(
     "data: {\"usageMetadata\":{\"promptTokenCount\":1,\"candidatesTokenCount\":2,\"totalTokenCount\":3}}\n",
   )
-  assert_eq(event_summary(usage_only), "UX")
+  assert_eq(event_summary(usage_only), "?UX")
 }
 
 ///|
 test "gemini decode - stream fallback done and skipped frames" {
-  // 空流 / 无 data 行 → 仅兜底 Done
+  // 空流 / 无 data 行 → 无任何可解析帧，仅兜底 Done
   assert_eq(event_summary(sse_ok("")), "X")
   assert_eq(event_summary(sse_ok("event: ping\n\n")), "X")
-  // 非法 JSON 帧被跳过，后续帧正常解析（流末兜底闭合文本块）
+  // CR-002 A1：只要存在可解析帧就会先发 ConversationStart（"?"），
+  // 因此下列用例由 "X" 变为 "?X"；非法 JSON 帧被跳过后仍以首帧元信息开头。
   assert_eq(
     event_summary(
       sse_ok(
         "data: {oops\ndata: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"x\"}]}}]}\n",
       ),
     ),
-    "S0D0E0X",
+    "?S0D0E0X",
   )
-  // candidates 空数组 → 无事件
-  assert_eq(event_summary(sse_ok("data: {\"candidates\":[]}\n")), "X")
-  // content 缺失 / parts 缺失 / part 无 text → 无事件
+  // candidates 空数组 → 无内容事件（仅元信息 + 兜底 Done）
+  assert_eq(event_summary(sse_ok("data: {\"candidates\":[]}\n")), "?X")
+  // content 缺失 / parts 缺失 / part 无 text → 无内容事件
   assert_eq(
     event_summary(sse_ok("data: {\"candidates\":[{\"index\":0}]}\n")),
-    "X",
+    "?X",
   )
   assert_eq(
     event_summary(
       sse_ok("data: {\"candidates\":[{\"content\":{\"role\":\"model\"}}]}\n"),
     ),
-    "X",
+    "?X",
   )
   assert_eq(
     event_summary(
@@ -1217,13 +1225,13 @@ test "gemini decode - stream fallback done and skipped frames" {
         "data: {\"candidates\":[{\"content\":{\"parts\":[{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"AA\"}}]}}]}\n",
       ),
     ),
-    "X",
+    "?X",
   )
-  // parts 为空数组 → 无事件
+  // parts 为空数组 → 无内容事件
   assert_eq(
     event_summary(
       sse_ok("data: {\"candidates\":[{\"content\":{\"parts\":[]}}]}\n"),
     ),
-    "X",
+    "?X",
   )
 }

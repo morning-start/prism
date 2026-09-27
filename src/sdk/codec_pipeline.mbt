@@ -46,6 +46,43 @@ fn decode_encode_response(
 }
 
 ///|
+/// CR-002 A5：为仍打开的内容块合成 BlockEnd（截断流收尾）。
+///
+/// 整缓冲路径没有跨帧状态，故在此按事件流本身重放块的开关，逆序闭合仍打开的块
+/// —— 与 `StreamConverter::finish` 的行为一致（两条路径必须逐字节一致）。
+fn close_open_blocks(
+  events : Array[@lux.LucentStreamEvent],
+) -> Array[@lux.LucentStreamEvent] {
+  let mut open : Array[Int] = []
+  let result : Array[@lux.LucentStreamEvent] = []
+  for ev in events {
+    match ev {
+      BlockStart(idx, _) => {
+        if !open.contains(idx) {
+          open.push(idx)
+        }
+        result.push(ev)
+      }
+      BlockEnd(idx) => {
+        open = remove_int(open, idx)
+        result.push(ev)
+      }
+      BlockDiscard(idx) => {
+        open = remove_int(open, idx)
+        result.push(ev)
+      }
+      _ => result.push(ev)
+    }
+  }
+  let mut k = open.length() - 1
+  while k >= 0 {
+    result.push(BlockEnd(open[k]))
+    k = k - 1
+  }
+  result
+}
+
+///|
 /// 通用：source 事件解码 → target 事件编码（合并诊断）
 fn decode_encode_stream(
   sse_str : String,
@@ -60,21 +97,22 @@ fn decode_encode_stream(
 ) -> Result[@lux.ConversionResult[String], String] {
   match decode(sse_str) {
     Ok(dcr) => {
-      // CR-001：IR 流以 Done 收尾。Gemini 没有 [DONE] 终止符，且它的 usageMetadata
-      // 帧可能晚于 finishReason 帧（Done 必须排在 usage 之后），因此"以 Done 收尾"
-      // 统一由会话层兜底（此处 + StreamConverter::finish），解码器不再提前发 Done。
+      // CR-002 D5：IR 流的终止符由会话层唯一产生 —— 丢弃解码器在流中途发出的
+      // Done（Gemini 的帧级兜底 Done 会落在 usage / 后续内容之前），末尾统一补
+      // 一个，保证终止符恰好一次且位于最后。
       let events = dcr.value()
-      let mut has_done = false
+      let kept : Array[@lux.LucentStreamEvent] = []
       for ev in events {
         match ev {
-          Done => has_done = true
-          _ => ()
+          Done => ()
+          _ => kept.push(ev)
         }
       }
-      if !has_done {
-        events.push(Done)
-      }
-      match encode(events) {
+      // CR-002 A5：截断流闭合仍打开的块（与 StreamConverter::finish 同构），
+      // 且必须排在终止符之前
+      let closed = close_open_blocks(kept)
+      closed.push(Done)
+      match encode(closed) {
         Ok(ecr) => Ok(merge_diagnostics(ecr, dcr.diagnostics()))
         Err(e) => Err(e)
       }

@@ -49,6 +49,8 @@ pub fn gemini_sse_to_events(
   let mut open_text : Int? = None
   let mut open_thinking : Int? = None
   let mut done_emitted = false
+  // CR-002 A1：是否已发出会话元信息（首个可解析帧发一次）
+  let mut conv_started = false
   let mut i = 0
   while i < messages.length() {
     let jv = match @internal.parse_sse_frame(messages[i].data) {
@@ -57,6 +59,23 @@ pub fn gemini_sse_to_events(
         i = i + 1
         continue
       }
+    }
+    // CR-002 A1：Gemini 帧携带 responseId / modelVersion（与非流式
+    // GenerateContentResponse 同名字段），但流式解码此前完全忽略 —— 依赖
+    // ConversationStart 发首帧的 messages / responses 目标因此缺 message_start /
+    // response.created，openai 目标的 id/model 为空。首个可解析帧发一次，字段
+    // 缺失为 None（保证协议首帧存在；batch 与逐帧路径形态一致）。
+    if !conv_started {
+      events.push(
+        ConversationStart(
+          @lux.LucentConversationMeta::new(
+            @internal.field_str(jv, "responseId"),
+            @internal.field_str(jv, "modelVersion"),
+            None,
+          ),
+        ),
+      )
+      conv_started = true
     }
     match @internal.field_arr(jv, "candidates") {
       Some(cands) =>
