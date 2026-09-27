@@ -331,6 +331,8 @@ pub struct StreamConverter {
   mut stream_ctx : @lux.LucentConversationMeta?
   mut open_blocks : Array[Int]
   mut held_events : Array[@lux.LucentStreamEvent]
+  mut finish_seen : Bool
+  mut closed : Bool
 }
 pub fn StreamConverter::feed(Self, String) -> Result[Array[String], String]
 pub fn StreamConverter::finish(Self) -> Result[Array[String], String]
