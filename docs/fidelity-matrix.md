@@ -116,6 +116,10 @@
 - **出站请求**：目标为 openai-chat 且 `stream=true` 且调用方未提供 `stream_options`
   时，注入 `{"include_usage": true}`（OpenAI 仅在此时于末帧返回 usage；调用方显式
   提供时以其为准）。
+- **终止符契约（CR-002）**：IR 流的终止符由会话层唯一产生 —— 解码器在流中途发出的
+  `Done` 一律丢弃（Gemini 的帧级兜底 `Done` 会落在 usage / 后续内容之前），整缓冲路径
+  在编码前补一个、逐帧路径在 `finish()` 补一个。因此下游**必须**调用
+  `StreamConverter::finish()` 才能拿到尾部帧与终止符。
 - 测试：`src/sdk/test/stream_usage_cr001_test.mbt`（T1.1–T1.4）+ 1 字节切分一致性；
   残余限制见 §4 第 5–8 条。
 
@@ -132,18 +136,19 @@
 4. **ReasoningEffort 档位**：`minimal`（openai）与 `max`（anthropic）
    在跨端时降级到最近档位并打诊断。
 
-5. **Gemini 流终止语义**：解码器的 Done 贴在"本段输入处理完"处（保证排在 usage 之后）。
-   逐帧路径下若中间帧也带 `usageMetadata`，该帧末尾即发 Done ⇒ 下游提前收到终止符
-   （**代码推断，未经线上核实**）。彻底修法是把终止权完全上移到会话层、让 gemini
-   解码器不发 Done —— 属 `events_decode` provider 契约变更，待后续 CR。
-6. **Gemini 流元信息**：流解码不发 `ConversationStart` ⇒ `gemini→messages` 的输出缺
-   `message_start`（Anthropic 协议要求首帧），`gemini→openai` 的 `id`/`model` 为空。
-7. **messages 编码器事件序**：IR 事件序为 `[Usage, Finish]` 时用量被清零
-   （Usage 分支"前面有 Finish 就跳过" + Finish 分支输出 `output_tokens: 0`）；
-   4 个真实解码器都不产出该序，仅 SDK 手工构造事件可达。另：`message_start` 的
-   缓存计费项无 IR 载体（`LucentConversationMeta` 仅 `usage_input`）。
-8. **StreamConverter 截断流**：整场没有 Finish 事件时不会合成缺失的 `BlockEnd`
-   （对 Chat 系目标无影响，messages 目标会留下未闭合 `content_block`）。
+5. **Anthropic `message_start` 的 `output_tokens`**：编码器只输出 `input_tokens`
+   （+ 缓存项），不含官方同时给出的 `output_tokens: 1`；属归一化差异，未修。
+6. **Gemini 空流**：整段输入没有任何可解析帧时不发 `ConversationStart`，故
+   `gemini→messages` 对退化空流不会有 `message_start`（仅异常/空流场景）。
+7. **裸解码仍带帧级 `Done`**：`wasm_sse_to_events` 与各 provider 的 `events_decode`
+   不经会话层，Gemini 的帧级兜底 `Done` 仍出现在其返回值中；自行拼装编码器的消费方
+   需自己保证终止符唯一（`convert_stream` / `StreamConverter` 已保证）。
+8. **StreamConverter 的半帧依赖 `finish()`**：没有结束空行的尾部半帧只在 `finish()`
+   冲刷；宿主若异常终止而不调用 `finish()`，尾部内容与终止符都会缺失。
+
+> CR-002 已修复本节原先的第 5–8 条（Gemini 终止语义 / Gemini 流元信息 /
+> messages 事件序与缓存载体 / 截断流未闭合块），回归见
+> `src/sdk/test/stream_meta_cr002_test.mbt` 与 [`cr/CR-002.md`](cr/CR-002.md)。
 
 ## 5. 使用建议（中间件切流前检查单）
 
