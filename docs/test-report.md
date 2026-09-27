@@ -64,3 +64,11 @@ approved_at: 2026-09-21T00:00:00Z
 ## 6. 结论
 
 改动点与关联影响点全部覆盖且通过，缺陷复现测试由红转绿 ⇒ `target = change(current)` 成立。
+
+## 7. 迭代内其它变更（CR-002）
+
+本迭代还包含 **CR-002（相邻缺口收敛：A1 / D5 / A4 / A3 / A5）**，其变更针对性测试为
+`src/sdk/test/stream_meta_cr002_test.mbt`（5 项断言先红后绿 + 1 项 `finish()` 幂等），
+关联影响点（messages / gemini / sdk 包回归）、既有断言变更的逐处解释与契约变化说明见
+[`cr/CR-002.md`](cr/CR-002.md) §5；本轮全量回归为 **1201 passed / 0 failed**。
+本文件 §1–§6 保持 **CR-001 范围**的结论。

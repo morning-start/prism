@@ -42,7 +42,7 @@ compilation to reach non-public members).
 - **wasm**: `wasm_test` + `stream_session_test` + `abi_version_test` covering all exports (in `src/wasm/test/`)
 - **internal**: Coverage in `internal/test/` subdirectory（含 T5 SseFrameSplitter 测试）
 
-**Total: 1201 tests passing (native + wasm-gc), 2026-09-21 CR-002 后（`moon test` 全量）。**
+**Total: 1202 tests passing (native + wasm-gc), 2026-09-21 CR-002 后（`moon test` 全量）。**
 
 ## Known Limitations
 

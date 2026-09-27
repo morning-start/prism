@@ -222,3 +222,34 @@ test "CR-002 truncated stream closes open blocks" {
     Err(e) => fail("convert_stream failed: " + e)
   }
 }
+
+///|
+/// T-CR002-6 · CR-002 D5：`finish()` 幂等 —— 重复调用不得产生第二个终止符
+/// （宿主可能在"上游已断"与"异常收尾"两条路径上各调一次）
+test "CR-002 finish is idempotent" {
+  match @sdk.StreamConverter::new("gemini", "openai") {
+    Ok(conv) => {
+      let out : Array[String] = []
+      match conv.feed(cr002_gemini_single()) {
+        Ok(frames) =>
+          for f in frames {
+            out.push(f)
+          }
+        Err(e) => fail("feed failed: " + e)
+      }
+      match conv.finish() {
+        Ok(tail) =>
+          for f in tail {
+            out.push(f)
+          }
+        Err(e) => fail("finish failed: " + e)
+      }
+      match conv.finish() {
+        Ok(second) => assert_eq(second.length(), 0)
+        Err(e) => fail("second finish failed: " + e)
+      }
+      assert_true(cr002_terminator_last(out.join(""), "data: [DONE]"))
+    }
+    Err(e) => fail("StreamConverter::new failed: " + e)
+  }
+}
