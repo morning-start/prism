@@ -259,6 +259,14 @@ pub fn gemini_sse_to_events(
     i = i + 1
   }
   let (_, _) = close_gemini_blocks(events, open_text, open_thinking)
+  // CR-003 R2：整段输入没有任何可解析帧（空流 / 仅非法帧）时也补一个会话元信息，
+  // 否则 gemini→messages / responses 的退化流没有协议首帧。字段缺失为 None。
+  if !conv_started {
+    events.push(
+      ConversationStart(@lux.LucentConversationMeta::new(None, None, None)),
+    )
+    conv_started = true
+  }
   // 兜底：本段输入处理完仍未发过 Done 时补发（原生 Gemini 无 [DONE]，finishReason
   // 是终止信号但 usageMetadata 可能排在它之后 —— 放在这里可保证 Done 收尾）。
   if !done_emitted {

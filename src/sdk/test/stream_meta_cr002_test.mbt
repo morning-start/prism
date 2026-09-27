@@ -153,7 +153,8 @@ test "CR-002 gemini multi-frame terminates once at the end" {
 ///|
 /// T-CR002-3 · acceptance 3：message_start 透传缓存计费项，且两条路径逐字节一致
 test "CR-002 messages message_start carries cache usage" {
-  let expected = "\"usage\":{\"input_tokens\":10,\"cache_read_input_tokens\":7,\"cache_creation_input_tokens\":3}"
+  // CR-003 R1 起 message_start.usage 末尾追加 output_tokens（首帧语义 1）
+  let expected = "\"usage\":{\"input_tokens\":10,\"cache_read_input_tokens\":7,\"cache_creation_input_tokens\":3,\"output_tokens\":1}"
   match @sdk.convert_stream("messages", cr002_messages_cache(), "messages") {
     Ok(cr) => assert_true(cr.value().contains(expected))
     Err(e) => fail("convert_stream failed: " + e)

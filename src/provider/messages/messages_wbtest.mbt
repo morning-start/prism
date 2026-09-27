@@ -1573,7 +1573,12 @@ test "encode - stream conversation start emits input usage" {
   ]
   match lux_events_to_messages_sse(events) {
     Ok(cr) =>
-      assert_true(cr.value().contains("\"usage\":{\"input_tokens\":1234}"))
+      // CR-003 R1：message_start.usage 现在同时给出 output_tokens（首帧语义为 1）
+      assert_true(
+        cr
+        .value()
+        .contains("\"usage\":{\"input_tokens\":1234,\"output_tokens\":1}"),
+      )
     Err(e) => fail("encode error: \{e}")
   }
 }

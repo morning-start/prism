@@ -164,7 +164,9 @@ pub fn lux_events_to_messages_sse(
               n.to_string()
           None => ()
         }
-        fields = fields + ",\"usage\":" + usage_fields + "}"
+        // CR-003 R1：Anthropic 的 message_start.usage 同时给出 output_tokens
+        // （首帧语义为 1，与官方响应一致）；此前只输出 input_tokens + 缓存项。
+        fields = fields + ",\"usage\":" + usage_fields + ",\"output_tokens\":1}"
         lines.push(
           "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{" +
           fields +

@@ -1193,9 +1193,10 @@ test "gemini decode - stream usage and done emitted once" {
 
 ///|
 test "gemini decode - stream fallback done and skipped frames" {
-  // 空流 / 无 data 行 → 无任何可解析帧，仅兜底 Done
-  assert_eq(event_summary(sse_ok("")), "X")
-  assert_eq(event_summary(sse_ok("event: ping\n\n")), "X")
+  // 空流 / 无 data 行 → 无任何可解析帧：CR-003 R2 起仍补一个会话元信息（"?"），
+  // 保证退化流也有协议首帧；其后仅兜底 Done。
+  assert_eq(event_summary(sse_ok("")), "?X")
+  assert_eq(event_summary(sse_ok("event: ping\n\n")), "?X")
   // CR-002 A1：只要存在可解析帧就会先发 ConversationStart（"?"），
   // 因此下列用例由 "X" 变为 "?X"；非法 JSON 帧被跳过后仍以首帧元信息开头。
   assert_eq(
