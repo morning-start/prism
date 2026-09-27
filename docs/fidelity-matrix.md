@@ -136,19 +136,21 @@
 4. **ReasoningEffort 档位**：`minimal`（openai）与 `max`（anthropic）
    在跨端时降级到最近档位并打诊断。
 
-5. **Anthropic `message_start` 的 `output_tokens`**：编码器只输出 `input_tokens`
-   （+ 缓存项），不含官方同时给出的 `output_tokens: 1`；属归一化差异，未修。
-6. **Gemini 空流**：整段输入没有任何可解析帧时不发 `ConversationStart`，故
-   `gemini→messages` 对退化空流不会有 `message_start`（仅异常/空流场景）。
-7. **裸解码仍带帧级 `Done`**：`wasm_sse_to_events` 与各 provider 的 `events_decode`
-   不经会话层，Gemini 的帧级兜底 `Done` 仍出现在其返回值中；自行拼装编码器的消费方
-   需自己保证终止符唯一（`convert_stream` / `StreamConverter` 已保证）。
-8. **StreamConverter 的半帧依赖 `finish()`**：没有结束空行的尾部半帧只在 `finish()`
-   冲刷；宿主若异常终止而不调用 `finish()`，尾部内容与终止符都会缺失。
+5. **裸解码仍带帧级 `Done`（有意保留，非缺陷）**：`wasm_sse_to_events` 与各 provider 的
+   `events_decode` 不经会话层，Gemini 的帧级兜底 `Done` 仍出现在其返回值中。
+   理由：①"本段输入处理完即发 Done"是四个解码器一致的既有契约；②裸解码是原语，
+   替它发明会话级终止语义会与 `convert_stream` 的保证冲突。转换路径的终止符唯一性
+   由会话层保证（见 §3.5）。**若要变更**：需先出 provider 契约提案（`events_decode`
+   不再产 Done），并同步 4 个适配器 + wasm ABI 文档 + 全部 provider 测试。
+6. **StreamConverter 的半帧依赖 `finish()`（有意保留，非缺陷）**：没有结束空行的尾部半帧
+   只在 `finish()` 冲刷。理由：半帧只能由"上游流结束"这一外部信号驱动，转换器无法自行
+   判定上游已断，猜测会引入静默截断风险。**正确用法**：宿主在 `finally` 中调用
+   `conv.finish()`（幂等，见 CR-002 测试 6）。
 
-> CR-002 已修复本节原先的第 5–8 条（Gemini 终止语义 / Gemini 流元信息 /
-> messages 事件序与缓存载体 / 截断流未闭合块），回归见
-> `src/sdk/test/stream_meta_cr002_test.mbt` 与 [`cr/CR-002.md`](cr/CR-002.md)。
+> CR-002 修复了本节原先的第 5–8 条（Gemini 终止语义 / Gemini 流元信息 / messages 事件序
+> 与缓存载体 / 截断流未闭合块），回归见 `src/sdk/test/stream_meta_cr002_test.mbt` 与
+> [`cr/CR-002.md`](cr/CR-002.md)；CR-003 又补齐了 `message_start.output_tokens` 与
+> Gemini 空流首帧（回归 `src/sdk/test/stream_meta_cr003_test.mbt`）。
 
 ## 5. 使用建议（中间件切流前检查单）
 

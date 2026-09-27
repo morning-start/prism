@@ -42,7 +42,7 @@ compilation to reach non-public members).
 - **wasm**: `wasm_test` + `stream_session_test` + `abi_version_test` covering all exports (in `src/wasm/test/`)
 - **internal**: Coverage in `internal/test/` subdirectory（含 T5 SseFrameSplitter 测试）
 
-**Total: 1202 tests passing (native + wasm-gc), 2026-09-21 CR-002 后（`moon test` 全量）。**
+**Total: 1204 tests passing (native + wasm-gc), 2026-09-27 CR-003 后（`moon test` 全量）。**
 
 ## Known Limitations
 
@@ -64,10 +64,21 @@ compilation to reach non-public members).
   缓存计费项未解析；增量路径重复 Finish 把 `message_delta.usage.output_tokens` 覆盖成 0；
   Gemini 源 usage 帧落在 `data: [DONE]` 之后被客户端丢弃；openai 出站流式请求未注入
   `stream_options.include_usage`（上游整条流因此不带 usage）。
-- **残余（CR-002 后收敛，见 [`fidelity-matrix.md`](fidelity-matrix.md) §4 第 5–8 条）**：
-  Anthropic `message_start` 仍不输出 `output_tokens`；Gemini 空流不发首帧；裸解码接口
-  （`wasm_sse_to_events` / `events_decode`）仍带帧级 `Done`；`StreamConverter` 尾部半帧
-  依赖宿主调用 `finish()`。
+- **残余（CR-003 后收敛，见 [`fidelity-matrix.md`](fidelity-matrix.md) §4 第 5–6 条）**：
+  余下两条为**有意保留**：裸解码接口（`wasm_sse_to_events` / `events_decode`）仍带帧级
+  `Done`（保持解码器契约，变更需先出 provider 契约提案）；`StreamConverter` 尾部半帧
+  依赖宿主调用 `finish()`（宿主应在 `finally` 中调用）。
+
+### 残余收敛（CR-003）
+
+- **已修**（回归 `src/sdk/test/stream_meta_cr003_test.mbt`）：
+  ①Anthropic `message_start.usage` 缺 `output_tokens`（首帧语义为 1）——
+  messages 目标现同时给出 `input_tokens`（+ 缓存项）与 `output_tokens: 1`；
+  ②Gemini 输入整段无可解析帧（空流 / 仅非法帧）时不发会话元信息 ⇒ 退化流的
+  `gemini→messages` 缺 `message_start`、`gemini→responses` 缺 `response.created` ——
+  现在同样补发一次首帧（字段缺失为 None）。
+- **决策记录**：R3（裸解码帧级 `Done`）与 R4（半帧依赖 `finish()`）**不改代码**，
+  理由与变更前置条件见 [`fidelity-matrix.md`](fidelity-matrix.md) §4 第 5–6 条。
 
 ### 流式首帧与终止语义（CR-002）
 
