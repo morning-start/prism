@@ -82,11 +82,10 @@ fn cr002_terminator_last(s : String, terminator : String) -> Bool {
 /// 目标协议对应的终止符
 fn cr002_terminator(target : String) -> String {
   if target == "openai" {
-    "[DONE]"
-  } else if target == "messages" {
-    "message_stop"
+    "data: [DONE]"
   } else {
-    "response.completed"
+    // 不能只用 "message_stop"：它在 event 行与 data 行各出现一次
+    "event: message_stop\ndata: {\"type\":\"message_stop\"}"
   }
 }
 

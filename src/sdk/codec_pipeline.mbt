@@ -60,21 +60,19 @@ fn decode_encode_stream(
 ) -> Result[@lux.ConversionResult[String], String] {
   match decode(sse_str) {
     Ok(dcr) => {
-      // CR-001：IR 流以 Done 收尾。Gemini 没有 [DONE] 终止符，且它的 usageMetadata
-      // 帧可能晚于 finishReason 帧（Done 必须排在 usage 之后），因此"以 Done 收尾"
-      // 统一由会话层兜底（此处 + StreamConverter::finish），解码器不再提前发 Done。
+      // CR-002 D5：IR 流的终止符由会话层唯一产生 —— 丢弃解码器在流中途发出的
+      // Done（Gemini 的帧级兜底 Done 会落在 usage / 后续内容之前），末尾统一补
+      // 一个，保证终止符恰好一次且位于最后。
       let events = dcr.value()
-      let mut has_done = false
+      let kept : Array[@lux.LucentStreamEvent] = []
       for ev in events {
         match ev {
-          Done => has_done = true
-          _ => ()
+          Done => ()
+          _ => kept.push(ev)
         }
       }
-      if !has_done {
-        events.push(Done)
-      }
-      match encode(events) {
+      kept.push(Done)
+      match encode(kept) {
         Ok(ecr) => Ok(merge_diagnostics(ecr, dcr.diagnostics()))
         Err(e) => Err(e)
       }
