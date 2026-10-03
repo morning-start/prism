@@ -6,7 +6,7 @@ set -u
 
 cd "$(dirname "$0")/.." || exit 1
 
-pkgs=("lux" "sdk" "wasm" "cmd/main" "internal")
+pkgs=("src/lux" "src/sdk" "src/wasm" "src/cmd/main" "src/internal")
 total=0
 for pkg in "${pkgs[@]}"; do
   mbti="$pkg/pkg.generated.mbti"
