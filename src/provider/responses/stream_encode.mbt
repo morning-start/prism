@@ -26,6 +26,11 @@ pub fn lux_events_to_responses_sse_with_ctx(
   let block_content : Map[Int, Int] = Map([])
   let block_is_tool : Map[Int, Bool] = Map([])
   let block_is_thinking : Map[Int, Bool] = Map([])
+  // 工具块累积：BlockEnd 的 function_call_arguments.done / output_item.done
+  // 需要完整 arguments 与函数名（官方 done 帧携带完整载荷，AI SDK 由此收尾
+  // function_call item；此前恒发空串且从不发 output_item.done）。
+  let block_tool_args : Map[Int, StringBuilder] = Map([])
+  let block_tool_name : Map[Int, String] = Map([])
   let mut next_output_index = 0
   let mut message_output_index : Int = -1 // message item 的 output_index（Thinking 不修改）
   let mut cur_content_index = 0
@@ -183,6 +188,7 @@ pub fn lux_events_to_responses_sse_with_ctx(
           ToolCall(tid, tname) => {
             block_output[idx] = next_output_index
             block_is_tool[idx] = true
+            block_tool_name[idx] = tname
             // AI SDK 依赖 output_item.added 注册 tool call（ongoingToolCalls），
             // 缺少则后续 function_call_arguments.delta 无法归属到工具调用
             let out = next_output_index
@@ -307,7 +313,24 @@ pub fn lux_events_to_responses_sse_with_ctx(
               @internal.json_escape(s) +
               "\"}",
             )
-          ToolArgumentsDelta(s) =>
+          ToolArgumentsDelta(s) => {
+            // 工具块：跨帧累积参数，供 BlockEnd 的 function_call_arguments.done
+            // 与 output_item.done 携带完整 arguments（官方 done 帧携带完整
+            // 载荷；此前恒为空串）
+            match block_is_tool.get(idx) {
+              Some(true) => {
+                let sb = match block_tool_args.get(idx) {
+                  Some(b) => b
+                  None => {
+                    let b = StringBuilder()
+                    block_tool_args[idx] = b
+                    b
+                  }
+                }
+                sb.write_string(s)
+              }
+              _ => ()
+            }
             lines.push(
               "event: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"item_id\":\"" +
               @internal.json_escape(item_id) +
@@ -317,11 +340,14 @@ pub fn lux_events_to_responses_sse_with_ctx(
               @internal.json_escape(s) +
               "\"}",
             )
+          }
           SignatureDelta(s) =>
             // thinking signature → reasoning item 的 encrypted-style signature 字段：
-            // Responses 推理延续凭证，不丢弃（标准 §10.2 reasoning signature）
+            // Responses 推理延续凭证，不丢弃（标准 §10.2 reasoning signature）。
+            // event 名与 data.type 必须一致：AI SDK / OpenAI SDK 按 SSE event 名
+            // 分派，不一致会被当作 unknown event 丢弃。
             lines.push(
-              "event: response.reasoning_summary_text.done\ndata: {\"type\":\"response.reasoning_summary_part.done\",\"item_id\":\"" +
+              "event: response.reasoning_summary_part.done\ndata: {\"type\":\"response.reasoning_summary_part.done\",\"item_id\":\"" +
               @internal.json_escape(item_id) +
               "\",\"output_index\":" +
               out.to_string() +
@@ -358,14 +384,42 @@ pub fn lux_events_to_responses_sse_with_ctx(
           None => "item_" + out.to_string()
         }
         // 按块类型发对应 done 事件（标准 §10.2）：
-        // tool 块 → function_call_arguments.done；thinking 块 → reasoning_summary_part.done；文本块 → output_text.done
+        // tool 块 → function_call_arguments.done + output_item.done；thinking 块 →
+        // reasoning_summary_part.done + output_item.done；文本块 → output_text.done + output_item.done
         if block_is_tool.get(idx) == Some(true) {
+          // BlockStart 起累积的完整参数（此前恒为空串——只读 delta 的消费方
+          // 在 done 帧拿不到任何参数）
+          let args = match block_tool_args.get(idx) {
+            Some(b) => b.to_string()
+            None => ""
+          }
+          let tname = match block_tool_name.get(idx) {
+            Some(n) => n
+            None => ""
+          }
           lines.push(
             "event: response.function_call_arguments.done\ndata: {\"type\":\"response.function_call_arguments.done\",\"item_id\":\"" +
             @internal.json_escape(item_id) +
             "\",\"output_index\":" +
             out.to_string() +
-            ",\"arguments\":\"\"}",
+            ",\"arguments\":\"" +
+            @internal.json_escape(args) +
+            "\"}",
+          )
+          // output_item.done：AI SDK 依赖它结束 function_call item（发 tool-input-end）。
+          // 此前 tools 分支只发 arguments.done，item 悬空永不收尾。
+          lines.push(
+            "event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"output_index\":" +
+            out.to_string() +
+            ",\"item\":{\"id\":\"" +
+            @internal.json_escape(item_id) +
+            "\",\"type\":\"function_call\",\"call_id\":\"" +
+            @internal.json_escape(item_id) +
+            "\",\"name\":\"" +
+            @internal.json_escape(tname) +
+            "\",\"arguments\":\"" +
+            @internal.json_escape(args) +
+            "\"}}",
           )
         } else if block_is_thinking.get(idx) == Some(true) {
           lines.push(

@@ -1524,11 +1524,57 @@ test "encode - stream tool call block synthetic id" {
           "\"item_id\":\"fc_0\",\"output_index\":0,\"delta\":\"{\\\"a\\\":1}\"",
         ),
       )
+      // P1 修复：function_call_arguments.done 携带 BlockStart 起累积的完整
+      // 参数（此前恒为空串，只读 done 帧的消费方拿不到参数）
       assert_true(
         sse.contains(
-          "\"item_id\":\"fc_0\",\"output_index\":0,\"arguments\":\"\"",
+          "\"item_id\":\"fc_0\",\"output_index\":0,\"arguments\":\"{\\\"a\\\":1}\"",
         ),
       )
+      // P1 修复：output_item.done 收尾 function_call item（此前只发
+      // arguments.done，AI SDK 的 item 悬空永不结束）
+      assert_true(
+        sse.contains(
+          "event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"output_index\":0" +
+          ",\"item\":{\"id\":\"fc_0\",\"type\":\"function_call\",\"call_id\":\"fc_0\"" +
+          ",\"name\":\"auto_tool\",\"arguments\":\"{\\\"a\\\":1}\"}}",
+        ),
+      )
+    }
+    Err(e) => fail("encode error: \{e}")
+  }
+}
+
+///|
+/// P1 修复：SignatureDelta 的 SSE event 名与 data.type 必须一致
+/// （此前 event 名为 response.reasoning_summary_text.done 而 type 为
+/// response.reasoning_summary_part.done，按 event 名分发的客户端会丢弃）。
+test "encode - stream signature delta event name matches data type" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new(Some("r_sig"), Some("gpt-5"), None),
+    ),
+    BlockStart(0, @lux.LucentBlockType::thinking()),
+    BlockDelta(0, @lux.LucentBlockDelta::signature_delta("sigdata")),
+    BlockEnd(0),
+    Finish(Stop),
+    Done,
+  ]
+  match lux_events_to_responses_sse(events) {
+    Ok(cr) => {
+      let sse = cr.value()
+      assert_true(
+        sse.contains(
+          "event: response.reasoning_summary_part.done\ndata: {\"type\":\"response.reasoning_summary_part.done\"",
+        ),
+      )
+      // 不再出现 event 名与 type 不一致的旧形态
+      assert_true(
+        !sse.contains(
+          "event: response.reasoning_summary_text.done\ndata: {\"type\":\"response.reasoning_summary_part.done\"",
+        ),
+      )
+      assert_true(sse.contains("\"signature\":\"sigdata\""))
     }
     Err(e) => fail("encode error: \{e}")
   }
