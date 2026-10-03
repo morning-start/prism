@@ -35,6 +35,8 @@ function Get-SourceEnums([string]$Text) {
 
 function Convert-ToWireName([string]$Name) {
   if ($Name -eq "MCP") { return "mcp" }
+  # XHigh 的 wire 名是 "xhigh"（LucentReasoningEffort::to_string），非蛇形转换结果
+  if ($Name -eq "XHigh") { return "xhigh" }
   return ([regex]::Replace($Name, "(?<!^)(?=[A-Z])", "_")).ToLowerInvariant()
 }
 
@@ -83,7 +85,8 @@ function Get-AdapterExpectedFields([string]$Adapter) {
     "openai" = @("model","messages","max_tokens","temperature","top_p","stop","stream","store",
       "response_format","tool_choice","tools","reasoning_effort","role","content","name",
       "tool_call_id","tool_calls","refusal","type","text","image_url","url","function","id",
-      "arguments","description","parameters","strict","parallel_tool_calls","schema","json_schema")
+      "arguments","description","parameters","strict","parallel_tool_calls","schema","json_schema",
+      "stream_options","include_usage")
     "messages" = @("model","system","messages","max_tokens","temperature","top_p","top_k",
       "stop_sequences","stream","metadata","tools","tool_choice","thinking","output_config",
       "type","text","signature","thinking","id","name","input","is_error","tool_use_id",
