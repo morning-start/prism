@@ -398,6 +398,8 @@ fn lux_effort_to_gemini_level(e : @lux.LucentReasoningEffort) -> (String, Bool) 
     Medium => ("medium", false)
     High => ("high", false)
     XHigh => ("high", true)
+    // 未知档位（跨 provider 原样保留的 Native 值）：透传字符串，标记降级
+    Native(tag) => (tag, true)
   }
 }
 

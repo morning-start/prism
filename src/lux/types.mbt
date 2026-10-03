@@ -372,11 +372,13 @@ pub extend LucentTool with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// LucentToolChoice — 工具选择（类型化）
+/// Native(String)：未知 tool_choice 值原样保留（与 Role/ToolKind 等一致）
 pub(all) enum LucentToolChoice {
   Auto
   None
   Required
   SpecificTool(String)
+  Native(String)
 } derive(Eq, Debug)
 
 ///|
@@ -395,10 +397,12 @@ pub extend LucentToolChoice with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// LucentStructuredOutput — 结构化输出
+/// Native(String)：未知 structured_output 值原样保留
 pub(all) enum LucentStructuredOutput {
   JsonObject
   Text
   JsonSchema(String)
+  Native(String)
 } derive(Eq, Debug)
 
 ///|
@@ -449,11 +453,13 @@ pub extend LucentOptions with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// LucentReasoningEffort — 推理力度
+/// Native(String)：未知档位原样保留（跨 provider 档位漂移不丢数据）
 pub(all) enum LucentReasoningEffort {
   Low
   Medium
   High
   XHigh
+  Native(String)
 } derive(Eq, Debug)
 
 ///|
@@ -472,10 +478,12 @@ pub extend LucentReasoningEffort with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// LucentReasoningSummary — 推理摘要详细度
+/// Native(String)：未知详细度值原样保留
 pub(all) enum LucentReasoningSummary {
   Auto
   Concise
   Detailed
+  Native(String)
 } derive(Eq, Debug)
 
 ///|

@@ -396,18 +396,22 @@ pub(all) enum LucentReasoningEffort {
   Medium
   High
   XHigh
+  Native(String)
 } derive(Eq, @debug.Debug)
 pub fn LucentReasoningEffort::equal(Self, Self) -> Bool
 pub fn LucentReasoningEffort::from_json(Json) -> Result[Self, String]
+pub fn LucentReasoningEffort::to_json(Self) -> Json
 pub fn LucentReasoningEffort::to_string(Self) -> String
 
 pub(all) enum LucentReasoningSummary {
   Auto
   Concise
   Detailed
+  Native(String)
 } derive(Eq, @debug.Debug)
 pub fn LucentReasoningSummary::equal(Self, Self) -> Bool
 pub fn LucentReasoningSummary::from_json(Json) -> Result[Self, String]
+pub fn LucentReasoningSummary::to_json(Self) -> Json
 
 pub struct LucentRequest {
   schema_version : String
@@ -495,6 +499,7 @@ pub(all) enum LucentStructuredOutput {
   JsonObject
   Text
   JsonSchema(String)
+  Native(String)
 } derive(Eq, @debug.Debug)
 pub fn LucentStructuredOutput::equal(Self, Self) -> Bool
 pub fn LucentStructuredOutput::from_json(Json) -> Result[Self, String]
@@ -531,6 +536,7 @@ pub(all) enum LucentToolChoice {
   None
   Required
   SpecificTool(String)
+  Native(String)
 } derive(Eq, @debug.Debug)
 pub fn LucentToolChoice::equal(Self, Self) -> Bool
 pub fn LucentToolChoice::from_json(Json) -> Result[Self, String]

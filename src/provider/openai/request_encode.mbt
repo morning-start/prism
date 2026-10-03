@@ -12,7 +12,10 @@ fn role_to_string(role : @lux.LucentRole) -> String {
 
 ///|
 /// 工具选择 → JSON 片段
-fn tool_choice_to_json(tc : @lux.LucentToolChoice) -> String {
+fn tool_choice_to_json(
+  tc : @lux.LucentToolChoice,
+  diagnostics : Array[@lux.ConversionDiagnostic],
+) -> String {
   match tc {
     Auto => "\"auto\""
     None => "\"none\""
@@ -21,6 +24,17 @@ fn tool_choice_to_json(tc : @lux.LucentToolChoice) -> String {
       "{\"type\":\"function\",\"function\":{\"name\":\"" +
       @internal.json_escape(name) +
       "\"}}"
+    // 未知 tool_choice（其他 provider 原生值经 IR Native 保留）：openai
+    // 无对应项，显式 Unsupported 而非静默回退 Auto
+    Native(tag) => {
+      diagnostics.push(
+        @lux.ConversionDiagnostic::unsupported(
+          "tool_choice",
+          Some("native tool_choice (" + tag + ") not supported by openai-chat"),
+        ),
+      )
+      "\"auto\""
+    }
   }
 }
 
@@ -348,7 +362,8 @@ pub fn lux_request_to_openai(
   }
   // tool_choice
   match req.tool_choice {
-    Some(tc) => parts.push("\"tool_choice\":" + tool_choice_to_json(tc))
+    Some(tc) =>
+      parts.push("\"tool_choice\":" + tool_choice_to_json(tc, diagnostics))
     None => ()
   }
   // options
@@ -427,6 +442,19 @@ pub fn lux_request_to_openai(
         "}}",
       )
     }
+    // 未知 structured_output（其他 provider 原生值经 IR Native 保留）：
+    // openai 无对应 response_format，显式 Unsupported
+    Some(Native(tag)) =>
+      diagnostics.push(
+        @lux.ConversionDiagnostic::unsupported(
+          "options.structured_output",
+          Some(
+            "native structured_output (" +
+            tag +
+            ") not supported by openai-chat",
+          ),
+        ),
+      )
     None => ()
   }
   match opts.store {

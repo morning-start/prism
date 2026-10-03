@@ -49,7 +49,9 @@ pub fn LucentToolChoice::from_json(
         "auto" => Ok(Auto)
         "none" => Ok(None)
         "required" => Ok(Required)
-        _ => Err("unknown tool_choice")
+        // 未知字符串值 → Native 原样保留（治理：未知值不得丢失；此前直接
+        // Err，再被 request 层软失败吞成 None=无约束，语义反转）
+        other => Ok(Native(other))
       }
     Object(m) =>
       match m.get("type") {
@@ -59,7 +61,13 @@ pub fn LucentToolChoice::from_json(
             Some(_) => Err("expected string for name")
             None => Err("missing name for specific_tool")
           }
-        Some(_) => Err("expected string for type")
+        Some(String(other)) =>
+          // 未知对象 type：保留 type 串（name 若有则并入，逗号分隔）
+          match m.get("name") {
+            Some(String(nm)) => Ok(Native(other + "," + nm))
+            _ => Ok(Native(other))
+          }
+        Some(_) => Err("expected string for type in tool_choice object")
         None => Err("missing type in tool_choice object")
       }
     _ => Err("expected string or object for LucentToolChoice")
@@ -76,7 +84,9 @@ pub fn LucentStructuredOutput::from_json(
       match s {
         "json_object" => Ok(JsonObject)
         "text" => Ok(Text)
-        _ => Err("unknown structured_output")
+        // 未知字符串值 → Native 原样保留（此前 Err → 被 options 层软失败
+        // 吞成 None，结构化输出配置静默消失）
+        other => Ok(Native(other))
       }
     Object(m) =>
       match m.get("type") {
@@ -85,7 +95,13 @@ pub fn LucentStructuredOutput::from_json(
             Some(schema) => Ok(JsonSchema(schema.stringify()))
             None => Err("missing schema for json_schema")
           }
-        Some(_) => Err("expected string for type")
+        Some(String(other)) =>
+          // 未知对象 type：保留 type 串，schema 若存在则附在冒号后
+          match m.get("schema") {
+            Some(schema) => Ok(Native(other + ":" + schema.stringify()))
+            None => Ok(Native(other))
+          }
+        Some(_) => Err("expected string for type in structured_output object")
         None => Err("missing type in structured_output object")
       }
     _ => Err("expected string or object for LucentStructuredOutput")

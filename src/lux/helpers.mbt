@@ -284,12 +284,14 @@ pub fn LucentFinishReason::to_string(self : LucentFinishReason) -> String {
 /// 出站侧 openai / messages / responses 三处使用完全相同的档位名
 /// （"low"/"medium"/"high"/"xhigh"），集中于此避免重复 match。
 /// gemini 的降级映射（XHigh → ("high", true)）语义不同，保留在 adapter。
+/// Native(tag) 原样透传（未知档位不丢数据）。
 pub fn LucentReasoningEffort::to_string(self : LucentReasoningEffort) -> String {
   match self {
     Low => "low"
     Medium => "medium"
     High => "high"
     XHigh => "xhigh"
+    Native(tag) => tag
   }
 }
 

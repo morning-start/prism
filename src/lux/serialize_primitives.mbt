@@ -297,6 +297,8 @@ pub fn LucentToolChoice::to_json(self : LucentToolChoice) -> Json {
         "type": Json::string("specific_tool"),
         "name": Json::string(name),
       })
+    // Native 原样回写（from_json 以同形读回）
+    Native(tag) => Json::string(tag)
   }
 }
 
@@ -309,6 +311,8 @@ pub fn LucentStructuredOutput::to_json(self : LucentStructuredOutput) -> Json {
       let schema = @json.parse(schema_str) catch { _ => Json::object(Map([])) }
       Json::object({ "type": Json::string("json_schema"), "schema": schema })
     }
+    // Native 原样回写（from_json 以同形读回）
+    Native(tag) => Json::string(tag)
   }
 }
 
@@ -361,6 +365,29 @@ pub fn LucentOptions::to_json(self : LucentOptions) -> Json {
 }
 
 ///|
+pub fn LucentReasoningEffort::to_json(self : LucentReasoningEffort) -> Json {
+  match self {
+    Low => Json::string("low")
+    Medium => Json::string("medium")
+    High => Json::string("high")
+    XHigh => Json::string("xhigh")
+    // 未知档位原样回写（from_json 以同形读回）
+    Native(tag) => Json::string(tag)
+  }
+}
+
+///|
+pub fn LucentReasoningSummary::to_json(self : LucentReasoningSummary) -> Json {
+  match self {
+    Auto => Json::string("auto")
+    Concise => Json::string("concise")
+    Detailed => Json::string("detailed")
+    // 未知详细度原样回写（from_json 以同形读回）
+    Native(tag) => Json::string(tag)
+  }
+}
+
+///|
 pub fn LucentReasoningConfig::to_json(self : LucentReasoningConfig) -> Json {
   let fields : Map[String, Json] = { "enabled": self.enabled.to_json() }
   match self.budget_tokens {
@@ -368,22 +395,11 @@ pub fn LucentReasoningConfig::to_json(self : LucentReasoningConfig) -> Json {
     None => ()
   }
   match self.effort {
-    Some(e) =>
-      fields["effort"] = match e {
-        Low => Json::string("low")
-        Medium => Json::string("medium")
-        High => Json::string("high")
-        XHigh => Json::string("xhigh")
-      }
+    Some(e) => fields["effort"] = e.to_json()
     None => ()
   }
   match self.summary {
-    Some(s) =>
-      fields["summary"] = match s {
-        Auto => Json::string("auto")
-        Concise => Json::string("concise")
-        Detailed => Json::string("detailed")
-      }
+    Some(s) => fields["summary"] = s.to_json()
     None => ()
   }
   Json::object(fields)

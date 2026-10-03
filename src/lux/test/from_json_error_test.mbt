@@ -94,8 +94,10 @@ test "@lux.LucentTool from_json - malformed inputs reject" {
 
 ///|
 test "@lux.LucentToolChoice from_json - malformed inputs reject" {
+  // 非字符串/形状错误仍拒绝；未知 tool_choice 字符串值不再 Err（P1-2：
+  // Native 兜底保留原值，避免被 request 层软失败吞成 None=无约束）
   let invalid : Array[String] = [
-    "\"bad\"", "null", "{\"type\":\"specific_tool\"}", "{\"type\":\"specific_tool\",\"name\":42}",
+    "null", "{\"type\":\"specific_tool\"}", "{\"type\":\"specific_tool\",\"name\":42}",
     "{\"name\":\"x\"}",
   ]
   for s in invalid {
@@ -107,10 +109,25 @@ test "@lux.LucentToolChoice from_json - malformed inputs reject" {
 }
 
 ///|
+test "@lux.LucentToolChoice from_json - unknown string preserved as Native" {
+  match @lux.LucentToolChoice::from_json(@json.parse("\"bad\"")) {
+    Ok(@lux.LucentToolChoice::Native(tag)) => assert_eq(tag, "bad")
+    _ => fail("unknown tool_choice must be preserved as Native")
+  }
+  // round-trip 对称
+  match
+    @lux.LucentToolChoice::from_json(
+      @lux.LucentToolChoice::Native("bad").to_json(),
+    ) {
+    Ok(@lux.LucentToolChoice::Native(tag)) => assert_eq(tag, "bad")
+    _ => fail("Native tool_choice round-trip broken")
+  }
+}
+
+///|
 test "@lux.LucentStructuredOutput from_json - malformed inputs reject" {
-  let invalid : Array[String] = [
-    "\"unknown\"", "null", "{\"type\":\"json_schema\"}",
-  ]
+  // 形状错误拒绝；未知字符串值不再 Err（P1-2：Native 兜底）
+  let invalid : Array[String] = ["null", "{\"type\":\"json_schema\"}"]
   for s in invalid {
     match @lux.LucentStructuredOutput::from_json(@json.parse(s)) {
       Ok(_) => fail("expected Err for input: \{s}")
@@ -120,8 +137,25 @@ test "@lux.LucentStructuredOutput from_json - malformed inputs reject" {
 }
 
 ///|
+test "@lux.LucentStructuredOutput from_json - unknown string preserved as Native" {
+  match @lux.LucentStructuredOutput::from_json(@json.parse("\"unknown\"")) {
+    Ok(@lux.LucentStructuredOutput::Native(tag)) => assert_eq(tag, "unknown")
+    _ => fail("unknown structured_output must be preserved as Native")
+  }
+  match
+    @lux.LucentStructuredOutput::from_json(
+      @lux.LucentStructuredOutput::Native("unknown").to_json(),
+    ) {
+    Ok(@lux.LucentStructuredOutput::Native(tag)) => assert_eq(tag, "unknown")
+    _ => fail("Native structured_output round-trip broken")
+  }
+}
+
+///|
 test "@lux.LucentReasoningEffort from_json - malformed inputs reject" {
-  let invalid : Array[String] = ["\"ultra\"", "42"]
+  // 类型错误拒绝；未知档位串不再 Err（P1-2：Native 兜底——gpt-5 家族
+  // "minimal" 等厂商值此前被静默吞掉）
+  let invalid : Array[String] = ["42"]
   for s in invalid {
     match @lux.LucentReasoningEffort::from_json(@json.parse(s)) {
       Ok(_) => fail("expected Err for input: \{s}")
@@ -131,13 +165,44 @@ test "@lux.LucentReasoningEffort from_json - malformed inputs reject" {
 }
 
 ///|
+test "@lux.LucentReasoningEffort from_json - unknown tier preserved as Native" {
+  match @lux.LucentReasoningEffort::from_json(@json.parse("\"ultra\"")) {
+    Ok(@lux.LucentReasoningEffort::Native(tag)) => assert_eq(tag, "ultra")
+    _ => fail("unknown effort tier must be preserved as Native")
+  }
+  match
+    @lux.LucentReasoningEffort::from_json(
+      @lux.LucentReasoningEffort::Native("ultra").to_json(),
+    ) {
+    Ok(@lux.LucentReasoningEffort::Native(tag)) => assert_eq(tag, "ultra")
+    _ => fail("Native effort round-trip broken")
+  }
+}
+
+///|
 test "@lux.LucentReasoningSummary from_json - malformed inputs reject" {
-  let invalid : Array[String] = ["\"verbose\"", "null"]
+  // 类型错误拒绝；未知详细度串不再 Err（P1-2：Native 兜底）
+  let invalid : Array[String] = ["null"]
   for s in invalid {
     match @lux.LucentReasoningSummary::from_json(@json.parse(s)) {
       Ok(_) => fail("expected Err for input: \{s}")
       Err(_) => ()
     }
+  }
+}
+
+///|
+test "@lux.LucentReasoningSummary from_json - unknown detail preserved as Native" {
+  match @lux.LucentReasoningSummary::from_json(@json.parse("\"verbose\"")) {
+    Ok(@lux.LucentReasoningSummary::Native(tag)) => assert_eq(tag, "verbose")
+    _ => fail("unknown summary detail must be preserved as Native")
+  }
+  match
+    @lux.LucentReasoningSummary::from_json(
+      @lux.LucentReasoningSummary::Native("verbose").to_json(),
+    ) {
+    Ok(@lux.LucentReasoningSummary::Native(tag)) => assert_eq(tag, "verbose")
+    _ => fail("Native summary round-trip broken")
   }
 }
 
@@ -909,17 +974,19 @@ test "@lux.LucentReasoningSummary from_json - all documented levels accepted" {
 }
 
 ///|
-test "@lux.LucentReasoningConfig from_json - unparseable effort and summary fall back to absent" {
+test "@lux.LucentReasoningConfig from_json - unknown effort and summary preserved as Native" {
+  // P1-2：未知档位/详细度不再软失败为 None（推理配置静默丢失），经
+  // Native 兜底保留原值
   match
     @lux.LucentReasoningConfig::from_json(
       @json.parse("{\"enabled\":true,\"effort\":\"bogus\"}"),
     ) {
     Ok(c) =>
       match c.effort {
-        Some(_) => fail("expected effort to fall back to None")
-        None => ()
+        Some(@lux.LucentReasoningEffort::Native(tag)) => assert_eq(tag, "bogus")
+        _ => fail("expected effort preserved as Native(\"bogus\")")
       }
-    Err(e) => fail("expected Ok for reasoning config with invalid effort: \{e}")
+    Err(e) => fail("expected Ok for reasoning config with unknown effort: \{e}")
   }
   match
     @lux.LucentReasoningConfig::from_json(
@@ -927,11 +994,12 @@ test "@lux.LucentReasoningConfig from_json - unparseable effort and summary fall
     ) {
     Ok(c) =>
       match c.summary {
-        Some(_) => fail("expected summary to fall back to None")
-        None => ()
+        Some(@lux.LucentReasoningSummary::Native(tag)) =>
+          assert_eq(tag, "bogus")
+        _ => fail("expected summary preserved as Native(\"bogus\")")
       }
     Err(e) =>
-      fail("expected Ok for reasoning config with invalid summary: \{e}")
+      fail("expected Ok for reasoning config with unknown summary: \{e}")
   }
 }
 
@@ -962,18 +1030,20 @@ test "@lux.LucentOptions from_json - store false and non-string stop entries" {
 }
 
 ///|
-test "@lux.LucentOptions from_json - invalid structured_output and extras" {
+test "@lux.LucentOptions from_json - unknown structured_output preserved as Native" {
+  // P1-2：未知 structured_output 不再软失败为 None，Native 兜底保留原值
   match
     @lux.LucentOptions::from_json(
       @json.parse("{\"stream\":false,\"structured_output\":\"bogus\"}"),
     ) {
     Ok(o) =>
       match o.structured_output {
-        Some(_) => fail("expected structured_output to fall back to None")
-        None => ()
+        Some(@lux.LucentStructuredOutput::Native(tag)) =>
+          assert_eq(tag, "bogus")
+        _ => fail("expected structured_output preserved as Native(\"bogus\")")
       }
     Err(e) =>
-      fail("expected Ok for options with invalid structured_output: \{e}")
+      fail("expected Ok for options with unknown structured_output: \{e}")
   }
   match
     @lux.LucentOptions::from_json(
@@ -1048,9 +1118,11 @@ test "@lux.LucentRequest from_json - optional fields soft-fail to absent" {
         Some(_) => fail("expected tools to fall back to None")
         None => ()
       }
+      // P1-2：未知 tool_choice 字符串值经 Native 兜底保留（不再软失败为
+      // None=无约束——那会把"限定工具"的请求悄悄变成自由调用）
       match r.tool_choice {
-        Some(_) => fail("expected tool_choice to fall back to None")
-        None => ()
+        Some(@lux.LucentToolChoice::Native(tag)) => assert_eq(tag, "bogus")
+        _ => fail("expected tool_choice preserved as Native(\"bogus\")")
       }
       match r.capabilities {
         Some(_) => fail("expected capabilities to fall back to None")

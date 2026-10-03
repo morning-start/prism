@@ -418,6 +418,15 @@ pub fn lux_request_to_gemini(
         @internal.json_escape(name) +
         "\"]}}",
       )
+    // 未知 tool_choice（其他 provider 的原生值经 IR Native 保留）：Gemini
+    // mode 三枚举无对应项，显式 Unsupported 而非静默回退 Auto
+    Some(Native(_)) =>
+      diagnostics.push(
+        @lux.ConversionDiagnostic::unsupported(
+          "tool_choice",
+          Some("native tool_choice has no gemini functionCallingConfig mode"),
+        ),
+      )
     None => ()
   }
   // generationConfig

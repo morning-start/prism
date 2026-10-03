@@ -346,6 +346,12 @@ pub fn lux_request_to_responses(
           Some(Auto) => rf = append_field(rf, "\"summary\":\"auto\"")
           Some(Concise) => rf = append_field(rf, "\"summary\":\"concise\"")
           Some(Detailed) => rf = append_field(rf, "\"summary\":\"detailed\"")
+          // 未知详细度（其他 provider 原生值经 IR Native 保留）：透传字符串
+          Some(Native(tag)) =>
+            rf = append_field(
+              rf,
+              "\"summary\":\"" + @internal.json_escape(tag) + "\"",
+            )
           None => ()
         }
       }
@@ -365,6 +371,17 @@ pub fn lux_request_to_responses(
         "\"text\":{\"format\":{\"type\":\"json_schema\",\"schema\":" +
         schema +
         "}}",
+      )
+    // 未知 structured_output（其他 provider 原生值经 IR Native 保留）：
+    // responses 无对应 format，显式 Unsupported
+    Some(Native(tag)) =>
+      diagnostics.push(
+        @lux.ConversionDiagnostic::unsupported(
+          "options.structured_output",
+          Some(
+            "native structured_output (" + tag + ") not supported by responses",
+          ),
+        ),
       )
     None => ()
   }

@@ -15,7 +15,9 @@ pub fn LucentReasoningEffort::from_json(
         "medium" => Ok(Medium)
         "high" => Ok(High)
         "xhigh" => Ok(XHigh)
-        _ => Err("unknown reasoning effort")
+        // 未知档位 → Native 原样保留（此前 Err 被 reasoning 层软失败吞成
+        // None，推理配置静默丢失——gpt-5 家族 "minimal" 等即触发）
+        other => Ok(Native(other))
       }
     _ => Err("expected string for LucentReasoningEffort")
   }
@@ -32,7 +34,8 @@ pub fn LucentReasoningSummary::from_json(
         "auto" => Ok(Auto)
         "concise" => Ok(Concise)
         "detailed" => Ok(Detailed)
-        _ => Err("unknown reasoning summary")
+        // 未知详细度 → Native 原样保留（此前 Err 被软失败吞成 None）
+        other => Ok(Native(other))
       }
     _ => Err("expected string for LucentReasoningSummary")
   }
