@@ -47,6 +47,10 @@ test "LucentFinishReason from_string variants" {
     LucentFinishReason::from_string("malformed_function_call")
     is MalformedToolCall,
   )
+  // schema 法定值（P0-3 修复后 to_string 的输出值）
+  assert_true(
+    LucentFinishReason::from_string("malformed_tool_call") is MalformedToolCall,
+  )
   assert_true(LucentFinishReason::from_string("error") is Error)
   match LucentFinishReason::from_string("custom_vendor") {
     Native(s) => assert_eq(s, "custom_vendor")
@@ -62,7 +66,7 @@ test "LucentFinishReason to_string" {
   assert_eq(LucentFinishReason::ContentFilter.to_string(), "content_filter")
   assert_eq(Safety.to_string(), "safety")
   assert_eq(Recitation.to_string(), "recitation")
-  assert_eq(MalformedToolCall.to_string(), "malformed_function_call")
+  assert_eq(MalformedToolCall.to_string(), "malformed_tool_call")
   assert_eq(LucentFinishReason::Error.to_string(), "error")
 }
 

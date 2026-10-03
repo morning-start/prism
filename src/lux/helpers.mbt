@@ -250,7 +250,11 @@ pub fn LucentFinishReason::from_string(s : String) -> LucentFinishReason {
     "content_filter" => ContentFilter
     "SAFETY" | "safety" => Safety
     "RECITATION" | "recitation" => Recitation
-    "MALFORMED_FUNCTION_CALL" | "malformed_function_call" => MalformedToolCall
+    // malformed_tool_call 是 schema 法定值；malformed_function_call 为
+    // 历史笔误的兼容读取（曾按此值输出，旧文档/对端可能仍在用）
+    "MALFORMED_FUNCTION_CALL"
+    | "malformed_function_call"
+    | "malformed_tool_call" => MalformedToolCall
     "error" | "failed" | "ERROR" => Error
     other => Native(other)
   }
@@ -265,7 +269,10 @@ pub fn LucentFinishReason::to_string(self : LucentFinishReason) -> String {
     ContentFilter => "content_filter"
     Safety => "safety"
     Recitation => "recitation"
-    MalformedToolCall => "malformed_function_call"
+    // 与 schemas/lux-ir-v1.json 的枚举值一致（曾误输出
+    // "malformed_function_call"，按 schema 校验的对端会拒绝本实现
+    // 的文档；from_string 仍兼容旧拼写）
+    MalformedToolCall => "malformed_tool_call"
     Error => "error"
     Native(s) => s
   }
