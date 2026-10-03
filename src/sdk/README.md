@@ -27,6 +27,12 @@
 | `pipeline.mbt` | Prism 门面内部方法（encode/decode 样板，从自身 provider 出发） |
 | `codec_pipeline.mbt` | 通用 decode→IR→encode 管线（任意 source→target，无状态） |
 
+### 3.5 stream session（增量解码会话，首字实时）
+
+| 文件 | 内容 |
+|---|---|
+| `event_stream.mbt` | `Prism::stream_session` 拉式会话（feed/finish）+ `EventNormalizer` 跨帧规整器（与 StreamConverter 共享）+ `PrismEventBuffer` 工具参数跨帧累积 |
+
 ### 4. convert（跨协议中转）
 
 | 文件 | 内容 |

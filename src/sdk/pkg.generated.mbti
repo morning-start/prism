@@ -146,6 +146,8 @@ pub(all) enum DiagnosticPolicy {
 } derive(Eq, @debug.Debug)
 pub fn DiagnosticPolicy::equal(Self, Self) -> Bool
 
+type EventNormalizer
+
 pub struct FieldConstraint {
   min_val : Double?
   max_val : Double?
@@ -174,6 +176,7 @@ pub fn Prism::endpoint(Self, String) -> SdkProviderEndpoint?
 pub fn Prism::events_to_context(Self, Context, Array[PrismEvent]) -> Context
 pub fn Prism::new() -> Self
 pub fn Prism::stream(Self, Context, (String) -> Result[String, String]) -> Result[Array[PrismEvent], String]
+pub fn Prism::stream_session(Self) -> Result[PrismStreamSession, String]
 pub fn Prism::with_provider(Self, String) -> Self
 
 pub struct PrismError {
@@ -195,6 +198,8 @@ pub(all) enum PrismEvent {
   Thinking(PrismThinking)
   Finish(PrismFinishReason)
 }
+
+type PrismEventBuffer
 
 pub(all) enum PrismFinishReason {
   Stop
@@ -222,6 +227,15 @@ pub fn PrismOptions::with_parallel_tool_calls(Self, Bool) -> Self
 pub fn PrismOptions::with_reasoning(Self, Bool?, @lux.LucentReasoningEffort?) -> Self
 pub fn PrismOptions::with_structured_output(Self, @lux.LucentStructuredOutput) -> Self
 pub fn PrismOptions::with_tool_choice(Self, @lux.LucentToolChoice) -> Self
+
+pub struct PrismStreamSession {
+  reg : ProviderRegistration
+  splitter : @internal.SseFrameSplitter
+  normalizer : EventNormalizer
+  events : PrismEventBuffer
+}
+pub fn PrismStreamSession::feed(Self, String) -> Result[Array[PrismEvent], String]
+pub fn PrismStreamSession::finish(Self) -> Result[Array[PrismEvent], String]
 
 pub struct PrismThinking {
   text : String
@@ -328,10 +342,8 @@ pub struct StreamConverter {
   source : ProviderRegistration
   target : ProviderRegistration
   splitter : @internal.SseFrameSplitter
-  mut stream_ctx : @lux.LucentConversationMeta?
-  mut open_blocks : Array[Int]
+  normalizer : EventNormalizer
   mut held_events : Array[@lux.LucentStreamEvent]
-  mut finish_seen : Bool
   mut closed : Bool
 }
 pub fn StreamConverter::feed(Self, String) -> Result[Array[String], String]

@@ -37,12 +37,18 @@ live in a dedicated `test/` subpackage (`import ... for "test"`); **whitebox**
 compilation to reach non-public members).
 
 - **lux**: Whitebox (`lux_wbtest`, `serialize_wbtest`, `deserialize_wbtest`, `diagnostics_json_wbtest` in `src/lux/`) + blackbox (`lux_test`, `from_json_error_test`, `snapshot_test` in `src/lux/test/`) — extensive
-- **sdk**: Cross-protocol (`cross_protocol_test`), convert matrix (`convert_matrix_test`), registry (`provider_registry_wbtest`, `dynamic_registry_wbtest`), integration (`sdk_test`, `convert_test`), iteration-009 新增：`context_toolcall_test` / `events_to_context_test` / `options_ext_test` / `hooks_test` / `stream_converter_test` / `error_typed_test` / `snapshot_store_test` / `diagnostics_policy_test` — blackbox in `src/sdk/test/`
+- **sdk**: Cross-protocol (`cross_protocol_test`), convert matrix (`convert_matrix_test`), registry (`provider_registry_wbtest`, `dynamic_registry_wbtest`), integration (`sdk_test`, `convert_test`), iteration-009 新增：`context_toolcall_test` / `events_to_context_test` / `options_ext_test` / `hooks_test` / `stream_converter_test` / `error_typed_test` / `snapshot_store_test` / `diagnostics_policy_test` — blackbox in `src/sdk/test/`；首字实时增量解码会话：`stream_session_test`（`Prism::stream_session`，逐 chunk feed 即时产出事件，与整批 `decode_sse` 等价）
 - **provider/\***: Each adapter has whitebox `_wbtest` (package dir) + blackbox `_test` (`test/` subpackage)
 - **wasm**: `wasm_test` + `stream_session_test` + `abi_version_test` covering all exports (in `src/wasm/test/`)
 - **internal**: Coverage in `internal/test/` subdirectory（含 T5 SseFrameSplitter 测试）
 
-**Total: 1204 tests passing (native + wasm-gc), 2026-09-27 CR-003 后（`moon test` 全量）。**
+**Total: 1210 tests passing (native + wasm-gc), 2026-10-03 stream_session 后（`moon test` 全量）。**
+
+### 实时流式（首字延迟）
+
+- **Agent SDK 门面**：`Prism::stream_session()`（拉式会话）——`feed(chunk)` 收到一个上游 chunk 即返回其中完整帧解出的 `PrismEvent`，首字延迟 = 首个完整 SSE 帧；`finish()` 冲刷尾部半帧并闭合未完块（幂等）。与整批 `decode_sse` 事件序列等价（测试锁定），工具调用参数跨帧累积。源码：`src/sdk/event_stream.mbt`。
+- **中转 middleware**：`StreamConverter`（逐帧 source→target，T5）与 WASM 会话 ABI `wasm_stream_new/feed/finish`（T5/CR-002）本已实时。
+- 终止符契约（CR-002）不变：`finish()` 必须在流结束时调用（建议宿主 `finally`）。
 
 ## Known Limitations
 

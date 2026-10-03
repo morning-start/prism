@@ -195,22 +195,13 @@ pub struct StreamConverter {
   source : ProviderRegistration
   target : ProviderRegistration
   splitter : @internal.SseFrameSplitter
-  /// 跨帧会话元信息（首个 ConversationStart 出现后持续复用）
-  mut stream_ctx : @lux.LucentConversationMeta?
-  /// 跨帧块状态：当前打开的 block_index 有序集合。
-  /// source 解码器每次调用是无跨帧状态的（openai 每帧重发 BlockStart、
-  /// finish 帧丢 BlockEnd），转换器据此过滤重复/孤儿块事件并合成
-  /// 缺失的 BlockEnd，使逐帧解码序列与整缓冲解码一致。
-  mut open_blocks : Array[Int]
+  /// 跨帧解码侧规整器（块去重/Finish 去重/usage 回填/Done 丢弃），
+  /// 与 Prism::stream_session 共享同一实现（event_stream.mbt）。
+  normalizer : EventNormalizer
   /// Finish 帧保持：推迟一帧发射，让紧随其后的 Usage 帧并入同一次
   /// 编码（messages 编码器把 Finish+Usage 合并为单条 message_delta），
   /// 保证逐帧输出与整缓冲输出逐字节一致。
   mut held_events : Array[@lux.LucentStreamEvent]
-  /// CR-001 D2：会话级 Finish 去重。messages 解码器在 message_stop 帧内会补发
-  /// Finish（该帧内看不到前面的 message_delta），逐帧路径下与 message_delta 帧
-  /// 的 Finish 重复 —— 目标端会多出 finish_reason 帧，或把 message_delta 的
-  /// usage 覆盖成 0。同一会话只保留首个 Finish。
-  mut finish_seen : Bool
   /// CR-002 D5：会话是否已收尾（`finish()` 幂等）。终止符由会话层唯一产生：
   /// 解码器在流中途发出的 Done 一律丢弃（Gemini 的帧级兜底 Done 会落在
   /// usage/内容之前），`finish()` 在最后补且仅补一个终止符。
@@ -229,10 +220,8 @@ pub fn StreamConverter::new(
         source: src,
         target: dst,
         splitter: @internal.SseFrameSplitter::new(),
-        stream_ctx: None,
-        open_blocks: [],
+        normalizer: EventNormalizer::new(),
         held_events: [],
-        finish_seen: false,
         closed: false,
       })
     Err(e) => Err(e)
@@ -270,12 +259,12 @@ pub fn StreamConverter::finish(
       self.held_events = []
       // CR-002 A5：截断流（整场没有 Finish）仍打开的块在此闭合 —— 否则 messages
       // 目标会留下未闭合的 content_block。逆序闭合与整缓冲路径的栈语义一致。
-      let mut k = self.open_blocks.length() - 1
+      let mut k = self.normalizer.open_blocks.length() - 1
       while k >= 0 {
-        pending.push(BlockEnd(self.open_blocks[k]))
+        pending.push(BlockEnd(self.normalizer.open_blocks[k]))
         k = k - 1
       }
-      self.open_blocks = []
+      self.normalizer.open_blocks = []
       if pending.length() > 0 {
         match self.encode_events(pending) {
           Ok(sse) => if sse.trim().length() > 0 { emitted.push(sse) }
@@ -304,7 +293,7 @@ fn StreamConverter::convert_frames(
   for frame in frames {
     match (self.source.events_decode)(frame) {
       Ok(dcr) => {
-        let events = self.normalize_events(dcr.value())
+        let events = self.normalizer.normalize(dcr.value())
         // Finish 帧保持：与后续帧合并发射（usage 合并 + 字节一致）
         let combined : Array[@lux.LucentStreamEvent] = if self.held_events.length() >
           0 {
@@ -343,110 +332,21 @@ fn StreamConverter::encode_events(
 ) -> Result[String, String] {
   for ev in events {
     match ev {
-      ConversationStart(meta) => self.stream_ctx = Some(meta)
+      ConversationStart(meta) => self.normalizer.stream_ctx = Some(meta)
       _ => ()
     }
   }
-  match (self.target.events_encode_with_ctx)(events, self.stream_ctx) {
+  match
+    (self.target.events_encode_with_ctx)(events, self.normalizer.stream_ctx) {
     Ok(ecr) => Ok(ecr.value())
     Err(e) => Err(e)
   }
 }
 
 ///|
-/// 跨帧状态规整：块事件去重/孤儿过滤 + Finish 前合成缺失 BlockEnd + 丢弃 Done
-///
-/// - BlockStart(idx)：idx 已打开 → 丢弃（解码器每帧重发）；否则记录
-/// - BlockEnd/BlockDiscard(idx)：idx 未打开 → 丢弃（孤儿）；否则移除
-/// - Finish：为仍打开的块合成 BlockEnd（整缓冲解码在 Finish 前闭合块），
-///   合成顺序按打开顺序（与整缓冲解码的 text→thinking→tool 顺序一致）
-/// - Done：一律丢弃。Gemini 没有 [DONE]，其 Done 是"本段输入处理完"的帧级兜底，
-///   逐帧路径下会落在后续内容/usage 之前；终止符统一由 `finish()` 补（CR-002 D5）
-fn StreamConverter::normalize_events(
-  self : StreamConverter,
-  events : Array[@lux.LucentStreamEvent],
-) -> Array[@lux.LucentStreamEvent] {
-  let result : Array[@lux.LucentStreamEvent] = []
-  for ev in events {
-    match ev {
-      BlockStart(idx, _) =>
-        if self.open_blocks.contains(idx) {
-          // 重复 BlockStart：丢弃
-        } else {
-          self.open_blocks.push(idx)
-          result.push(ev)
-        }
-      BlockEnd(idx) =>
-        if self.open_blocks.contains(idx) {
-          self.open_blocks = remove_int(self.open_blocks, idx)
-          result.push(ev)
-        }
-      BlockDiscard(idx) =>
-        if self.open_blocks.contains(idx) {
-          self.open_blocks = remove_int(self.open_blocks, idx)
-          result.push(ev)
-        }
-      Finish(_) =>
-        // CR-001 D2：同一会话只保留首个 Finish。
-        if self.finish_seen {
-          ()
-        } else {
-          self.finish_seen = true
-          // 合成缺失的 BlockEnd（逆序闭合，与栈语义一致）
-          let mut k = self.open_blocks.length() - 1
-          while k >= 0 {
-            result.push(BlockEnd(self.open_blocks[k]))
-            k = k - 1
-          }
-          self.open_blocks = []
-          result.push(ev)
-        }
-      Usage(u) =>
-        // CR-001 D1（增量路径）：逐帧解码时 message_delta 帧看不到 message_start
-        // 的 input_tokens，解出的 prompt_tokens 为 0；用会话元信息回填，
-        // 保证逐帧输出与整缓冲输出逐字节一致。
-        if u.prompt_tokens == 0 {
-          match self.stream_ctx {
-            Some(meta) =>
-              match meta.usage_input {
-                Some(n) => {
-                  let (meta_cached, meta_cache_creation) = meta_cache_usage(
-                    meta,
-                  )
-                  let cached = match u.cached_tokens {
-                    Some(c) => Some(c)
-                    None => meta_cached
-                  }
-                  let cache_creation = match u.cache_creation_tokens {
-                    Some(c) => Some(c)
-                    None => meta_cache_creation
-                  }
-                  result.push(
-                    Usage(
-                      @lux.LucentUsage::full(
-                        n,
-                        u.completion_tokens,
-                        n + u.completion_tokens,
-                        u.reasoning_tokens,
-                        cached,
-                        cache_creation,
-                      ),
-                    ),
-                  )
-                }
-                None => result.push(ev)
-              }
-            None => result.push(ev)
-          }
-        } else {
-          result.push(ev)
-        }
-      Done => ()
-      _ => result.push(ev)
-    }
-  }
-  result
-}
+/// 跨帧状态规整已抽取为共享的 `EventNormalizer`（event_stream.mbt），
+/// 由 StreamConverter 与 Prism::stream_session 共用，语义不变：
+/// 块事件去重/孤儿过滤 + Finish 去重并合成缺失 BlockEnd + usage 回填 + 丢弃 Done。
 
 ///|
 /// 从数组中移除指定元素（保持顺序）

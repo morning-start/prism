@@ -109,7 +109,8 @@ graph TD
 | `match.mbt` | provider 模式匹配：`resolve_provider` / `match_model_pattern` |
 | `pipeline.mbt` | `run_pipeline`：request → IR → response 编排流水线 |
 | `codec_pipeline.mbt` | 编解码流水线：encode/decode 与 diagnostics 注入 |
-| `convert.mbt` | 跨协议转换：request/response/stream 三向 |
+| `convert.mbt` | 跨协议转换：request/response/stream 三向 + `StreamConverter` 增量会话 |
+| `event_stream.mbt` | `Prism::stream_session`：拉式增量解码会话（feed/finish，首字实时）+ 与 StreamConverter 共享的跨帧规整器 |
 | `schema.mbt` | JSON Schema 校验：`validate_request_schema` |
 | `event.mbt` | 流事件辅助 |
 
