@@ -27,7 +27,7 @@
 文本 / 工具调用 / 流式三大交集在全部 16 个 provider 配对（含自身往返）
 上均为 Exact，逐条覆盖于 `src/provider/*/*_wbtest.mbt` 与
 `src/sdk/test/cross_protocol_test.mbt`（12 条验收标准见
-`docs/api-protocol-converter.md`，总数 812+）：
+`docs/api-protocol-converter.md`，全仓测试总数见 `docs/status.md`）：
 
 | # | 用例 | 保真度 |
 |---|---|---|

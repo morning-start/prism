@@ -14,14 +14,19 @@ Provider JSON/SSE  ←→  Lucent IR  ←→  Any other provider
 
 ```
 src/provider/<name>/
-  moon.pkg          # package manifest
-  <name>.mbt        # request decode/encode + helpers
-  response.mbt      # response decode/encode
-  stream.mbt        # SSE decode/encode
-  capability.mbt    # capability declaration
-  <name>_wbtest.mbt # whitebox tests
-  <name>_test.mbt   # blackbox tests
+  moon.pkg            # package manifest
+  meta.mbt            # provider metadata (name/aliases/model_pattern) + schema
+  request_decode.mbt  # request JSON -> LucentRequest
+  request_encode.mbt  # LucentRequest -> request JSON
+  response.mbt        # response decode/encode
+  stream_decode.mbt   # SSE -> LucentStreamEvent
+  stream_encode.mbt   # LucentStreamEvent -> SSE
+  capability.mbt      # capability declaration
+  <name>_wbtest.mbt   # whitebox tests
 ```
+
+Blackbox tests live in a dedicated `test/` subpackage
+(`src/provider/<name>/test/`).
 
 ## The 6-Function Contract
 
@@ -98,47 +103,65 @@ Use `@internal.parse_sse_messages` to parse SSE, then convert each `SseMessage` 
 ### 6. Declare capabilities
 
 ```moonbit
-pub fn myprovider_capability() -> @lux.ProviderCapability {
+pub fn capability() -> @lux.ProviderCapability {
   @lux.ProviderCapability::new(
-    model_pattern="my-model*",
-    provider="myprovider",
-    capabilities=@lux.LucentCapabilities::create(
-      tool_calling=Full,
-      parallel_tool_calls=Full,
-      reasoning=Partial,
-      multimodal_input=Full,
-      structured_output=Absent,
-      input_modalities=[Text, Image],
-      output_modalities=[Text],
+    "my-model*",
+    "myprovider",
+    @lux.LucentCapabilities::create(
+      Full,
+      Full,
+      Partial,
+      Full,
+      Absent,
+      [Text, Image],
+      [Text],
     ),
-    extra_params=None,
+    None,
+  )
+}
+```
+
+Also add `meta.mbt` with the provider metadata single source of truth:
+
+```moonbit
+pub fn metadata() -> @meta.ProviderMeta {
+  @meta.ProviderMeta::new(
+    "myprovider",
+    ["mp"],
+    "my-model*",
+    capability(),
+    schema(),
   )
 }
 ```
 
 ### 7. Register in SDK
 
-Add the provider to `src/sdk/provider_capability.mbt` in `build_providers()`:
+Add the provider to `build_providers()` in `src/sdk/registry.mbt` via
+`ProviderRegistration::from_metadata` — codec functions are wired from the
+adapter, metadata (name/aliases/model_pattern/capability/schema) comes from
+`meta.mbt`:
 
 ```moonbit
-@sdk.ProviderRegistration::new(
-  name="myprovider",
-  aliases=["mp", "my-model"],
-  capability=myprovider_capability(),
-  model_pattern="my-model*",
-  request_decode=myprovider_to_lux_request,
-  request_encode=lux_request_to_myprovider,
-  response_decode=myprovider_to_lux_response,
-  response_encode=lux_response_to_myprovider,
-  events_decode=myprovider_sse_to_events,
-  events_encode=lux_events_to_myprovider_sse,
+ProviderRegistration::from_metadata(
+  @myprovider.metadata(),
+  @myprovider.myprovider_to_lux_request,
+  @myprovider.lux_request_to_myprovider,
+  @myprovider.myprovider_to_lux_response,
+  @myprovider.lux_response_to_myprovider,
+  @myprovider.myprovider_sse_to_events,
+  @myprovider.lux_events_to_myprovider_sse,
+  @myprovider.lux_events_to_myprovider_sse_with_ctx,  // or an ctx-ignoring wrapper
+  None,  // base_url
+  None,  // auth_header
+  None,  // api_version
 )
 ```
 
 ### 8. Add tests
 
-- **Whitebox tests** (`_wbtest.mbt`): test internal helpers, edge cases, error paths
-- **Blackbox tests** (`_test.mbt`): test the 6 public functions with real provider JSON fixtures
+- **Whitebox tests** (`_wbtest.mbt`): test internal helpers, edge cases, error paths (in the package directory)
+- **Blackbox tests** (`_test.mbt` in `test/` subpackage): test the 6 public functions with real provider JSON fixtures
 - **Cross-protocol tests**: verify round-trip through `sdk/convert.mbt`
 
 ## Diagnostics

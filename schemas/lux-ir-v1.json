@@ -158,6 +158,23 @@
             "video": { "$ref": "#/definitions/LucentMultimedia" }
           },
           "required": ["type", "video"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "file" },
+            "file": { "$ref": "#/definitions/LucentMultimedia" }
+          },
+          "required": ["type", "file"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "native" },
+            "native_tag": { "type": "string", "description": "厂商私有类型标签" },
+            "native_payload": { "$ref": "#/definitions/JsonValue" }
+          },
+          "required": ["type", "native_tag"]
         }
       ]
     },
@@ -165,7 +182,9 @@
       "type": "object",
       "properties": {
         "role": { "$ref": "#/definitions/LucentRole" },
-        "content": { "type": "array", "items": { "$ref": "#/definitions/LucentContent" } }
+        "content": { "type": "array", "items": { "$ref": "#/definitions/LucentContent" } },
+        "phase": { "type": "string", "description": "流水线阶段标签（SDK 内部透传）" },
+        "reasoning": { "$ref": "#/definitions/LucentThinking", "description": "消息级 reasoning（vLLM/DeepSeek reasoning_content 载体）" }
       },
       "required": ["role", "content"]
     },
@@ -218,10 +237,16 @@
       "properties": {
         "name": { "type": "string" },
         "description": { "type": "string" },
+        "kind": { "$ref": "#/definitions/LucentToolKind" },
         "parameters": { "$ref": "#/definitions/JsonValue" },
         "strict": { "type": "boolean" }
       },
-      "required": ["name", "parameters"]
+      "required": ["name", "kind", "parameters"]
+    },
+    "LucentToolKind": {
+      "type": "string",
+      "enum": ["function", "file_search", "web_search", "code_interpreter", "computer_use", "code_execution", "shell", "apply_patch", "mcp"],
+      "description": "工具类型；未知值按 Native 保留原字符串"
     },
     "LucentToolChoice": {
       "oneOf": [
@@ -260,9 +285,10 @@
         "stop": { "type": "array", "items": { "type": "string" } },
         "stream": { "type": "boolean" },
         "candidate_count": { "type": "integer" },
-        "seed": { "type": "integer" },
         "structured_output": { "$ref": "#/definitions/LucentStructuredOutput" },
-        "previous_response_id": { "type": "string" }
+        "store": { "type": "boolean" },
+        "previous_response_id": { "type": "string" },
+        "extras": { "type": "object", "additionalProperties": { "$ref": "#/definitions/JsonValue" }, "description": "厂商私有扩展（软失败保留）" }
       },
       "required": ["stream"]
     },
@@ -277,7 +303,7 @@
     },
     "LucentReasoningEffort": {
       "type": "string",
-      "enum": ["low", "medium", "high"]
+      "enum": ["low", "medium", "high", "xhigh"]
     },
     "LucentReasoningSummary": {
       "type": "string",
@@ -430,6 +456,15 @@
             "text": { "type": "string" }
           },
           "required": ["type", "text"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "native" },
+            "native_tag": { "type": "string" },
+            "native_payload": { "$ref": "#/definitions/JsonValue" }
+          },
+          "required": ["type", "native_tag"]
         }
       ]
     },
@@ -451,7 +486,9 @@
       "properties": {
         "id": { "type": "string" },
         "model": { "type": "string" },
-        "usage_input": { "type": "integer" }
+        "usage_input": { "type": "integer" },
+        "created_at": { "type": "integer" },
+        "extra": { "$ref": "#/definitions/JsonValue", "description": "非通用字段透传（如缓存计费项）" }
       }
     },
     "LucentStreamEvent": {

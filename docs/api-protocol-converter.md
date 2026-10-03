@@ -119,7 +119,7 @@ partial_json、当前 stop_reason。
 12. 未支持 output/content 类型时能明确报错
 
 > 实现状态：12 条全部有直接测试覆盖（`src/provider/*/*_wbtest.mbt` 与
-> `src/sdk/test/cross_protocol_test.mbt`，总数 812）。
+> `src/sdk/test/cross_protocol_test.mbt`；全仓测试总数见 `docs/status.md`）。
 
 ## 不在第一版互转范围的内容
 

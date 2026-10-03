@@ -124,7 +124,7 @@ graph TD
 
 | 文件 | 职责 |
 |------|------|
-| `convert.mbt` | `wasm_convert_*` / `wasm_sdk_*` / `wasm_to_lux_request` 等 23 个导出函数 |
+| `convert.mbt` | `wasm_convert_*` / `wasm_sdk_*` / `wasm_to_lux_*` 等 28 个导出函数（以 `src/cmd/main/moon.pkg` 导出清单为准，可用 `scripts/export_count.sh` 核对） |
 | `memory.mbt` | `wasm_convert_*_trace` 带 trace 的变体（可选诊断输出） |
 
 **依赖**：lux + sdk + core。**不直接调用任何 provider，全部经 sdk 注册表分发。**
@@ -142,7 +142,7 @@ graph TD
 | `response.mbt` | `openai_to_lux_response` / `lux_response_to_openai`：响应双向 |
 | `stream_decode.mbt` | `openai_sse_to_events`：SSE → LucentStreamEvent |
 | `stream_encode.mbt` | `lux_events_to_openai_sse`：LucentStreamEvent → SSE |
-| `capability.mbt` | `capability()`：声明支持 tool_calling / parallel_tool_calls / reasoning / multimodal |
+| `capability.mbt` | `capability()`：声明 tool_calling=Full、parallel_tool_calls=Absent（协议实际支持，声明待修正，见 fidelity-matrix §1） / reasoning / multimodal / structured_output=Full |
 
 **依赖**：lux + internal + core。
 

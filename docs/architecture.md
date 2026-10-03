@@ -1,4 +1,4 @@
-﻿# Prism Architecture
+# Prism Architecture
 
 ## Goals
 
@@ -6,14 +6,14 @@ Prism converts provider-specific JSON and SSE protocols through a stable Lucent 
 
 ## Layered dependency graph
 
-`	ext
+```
 cmd/main (WASM exports only)
     -> wasm (string ABI envelope and error boundary)
         -> sdk (user facade and conversion orchestration)
             -> provider adapters (protocol codecs)
                 -> lux (Lucent IR, diagnostics, stream model)
                     -> internal (JSON and SSE primitives)
-`
+```
 
 The dependency direction is one-way. Provider adapters may depend on lux and internal; lux must not depend on a provider. WASM must not contain provider-specific protocol mapping.
 
@@ -52,7 +52,16 @@ MoonBit compiles all files in a package together, so this is a structural bounda
 
 ## Registry and conversion pipeline
 
-The SDK registry is a static composition root because the WASM target does not require dynamic loading. ProviderRegistration stores codec functions, aliases, model patterns, and capabilities. Resolution is exact name, alias, then model-pattern fallback. Conversion is always source decode -> Lucent IR -> target encode; diagnostics from both phases are merged. No adapter-to-adapter conversion path is allowed.
+The SDK registry's **static table is the composition root** (the WASM target
+does not require dynamic loading for the default path). T6 added a separate
+**dynamic table** (`register_provider` / `unregister_provider`) for middleware
+deployment-time entries (custom endpoints/aliases via `with_overrides`);
+matching consults the static table first and falls back to the dynamic table,
+so the default path is unchanged. ProviderRegistration stores codec functions,
+aliases, model patterns, and capabilities. Resolution is exact name, alias, then
+model-pattern fallback. Conversion is always source decode -> Lucent IR ->
+target encode; diagnostics from both phases are merged. No adapter-to-adapter
+conversion path is allowed.
 
 ## Stream pipeline
 
@@ -100,8 +109,10 @@ The ABI is a string-in/string-out boundary. cmd/main owns export names; wasm own
   adapters are thin "protocol JSON ↔ IR" layers over these. Trait-ifying the
   6-function contract was evaluated and declined: the contract is already an
   implicit interface (identical signatures across packages, verified in
-  `.mbti`), the SDK is a static composition root with no runtime polymorphism
-  need, and trait conversion would break the public API for no benefit.
+  `.mbti`), the SDK dispatches through the `ProviderRegistration` function
+  table (static table first, T6 dynamic table fallback) with no trait
+  polymorphism consumer, and trait conversion would break the public API for
+  no benefit.
   Remaining provider-side near-duplicates (usage field names, tool-definition
   wrappers, error codes, stream event names) are protocol-semantic differences
   and must stay in each adapter; genuinely identical helpers keep landing in
@@ -111,14 +122,17 @@ The ABI is a string-in/string-out boundary. cmd/main owns export names; wasm own
   struct's **function fields** (`(src.response_decode)(json_str)` in
   `src/sdk/convert.mbt`) — a function-table that already achieves the same
   "unified interface" a `trait Codec` would provide, and it is bound at compile
-  time (static composition root), so a trait's polymorphism/bounds benefit has
-  no consumer. Adding `trait Codec` + 4 adapter structs + 24 forwarding impls
-  would be pure ceremony with double-maintenance (top-level functions must stay
-  for the public API). Clarity is already provided by `.mbti`, registration
-  field comments, and `docs/api-protocol-converter.md`.
+  time (static table first, T6 dynamic table fallback), so a trait's
+  polymorphism/bounds benefit has no consumer. Adding `trait Codec` + 4 adapter
+  structs + 24 forwarding impls would be pure ceremony with double-maintenance
+  (top-level functions must stay for the public API). Clarity is already
+  provided by `.mbti`, registration field comments, and
+  `docs/api-protocol-converter.md`.
 - Provider adapters were split from monolithic files into request, response, stream, and capability units without changing package names or function signatures.
-- SDK remains the static provider composition root; a dedicated registry
-  package was measured in iteration-005 (`.agent-workplace/research/iteration-008/sdk-split-feasibility.md`):
+- SDK static table remains the composition root (T6 dynamic registration is a
+  separate deployment-time table; see Registry and conversion pipeline); a
+  dedicated registry package was measured in iteration-005
+  (`.agent-workplace/research/iteration-008/sdk-split-feasibility.md`):
   its 36 inherent methods (`Prism::*` etc.) must stay in the type's package and
   struct fields are intentionally non-public, so **the split is declined** —
   same conclusion as the lux measurement. Type definitions plus their methods

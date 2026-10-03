@@ -9,7 +9,7 @@
 | `src/lux` (Lucent IR) | ✅ Stable | v1 schema, types + builders + stream events + diagnostics；T8 新增 previous_response_id 标准字段 + ConversationSnapshot |
 | `src/internal` | ✅ Stable | JSON helpers, SSE parser（含 T5 增量 SseFrameSplitter）, shared primitives |
 | `src/sdk` | ✅ Stable | Facade, context, registry+match（T6 动态注册 + endpoint 配置）, pipeline/codec_pipeline, convert（T4 钩子链 / T5 StreamConverter / T8 快照还原）, hooks, error（T7 类型化）, diagnostics（T10 策略+聚合）, snapshot |
-| `src/wasm` | ✅ Stable | 16 exported functions, scratch memory, log buffer；T5 增量会话句柄 ABI + T11 ABI 版本导出 |
+| `src/wasm` | ✅ Stable | 28 exported functions (per `src/cmd/main/moon.pkg` exports list; check via `scripts/export_count.sh`), scratch memory, log buffer；T5 增量会话句柄 ABI + T11 ABI 版本导出 |
 | `src/provider/openai` | ✅ Complete | Chat Completions + stream + capability |
 | `src/provider/messages` | ✅ Complete | Anthropic Messages API + extended thinking |
 | `src/provider/responses` | ✅ Complete | OpenAI Responses API |
@@ -27,7 +27,7 @@
 | `messages` | Anthropic Messages API | ✅ | ✅ | ✅ | ✅ |
 | `gemini` | Google Gemini API | ✅ | ✅ | ✅ | ✅ |
 
-Provider aliases and model-pattern variants (codex, azure, vllm, gemini-vertex, gemini-interactions) are registered in `src/sdk/registry.mbt`.
+Provider 主名称与别名（openai["chat"]、responses["openai-responses"]、messages["claude-messages","anthropic"]、gemini["google"]）定义于各 `src/provider/<name>/meta.mbt`；azure/vllm 等部署态变体经运行时 `register_provider` + `with_overrides` 注册（见 `src/sdk/dynamic_registry_wbtest.mbt`），不在静态表中。
 
 ## Test Coverage
 
@@ -52,7 +52,7 @@ compilation to reach non-public members).
 
 ## Known Limitations
 
-- `scripts/check_schema_drift.ps1` runs in report mode by default and can be used with `-Strict` in CI; its self-test covers version, required fields, enums, and stream events
+- `scripts/check_schema_drift.ps1` runs in report mode by default and can be used with `-Strict` in CI; its self-test covers version, required fields, enums, stream events, and adapter output fields
 
 - `src/lux/types.mbt` remains the type/model hub; codec implementations are split into request/response/stream/primitive files (deserialization further split: `deserialize_helpers` / `deserialize_primitives` / `deserialize_content` / `deserialize_tools` / `deserialize_options`); diagnostics JSON codec lives in `diagnostics_json.mbt`. Package navigation: `src/lux/README.md` and `src/sdk/README.md` provide per-package file maps and dependency rules (MoonBit folders = packages, so intra-package organization uses prefixes + partition comments + index READMEs, iteration-007)
 - Provider adapters use a uniform file layout: capability / request_decode / request_encode / response / stream_decode / stream_encode
@@ -60,7 +60,7 @@ compilation to reach non-public members).
 
 - `src/internal/sse.mbt` exports `parse_sse_frame` — shared SSE preprocessing pipeline used by messages, openai, and gemini stream decoders; `SseFrameSplitter`（T5）提供 chunk-boundary-safe 增量分帧
 - `src/internal/json.mbt` exports JSON field access (`obj_get` / `field_*`) and basic tools (`json_escape` / `parse_string_array` / `parse_content_polymorphic` / …); `extras.mbt` exports `collect_extra_fields` / `merge_extras_json` / `extras_without`; `usage.mbt` exports `parse_usage_json` / `parse_reasoning_tokens` / `parse_cached_tokens` / `parse_cache_creation_tokens` / `parse_cached_tokens_gemini` — shared helpers used by all four providers
-- `src/lux/stream.mbt` exports `BlockAccumulator` (package-internal) — extracted from the 290-line stream accumulator function
+- `src/lux/stream.mbt` exports `BlockAccumulator` (public `pub(all)` struct, used by stream accumulation) — extracted from the 290-line stream accumulator function
 - `src/lux/helpers.mbt` exports `LucentReasoningEffort::to_string` — outbound effort tier mapping shared by openai / messages / responses (gemini keeps its own downgrade mapping)
 
 ### 流式 usage（CR-001）

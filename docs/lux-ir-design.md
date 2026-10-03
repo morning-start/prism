@@ -48,14 +48,18 @@ Normalized streaming events. See `src/lux/stream.mbt` for the full enum.
 
 | Event | Payload | Description |
 |-------|---------|-------------|
-| `ConversationStart` | metadata | Stream begins |
-| `ItemStart` | ConversationItem | New message/tool/reasoning |
-| `BlockStart` | content type | Content block begins |
-| `BlockDelta` | delta type | Incremental content |
-| `BlockEnd` | — | Content block ends |
-| `ItemEnd` | — | Item complete |
-| `Usage` | LucentUsage | Token counts |
-| `Finish` | LucentFinishReason | Stream complete |
+| `ConversationStart` | `LucentConversationMeta` | Stream begins |
+| `ItemStart` | `(index, ConversationItem)` | New message/tool/reasoning |
+| `BlockStart` | `(index, LucentBlockType)` | Content block begins |
+| `BlockDelta` | `(index, LucentBlockDelta)` | Incremental content |
+| `BlockEnd` | `index` | Content block ends |
+| `ItemEnd` | `index` | Item complete |
+| `BlockDiscard` | `index` | Block discarded (Gemini full-frame overwrite) |
+| `Annotations` | `(index, Array[LucentAnnotation])` | Citation/annotation side-channel |
+| `Usage` | `LucentUsage` | Token counts |
+| `Finish` | `LucentFinishReason` | Stream complete |
+| `Error` | `LucentError` | Typed error event |
+| `Done` | — | Stream terminated (emitted by session layer in conversion paths) |
 
 ## Conversation Model
 
