@@ -5,6 +5,23 @@
 /// 由 convert.mbt（StreamConverter）与 pipeline.mbt（lucent_events_to_prism）共享。
 
 ///|
+/// 块种类内核：去重键只看"这是哪一类块"，不看骨架载荷。
+/// openai 逐帧解码时同一工具块的首帧带 (id,name)、续帧只剩 arguments，
+/// LucentBlockType 整体比较会把同一逻辑块判成两类。
+fn block_kind(bt : @lux.LucentBlockType) -> Int {
+  match bt {
+    Text => 0
+    ToolCall(_, _) => 1
+    Thinking => 2
+    Refusal => 3
+    Image => 4
+    Audio => 5
+    Video => 6
+    Native(_) => 7
+  }
+}
+
+///|
 /// EventNormalizer — 解码侧跨帧规整器（T5/CR-001/CR-002 不变量）
 ///
 /// 逐帧解码时源解码器是无跨帧状态的，本结构在会话内维护：
@@ -14,17 +31,32 @@
 /// - stream_ctx：首个 ConversationStart 的会话元信息（usage 回填用，CR-001 D1）
 /// - Done：一律丢弃（CR-002 D5：终止符由会话层在收尾时唯一产生）
 ///
+/// BlockStart 去重键是 (index, block_kind)：
+/// - 同索引同种类才是真重复（gemini 全量帧覆盖前的重发）；
+/// - 同索引不同种类说明该索引被另一类块复用 —— openai 流里 tool_calls 的
+///   wire index 与 text（0）/thinking（1）固定索引分区重叠，逐帧解码时
+///   上一帧的 text 块仍开着，本帧工具块 BlockStart(0) 到不了"先闭合"的
+///   状态。此时视为索引复用：补一个 BlockEnd 闭合旧块再开新块，与整批
+///   路径（解码器有跨帧状态）输出逐字节一致。
+///   曾按裸索引去重把工具块的 BlockStart 当重复丢掉 → 混合流失工具调用。
+///
 /// StreamConverter（编码到目标协议）与 Prism::stream_session（解码到
 /// PrismEvent）共用此规整逻辑，保证两条路径事件语义一致。
 struct EventNormalizer {
   mut open_blocks : Array[Int]
+  open_block_kinds : Map[Int, Int]
   mut finish_seen : Bool
   mut stream_ctx : @lux.LucentConversationMeta?
 }
 
 ///|
 fn EventNormalizer::new() -> EventNormalizer {
-  { open_blocks: [], finish_seen: false, stream_ctx: None, }
+  {
+    open_blocks: [],
+    open_block_kinds: Map([]),
+    finish_seen: false,
+    stream_ctx: None,
+  }
 }
 
 ///|
@@ -35,21 +67,34 @@ fn EventNormalizer::normalize(
   let result : Array[@lux.LucentStreamEvent] = []
   for ev in events {
     match ev {
-      BlockStart(idx, _) =>
+      BlockStart(idx, bt) =>
         if self.open_blocks.contains(idx) {
-          // 重复 BlockStart：丢弃
+          // 重复 BlockStart：同索引同种类 → 丢弃；同索引不同种类 → 索引复用，
+          // 先补 BlockEnd 闭合旧块再开新块（见结构体注释）
+          let kind = block_kind(bt)
+          match self.open_block_kinds.get(idx) {
+            Some(prev) if prev == kind => ()
+            _ => {
+              result.push(BlockEnd(idx))
+              self.open_block_kinds[idx] = kind
+              result.push(ev)
+            }
+          }
         } else {
           self.open_blocks.push(idx)
+          self.open_block_kinds[idx] = block_kind(bt)
           result.push(ev)
         }
       BlockEnd(idx) =>
         if self.open_blocks.contains(idx) {
           self.open_blocks = remove_int(self.open_blocks, idx)
+          self.open_block_kinds.remove(idx)
           result.push(ev)
         }
       BlockDiscard(idx) =>
         if self.open_blocks.contains(idx) {
           self.open_blocks = remove_int(self.open_blocks, idx)
+          self.open_block_kinds.remove(idx)
           result.push(ev)
         }
       Finish(_) =>

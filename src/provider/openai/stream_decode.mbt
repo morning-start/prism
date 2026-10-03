@@ -100,6 +100,15 @@ pub fn openai_sse_to_events(
               match @internal.field_str(delta, "content") {
                 Some(s) if s.length() > 0 => {
                   if !text_block_open {
+                    // 不变量：同一 block_index 任一时刻至多一个打开的块。先闭合
+                    // 占用索引 0 的工具块（tool_calls[i].index 与 text 块分区重叠，
+                    // OpenAI 的 tool index 从 0 起）。若直接再发一个 BlockStart(0)，
+                    // 下游 EventNormalizer 会按索引去重丢弃，混合流（先文本后工具
+                    // 调用）的工具调用将整体丢失。
+                    if current_tool_block == 0 {
+                      events.push(BlockEnd(0))
+                      current_tool_block = -1
+                    }
                     events.push(BlockStart(0, Text))
                     text_block_open = true
                   }
@@ -119,6 +128,12 @@ pub fn openai_sse_to_events(
               match reasoning_text {
                 Some(s) => {
                   if !thinking_block_open {
+                    // 同 text 块闭合逻辑：先闭合占用 thinking 索引 1 的工具块
+                    // （第二个及以后的 tool_calls[i].index 可为 1）。
+                    if current_tool_block == thinking_block_idx {
+                      events.push(BlockEnd(thinking_block_idx))
+                      current_tool_block = -1
+                    }
                     events.push(BlockStart(thinking_block_idx, Thinking))
                     thinking_block_open = true
                   }
@@ -142,6 +157,17 @@ pub fn openai_sse_to_events(
                       events.push(BlockEnd(current_tool_block))
                     }
                     if current_tool_block != idx {
+                      // 同一索引每个时刻至多一个打开的块：先闭合占用该索引的
+                      // text（idx 0）/ thinking（idx 1）块，否则下游按索引去重
+                      // 会把本 BlockStart 当重复事件丢弃 → 工具调用丢失。
+                      if idx == 0 && text_block_open {
+                        events.push(BlockEnd(0))
+                        text_block_open = false
+                      }
+                      if idx == thinking_block_idx && thinking_block_open {
+                        events.push(BlockEnd(thinking_block_idx))
+                        thinking_block_open = false
+                      }
                       let id = @internal.field_str(tc, "id").unwrap_or("")
                       let name = match @internal.obj_get(tc, "function") {
                         Some(fn_obj) =>
