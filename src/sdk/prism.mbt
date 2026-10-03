@@ -257,12 +257,25 @@ pub fn Prism::decode_response_with_meta(
     Some(reg) => reg.name
     None => self.provider
   }
-  match self.decode_to_lux(json_str) {
-    Ok(resp) => {
-      let meta = ConversionMeta::new(source, [], resp.provider_payload, None)
-      Ok(DecodedResponse::new(resp.get_text(), meta))
-    }
-    Err(e) => Err(e)
+  // 直接走注册表 codec（不经 decode_to_lux 的 value() 简化入口），保留
+  // 解码阶段诊断——ConversionMeta 的 D8 契约宣称携带转换损失诊断，
+  // 此前恒为空数组（退化为"看不到任何降级"的静默通道）。
+  match match_provider_name(self.provider) {
+    Some(reg) =>
+      match (reg.response_decode)(json_str) {
+        Ok(dcr) => {
+          let resp = dcr.value()
+          let meta = ConversionMeta::new(
+            source,
+            dcr.diagnostics(),
+            resp.provider_payload,
+            None,
+          )
+          Ok(DecodedResponse::new(resp.get_text(), meta))
+        }
+        Err(e) => Err(e)
+      }
+    None => Err("unknown provider: " + self.provider)
   }
 }
 
@@ -374,13 +387,32 @@ pub fn Prism::complete(
 
 ///|
 /// L2 Agent 循环：流式请求 + 5 事件解码（HTTP 由 Host 注入 send）
+///
+/// 兼容入口：等价于 stream_with_options(ctx, PrismOptions::default(), send)。
 pub fn Prism::stream(
   self : Prism,
   ctx : Context,
   send : (String) -> Result[String, String],
 ) -> Result[Array[PrismEvent], String] {
-  let model = DEFAULT_MODEL
-  let mut req = context_to_lux_request(ctx, model, PrismOptions::default())
+  self.stream_with_options(ctx, PrismOptions::default(), send)
+}
+
+///|
+/// L2 Agent 循环（可配置参数版）：temperature / tool_choice / reasoning /
+/// structured_output / model 等 PrismOptions 生效。
+///
+/// 此前 stream() 只有 ctx 一个参数，PrismOptions 与 model 全部写死默认值
+/// （model 恒 DEFAULT_MODEL="gpt-4o"，provider 为 messages/gemini 时也编码
+/// 该模型名），L2 门面无法表达任何生成参数。本入口补齐，stream() 保留为
+/// 旧签名的兼容薄包装。
+pub fn Prism::stream_with_options(
+  self : Prism,
+  ctx : Context,
+  opts : PrismOptions,
+  send : (String) -> Result[String, String],
+) -> Result[Array[PrismEvent], String] {
+  let model = opts.model.unwrap_or(DEFAULT_MODEL)
+  let mut req = context_to_lux_request(ctx, model, opts)
   req = @lux.LucentRequest::with_stream(req, true)
   match self.encode_lux_request(req) {
     Ok(json) =>

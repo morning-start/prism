@@ -191,11 +191,40 @@ test "@lux.LucentModality from_json - malformed inputs reject" {
 test "@lux.LucentMediaSource from_json - malformed inputs reject" {
   let invalid : Array[String] = [
     "42", "{}", "{\"type\":\"unknown_type\"}", "{\"type\":42}",
+    // data 是载荷本体（schema 必填）：缺失必须 Err，不得默认 ""
+     "{\"type\":\"inline\"}", "{\"type\":\"url\"}", "{\"type\":\"file_uri\"}",
   ]
   for s in invalid {
     match @lux.LucentMediaSource::from_json(@json.parse(s)) {
       Ok(_) => fail("expected Err for input: \{s}")
       Err(_) => ()
+    }
+  }
+}
+
+///|
+/// P0-2 修复：与 schemas/lux-ir-v1.json 对齐后的对象形状 round-trip
+/// （schema 曾为字符串 const 枚举，无处安放 inline 数据，第三方按 schema
+/// 发字符串会被实现拒绝；现 schema 与实现均为 {type,data} 对象形状）。
+test "@lux.LucentMediaSource round-trip matches schema object shape" {
+  for
+    src in [
+      @lux.LucentMediaSource::inline("iVBORw0KGgo"),
+      @lux.LucentMediaSource::url("https://example.com/x.png"),
+      @lux.LucentMediaSource::file_uri("file-abc-1"),
+    ] {
+    let jv = src.to_json()
+    // wire 形状必须是对象，且 type/data 齐备
+    match jv {
+      Object(m) =>
+        if !(m.contains("type") && m.contains("data")) {
+          fail("schema object shape broken: \{jv.stringify()}")
+        }
+      _ => fail("expected object shape, got: \{jv.stringify()}")
+    }
+    match @lux.LucentMediaSource::from_json(jv) {
+      Ok(back) => assert_true(back == src)
+      Err(e) => fail("round-trip failed: \{e}")
     }
   }
 }

@@ -19,10 +19,32 @@
       "enum": ["full", "partial", "none"]
     },
     "LucentMediaSource": {
+      "description": "多模态来源。对象形状：type 区分种类，data 携带载荷——字符串 const 枚举无处安放内联数据（曾为字符串枚举，与实现硬漂移，第三方按 schema 发字符串会被实现拒绝，见 docs/rules/lucent-ir-evolution.md 提案 MEDIA-SOURCE-SHAPE）。",
       "oneOf": [
-        { "type": "string", "const": "inline", "description": "base64 内联数据" },
-        { "type": "string", "const": "url", "description": "远程 URL" },
-        { "type": "string", "const": "file_uri", "description": "厂商文件 URI" }
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "inline", "description": "base64 内联数据" },
+            "data": { "type": "string", "description": "base64 编码的二进制载荷" }
+          },
+          "required": ["type", "data"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "url", "description": "远程 URL" },
+            "data": { "type": "string", "description": "http(s) URL" }
+          },
+          "required": ["type", "data"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "file_uri", "description": "厂商文件 URI" },
+            "data": { "type": "string", "description": "厂商 File API / GCS URI" }
+          },
+          "required": ["type", "data"]
+        }
       ]
     },
     "LucentMultimedia": {

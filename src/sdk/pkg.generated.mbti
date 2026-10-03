@@ -177,6 +177,7 @@ pub fn Prism::events_to_context(Self, Context, Array[PrismEvent]) -> Context
 pub fn Prism::new() -> Self
 pub fn Prism::stream(Self, Context, (String) -> Result[String, String]) -> Result[Array[PrismEvent], String]
 pub fn Prism::stream_session(Self) -> Result[PrismStreamSession, String]
+pub fn Prism::stream_with_options(Self, Context, PrismOptions, (String) -> Result[String, String]) -> Result[Array[PrismEvent], String]
 pub fn Prism::with_provider(Self, String) -> Self
 
 pub struct PrismError {

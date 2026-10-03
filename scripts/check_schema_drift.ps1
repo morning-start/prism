@@ -140,7 +140,7 @@ function Invoke-Check($Schema, [string]$SchemaText, [string]$SourceText) {
 
   $structs = Get-SourceStructs $SourceText
   $aliases = @{ "LucentAnnotation.ref"="reference"; "LucentToolUse.arguments"="arguments_json"; "LucentAgentAction.arguments"="arguments_json"; "LucentTool.parameters"="parameters_json" }
-  $skip = @("LucentContent", "LucentMediaSource", "LucentStreamEvent")
+  $skip = @("LucentContent", "LucentStreamEvent")
   foreach ($entry in (Get-RequiredFields $Schema).GetEnumerator()) {
     $definition = $entry.Key
     $fields = $structs[$definition]

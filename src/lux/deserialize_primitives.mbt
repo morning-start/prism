@@ -41,9 +41,11 @@ pub fn LucentMediaSource::from_json(
         Ok(t) => t
         Err(e) => return Err(e)
       }
-      let data : String = match get_str_opt(m, "data") {
-        Some(d) => d
-        None => ""
+      let data : String = match get_str(m, "data") {
+        Ok(d) => d
+        // data 是 source 的载荷本体，缺失即不可用：Err 而非默认 ""
+        // （默认 "" 会把"缺失"与"空数据"混为一谈；schema 亦要求必填）
+        Err(e) => return Err(e)
       }
       match typ {
         "inline" => Ok(Inline(data))
