@@ -256,9 +256,13 @@ pub fn LucentConversationItem::to_json(self : LucentConversationItem) -> Json {
 }
 
 ///|
-pub fn LucentTool::to_json(self : LucentTool) -> Json {
-  let params = @json.parse(self.parameters_json) catch { _ => Json::null() }
-  let kind_str = match self.kind {
+/// LucentToolKind → wire tag 字符串。
+///
+/// 用于两处：IR 序列化的 `kind` 字段，以及 provider 解码器在遇到目标协议
+/// 无载体的工具时给出可识别的名字（`Native(t)` 原样透传）。
+/// 单点定义避免多处映射漂移。
+pub fn LucentToolKind::to_tag(self : LucentToolKind) -> String {
+  match self {
     Function => "function"
     FileSearch => "file_search"
     WebSearch => "web_search"
@@ -270,6 +274,12 @@ pub fn LucentTool::to_json(self : LucentTool) -> Json {
     MCP => "mcp"
     Native(s) => s
   }
+}
+
+///|
+pub fn LucentTool::to_json(self : LucentTool) -> Json {
+  let params = @json.parse(self.parameters_json) catch { _ => Json::null() }
+  let kind_str = self.kind.to_tag()
   let fields : Map[String, Json] = {
     "name": Json::string(self.name),
     "kind": Json::string(kind_str),

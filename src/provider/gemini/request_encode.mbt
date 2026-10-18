@@ -118,18 +118,50 @@ fn media_part(
 ///|
 /// functionCall part。`id` 为官方可选字段：IR 侧存在调用 ID 时回填，
 /// 使跨协议（OpenAI/Anthropic 入站）的 call↔response 配对精确而非仅按函数名+顺序。
-fn function_call_part(tu : @lux.LucentToolUse) -> String {
+///
+/// `args` 必须是 JSON 对象字面量：IR 的 `arguments_json` 来自任意入站协议，
+/// 可能是非法 JSON（如 "oops-not-json"）。直接内嵌会产出**非法请求体**
+/// （Gemini 会整请求 400）。故校验后内嵌；非法时回退 `{}` 并打 Invalid
+/// 诊断（与 messages 编码器的 `tool_use_input_fragment` 同构，契约 §11.2）。
+fn function_call_part(
+  tu : @lux.LucentToolUse,
+  diagnostics : Array[@lux.ConversionDiagnostic],
+) -> String {
   let id_part = if tu.id == "" {
     ""
   } else {
     ",\"id\":\"" + @internal.json_escape(tu.id) + "\""
+  }
+  let args = match @internal.parse_protocol_json(tu.arguments_json) {
+    Ok(Object(_)) => tu.arguments_json
+    Ok(_) => {
+      diagnostics.push(
+        @lux.ConversionDiagnostic::invalid(
+          "content.tool_use.args",
+          Some("tool arguments is not a JSON object; sent as {}"),
+        ),
+      )
+      "{}"
+    }
+    Err(_) => {
+      diagnostics.push(
+        @lux.ConversionDiagnostic::invalid(
+          "content.tool_use.args",
+          Some(
+            "invalid JSON tool arguments cannot be sent to gemini: " +
+            tu.arguments_json,
+          ),
+        ),
+      )
+      "{}"
+    }
   }
   "{\"functionCall\":{\"name\":\"" +
   @internal.json_escape(tu.name) +
   "\"" +
   id_part +
   ",\"args\":" +
-  tu.arguments_json +
+  args +
   "}}"
 }
 
@@ -243,7 +275,8 @@ pub fn lux_request_to_gemini(
                 "{\"text\":\"" + @internal.json_escape(s) + "\"}",
               )
             }
-            ToolUse(tu) => content_parts.push(function_call_part(tu))
+            ToolUse(tu) =>
+              content_parts.push(function_call_part(tu, diagnostics))
             ToolResult(tr) => {
               // functionResponse.name 必须是函数名：从 ToolCall 配对回查（Gemini 无调用 ID 概念）
               let fn_name = tool_response_name(
@@ -312,7 +345,9 @@ pub fn lux_request_to_gemini(
       }
       ToolCall(tu) =>
         contents.push(
-          "{\"role\":\"model\",\"parts\":[" + function_call_part(tu) + "]}",
+          "{\"role\":\"model\",\"parts\":[" +
+          function_call_part(tu, diagnostics) +
+          "]}",
         )
       ToolResult(tr) => {
         let fn_name = tool_response_name(

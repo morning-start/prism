@@ -70,6 +70,7 @@ pub struct ConversionDiagnostic {
 pub fn ConversionDiagnostic::degraded(String, String?) -> Self
 pub fn ConversionDiagnostic::equal(Self, Self) -> Bool
 pub fn ConversionDiagnostic::from_json(Json) -> Result[Self, String]
+pub fn ConversionDiagnostic::invalid(String, String?) -> Self
 pub fn ConversionDiagnostic::new(String, ConversionStatus, String?) -> Self
 pub fn ConversionDiagnostic::status(Self) -> ConversionStatus
 pub fn ConversionDiagnostic::to_json(Self) -> Json
@@ -573,6 +574,7 @@ pub(all) enum LucentToolKind {
   Native(String)
 } derive(Eq, @debug.Debug)
 pub fn LucentToolKind::equal(Self, Self) -> Bool
+pub fn LucentToolKind::to_tag(Self) -> String
 
 pub struct LucentToolResult {
   tool_use_id : String

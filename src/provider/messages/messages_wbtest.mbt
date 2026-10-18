@@ -1910,3 +1910,47 @@ test "encode - previous_response_id in extras with history degrades and strips" 
     Err(e) => fail("encode error: \{e}")
   }
 }
+
+///|
+/// tool_result 的 content 官方允许**字符串**简写或 block 数组。
+/// 字符串形态此前被 field_arr 判为 None → 内容整体丢失且无诊断（契约 §3）。
+test "decode - tool_result with string content is preserved" {
+  let json = "{\"model\":\"m\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"t1\",\"content\":\"plain result text\"}]}]}"
+  match messages_to_lux_request(json) {
+    Ok(cr) => {
+      match cr.value().conversation[0] {
+        ToolResult(tr) => {
+          assert_eq(tr.tool_use_id, "t1")
+          assert_eq(tr.content.length(), 1)
+          match tr.content[0] {
+            Text(t, _) => assert_eq(t, "plain result text")
+            _ => fail("expected text block from string content")
+          }
+        }
+        _ => fail("expected ToolResult item")
+      }
+      // 字符串形态是合法的，不应产生诊断
+      assert_eq(cr.diagnostics().length(), 0)
+    }
+    Err(e) => fail("decode failed: \{e}")
+  }
+}
+
+///|
+/// tool_result 的 content 既非字符串也非数组（如数字）→ 显式 Invalid 诊断，
+/// 不静默丢弃。
+test "decode - tool_result with non-string non-array content reports Invalid" {
+  let json = "{\"model\":\"m\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"t1\",\"content\":42}]}]}"
+  match messages_to_lux_request(json) {
+    Ok(cr) => {
+      let mut has_invalid = false
+      for d in cr.diagnostics() {
+        if d.status == Invalid && d.field == "content.tool_result.content" {
+          has_invalid = true
+        }
+      }
+      assert_true(has_invalid)
+    }
+    Err(e) => fail("decode failed: \{e}")
+  }
+}

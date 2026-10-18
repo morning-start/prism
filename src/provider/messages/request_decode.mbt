@@ -22,7 +22,10 @@
 
 ///|
 /// 解析 content block → LucentContent
-fn parse_content_block(block : Json) -> Result[@lux.LucentContent, String] {
+fn parse_content_block(
+  block : Json,
+  diagnostics : Array[@lux.ConversionDiagnostic],
+) -> Result[@lux.LucentContent, String] {
   match @internal.field_str(block, "type") {
     Some("text") =>
       match @internal.field_str(block, "text") {
@@ -42,18 +45,20 @@ fn parse_content_block(block : Json) -> Result[@lux.LucentContent, String] {
     Some("tool_result") => {
       let tool_use_id = @internal.field_str(block, "tool_use_id").unwrap_or("")
       let is_error = @internal.field_bool(block, "is_error").unwrap_or(false)
-      let content = match @internal.field_arr(block, "content") {
-        Some(parts) => {
-          let result : Array[@lux.LucentContent] = []
-          let mut i = 0
-          while i < parts.length() {
-            match parse_content_block(parts[i]) {
-              Ok(c) => result.push(c)
-              Err(_) => ()
-            }
-            i = i + 1
-          }
-          result
+      // 官方允许 content 为**字符串**（简写）或 content block 数组。
+      // 字符串形态此前被 `field_arr` 判为 None → 内容整体丢失且无诊断。
+      let content = match @internal.obj_get(block, "content") {
+        Some(String(s)) => [@lux.LucentContent::text(s)]
+        Some(Array(parts)) => parse_content_blocks(parts, diagnostics)
+        Some(_) => {
+          // 其它形态（数字/null 等）：显式诊断，不静默丢弃
+          diagnostics.push(
+            @lux.ConversionDiagnostic::invalid(
+              "content.tool_result.content",
+              Some("tool_result content must be a string or an array of blocks"),
+            ),
+          )
+          []
         }
         None => []
       }
@@ -234,7 +239,7 @@ fn parse_content_blocks(
   let result : Array[@lux.LucentContent] = []
   let mut i = 0
   while i < arr.length() {
-    match parse_content_block(arr[i]) {
+    match parse_content_block(arr[i], diagnostics) {
       Ok(c) => result.push(c)
       Err(e) =>
         diagnostics.push(

@@ -6,6 +6,7 @@
 /// - wasm_stream_new(source, target) → {"value": handle}
 /// - wasm_stream_feed(handle, chunk)  → {"value": ["<sse frame>", ...]}
 /// - wasm_stream_finish(handle)       → {"value": ["<sse frame>", ...]}
+/// - wasm_stream_finished(handle)     → {"value": true|false}（是否已收尾）
 /// - wasm_stream_free(handle)         → {"value": true}
 ///
 /// 句柄表由本模块持有（wasm 单线程，无并发问题）；free 后槽位复用。
@@ -85,6 +86,20 @@ pub fn wasm_stream_finish(handle : Int32) -> String {
         Ok(frames) => frames_envelope(frames)
         Err(e) => wasm_envelope_err(e)
       }
+    None => wasm_envelope_err("invalid stream handle: " + handle.to_string())
+  }
+}
+
+///|
+/// 查询会话是否已收尾 → {"value": true|false}
+///
+/// 宿主在释放会话前可用它自查：未 finish 就释放意味着尾部帧与终止符
+/// **静默丢失**（`finish()` 才冲刷尾部半帧、闭合悬挂块、补终止符）。
+/// 该查询让这个陷阱可观测 —— 不做强制校验，因为直接释放（测试清理、
+/// 提前放弃上游）是合法用法。
+pub fn wasm_stream_finished(handle : Int32) -> String {
+  match get_stream_session(handle) {
+    Some(conv) => wasm_envelope(Json::boolean(conv.finished()))
     None => wasm_envelope_err("invalid stream handle: " + handle.to_string())
   }
 }

@@ -52,6 +52,8 @@ pub fn wasm_stream_feed(Int, String) -> String
 
 pub fn wasm_stream_finish(Int) -> String
 
+pub fn wasm_stream_finished(Int) -> String
+
 pub fn wasm_stream_free(Int) -> String
 
 pub fn wasm_stream_new(String, String) -> String

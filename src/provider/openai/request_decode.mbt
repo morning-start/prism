@@ -171,7 +171,15 @@ fn parse_message(msg_jv : Json) -> @lux.LucentMessage? {
 
 ///|
 /// 解析 tools[] → LucentTool[]
-fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
+///
+/// 非 `type:function` 的内置工具（web_search / file_search / computer_use 等）
+/// 在 Chat Completions 无对等载体：IR 能表达它们（`LucentToolKind`），因此解码
+/// 时保留 kind 并打 Unsupported 诊断（转换契约 #12：不支持的能力必须显式报错，
+/// 不得静默丢弃）。此前这些工具被整体丢弃且**无任何诊断**。
+fn parse_tools(
+  jv : Json,
+  diagnostics : Array[@lux.ConversionDiagnostic],
+) -> Array[@lux.LucentTool] {
   match @internal.field_arr(jv, "tools") {
     Some(tools) => {
       let result : Array[@lux.LucentTool] = []
@@ -191,7 +199,39 @@ fn parse_tools(jv : Json) -> Array[@lux.LucentTool] {
               @lux.LucentTool::new(name, desc, params, strict, Function),
             )
           }
-          _ => ()
+          None =>
+            // 无 function 包装体的工具：仅当**显式声明了 type** 时才按 kind
+            // 保留并打 Unsupported 诊断（IR 能表达，契约 #12 要求显式）。
+            // 完全无 type 的条目（如 `{"name":"no_fn"}`）不是合法工具定义，
+            // 维持既有行为跳过。
+            match @internal.field_str(tool, "type") {
+              None => ()
+              Some(t) => {
+                let kind : @lux.LucentToolKind = match t {
+                  "web_search" | "web_search_preview" => WebSearch
+                  "file_search" => FileSearch
+                  "computer_use" | "computer_use_preview" => ComputerUse
+                  "code_interpreter" => CodeInterpreter
+                  "mcp" => MCP
+                  _ => Native(t)
+                }
+                let name = @internal.field_str(tool, "name").unwrap_or("")
+                // 无 name 且非可命名 kind：用 kind tag 作占位名，保证 JSON 合法
+                let tool_name = if name != "" { name } else { kind.to_tag() }
+                diagnostics.push(
+                  @lux.ConversionDiagnostic::unsupported(
+                    "tools.kind",
+                    Some(
+                      "tool kind not supported by openai-chat, preserved in IR: " +
+                      tool_name,
+                    ),
+                  ),
+                )
+                result.push(
+                  @lux.LucentTool::new(tool_name, None, "{}", None, kind),
+                )
+              }
+            }
         }
         i = i + 1
       }
@@ -240,6 +280,8 @@ pub fn openai_to_lux_request(
     Err(e) => return Err(e)
   }
   let model = @internal.field_str(jv, "model").unwrap_or("")
+  // 诊断收集：decode 全程共用（工具 kind / 非 function 工具等）
+  let diagnostics : Array[@lux.ConversionDiagnostic] = []
   // reasoning_effort 非常规档位的降级诊断标志
   let mut push_degraded = false
   let mut ignored_effort : String? = None
@@ -273,7 +315,7 @@ pub fn openai_to_lux_request(
   } else {
     None
   }
-  let tools_list = parse_tools(jv)
+  let tools_list = parse_tools(jv, diagnostics)
   let tools = if tools_list.length() > 0 { Some(tools_list) } else { None }
   let tool_choice = parse_tool_choice(jv)
   // options
@@ -334,7 +376,6 @@ pub fn openai_to_lux_request(
     None => None
   }
   // 诊断组装：reasoning_effort 降级信息
-  let diagnostics : Array[@lux.ConversionDiagnostic] = []
   if push_degraded {
     diagnostics.push(
       @lux.ConversionDiagnostic::degraded(

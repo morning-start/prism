@@ -117,23 +117,31 @@ partial_json、当前 stop_reason。
 
 ## 最小测试矩阵（12 条验收标准）
 
-至少覆盖以下 12 条才能宣称"三端互转已兼容"：
+至少覆盖以下 12 条才能宣称"互转已兼容"。每条都对应**可执行断言**：
+`src/sdk/test/conversion_matrix_case_test.mbt` 把本矩阵从散文变成逐格断言
+（§"契约矩阵的可执行验证"），provider 级细节仍由 `src/provider/*/*_wbtest.mbt`
+覆盖。
 
-1. 纯文本，非流式
-2. 纯文本，流式
-3. 单工具调用，非流式
-4. 单工具调用，流式参数增量
-5. 多工具调用，非流式
-6. 多工具调用，流式
-7. assistant 文本 + tool call 混合输出
-8. tool_result 回填后的第二轮继续回答
-9. Claude 顺序错误时能正确报错
-10. Responses 只有 `previous_response_id` 且无历史时能拒绝跨端转换
-11. 非法 JSON arguments 时能明确报错
-12. 未支持 output/content 类型时能明确报错
+| # | 验收标准 | 涉及端点（含 Gemini） | 可执行验证 |
+|---|---|---|---|
+| 1 | 纯文本，非流式 | 4 源 × 4 目标全配对 | `conversion_matrix_case_test.mbt` `matrix 1-2` |
+| 2 | 纯文本，流式 | 同上 | `matrix 1-2` + `stream_tool_equivalence_test.mbt` |
+| 3 | 单工具调用，非流式 | openai→responses/messages/gemini | `matrix 3-5` |
+| 4 | 单工具调用，流式参数增量 | 同 3（**逐帧 == 整批**） | `matrix 4-6` + `stream_tool_equivalence_test.mbt` |
+| 5 | 多工具调用，非流式 | 同 3 | `matrix 3-5` |
+| 6 | 多工具调用，流式 | 同 4 | `matrix 4-6` |
+| 7 | assistant 文本 + tool call 混合输出 | responses/messages/gemini/openai | `matrix 7` + `stream_semantic_test.mbt` |
+| 8 | tool_result 回填后的第二轮 | messages/responses/gemini | `matrix 8` |
+| 9 | Claude 顺序硬规则（tool_result 前置） | messages 目标 | `matrix 9` + `messages_wbtest.mbt` #9 系列 |
+| 10 | `previous_response_id` 无历史时拒绝/降级 | openai/messages/gemini | `matrix 10` + `responses_wbtest.mbt` |
+| 11 | 非法 JSON arguments 显式报错 | **对象载体**：messages/gemini；（openai/responses 以字符串承载，直通即保真） | `matrix 11` + `gemini_wbtest.mbt` `invalid tool arguments` |
+| 12 | 未支持 output/content 类型显式诊断 | 4 目标 | `matrix 12` + `openai_wbtest.mbt` `non-function tool kind` |
 
-> 实现状态：12 条全部有直接测试覆盖（`src/provider/*/*_wbtest.mbt` 与
-> `src/sdk/test/cross_protocol_test.mbt`；全仓测试总数见 `docs/status.md`）。
+> 实现状态：12 条全部有直接测试覆盖。**Gemini 已纳入矩阵**（此前只列
+> Chat/Responses/Messages 三列，而实现含第四个适配器）。
+> 逐帧与整批的一致性不变量见 `stream_tool_equivalence_test.mbt`（17 用例）、
+> `stream_session_isolation_test.mbt`（切分/截断/幂等/隔离）与
+> `stream_semantic_test.mbt`（语义完整性，非仅两路径相等）。
 
 ## 不在第一版互转范围的内容
 

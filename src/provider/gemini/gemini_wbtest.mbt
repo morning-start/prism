@@ -1653,3 +1653,80 @@ test "encode - stream finish reason mapping covers all variants" {
     }
   }
 }
+
+///|
+/// functionCall 的 args 必须是合法 JSON 对象：非法 arguments_json 直接内嵌会
+/// 产出非法请求体（Gemini 整请求 400）。修复后：回退 {} + Invalid 诊断。
+test "encode - invalid tool arguments fall back to empty object with Invalid diagnostic" {
+  let req = @lux.LucentRequest::from_messages(
+    "gemini-2.0-flash",
+    None,
+    [
+      @lux.LucentMessage::new(Assistant, [
+        @lux.LucentContent::tool_use("c1", "f1", "oops-not-json", None),
+      ]),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_gemini(req) {
+    Ok(cr) => {
+      // 必须打 Invalid 诊断
+      let mut has_invalid = false
+      for d in cr.diagnostics() {
+        if d.status == Invalid && d.field == "content.tool_use.args" {
+          has_invalid = true
+        }
+      }
+      assert_true(has_invalid)
+      // 不得把非法 JSON 内嵌进请求体（否则上游 400）
+      assert_false(cr.value().contains("oops-not-json"))
+      assert_true(cr.value().contains("\"args\":{}"))
+      // 产出必须是合法 JSON
+      match @internal.parse_protocol_json(cr.value()) {
+        Ok(_) => ()
+        Err(e) => fail("gemini request body is not valid JSON: " + e)
+      }
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}
+
+///|
+/// 非对象但合法的 JSON（如数组/字符串）同样不是 Gemini 能接受的 args 形态
+test "encode - non-object tool arguments fall back with Invalid diagnostic" {
+  let req = @lux.LucentRequest::from_messages(
+    "gemini-2.0-flash",
+    None,
+    [
+      @lux.LucentMessage::new(Assistant, [
+        @lux.LucentContent::tool_use("c1", "f1", "[1,2]", None),
+      ]),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::default(),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_gemini(req) {
+    Ok(cr) => {
+      let mut has_invalid = false
+      for d in cr.diagnostics() {
+        if d.status == Invalid && d.field == "content.tool_use.args" {
+          has_invalid = true
+        }
+      }
+      assert_true(has_invalid)
+      assert_true(cr.value().contains("\"args\":{}"))
+    }
+    Err(e) => fail("encode: \{e}")
+  }
+}

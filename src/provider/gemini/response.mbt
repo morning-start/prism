@@ -144,7 +144,7 @@ pub fn lux_response_to_gemini(
       match c.message.content[j] {
         Text(s, _) =>
           parts.push("{\"text\":\"" + @internal.json_escape(s) + "\"}")
-        ToolUse(tu) => parts.push(function_call_part(tu))
+        ToolUse(tu) => parts.push(function_call_part(tu, diagnostics))
         Thinking(th) => {
           // thought part + thoughtSignature（Gemini 跨轮思考延续凭证）
           let sig_part = match th.signature {

@@ -35,6 +35,8 @@ pub fn convert_response_with_meta(String, String, String) -> Result[ConvertMetaR
 
 pub fn convert_stream(String, String, String) -> Result[@lux.ConversionResult[String], String]
 
+pub fn convert_stream_session(String, String, String) -> Result[Array[String], String]
+
 pub fn convert_stream_typed(String, String, String) -> Result[@lux.ConversionResult[String], PrismError]
 
 pub fn convert_stream_with_hooks(String, String, String, Array[(Array[@lux.LucentStreamEvent], Array[@lux.ConversionDiagnostic]) -> Array[@lux.LucentStreamEvent]]) -> Result[@lux.ConversionResult[String], String]
@@ -355,6 +357,7 @@ pub struct StreamConverter {
 }
 pub fn StreamConverter::feed(Self, String) -> Result[Array[String], String]
 pub fn StreamConverter::finish(Self) -> Result[Array[String], String]
+pub fn StreamConverter::finished(Self) -> Bool
 pub fn StreamConverter::new(String, String) -> Result[Self, String]
 
 // Type aliases

@@ -2171,3 +2171,76 @@ test "encode - reasoning_field unrecognized falls back to reasoning" {
     Err(e) => fail("encode: \{e}")
   }
 }
+
+///|
+/// 非 function 的内置工具（web_search_preview 等）在 Chat 无载体，但 IR 能
+/// 表达（LucentToolKind）：解码时保留 kind + Unsupported 诊断，不得静默丢弃
+/// （契约 #12：不支持的能力必须显式报错）。
+test "openai decode - non-function tool kind preserved with Unsupported diagnostic" {
+  let json = "{\"model\":\"m\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"tools\":[{\"type\":\"function\",\"function\":{\"name\":\"f\",\"parameters\":{}}},{\"type\":\"web_search_preview\"},{\"type\":\"mcp\",\"name\":\"mt\"}]}"
+  match openai_to_lux_request(json) {
+    Ok(cr) => {
+      match cr.value().tools {
+        Some(ts) => {
+          assert_eq(ts.length(), 3)
+          assert_eq(ts[0].kind, Function)
+          // web_search_preview → WebSearch，无 name 时用 kind tag 作占位名
+          assert_eq(ts[1].kind, WebSearch)
+          assert_eq(ts[1].name, "web_search")
+          assert_eq(ts[2].kind, MCP)
+          assert_eq(ts[2].name, "mt")
+        }
+        None => fail("expected tools")
+      }
+      // 两个非 function 工具各产生一条 Unsupported 诊断
+      let mut unsupported = 0
+      for d in cr.diagnostics() {
+        if d.status == Unsupported && d.field == "tools.kind" {
+          unsupported = unsupported + 1
+        }
+      }
+      assert_eq(unsupported, 2)
+    }
+    Err(e) => fail("decode failed: \{e}")
+  }
+}
+
+///|
+/// 完全无 type 的条目不是合法工具定义，维持既有行为跳过（不误判为 Native）
+test "openai decode - tool entry without type is skipped" {
+  let json = "{\"model\":\"m\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"tools\":[{\"name\":\"no_fn\"}]}"
+  match openai_to_lux_request(json) {
+    Ok(cr) => {
+      assert_eq(cr.value().tools, None)
+      assert_eq(cr.diagnostics().length(), 0)
+    }
+    Err(e) => fail("decode failed: \{e}")
+  }
+}
+
+///|
+/// 非 function 工具 kind 的完整映射：file_search / code_interpreter /
+/// computer_use / 未知 type（→ Native）
+test "openai decode - all non-function tool kinds map correctly" {
+  let json = "{\"model\":\"m\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"tools\":[{\"type\":\"file_search\"},{\"type\":\"code_interpreter\"},{\"type\":\"computer_use\"},{\"type\":\"vendor_builtin\"}]}"
+  match openai_to_lux_request(json) {
+    Ok(cr) => {
+      match cr.value().tools {
+        Some(ts) => {
+          assert_eq(ts.length(), 4)
+          assert_eq(ts[0].kind, FileSearch)
+          assert_eq(ts[1].kind, CodeInterpreter)
+          assert_eq(ts[2].kind, ComputerUse)
+          // 未知 type 原样保留为 Native（不丢数据）
+          assert_eq(ts[3].kind, Native("vendor_builtin"))
+          // 无 name 时用 kind tag 作占位名
+          assert_eq(ts[0].name, "file_search")
+          assert_eq(ts[3].name, "vendor_builtin")
+        }
+        None => fail("expected tools")
+      }
+      assert_eq(cr.diagnostics().length(), 4)
+    }
+    Err(e) => fail("decode failed: \{e}")
+  }
+}

@@ -282,6 +282,54 @@ pub fn StreamConverter::new(
 }
 
 ///|
+/// 会话是否已收尾（`finish()` 是否调用过）。
+///
+/// 宿主可在释放会话前查询：未 finish 就丢弃会话意味着**尾部帧与终止符
+/// 静默丢失**（`finish()` 才冲刷尾部半帧、闭合悬挂块、补 Done）。
+/// wasm 侧 `wasm_stream_free` 不再强制校验（测试清理等合法用法需要直接释放），
+/// 因此把可观测性放在这里，供宿主与调试链路自查。
+pub fn StreamConverter::finished(self : StreamConverter) -> Bool {
+  self.closed
+}
+
+///|
+/// 一次性完成整条流的转换（便捷入口，**不会遗漏 finish**）。
+///
+/// 等价于 `new` + 单个 `feed(all_chunks)` + `finish`，但把三步收敛为一次调用 ——
+/// 宿主只需拿到完整 SSE 文本（或最后一个 chunk）时用它，即可规避"忘记调
+/// `finish()` 导致尾帧丢失"这一使用陷阱。
+///
+/// 注意：这是**非增量**入口（等价于整缓冲 `convert_stream` 的会话实现），
+/// 需要 TFTB（首帧即转发）的场景仍应使用 `feed`/`finish` 分帧 API。
+pub fn convert_stream_session(
+  source : String,
+  target : String,
+  sse_str : String,
+) -> Result[Array[String], String] {
+  match StreamConverter::new(source, target) {
+    Ok(conv) => {
+      let out : Array[String] = []
+      match conv.feed(sse_str) {
+        Ok(frames) =>
+          for f in frames {
+            out.push(f)
+          }
+        Err(e) => return Err(e)
+      }
+      match conv.finish() {
+        Ok(frames) =>
+          for f in frames {
+            out.push(f)
+          }
+        Err(e) => return Err(e)
+      }
+      Ok(out)
+    }
+    Err(e) => Err(e)
+  }
+}
+
+///|
 /// 喂入一个上游 chunk，返回目标协议 SSE 帧数组（可能为空：半帧缓冲中）
 pub fn StreamConverter::feed(
   self : StreamConverter,
@@ -310,7 +358,15 @@ pub fn StreamConverter::finish(
       // 冲刷保持的 Finish 帧（无后续 Usage 帧时）
       let pending = self.held_events.copy()
       self.held_events = []
-      // CR-002 A5：截断流（整场没有 Finish）仍打开的块在此闭合 —— 否则 messages
+      // 源解码会话的收尾事件（P1）：先让解码会话发出它持有的块闭合
+      // （openai 源在流尾闭合仍打开的块），经规整器校验后并入待编码集。
+      // 必须**先于**下方"补齐 normalizer 仍打开的块"执行：否则 normalizer
+      // 的 open_blocks 已被清空，解码会话的 BlockEnd 会因"孤儿"被丢弃。
+      let closing = self.decoder.finish()
+      for ev in self.normalizer.normalize(closing) {
+        pending.push(ev)
+      }
+      // CR-002 A5：解码会话未覆盖的、仍打开的块在此闭合 —— 否则 messages
       // 目标会留下未闭合的 content_block。逆序闭合与整缓冲路径的栈语义一致。
       let mut k = self.normalizer.open_blocks.length() - 1
       while k >= 0 {
@@ -318,12 +374,6 @@ pub fn StreamConverter::finish(
         k = k - 1
       }
       self.normalizer.open_blocks = []
-      // 源解码会话的收尾事件（P1：openai 解码器在流尾闭合仍打开的块，
-      // 与整批路径的 Finish 分支行为一致）；规整化后并入待编码事件。
-      let closing = self.decoder.finish()
-      for ev in self.normalizer.normalize(closing) {
-        pending.push(ev)
-      }
       if pending.length() > 0 {
         match self.encode_events(pending) {
           Ok(sse) => if sse.trim().length() > 0 { emitted.push(sse) }

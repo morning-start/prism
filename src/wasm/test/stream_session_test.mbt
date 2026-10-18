@@ -158,3 +158,28 @@ test "wasm_stream_new - unknown provider returns error" {
   let result = @wasm.wasm_stream_new("no-such", "messages")
   assert_true(result.contains("\"error\""))
 }
+
+///|
+/// wasm_stream_finished 暴露会话收尾状态：宿主在释放前可自查是否已 finish
+/// （未 finish 就释放意味着尾帧与终止符静默丢失）。
+test "wasm_stream session - finished reports session closure state" {
+  let new_env = @wasm.wasm_stream_new("openai", "messages")
+  let handle = match envelope_num(new_env, "value") {
+    Some(n) => n.to_int()
+    None => fail("expected handle")
+  }
+  // 新建会话：未收尾
+  assert_true(@wasm.wasm_stream_finished(handle).contains("\"value\":false"))
+  let _ = @wasm.wasm_stream_feed(
+    handle, "data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"m\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hi\"}}]}\n\n",
+  )
+  // 只 feed 未 finish：仍未收尾
+  assert_true(@wasm.wasm_stream_finished(handle).contains("\"value\":false"))
+  let _ = @wasm.wasm_stream_finish(handle)
+  // finish 后：已收尾
+  assert_true(@wasm.wasm_stream_finished(handle).contains("\"value\":true"))
+  // 越界句柄 → error（不 panic）
+  assert_true(@wasm.wasm_stream_finished(999).contains("\"error\""))
+  assert_true(@wasm.wasm_stream_finished(-1).contains("\"error\""))
+  let _ = @wasm.wasm_stream_free(handle)
+}
