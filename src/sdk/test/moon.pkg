@@ -9,5 +9,4 @@ import {
   "moonbitlang/core/json",
   "moonbitlang/core/quickcheck" @coreqc,
   "moonbitlang/quickcheck" @qc,
-  "moonbitlang/quickcheck/gen",
 } for "test"

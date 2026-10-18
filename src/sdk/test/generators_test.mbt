@@ -10,15 +10,15 @@
 
 ///|
 /// 按随机串长度取模选择池元素（长度恒非负，避免负下标）
-fn pick_str(n : Int, pool : Array[String]) -> String {
+fn pick_str(n : Int32, pool : Array[String]) -> String {
   pool[n % pool.length()]
 }
 
 ///|
 /// 文本响应生成器：id/model 随机、choices 1~2 条（Assistant 单 Text 块、Stop）、
 /// created_at/usage 可选（None 或简单值）
-fn gen_text_resp() -> @gen.Gen[@lux.LucentResponse] {
-  Gen(fn(size, r0) {
+fn gen_text_resp() -> @coreqc.Generator[@lux.LucentResponse] {
+  Generator(fn(size, r0) {
     let r1 = r0.split()
     let r2 = r1.split()
     let r3 = r2.split()
@@ -30,9 +30,9 @@ fn gen_text_resp() -> @gen.Gen[@lux.LucentResponse] {
     let mstr : String = @coreqc.Arbitrary::arbitrary(size, r1)
     // created_at 恒 None：anthropic-messages 响应无 created_at 载体，
     // 生成 Some 会破坏 G5 跨端点差分一致性（无损子集要求该字段缺席）
-    let created_at : Int? = None
+    let created_at : Int32? = None
     let has_usage : Bool = @coreqc.Arbitrary::arbitrary(size, r2)
-    let usint : Int = @coreqc.Arbitrary::arbitrary(size, r3)
+    let usint : Int32 = @coreqc.Arbitrary::arbitrary(size, r3)
     let usage = if has_usage {
       let p = usint.abs() % 10000
       Some(@lux.LucentUsage::new(p, p / 2, p + p / 2))
@@ -61,7 +61,7 @@ fn gen_text_resp() -> @gen.Gen[@lux.LucentResponse] {
 
 ///|
 /// 按随机整数选择扩展内容块类型（0=thinking 1=audio 2=native 3=file_uri 图片 4=annotations 文本）
-fn ext_block_by(pick : Int, txt : String) -> @lux.LucentContent {
+fn ext_block_by(pick : Int32, txt : String) -> @lux.LucentContent {
   match pick % 5 {
     0 => @lux.LucentContent::thinking(txt, None)
     1 =>
@@ -86,8 +86,8 @@ fn ext_block_by(pick : Int, txt : String) -> @lux.LucentContent {
 /// 扩展字段请求生成器：conversation 1~3 条消息，首条必含 ≥1 个扩展内容块，
 /// 其余消息为文本；随机插入 AgentAction 会话项；随机附 server tools、
 /// reasoning 配置与 capabilities 声明
-fn gen_extended_req() -> @gen.Gen[@lux.LucentRequest] {
-  Gen(fn(size, r0) {
+fn gen_extended_req() -> @coreqc.Generator[@lux.LucentRequest] {
+  Generator(fn(size, r0) {
     let r1 = r0.split()
     let r2 = r1.split()
     let r3 = r2.split()
@@ -121,7 +121,7 @@ fn gen_extended_req() -> @gen.Gen[@lux.LucentRequest] {
       let blocks : Array[@lux.LucentContent] = []
       if i == 0 {
         // 首条消息：1 个扩展块 + 1 个文本块
-        let pick : Int = @coreqc.Arbitrary::arbitrary(size, r_blocks)
+        let pick : Int32 = @coreqc.Arbitrary::arbitrary(size, r_blocks)
         let r_txt = r_blocks.split()
         let txt : String = @coreqc.Arbitrary::arbitrary(size, r_txt)
         blocks.push(ext_block_by(pick, txt))
@@ -174,7 +174,7 @@ fn gen_extended_req() -> @gen.Gen[@lux.LucentRequest] {
     }
     // reasoning：随机 None 或 enabled(预算)；capabilities：随机声明
     let rb : Bool = @coreqc.Arbitrary::arbitrary(size, r4)
-    let rint : Int = @coreqc.Arbitrary::arbitrary(size, r4.split())
+    let rint : Int32 = @coreqc.Arbitrary::arbitrary(size, r4.split())
     let reasoning = if rb {
       Some(@lux.LucentReasoningConfig::enabled(Some(rint.abs() % 1000 + 1)))
     } else {

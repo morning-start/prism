@@ -15,8 +15,8 @@
 
 ///|
 /// 有损请求生成器：max_output_tokens 可缺省、文本可空（放宽 G5 无损域）
-fn gen_lossy_req() -> @gen.Gen[@lux.LucentRequest] {
-  Gen(fn(size, r0) {
+fn gen_lossy_req() -> @coreqc.Generator[@lux.LucentRequest] {
+  Generator(fn(size, r0) {
     let r1 = r0.split()
     let r2 = r1.split()
     let r3 = r2.split()
@@ -91,8 +91,8 @@ fn gen_lossy_req() -> @gen.Gen[@lux.LucentRequest] {
 
 ///|
 /// 有损响应生成器：created_at 可缺省、多 choice（放宽 G5 无损域）
-fn gen_lossy_resp() -> @gen.Gen[@lux.LucentResponse] {
-  Gen(fn(size, r0) {
+fn gen_lossy_resp() -> @coreqc.Generator[@lux.LucentResponse] {
+  Generator(fn(size, r0) {
     let r1 = r0.split()
     let r2 = r1.split()
     let r3 = r2.split()
@@ -102,14 +102,14 @@ fn gen_lossy_resp() -> @gen.Gen[@lux.LucentResponse] {
     let idstr : String = @coreqc.Arbitrary::arbitrary(size, r0)
     let mstr : String = @coreqc.Arbitrary::arbitrary(size, r1)
     let has_created : Bool = @coreqc.Arbitrary::arbitrary(size, r2)
-    let cint : Int = @coreqc.Arbitrary::arbitrary(size, r3)
+    let cint : Int32 = @coreqc.Arbitrary::arbitrary(size, r3)
     let created_at = if has_created {
       Some(cint.abs() % 2000000000)
     } else {
       None
     }
     let has_usage : Bool = @coreqc.Arbitrary::arbitrary(size, r4)
-    let usint : Int = @coreqc.Arbitrary::arbitrary(size, r4.split())
+    let usint : Int32 = @coreqc.Arbitrary::arbitrary(size, r4.split())
     let usage = if has_usage {
       let p = usint.abs() % 10000
       Some(@lux.LucentUsage::new(p, p / 2, p + p / 2))

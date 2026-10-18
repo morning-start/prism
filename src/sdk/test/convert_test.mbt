@@ -26,7 +26,7 @@ test "openai stream to responses stream - full event sequence" {
       // 必须包含 output_text.done
       assert_true(sse.contains("response.output_text.done"))
       // 必须包含 response.completed（只出现一次）
-      let completed_count = sse.split("event: response.completed").length() - 1
+      let completed_count = sse.split("event: response.completed").count() - 1
       assert_eq(completed_count, 1)
       // 不应包含 [DONE]
       assert_false(sse.contains("[DONE]"))
@@ -42,7 +42,7 @@ test "openai stream to responses stream - full event sequence" {
         j = j + 1
       }
       // 调试：统计所有事件类型
-      let event_type_counts : Map[String, Int] = Map([])
+      let event_type_counts : Map[String, Int32] = Map([])
       let all_lines = sse.split("\n").to_array()
       let mut j = 0
       while j < all_lines.length() {
@@ -68,12 +68,12 @@ test "openai stream to responses stream - full event sequence" {
       if has_reasoning_done {
         let reasoning_done_count = sse
           .split("event: response.reasoning_summary_part.done")
-          .length() -
+          .count() -
           1
         assert_eq(reasoning_done_count, 1)
       }
       // 断言：response.completed 只出现一次
-      let completed_count = sse.split("event: response.completed").length() - 1
+      let completed_count = sse.split("event: response.completed").count() - 1
       assert_eq(completed_count, 1)
       // 断言：不应包含 [DONE]
       assert_false(sse.contains("[DONE]"))

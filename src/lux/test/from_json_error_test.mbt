@@ -111,7 +111,7 @@ test "@lux.LucentToolChoice from_json - malformed inputs reject" {
 ///|
 test "@lux.LucentToolChoice from_json - unknown string preserved as Native" {
   match @lux.LucentToolChoice::from_json(@json.parse("\"bad\"")) {
-    Ok(@lux.LucentToolChoice::Native(tag)) => assert_eq(tag, "bad")
+    Ok(Native(tag)) => assert_eq(tag, "bad")
     _ => fail("unknown tool_choice must be preserved as Native")
   }
   // round-trip 对称
@@ -119,7 +119,7 @@ test "@lux.LucentToolChoice from_json - unknown string preserved as Native" {
     @lux.LucentToolChoice::from_json(
       @lux.LucentToolChoice::Native("bad").to_json(),
     ) {
-    Ok(@lux.LucentToolChoice::Native(tag)) => assert_eq(tag, "bad")
+    Ok(Native(tag)) => assert_eq(tag, "bad")
     _ => fail("Native tool_choice round-trip broken")
   }
 }
@@ -139,14 +139,14 @@ test "@lux.LucentStructuredOutput from_json - malformed inputs reject" {
 ///|
 test "@lux.LucentStructuredOutput from_json - unknown string preserved as Native" {
   match @lux.LucentStructuredOutput::from_json(@json.parse("\"unknown\"")) {
-    Ok(@lux.LucentStructuredOutput::Native(tag)) => assert_eq(tag, "unknown")
+    Ok(Native(tag)) => assert_eq(tag, "unknown")
     _ => fail("unknown structured_output must be preserved as Native")
   }
   match
     @lux.LucentStructuredOutput::from_json(
       @lux.LucentStructuredOutput::Native("unknown").to_json(),
     ) {
-    Ok(@lux.LucentStructuredOutput::Native(tag)) => assert_eq(tag, "unknown")
+    Ok(Native(tag)) => assert_eq(tag, "unknown")
     _ => fail("Native structured_output round-trip broken")
   }
 }
@@ -167,14 +167,14 @@ test "@lux.LucentReasoningEffort from_json - malformed inputs reject" {
 ///|
 test "@lux.LucentReasoningEffort from_json - unknown tier preserved as Native" {
   match @lux.LucentReasoningEffort::from_json(@json.parse("\"ultra\"")) {
-    Ok(@lux.LucentReasoningEffort::Native(tag)) => assert_eq(tag, "ultra")
+    Ok(Native(tag)) => assert_eq(tag, "ultra")
     _ => fail("unknown effort tier must be preserved as Native")
   }
   match
     @lux.LucentReasoningEffort::from_json(
       @lux.LucentReasoningEffort::Native("ultra").to_json(),
     ) {
-    Ok(@lux.LucentReasoningEffort::Native(tag)) => assert_eq(tag, "ultra")
+    Ok(Native(tag)) => assert_eq(tag, "ultra")
     _ => fail("Native effort round-trip broken")
   }
 }
@@ -194,14 +194,14 @@ test "@lux.LucentReasoningSummary from_json - malformed inputs reject" {
 ///|
 test "@lux.LucentReasoningSummary from_json - unknown detail preserved as Native" {
   match @lux.LucentReasoningSummary::from_json(@json.parse("\"verbose\"")) {
-    Ok(@lux.LucentReasoningSummary::Native(tag)) => assert_eq(tag, "verbose")
+    Ok(Native(tag)) => assert_eq(tag, "verbose")
     _ => fail("unknown summary detail must be preserved as Native")
   }
   match
     @lux.LucentReasoningSummary::from_json(
       @lux.LucentReasoningSummary::Native("verbose").to_json(),
     ) {
-    Ok(@lux.LucentReasoningSummary::Native(tag)) => assert_eq(tag, "verbose")
+    Ok(Native(tag)) => assert_eq(tag, "verbose")
     _ => fail("Native summary round-trip broken")
   }
 }
@@ -983,7 +983,7 @@ test "@lux.LucentReasoningConfig from_json - unknown effort and summary preserve
     ) {
     Ok(c) =>
       match c.effort {
-        Some(@lux.LucentReasoningEffort::Native(tag)) => assert_eq(tag, "bogus")
+        Some(Native(tag)) => assert_eq(tag, "bogus")
         _ => fail("expected effort preserved as Native(\"bogus\")")
       }
     Err(e) => fail("expected Ok for reasoning config with unknown effort: \{e}")
@@ -994,8 +994,7 @@ test "@lux.LucentReasoningConfig from_json - unknown effort and summary preserve
     ) {
     Ok(c) =>
       match c.summary {
-        Some(@lux.LucentReasoningSummary::Native(tag)) =>
-          assert_eq(tag, "bogus")
+        Some(Native(tag)) => assert_eq(tag, "bogus")
         _ => fail("expected summary preserved as Native(\"bogus\")")
       }
     Err(e) =>
@@ -1038,8 +1037,7 @@ test "@lux.LucentOptions from_json - unknown structured_output preserved as Nati
     ) {
     Ok(o) =>
       match o.structured_output {
-        Some(@lux.LucentStructuredOutput::Native(tag)) =>
-          assert_eq(tag, "bogus")
+        Some(Native(tag)) => assert_eq(tag, "bogus")
         _ => fail("expected structured_output preserved as Native(\"bogus\")")
       }
     Err(e) =>
@@ -1121,7 +1119,7 @@ test "@lux.LucentRequest from_json - optional fields soft-fail to absent" {
       // P1-2：未知 tool_choice 字符串值经 Native 兜底保留（不再软失败为
       // None=无约束——那会把"限定工具"的请求悄悄变成自由调用）
       match r.tool_choice {
-        Some(@lux.LucentToolChoice::Native(tag)) => assert_eq(tag, "bogus")
+        Some(Native(tag)) => assert_eq(tag, "bogus")
         _ => fail("expected tool_choice preserved as Native(\"bogus\")")
       }
       match r.capabilities {

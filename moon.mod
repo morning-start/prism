@@ -17,5 +17,5 @@ preferred_target = "wasm-gc"
 description = "A unified LLM protocol middleware converting between OpenAI, Anthropic, Gemini and other provider formats via the Lucent IR neutral protocol"
 
 import {
-  "moonbitlang/quickcheck@0.14.0",
+  "moonbitlang/quickcheck@0.15.0",
 }

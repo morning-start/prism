@@ -57,37 +57,34 @@ pub fn LucentStreamEvent::to_json(self : LucentStreamEvent) -> Json {
     ItemStart(idx, item) =>
       Json::object({
         "event": Json::string("item_start"),
-        "index": idx.to_json(),
+        "index": Json(idx),
         "item": item.to_json(),
       })
     BlockStart(idx, bt) =>
       Json::object({
         "event": Json::string("block_start"),
-        "index": idx.to_json(),
+        "index": Json(idx),
         "block_type": bt.to_json(),
       })
     BlockDelta(idx, delta) =>
       Json::object({
         "event": Json::string("block_delta"),
-        "index": idx.to_json(),
+        "index": Json(idx),
         "delta": delta.to_json(),
       })
     BlockEnd(idx) =>
-      Json::object({
-        "event": Json::string("block_end"),
-        "index": idx.to_json(),
-      })
+      Json::object({ "event": Json::string("block_end"), "index": Json(idx) })
     ItemEnd(idx) =>
-      Json::object({ "event": Json::string("item_end"), "index": idx.to_json() })
+      Json::object({ "event": Json::string("item_end"), "index": Json(idx) })
     BlockDiscard(idx) =>
       Json::object({
         "event": Json::string("block_discard"),
-        "index": idx.to_json(),
+        "index": Json(idx),
       })
     Annotations(idx, anns) =>
       Json::object({
         "event": Json::string("annotations"),
-        "index": idx.to_json(),
+        "index": Json(idx),
         "annotations": Json::array(anns.map(fn(a) { a.to_json() })),
       })
     Finish(fr) =>

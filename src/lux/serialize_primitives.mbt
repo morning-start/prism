@@ -84,11 +84,11 @@ pub fn LucentAnnotation::to_json(self : LucentAnnotation) -> Json {
     None => ()
   }
   match self.start {
-    Some(s) => fields["start"] = s.to_json()
+    Some(s) => fields["start"] = Json(s)
     None => ()
   }
   match self.end {
-    Some(e) => fields["end"] = e.to_json()
+    Some(e) => fields["end"] = Json(e)
     None => ()
   }
   Json::object(fields)
@@ -98,7 +98,7 @@ pub fn LucentAnnotation::to_json(self : LucentAnnotation) -> Json {
 pub fn LucentThinking::to_json(self : LucentThinking) -> Json {
   let fields : Map[String, Json] = {
     "text": Json::string(self.text),
-    "redacted": self.redacted.to_json(),
+    "redacted": Json(self.redacted),
   }
   match self.signature {
     Some(s) => fields["signature"] = Json::string(s)
@@ -125,7 +125,7 @@ pub fn LucentToolResult::to_json(self : LucentToolResult) -> Json {
   Json::object({
     "tool_use_id": Json::string(self.tool_use_id),
     "content": Json::array(self.content.map(fn(c) { c.to_json() })),
-    "is_error": self.is_error.to_json(),
+    "is_error": Json(self.is_error),
   })
 }
 
@@ -280,7 +280,7 @@ pub fn LucentTool::to_json(self : LucentTool) -> Json {
     None => ()
   }
   match self.strict {
-    Some(s) => fields["strict"] = s.to_json()
+    Some(s) => fields["strict"] = Json(s)
     None => ()
   }
   Json::object(fields)
@@ -318,21 +318,21 @@ pub fn LucentStructuredOutput::to_json(self : LucentStructuredOutput) -> Json {
 
 ///|
 pub fn LucentOptions::to_json(self : LucentOptions) -> Json {
-  let fields : Map[String, Json] = { "stream": self.stream.to_json() }
+  let fields : Map[String, Json] = { "stream": Json(self.stream) }
   match self.temperature {
-    Some(t) => fields["temperature"] = t.to_json()
+    Some(t) => fields["temperature"] = Json(t)
     None => ()
   }
   match self.top_p {
-    Some(p) => fields["top_p"] = p.to_json()
+    Some(p) => fields["top_p"] = Json(p)
     None => ()
   }
   match self.top_k {
-    Some(k) => fields["top_k"] = k.to_json()
+    Some(k) => fields["top_k"] = Json(k)
     None => ()
   }
   match self.max_output_tokens {
-    Some(n) => fields["max_output_tokens"] = n.to_json()
+    Some(n) => fields["max_output_tokens"] = Json(n)
     None => ()
   }
   match self.stop {
@@ -341,7 +341,7 @@ pub fn LucentOptions::to_json(self : LucentOptions) -> Json {
     None => ()
   }
   match self.candidate_count {
-    Some(n) => fields["candidate_count"] = n.to_json()
+    Some(n) => fields["candidate_count"] = Json(n)
     None => ()
   }
   match self.structured_output {
@@ -349,7 +349,7 @@ pub fn LucentOptions::to_json(self : LucentOptions) -> Json {
     None => ()
   }
   match self.store {
-    Some(s) => fields["store"] = s.to_json()
+    Some(s) => fields["store"] = Json(s)
     None => ()
   }
   // previous_response_id（T8 标准可选字段）：Responses 有状态续接载体
@@ -389,9 +389,9 @@ pub fn LucentReasoningSummary::to_json(self : LucentReasoningSummary) -> Json {
 
 ///|
 pub fn LucentReasoningConfig::to_json(self : LucentReasoningConfig) -> Json {
-  let fields : Map[String, Json] = { "enabled": self.enabled.to_json() }
+  let fields : Map[String, Json] = { "enabled": Json(self.enabled) }
   match self.budget_tokens {
-    Some(n) => fields["budget_tokens"] = n.to_json()
+    Some(n) => fields["budget_tokens"] = Json(n)
     None => ()
   }
   match self.effort {
