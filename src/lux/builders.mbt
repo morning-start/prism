@@ -64,8 +64,8 @@ pub fn LucentAnnotation::new(
   kind : LucentAnnotationKind,
   text : String?,
   reference : String?,
-  start : Int?,
-  end : Int?,
+  start : Int32?,
+  end : Int32?,
 ) -> LucentAnnotation {
   { kind, text, reference, start, end, }
 }
@@ -357,11 +357,11 @@ pub fn LucentOptions::default() -> LucentOptions {
 pub fn LucentOptions::new(
   temperature : Double?,
   top_p : Double?,
-  top_k : Int?,
-  max_output_tokens : Int?,
+  top_k : Int32?,
+  max_output_tokens : Int32?,
   stop : Array[String]?,
   stream : Bool,
-  candidate_count : Int?,
+  candidate_count : Int32?,
   structured_output : LucentStructuredOutput?,
   store : Bool?,
   extras : Map[String, Json]?,
@@ -439,7 +439,7 @@ pub fn LucentCapabilities::create(
 }
 
 ///|
-pub fn LucentReasoningConfig::enabled(budget : Int?) -> LucentReasoningConfig {
+pub fn LucentReasoningConfig::enabled(budget : Int32?) -> LucentReasoningConfig {
   { enabled: true, budget_tokens: budget, effort: None, summary: None, }
 }
 
@@ -460,7 +460,7 @@ pub fn LucentReasoningConfig::disabled() -> LucentReasoningConfig {
 /// 构建替换 budget_tokens 的副本（保留其余字段）
 pub fn LucentReasoningConfig::copy_with_budget(
   self : LucentReasoningConfig,
-  budget_tokens : Int?,
+  budget_tokens : Int32?,
 ) -> LucentReasoningConfig {
   { ..self, budget_tokens, }
 }

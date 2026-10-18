@@ -18,7 +18,7 @@ let stream_sessions : Array[@sdk.StreamConverter?] = []
 
 ///|
 /// 分配句柄（复用已释放槽位，否则追加）
-fn alloc_stream_slot(conv : @sdk.StreamConverter) -> Int {
+fn alloc_stream_slot(conv : @sdk.StreamConverter) -> Int32 {
   let mut i = 0
   while i < stream_sessions.length() {
     match stream_sessions[i] {
@@ -36,7 +36,7 @@ fn alloc_stream_slot(conv : @sdk.StreamConverter) -> Int {
 
 ///|
 /// 取会话（句柄越界或已释放 → None）
-fn get_stream_session(handle : Int) -> @sdk.StreamConverter? {
+fn get_stream_session(handle : Int32) -> @sdk.StreamConverter? {
   if handle < 0 || handle >= stream_sessions.length() {
     None
   } else {
@@ -65,7 +65,7 @@ pub fn wasm_stream_new(source : String, target : String) -> String {
 
 ///|
 /// 喂入一个上游 chunk → {"value": [目标 SSE 帧...]}（可能为空数组）
-pub fn wasm_stream_feed(handle : Int, chunk : String) -> String {
+pub fn wasm_stream_feed(handle : Int32, chunk : String) -> String {
   match get_stream_session(handle) {
     Some(conv) =>
       match conv.feed(chunk) {
@@ -78,7 +78,7 @@ pub fn wasm_stream_feed(handle : Int, chunk : String) -> String {
 
 ///|
 /// 流结束：冲刷尾部半帧并发射保持的 Finish 帧
-pub fn wasm_stream_finish(handle : Int) -> String {
+pub fn wasm_stream_finish(handle : Int32) -> String {
   match get_stream_session(handle) {
     Some(conv) =>
       match conv.finish() {
@@ -91,7 +91,7 @@ pub fn wasm_stream_finish(handle : Int) -> String {
 
 ///|
 /// 释放会话（槽位置空复用）；重复释放返回错误
-pub fn wasm_stream_free(handle : Int) -> String {
+pub fn wasm_stream_free(handle : Int32) -> String {
   if handle < 0 || handle >= stream_sessions.length() {
     return wasm_envelope_err("invalid stream handle: " + handle.to_string())
   }

@@ -85,8 +85,8 @@ fn scan_by_model(
   providers : Array[ProviderRegistration],
   model_name : String,
   initial_best : ProviderRegistration?,
-  initial_score : Int,
-) -> (ProviderRegistration?, Int) {
+  initial_score : Int32,
+) -> (ProviderRegistration?, Int32) {
   let mut best = initial_best
   let mut best_score = initial_score
   let mut i = 0
@@ -199,7 +199,7 @@ fn pattern_parts(pattern : String) -> Array[String] {
 }
 
 ///|
-fn find_comma(s : String, start : Int) -> Int {
+fn find_comma(s : String, start : Int32) -> Int32 {
   let mut i = start
   while i < s.length() {
     if s[i] == ',' {
@@ -216,7 +216,7 @@ fn find_comma(s : String, start : Int) -> Int {
 /// 评分 = stars * 1000 + 长度（无通配符的字符数）
 /// * 数量越多越具体；同 * 数量时，越长越具体
 /// 例如："gpt-*-codex" (1011) > "gpt-*" (1004) > "o*" (1002)
-fn pattern_specificity(pattern : String) -> Int {
+fn pattern_specificity(pattern : String) -> Int32 {
   let parts = pattern_parts(pattern)
   let mut best = 0
   let mut i = 0
@@ -233,7 +233,7 @@ fn pattern_specificity(pattern : String) -> Int {
 
 ///|
 /// 统计字符串中 * 的个数
-fn count_star(s : String) -> Int {
+fn count_star(s : String) -> Int32 {
   let mut total = 0
   let mut i = 0
   while i < s.length() {
@@ -247,7 +247,7 @@ fn count_star(s : String) -> Int {
 
 ///|
 /// 查找第一个 '*' 的位置，未找到返回 -1
-fn find_first_star(s : String) -> Int {
+fn find_first_star(s : String) -> Int32 {
   let mut i = 0
   while i < s.length() {
     if s[i] == '*' {
@@ -260,7 +260,7 @@ fn find_first_star(s : String) -> Int {
 
 ///|
 /// 提取子串
-fn substring(s : String, start : Int, end : Int) -> String {
+fn substring(s : String, start : Int32, end : Int32) -> String {
   if start < 0 || end > s.length() || start > end {
     return ""
   }

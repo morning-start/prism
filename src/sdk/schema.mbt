@@ -43,7 +43,7 @@ pub struct ProviderSchema {
   top_k : FieldConstraint
   max_output_tokens : FieldConstraint
   /// 响应字段约束
-  resp_min_choices : Int
+  resp_min_choices : Int32
   /// 是否允许发送函数/工具调用字段（部分 provider 不支持）
   supports_tools : Bool
   /// 是否支持 system 指令作为顶层字段（而非消息列表中）

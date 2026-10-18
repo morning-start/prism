@@ -48,7 +48,7 @@ pub extend DiagnosticPolicy with @moonbitlang/core/debug.Debug::{to_repr}
 
 ///|
 /// 诊断严重度排序（数值越大越重）：Exact < Degraded < Unsupported < Invalid
-fn status_severity(status : @lux.ConversionStatus) -> Int {
+fn status_severity(status : @lux.ConversionStatus) -> Int32 {
   match status {
     Exact => 0
     Degraded => 1
@@ -59,7 +59,7 @@ fn status_severity(status : @lux.ConversionStatus) -> Int {
 
 ///|
 /// 策略阈值：达到该严重度即失败（ReportOnly 返回 -1 = 不失败）
-fn policy_threshold(policy : DiagnosticPolicy) -> Int {
+fn policy_threshold(policy : DiagnosticPolicy) -> Int32 {
   match policy {
     ReportOnly => -1
     FailOnUnsupported => 2
@@ -119,10 +119,10 @@ pub fn[T] enforce_policy(
 /// DiagnosticCounts — 按 status 的计数（ConversionStatus 无 Hash 实现，
 /// 用专用结构体而非 Map；运维直接读字段）
 pub struct DiagnosticCounts {
-  mut exact : Int
-  mut degraded : Int
-  mut unsupported : Int
-  mut invalid : Int
+  mut exact : Int32
+  mut degraded : Int32
+  mut unsupported : Int32
+  mut invalid : Int32
 } derive(Eq, Debug)
 
 ///|
@@ -146,7 +146,7 @@ pub fn DiagnosticCounts::default() -> DiagnosticCounts {
 
 ///|
 /// 计数总数
-pub fn DiagnosticCounts::total(self : DiagnosticCounts) -> Int {
+pub fn DiagnosticCounts::total(self : DiagnosticCounts) -> Int32 {
   self.exact + self.degraded + self.unsupported + self.invalid
 }
 
@@ -213,7 +213,7 @@ pub fn DiagnosticCollector::count_by_status(
 pub fn DiagnosticCollector::count_by_field(
   self : DiagnosticCollector,
   field : String,
-) -> Int {
+) -> Int32 {
   let mut n = 0
   for d in self.all {
     if d.field == field {
@@ -225,7 +225,7 @@ pub fn DiagnosticCollector::count_by_field(
 
 ///|
 /// 诊断总数
-pub fn DiagnosticCollector::total(self : DiagnosticCollector) -> Int {
+pub fn DiagnosticCollector::total(self : DiagnosticCollector) -> Int32 {
   self.all.length()
 }
 

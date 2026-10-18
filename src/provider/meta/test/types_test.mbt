@@ -316,8 +316,8 @@ fn schema_for(
 fn req_with(
   temperature : Double?,
   top_p : Double?,
-  top_k : Int?,
-  max_output_tokens : Int?,
+  top_k : Int32?,
+  max_output_tokens : Int32?,
 ) -> @lux.LucentRequest {
   @lux.LucentRequest::from_messages(
     "prov-model",

@@ -22,7 +22,7 @@ fn lookup(provider : String) -> @sdk.ProviderRegistration? {
 ///|
 /// 将 Bytes 引用转为线性内存地址（i32）。
 /// WASM 目标下 Bytes 就是 i32 指针，与 Int 同构。
-fn bytes_ptr_to_int(b : Bytes) -> Int = "%identity"
+fn bytes_ptr_to_int(b : Bytes) -> Int32 = "%identity"
 
 ///|
 /// 初始化暂存缓冲区。返回缓冲区数据的线性内存地址（i32）。
@@ -30,7 +30,7 @@ fn bytes_ptr_to_int(b : Bytes) -> Int = "%identity"
 /// 宿主调用一次后，将 UTF-16LE 数据写入返回的地址。
 /// 布局：`addr - 4` 处为 u32 LE 字节长度，`addr` 处为 UTF-16LE 载荷。
 /// 推荐大小：8192 字节/参数 × 3 参数 = 24576。
-pub fn wasm_init_scratch(size : Int) -> Int {
+pub fn wasm_init_scratch(size : Int32) -> Int32 {
   let buf = Bytes::make(size, b'\x00')
   // Bytes 在 WASM 中是 i32 指针，指向数据载荷（对象头之后 8 字节）
   // MoonBit 对象头：rc(4B) + meta(4B) = 8B
@@ -44,7 +44,7 @@ pub fn wasm_init_scratch(size : Int) -> Int {
 /// 调用 `wasm_init_scratch` 后，宿主将 UTF-16LE 数据写入返回的地址。
 /// 然后调用本函数读取：`offset` 是缓冲区内偏移量（不含长度头）。
 /// 宿主在 `offset - 4` 处写 u32 LE 字节长度，`offset` 处写 UTF-16LE 载荷。
-pub fn wasm_read_scratch_arg(buf_ptr : Int, offset : Int) -> String {
+pub fn wasm_read_scratch_arg(buf_ptr : Int32, offset : Int32) -> String {
   let buf : Bytes = int_to_bytes(buf_ptr)
   let len_view = buf[offset - 4:offset]
   let byte_len = len_view[0]
@@ -59,7 +59,7 @@ pub fn wasm_read_scratch_arg(buf_ptr : Int, offset : Int) -> String {
 ///|
 /// 将线性内存地址（i32）转为 Bytes 引用。
 /// 与 bytes_ptr_to_int 互逆。
-fn int_to_bytes(ptr : Int) -> Bytes = "%identity"
+fn int_to_bytes(ptr : Int32) -> Bytes = "%identity"
 
 ///|
 /// === 日志/追踪系统 ===
@@ -81,14 +81,14 @@ fn int_to_bytes(ptr : Int) -> Bytes = "%identity"
 
 ///|
 /// FixedArray[Byte] ↔ Int 转换（WASM 中都是 i32）
-fn fixed_bytes_ptr_to_int(b : FixedArray[Byte]) -> Int = "%identity"
+fn fixed_bytes_ptr_to_int(b : FixedArray[Byte]) -> Int32 = "%identity"
 
 ///|
-fn int_to_fixed_bytes(ptr : Int) -> FixedArray[Byte] = "%identity"
+fn int_to_fixed_bytes(ptr : Int32) -> FixedArray[Byte] = "%identity"
 
 ///|
 /// 从 FixedArray[Byte] 读取 u32 LE 值（4 字节）
-fn read_le32(buf : FixedArray[Byte], offset : Int) -> Int {
+fn read_le32(buf : FixedArray[Byte], offset : Int32) -> Int32 {
   buf[offset]
   .to_int()
   .land(0xFF)
@@ -99,7 +99,7 @@ fn read_le32(buf : FixedArray[Byte], offset : Int) -> Int {
 
 ///|
 /// 向 FixedArray[Byte] 写入 u32 LE 值（4 字节）
-fn write_le32(buf : FixedArray[Byte], offset : Int, value : Int) -> Unit {
+fn write_le32(buf : FixedArray[Byte], offset : Int32, value : Int32) -> Unit {
   buf[offset] = value.land(0xFF).to_byte()
   buf[offset + 1] = (value >> 8).land(0xFF).to_byte()
   buf[offset + 2] = (value >> 16).land(0xFF).to_byte()
@@ -109,7 +109,7 @@ fn write_le32(buf : FixedArray[Byte], offset : Int, value : Int) -> Unit {
 ///|
 /// 初始化日志缓冲区。返回缓冲区线性内存地址。
 /// 缓冲区前 4 字节存储当前写入位置（u32 LE），日志内容从第 5 字节开始。
-pub fn wasm_log_init(size : Int) -> Int {
+pub fn wasm_log_init(size : Int32) -> Int32 {
   let buf = FixedArray::make(size + 4, b'\x00')
   fixed_bytes_ptr_to_int(buf)
 }
@@ -117,7 +117,7 @@ pub fn wasm_log_init(size : Int) -> Int {
 ///|
 /// 获取日志缓冲区当前写入位置。
 /// 宿主通过比较位置变化来判断是否有新日志。
-pub fn wasm_log_pos(buf_ptr : Int) -> Int {
+pub fn wasm_log_pos(buf_ptr : Int32) -> Int32 {
   let buf = int_to_fixed_bytes(buf_ptr)
   read_le32(buf, 0)
 }
@@ -131,9 +131,9 @@ pub fn wasm_log_pos(buf_ptr : Int) -> Int {
 /// `step`：步骤标识（如 "decode_request", "convert_to_lux"）
 /// `message`：日志内容
 fn log_write(
-  buf_ptr : Int,
-  buf_size : Int,
-  level : Int,
+  buf_ptr : Int32,
+  buf_size : Int32,
+  level : Int32,
   step : String,
   message : String,
 ) -> Unit {
@@ -213,8 +213,8 @@ fn trace_convert(
   target : String,
   step : String,
   convert : (String, String, String) -> String,
-  log_ptr : Int,
-  log_size : Int,
+  log_ptr : Int32,
+  log_size : Int32,
 ) -> String {
   log_write(log_ptr, log_size, 2, step, "start: " + source + " → " + target)
   log_write(
@@ -247,8 +247,8 @@ pub fn wasm_convert_req_trace(
   source : String,
   json_str : String,
   target : String,
-  log_ptr : Int,
-  log_size : Int,
+  log_ptr : Int32,
+  log_size : Int32,
 ) -> String {
   trace_convert(
     source, json_str, target, "convert_req", wasm_convert_request, log_ptr, log_size,
@@ -261,8 +261,8 @@ pub fn wasm_convert_resp_trace(
   source : String,
   json_str : String,
   target : String,
-  log_ptr : Int,
-  log_size : Int,
+  log_ptr : Int32,
+  log_size : Int32,
 ) -> String {
   trace_convert(
     source, json_str, target, "convert_resp", wasm_convert_response, log_ptr, log_size,
@@ -275,8 +275,8 @@ pub fn wasm_convert_stream_trace(
   source : String,
   sse_str : String,
   target : String,
-  log_ptr : Int,
-  log_size : Int,
+  log_ptr : Int32,
+  log_size : Int32,
 ) -> String {
   trace_convert(
     source, sse_str, target, "convert_stream", wasm_convert_stream, log_ptr, log_size,

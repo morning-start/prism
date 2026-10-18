@@ -12,7 +12,7 @@
 
 ///|
 /// 每个 chunk 的公共前缀：id / object / created / model
-fn chunk_prefix(id : String, model : String, created : Int) -> String {
+fn chunk_prefix(id : String, model : String, created : Int32) -> String {
   "data: {\"id\":\"" +
   @internal.json_escape(id) +
   "\",\"object\":\"chat.completion.chunk\",\"created\":" +
@@ -45,7 +45,7 @@ pub fn lux_events_to_openai_sse_with_ctx(
   // 从 ConversationStart 提取，注入每个 chunk；ctx 预置供逐帧转换跨帧复用
   let mut chat_id = ""
   let mut chat_model = ""
-  let mut chat_created : Int = 0
+  let mut chat_created : Int32 = 0
   match ctx {
     Some(meta) => {
       chat_id = meta.id.unwrap_or("chatcmpl-0")

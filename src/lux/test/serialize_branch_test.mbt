@@ -25,13 +25,13 @@
 
 ///|
 /// Stand-in value decoder for ConversionResult::from_json (success path).
-fn ser_decode_ok(_v : Json) -> Result[Int, String] {
+fn ser_decode_ok(_v : Json) -> Result[Int32, String] {
   Ok(1)
 }
 
 ///|
 /// Stand-in value decoder for ConversionResult::from_json (failure path).
-fn ser_decode_fail(_v : Json) -> Result[Int, String] {
+fn ser_decode_fail(_v : Json) -> Result[Int32, String] {
   Err("decoder rejected the value payload")
 }
 

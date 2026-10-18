@@ -122,9 +122,9 @@ pub fn LucentRequest::from_messages(
 
 ///|
 pub fn LucentUsage::new(
-  prompt_tokens : Int,
-  completion_tokens : Int,
-  total_tokens : Int,
+  prompt_tokens : Int32,
+  completion_tokens : Int32,
+  total_tokens : Int32,
 ) -> LucentUsage {
   {
     prompt_tokens,
@@ -139,12 +139,12 @@ pub fn LucentUsage::new(
 ///|
 /// 构造含细化用量的 LucentUsage（reasoning / cached / cache_creation）
 pub fn LucentUsage::full(
-  prompt_tokens : Int,
-  completion_tokens : Int,
-  total_tokens : Int,
-  reasoning_tokens : Int?,
-  cached_tokens : Int?,
-  cache_creation_tokens : Int?,
+  prompt_tokens : Int32,
+  completion_tokens : Int32,
+  total_tokens : Int32,
+  reasoning_tokens : Int32?,
+  cached_tokens : Int32?,
+  cache_creation_tokens : Int32?,
 ) -> LucentUsage {
   {
     prompt_tokens,
@@ -158,10 +158,10 @@ pub fn LucentUsage::full(
 
 ///|
 pub fn LucentUsage::with_reasoning(
-  prompt_tokens : Int,
-  completion_tokens : Int,
-  total_tokens : Int,
-  reasoning_tokens : Int,
+  prompt_tokens : Int32,
+  completion_tokens : Int32,
+  total_tokens : Int32,
+  reasoning_tokens : Int32,
 ) -> LucentUsage {
   {
     prompt_tokens,
@@ -183,7 +183,7 @@ pub fn LucentSafetyRating::new(
 
 ///|
 pub fn LucentChoice::new(
-  index : Int,
+  index : Int32,
   message : LucentMessage,
   finish_reason : LucentFinishReason,
   safety_ratings : Array[LucentSafetyRating]?,
@@ -195,7 +195,7 @@ pub fn LucentChoice::new(
 pub fn LucentResponse::new(
   id : String,
   model : String,
-  created_at : Int?,
+  created_at : Int32?,
   choices : Array[LucentChoice],
   usage : LucentUsage?,
   provider_payload : Json?,

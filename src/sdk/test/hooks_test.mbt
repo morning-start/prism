@@ -38,7 +38,7 @@ fn openai_req_json_with_tools() -> Result[String, String] {
 
 ///|
 /// 带 max_output_tokens 的标准请求 → openai JSON
-fn openai_req_json_max_tokens(max_tokens : Int) -> Result[String, String] {
+fn openai_req_json_max_tokens(max_tokens : Int32) -> Result[String, String] {
   let opts = @lux.LucentOptions::new(
     None,
     None,

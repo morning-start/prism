@@ -14,9 +14,9 @@
 /// 关闭仍打开的块（文本 / 思考），返回重置后的状态。
 fn close_gemini_blocks(
   events : Array[@lux.LucentStreamEvent],
-  open_text : Int?,
-  open_thinking : Int?,
-) -> (Int?, Int?) {
+  open_text : Int32?,
+  open_thinking : Int32?,
+) -> (Int32?, Int32?) {
   match open_text {
     Some(idx) => events.push(BlockEnd(idx))
     None => ()
@@ -44,10 +44,10 @@ pub fn gemini_sse_to_events(
   let messages = @internal.parse_sse_messages(normalized)
   // functionCall 序号：与 request_decode/response 的 fc_<name>_<n> 规则保持一致
   // （按函数名独立计数），避免与块序号混用导致跨帧配对错位（标准 §10.1）
-  let call_seq : Map[String, Int] = Map([])
+  let call_seq : Map[String, Int32] = Map([])
   let mut next_index = 0
-  let mut open_text : Int? = None
-  let mut open_thinking : Int? = None
+  let mut open_text : Int32? = None
+  let mut open_thinking : Int32? = None
   let mut done_emitted = false
   // CR-002 A1：是否已发出会话元信息（首个可解析帧发一次）
   let mut conv_started = false
@@ -278,7 +278,7 @@ pub fn gemini_sse_to_events(
 ///|
 /// 生成 `fc_<name>_<seq>` 合成调用 ID（与 request_decode / response 解码规则一致）。
 fn gemini_synthetic_call_id(
-  call_seq : Map[String, Int],
+  call_seq : Map[String, Int32],
   name : String,
 ) -> String {
   let seq = match call_seq.get(name) {

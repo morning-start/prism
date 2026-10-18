@@ -1,6 +1,6 @@
 ///|
 test "substring works at string boundary" {
-  fn substring(s : String, start : Int, end : Int) -> String {
+  fn substring(s : String, start : Int32, end : Int32) -> String {
     if start < 0 || end > s.length() || start > end {
       return ""
     }
@@ -15,7 +15,7 @@ test "substring works at string boundary" {
 
 ///|
 test "find_first_star" {
-  fn find_first_star(s : String) -> Int {
+  fn find_first_star(s : String) -> Int32 {
     let mut i = 0
     while i < s.length() {
       if s[i] == '*' {

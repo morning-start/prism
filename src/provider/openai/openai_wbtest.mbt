@@ -1336,7 +1336,7 @@ test "#6 openai_sse_to_events - multi tool call stream with deltas" {
     Ok(cr) => {
       let events = cr.value()
       // 两个 tool 块：index 0（get_weather）+ index 1（send_email）
-      let starts : Array[Int] = []
+      let starts : Array[Int32] = []
       for ev in events {
         match ev {
           BlockStart(idx, ToolCall(_, name)) => {
@@ -1348,7 +1348,7 @@ test "#6 openai_sse_to_events - multi tool call stream with deltas" {
       }
       assert_eq(starts, [0, 1])
       // 两个工具块各自收到 arguments 增量
-      let deltas : Array[Int] = []
+      let deltas : Array[Int32] = []
       for ev in events {
         match ev {
           BlockDelta(idx, ToolArgumentsDelta(_)) => deltas.push(idx)

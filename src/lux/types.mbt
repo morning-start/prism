@@ -128,8 +128,8 @@ pub struct LucentAnnotation {
   kind : LucentAnnotationKind
   text : String?
   reference : String?
-  start : Int?
-  end : Int?
+  start : Int32?
+  end : Int32?
 } derive(Eq, Debug)
 
 ///|
@@ -424,11 +424,11 @@ pub extend LucentStructuredOutput with @moonbitlang/core/debug.Debug::{to_repr}
 pub struct LucentOptions {
   temperature : Double?
   top_p : Double?
-  top_k : Int?
-  max_output_tokens : Int?
+  top_k : Int32?
+  max_output_tokens : Int32?
   stop : Array[String]?
   stream : Bool
-  candidate_count : Int?
+  candidate_count : Int32?
   structured_output : LucentStructuredOutput?
   store : Bool?
   /// Responses 有状态续接载体（T8 标准可选字段）：上一轮 response id。
@@ -534,7 +534,7 @@ pub extend ConversationSnapshot with @moonbitlang/core/debug.Debug::{to_repr}
 /// LucentReasoningConfig — 推理配置
 pub struct LucentReasoningConfig {
   enabled : Bool
-  budget_tokens : Int?
+  budget_tokens : Int32?
   effort : LucentReasoningEffort?
   summary : LucentReasoningSummary?
 } derive(Eq, Debug)
@@ -655,12 +655,12 @@ pub extend LucentRequest with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 /// LucentUsage — Token 用量（面向 reasoning 时代）
 pub(all) struct LucentUsage {
-  prompt_tokens : Int
-  completion_tokens : Int
-  total_tokens : Int
-  reasoning_tokens : Int?
-  cached_tokens : Int?
-  cache_creation_tokens : Int?
+  prompt_tokens : Int32
+  completion_tokens : Int32
+  total_tokens : Int32
+  reasoning_tokens : Int32?
+  cached_tokens : Int32?
+  cache_creation_tokens : Int32?
 } derive(Eq, Debug)
 
 ///|
@@ -729,7 +729,7 @@ pub extend LucentSafetyRating with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 /// LucentChoice — 候选回复
 pub struct LucentChoice {
-  index : Int
+  index : Int32
   message : LucentMessage
   finish_reason : LucentFinishReason
   safety_ratings : Array[LucentSafetyRating]?
@@ -755,7 +755,7 @@ pub struct LucentResponse {
   schema_version : String
   id : String
   model : String
-  created_at : Int?
+  created_at : Int32?
   choices : Array[LucentChoice]
   usage : LucentUsage?
   provider_payload : Json?

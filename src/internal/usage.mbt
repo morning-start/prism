@@ -16,7 +16,7 @@ pub fn parse_usage_json(
   pt_key : String,
   ct_key : String,
   tt_key : String?,
-) -> (Int, Int, Int) {
+) -> (Int32, Int32, Int32) {
   let pt = field_int(u, pt_key).unwrap_or(0)
   let ct = field_int(u, ct_key).unwrap_or(0)
   let tt = match tt_key {
@@ -34,7 +34,7 @@ pub fn parse_usage_json(
 /// 形态三（Anthropic / vLLM）：无该字段 → None
 ///
 /// `path` 传空串时按顶层 `thoughtsTokenCount` 读取（Gemini 形态）。
-pub fn parse_reasoning_tokens(u : Json, path : Array[String]) -> Int? {
+pub fn parse_reasoning_tokens(u : Json, path : Array[String]) -> Int32? {
   let mut cursor : Json? = Some(u)
   for key in path {
     match cursor {
@@ -64,7 +64,7 @@ pub fn parse_reasoning_tokens(u : Json, path : Array[String]) -> Int? {
 /// 形态三（Gemini 系）：`cachedContentTokenCount` 直接挂 usage 顶层
 ///
 /// `path` 传空串时按顶层 `cache_read_input_tokens` 读取（Anthropic 形态）。
-pub fn parse_cached_tokens(u : Json, path : Array[String]) -> Int? {
+pub fn parse_cached_tokens(u : Json, path : Array[String]) -> Int32? {
   let mut cursor : Json? = Some(u)
   for key in path {
     match cursor {
@@ -91,7 +91,7 @@ pub fn parse_cached_tokens(u : Json, path : Array[String]) -> Int? {
 ///
 /// 仅 Anthropic 形态：`cache_creation_input_tokens` 直接挂 usage 顶层。
 /// `path` 传空串时按该键读取；非空 path 表示 OpenAI/Gemini 形态，无此概念 → None。
-pub fn parse_cache_creation_tokens(u : Json, path : Array[String]) -> Int? {
+pub fn parse_cache_creation_tokens(u : Json, path : Array[String]) -> Int32? {
   if path.length() > 0 {
     return None
   }
@@ -100,6 +100,6 @@ pub fn parse_cache_creation_tokens(u : Json, path : Array[String]) -> Int? {
 
 ///|
 /// 提取 Gemini cachedContentTokenCount（Gemini prompt caching 用量项）
-pub fn parse_cached_tokens_gemini(u : Json) -> Int? {
+pub fn parse_cached_tokens_gemini(u : Json) -> Int32? {
   field_int(u, "cachedContentTokenCount")
 }

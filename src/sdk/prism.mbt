@@ -60,7 +60,7 @@ pub fn DecodedResponse::new(
 pub struct PrismOptions {
   model : String?
   temperature : Double?
-  max_tokens : Int?
+  max_tokens : Int32?
   store : Bool?
   extras : Map[String, Json]?
   /// 工具选择（IR 标准字段：Auto/None/Required/SpecificTool）
@@ -96,7 +96,7 @@ pub fn PrismOptions::default() -> PrismOptions {
 pub fn PrismOptions::new(
   model : String?,
   temperature : Double?,
-  max_tokens : Int?,
+  max_tokens : Int32?,
   store : Bool?,
   extras : Map[String, Json]?,
 ) -> PrismOptions {

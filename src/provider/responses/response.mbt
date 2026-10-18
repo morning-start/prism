@@ -190,7 +190,7 @@ fn thinking_signature_field(s : String) -> String {
 
 ///|
 /// LucentThinking → OpenAI Responses reasoning item JSON（消息级 reasoning 出站复用）
-fn thinking_to_reasoning_item(th : @lux.LucentThinking, id : Int) -> String {
+fn thinking_to_reasoning_item(th : @lux.LucentThinking, id : Int32) -> String {
   let summary = match th.summary {
     Some(arr) => {
       let parts : Array[String] = []

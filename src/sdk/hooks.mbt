@@ -144,7 +144,7 @@ pub fn convert_stream_with_hooks(
 ///
 /// 实际压价时 push Degraded 诊断（值被改小才算损失）；
 /// 原值小于等于 limit 时原样返回、无诊断。
-pub fn hook_clamp_max_tokens(limit : Int) -> SdkRequestHook {
+pub fn hook_clamp_max_tokens(limit : Int32) -> SdkRequestHook {
   fn(
     ir : @lux.LucentRequest,
     diags : Array[@lux.ConversionDiagnostic],

@@ -22,7 +22,7 @@
 
 ///|
 /// 从信封取 number 字段（句柄等）；失败返回 None
-fn cb_env_num(envelope : String, key : String) -> Int? {
+fn cb_env_num(envelope : String, key : String) -> Int32? {
   let jv = @json.parse(envelope) catch { _ => Json::null() }
   match jv {
     Object(map) =>

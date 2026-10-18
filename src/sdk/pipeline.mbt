@@ -94,7 +94,7 @@ fn lucent_events_to_prism(
   let mut has_finish = false
   // 当前 tool 块累积状态
   let mut tool_active = false
-  let mut tool_idx : Int = -1
+  let mut tool_idx : Int32 = -1
   let mut tool_id : String = ""
   let mut tool_name : String = ""
   let mut tool_args : String = ""

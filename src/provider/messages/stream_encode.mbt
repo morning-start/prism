@@ -17,7 +17,7 @@ fn messages_usage_json(u : @lux.LucentUsage) -> String {
 ///|
 /// CR-002 A4：读取会话元信息 `extra` 中透传的输入侧缓存用量。
 /// 键名与写入端 `stream_decode.mbt` 一致（extension 载体，缺失即 None）。
-fn messages_meta_cache(meta : @lux.LucentConversationMeta) -> (Int?, Int?) {
+fn messages_meta_cache(meta : @lux.LucentConversationMeta) -> (Int32?, Int32?) {
   match meta.extra {
     Some(jv) =>
       (

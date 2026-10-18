@@ -240,7 +240,7 @@ pub fn parse_sse_frame_with_reason(data_raw : String) -> (Json?, String?) {
 
 ///|
 /// 查找第一个空行分隔符（"\n\n"）的位置；未找到返回 None
-fn find_blank_line(s : String) -> Int? {
+fn find_blank_line(s : String) -> Int32? {
   let mut i = 0
   while i + 1 < s.length() {
     if s[i] == '\n' && s[i + 1] == '\n' {

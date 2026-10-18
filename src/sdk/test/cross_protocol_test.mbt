@@ -205,8 +205,8 @@ test "consistency - model preserved across all providers" {
 fn req_with_opts(
   temp : Double?,
   top_p : Double?,
-  top_k : Int?,
-  max_tokens : Int?,
+  top_k : Int32?,
+  max_tokens : Int32?,
   stop : Array[String]?,
 ) -> @lux.LucentRequest {
   let opts = @lux.LucentOptions::new(
@@ -359,7 +359,7 @@ fn check_sse_roundtrip(
     @lux.ConversionResult[Array[@lux.LucentStreamEvent]],
     String,
   ],
-) -> Result[Int, String] {
+) -> Result[Int32, String] {
   let events = base_events()
   match encode(events) {
     Ok(cr) =>

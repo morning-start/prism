@@ -52,7 +52,7 @@ pub fn field_num(jv : Json, key : String) -> Double? {
 
 ///|
 /// 提取整数字段
-pub fn field_int(jv : Json, key : String) -> Int? {
+pub fn field_int(jv : Json, key : String) -> Int32? {
   match obj_get(jv, key) {
     Some(Number(n, ..)) => Some(n.to_int())
     _ => None
@@ -61,7 +61,7 @@ pub fn field_int(jv : Json, key : String) -> Int? {
 
 ///|
 /// 提取数值字段（Int，直接读不经过 Double）
-pub fn field_int_exact(jv : Json, key : String) -> Int? {
+pub fn field_int_exact(jv : Json, key : String) -> Int32? {
   match obj_get(jv, key) {
     Some(Number(n, ..)) =>
       // ignore decimal repr, check if the number's integer value is exact
@@ -169,17 +169,17 @@ pub fn sanitize_json_escapes(s : String) -> String {
         next == 'r' ||
         next == 't' ||
         next == 'u' {
-        sb.write_char(Int::unsafe_to_char(cp.to_int()))
-        sb.write_char(Int::unsafe_to_char(next.to_int()))
+        sb.write_char(Int32::unsafe_to_char(cp.to_int()))
+        sb.write_char(Int32::unsafe_to_char(next.to_int()))
         i = i + 2
       } else {
         // 无效转义：转义反斜杠本身
         sb.write_string("\\\\")
-        sb.write_char(Int::unsafe_to_char(next.to_int()))
+        sb.write_char(Int32::unsafe_to_char(next.to_int()))
         i = i + 2
       }
     } else {
-      sb.write_char(Int::unsafe_to_char(cp.to_int()))
+      sb.write_char(Int32::unsafe_to_char(cp.to_int()))
       i = i + 1
     }
   }
@@ -209,7 +209,7 @@ pub fn json_escape(s : String) -> String {
       let n = cp.to_int()
       sb.write_string("\\u00")
       sb.write_char(
-        Int::unsafe_to_char(
+        Int32::unsafe_to_char(
           if n / 16 < 10 {
             0x30 + n / 16
           } else {
@@ -218,7 +218,7 @@ pub fn json_escape(s : String) -> String {
         ),
       )
       sb.write_char(
-        Int::unsafe_to_char(
+        Int32::unsafe_to_char(
           if n % 16 < 10 {
             0x30 + n % 16
           } else {
@@ -227,7 +227,7 @@ pub fn json_escape(s : String) -> String {
         ),
       )
     } else {
-      sb.write_char(Int::unsafe_to_char(cp.to_int()))
+      sb.write_char(Int32::unsafe_to_char(cp.to_int()))
     }
     i = i + 1
   }

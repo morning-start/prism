@@ -123,19 +123,19 @@ pub fn wasm_stream_new(source : String, target : String) -> String {
 
 ///|
 /// 喂入上游 chunk → {"value": [目标 SSE 帧...]}
-pub fn wasm_stream_feed(handle : Int, chunk : String) -> String {
+pub fn wasm_stream_feed(handle : Int32, chunk : String) -> String {
   @wasm.wasm_stream_feed(handle, chunk)
 }
 
 ///|
 /// 流结束：冲刷尾部半帧 + 保持的 Finish 帧
-pub fn wasm_stream_finish(handle : Int) -> String {
+pub fn wasm_stream_finish(handle : Int32) -> String {
   @wasm.wasm_stream_finish(handle)
 }
 
 ///|
 /// 释放会话句柄
-pub fn wasm_stream_free(handle : Int) -> String {
+pub fn wasm_stream_free(handle : Int32) -> String {
   @wasm.wasm_stream_free(handle)
 }
 
@@ -159,13 +159,13 @@ pub fn wasm_abi_version() -> String {
 
 ///|
 /// 初始化暂存缓冲区，返回线性内存地址
-pub fn wasm_init_scratch(size : Int) -> Int {
+pub fn wasm_init_scratch(size : Int32) -> Int32 {
   @wasm.wasm_init_scratch(size)
 }
 
 ///|
 /// 从暂存缓冲区读取字符串参数
-pub fn wasm_read_scratch_arg(buf_ptr : Int, offset : Int) -> String {
+pub fn wasm_read_scratch_arg(buf_ptr : Int32, offset : Int32) -> String {
   @wasm.wasm_read_scratch_arg(buf_ptr, offset)
 }
 
@@ -174,13 +174,13 @@ pub fn wasm_read_scratch_arg(buf_ptr : Int, offset : Int) -> String {
 
 ///|
 /// 初始化日志缓冲区，返回线性内存地址
-pub fn wasm_log_init(size : Int) -> Int {
+pub fn wasm_log_init(size : Int32) -> Int32 {
   @wasm.wasm_log_init(size)
 }
 
 ///|
 /// 获取日志缓冲区当前写入位置
-pub fn wasm_log_pos(buf_ptr : Int) -> Int {
+pub fn wasm_log_pos(buf_ptr : Int32) -> Int32 {
   @wasm.wasm_log_pos(buf_ptr)
 }
 
@@ -190,8 +190,8 @@ pub fn wasm_convert_req_trace(
   source : String,
   json_str : String,
   target : String,
-  log_ptr : Int,
-  log_size : Int,
+  log_ptr : Int32,
+  log_size : Int32,
 ) -> String {
   @wasm.wasm_convert_req_trace(source, json_str, target, log_ptr, log_size)
 }
@@ -202,8 +202,8 @@ pub fn wasm_convert_resp_trace(
   source : String,
   json_str : String,
   target : String,
-  log_ptr : Int,
-  log_size : Int,
+  log_ptr : Int32,
+  log_size : Int32,
 ) -> String {
   @wasm.wasm_convert_resp_trace(source, json_str, target, log_ptr, log_size)
 }
@@ -214,8 +214,8 @@ pub fn wasm_convert_stream_trace(
   source : String,
   sse_str : String,
   target : String,
-  log_ptr : Int,
-  log_size : Int,
+  log_ptr : Int32,
+  log_size : Int32,
 ) -> String {
   @wasm.wasm_convert_stream_trace(source, sse_str, target, log_ptr, log_size)
 }

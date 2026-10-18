@@ -128,7 +128,7 @@ pub struct ProviderSchema {
   top_k : FieldConstraint
   max_output_tokens : FieldConstraint
   /// 响应字段约束
-  resp_min_choices : Int
+  resp_min_choices : Int32
   /// 是否允许发送函数/工具调用字段（部分 provider 不支持）
   supports_tools : Bool
   /// 是否支持 system 指令作为顶层字段（而非消息列表中）
@@ -146,7 +146,7 @@ pub fn ProviderSchema::new(
   top_p : FieldConstraint,
   top_k : FieldConstraint,
   max_output_tokens : FieldConstraint,
-  resp_min_choices : Int,
+  resp_min_choices : Int32,
   supports_tools : Bool,
   supports_system_instruction : Bool,
   supported_reasoning_efforts : Array[String]?,
@@ -194,7 +194,7 @@ pub fn ProviderSchema::max_output_tokens(
 }
 
 ///|
-pub fn ProviderSchema::resp_min_choices(self : ProviderSchema) -> Int {
+pub fn ProviderSchema::resp_min_choices(self : ProviderSchema) -> Int32 {
   self.resp_min_choices
 }
 

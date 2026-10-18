@@ -33,8 +33,8 @@
 /// call_seq 生成 functionCall id；resp_cursor 消费配对序号（按函数名）。
 fn parse_part(
   part : Json,
-  call_seq : Map[String, Int],
-  resp_cursor : Map[String, Int],
+  call_seq : Map[String, Int32],
+  resp_cursor : Map[String, Int32],
   diagnostics : Array[@lux.ConversionDiagnostic],
 ) -> Array[@lux.LucentContent] {
   // text
@@ -161,8 +161,8 @@ fn parse_part(
 /// 解析 contents[] 中单个 content 的 parts[] → Array[LucentContent]
 fn parse_parts(
   arr : Array[Json],
-  call_seq : Map[String, Int],
-  resp_cursor : Map[String, Int],
+  call_seq : Map[String, Int32],
+  resp_cursor : Map[String, Int32],
   diagnostics : Array[@lux.ConversionDiagnostic],
 ) -> Array[@lux.LucentContent] {
   let result : Array[@lux.LucentContent] = []
@@ -181,8 +181,8 @@ fn parse_parts(
 /// 解析 contents[] → Array[LucentConversationItem]
 fn parse_contents(
   jv : Json,
-  call_seq : Map[String, Int],
-  resp_cursor : Map[String, Int],
+  call_seq : Map[String, Int32],
+  resp_cursor : Map[String, Int32],
   diagnostics : Array[@lux.ConversionDiagnostic],
 ) -> Array[@lux.LucentConversationItem] {
   let result : Array[@lux.LucentConversationItem] = []
@@ -464,8 +464,8 @@ pub fn gemini_to_lux_request(
     None
   }
   // functionCall 序号生成 + functionResponse 配对游标（按函数名）
-  let call_seq : Map[String, Int] = Map([])
-  let resp_cursor : Map[String, Int] = Map([])
+  let call_seq : Map[String, Int32] = Map([])
+  let resp_cursor : Map[String, Int32] = Map([])
   let conversation = parse_contents(jv, call_seq, resp_cursor, diagnostics)
   let tools_list = parse_tools(jv)
   let tools = if tools_list.length() > 0 { Some(tools_list) } else { None }

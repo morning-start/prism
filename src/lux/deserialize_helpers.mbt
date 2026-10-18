@@ -25,7 +25,7 @@ fn get_str_opt(m : Map[String, Json], key : String) -> String? {
 }
 
 ///|
-fn get_int(m : Map[String, Json], key : String) -> Result[Int, String] {
+fn get_int(m : Map[String, Json], key : String) -> Result[Int32, String] {
   match m.get(key) {
     Some(Number(n, ..)) => Ok(n.to_int())
     Some(_) => Err("expected number for " + key)
@@ -34,7 +34,7 @@ fn get_int(m : Map[String, Json], key : String) -> Result[Int, String] {
 }
 
 ///|
-fn get_int_opt(m : Map[String, Json], key : String) -> Int? {
+fn get_int_opt(m : Map[String, Json], key : String) -> Int32? {
   match m.get(key) {
     Some(Number(n, ..)) => Some(n.to_int())
     _ => None

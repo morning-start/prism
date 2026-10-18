@@ -161,7 +161,7 @@ fn oa_req(field : String, payload : String) -> String {
 
 ///|
 /// 解码请求并取出唯一消息的内容块数量
-fn content_len(json : String) -> Int raise {
+fn content_len(json : String) -> Int32 raise {
   let req = decode_ok(json)
   if req.conversation.length() != 1 {
     fail(
@@ -176,7 +176,7 @@ fn content_len(json : String) -> Int raise {
 
 ///|
 /// 取出唯一消息的第 idx 个内容块
-fn block_at(json : String, idx : Int) -> @lux.LucentContent raise {
+fn block_at(json : String, idx : Int32) -> @lux.LucentContent raise {
   let req = decode_ok(json)
   if req.conversation.length() != 1 {
     fail("expected exactly 1 conversation item")
@@ -194,7 +194,7 @@ fn block_at(json : String, idx : Int) -> @lux.LucentContent raise {
 
 ///|
 /// 取出唯一消息的第 idx 个内容块并要求它是 Image
-fn image_at(json : String, idx : Int) -> @lux.LucentMultimedia raise {
+fn image_at(json : String, idx : Int32) -> @lux.LucentMultimedia raise {
   match block_at(json, idx) {
     Image(mm) => mm
     _ => fail("expected Image block at index \{idx}")
@@ -217,7 +217,7 @@ fn tool_start_labels(sse : String) -> Array[String] raise {
 
 ///|
 /// 统计流事件里 ToolArgumentsDelta 的数量
-fn tool_arg_deltas(sse : String) -> Int raise {
+fn tool_arg_deltas(sse : String) -> Int32 raise {
   let events = decode_events_ok(sse)
   let mut n = 0
   for ev in events {
@@ -231,7 +231,7 @@ fn tool_arg_deltas(sse : String) -> Int raise {
 
 ///|
 test "openai decode - malformed content parts are skipped, valid parts kept" {
-  let cases : Array[(String, Int)] = [
+  let cases : Array[(String, Int32)] = [
     (
       "{\"model\":\"m\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\"}]}]}",
       0,

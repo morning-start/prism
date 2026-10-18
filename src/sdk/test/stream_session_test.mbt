@@ -6,7 +6,7 @@
 
 ///|
 /// 查找从 from 开始的第一个 "\n\n" 位置（返回第一个 \n 的下标），未找到返回 None
-fn find_frame_end(s : String, from : Int) -> Int? {
+fn find_frame_end(s : String, from : Int32) -> Int32? {
   let mut i = from
   while i + 1 < s.length() {
     if s[i] == '\n' && s[i + 1] == '\n' {
