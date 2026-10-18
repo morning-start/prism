@@ -8,7 +8,7 @@
 /// 块种类内核：去重键只看"这是哪一类块"，不看骨架载荷。
 /// openai 逐帧解码时同一工具块的首帧带 (id,name)、续帧只剩 arguments，
 /// LucentBlockType 整体比较会把同一逻辑块判成两类。
-fn block_kind(bt : @lux.LucentBlockType) -> Int {
+fn block_kind(bt : @lux.LucentBlockType) -> Int32 {
   match bt {
     Text => 0
     ToolCall(_, _) => 1
@@ -43,8 +43,17 @@ fn block_kind(bt : @lux.LucentBlockType) -> Int {
 /// StreamConverter（编码到目标协议）与 Prism::stream_session（解码到
 /// PrismEvent）共用此规整逻辑，保证两条路径事件语义一致。
 struct EventNormalizer {
-  mut open_blocks : Array[Int]
-  open_block_kinds : Map[Int, Int]
+  mut open_blocks : Array[Int32]
+  open_block_kinds : Map[Int32, Int32]
+  /// 由 ItemStart 开启的索引（P1 修复）：responses 源的 function_call 以
+  /// `response.output_item.added` 开启（ItemStart），其参数增量与收尾以
+  /// `BlockDelta` / `function_call_arguments.done`（BlockEnd）表达 ——
+  /// 没有配套的 BlockStart。此前 BlockEnd(idx) 因索引不在 open_blocks 里被
+  /// 当孤儿丢弃 → 整批路径输出 content_block_stop 而逐帧路径丢失。
+  /// 与 open_blocks 分开登记：reasoning item 会 ItemStart 后紧跟
+  /// BlockStart(idx, Thinking)，两者不可互相去重（否则丢了 BlockStart，
+  /// 编码器不再产出 thinking 块）。
+  mut item_open : Array[Int32]
   mut finish_seen : Bool
   mut stream_ctx : @lux.LucentConversationMeta?
 }
@@ -54,6 +63,7 @@ fn EventNormalizer::new() -> EventNormalizer {
   {
     open_blocks: [],
     open_block_kinds: Map([]),
+    item_open: [],
     finish_seen: false,
     stream_ctx: None,
   }
@@ -86,15 +96,35 @@ fn EventNormalizer::normalize(
           result.push(ev)
         }
       BlockEnd(idx) =>
+        // 有配套 BlockStart 的块：正常闭合
         if self.open_blocks.contains(idx) {
           self.open_blocks = remove_int(self.open_blocks, idx)
           self.open_block_kinds.remove(idx)
           result.push(ev)
+          // responses 源：块由 ItemStart 开启、以 BlockEnd 收尾（无 BlockStart）
+        } else if self.item_open.contains(idx) {
+          self.item_open = remove_int(self.item_open, idx)
+          result.push(ev)
         }
+      ItemStart(idx, _) => {
+        // responses 源的 item 索引：登记供后续 BlockEnd 匹配
+        if !self.item_open.contains(idx) {
+          self.item_open.push(idx)
+        }
+        result.push(ev)
+      }
+      ItemEnd(idx) => {
+        // responses 源：item 显式收尾，注销登记
+        self.item_open = remove_int(self.item_open, idx)
+        result.push(ev)
+      }
       BlockDiscard(idx) =>
         if self.open_blocks.contains(idx) {
           self.open_blocks = remove_int(self.open_blocks, idx)
           self.open_block_kinds.remove(idx)
+          result.push(ev)
+        } else if self.item_open.contains(idx) {
+          self.item_open = remove_int(self.item_open, idx)
           result.push(ev)
         }
       Finish(_) =>
@@ -181,6 +211,9 @@ pub struct PrismStreamSession {
   reg : ProviderRegistration
   splitter : @internal.SseFrameSplitter
   normalizer : EventNormalizer
+  /// 源解码会话（P1 修复）：与 StreamConverter 共享同一份跨帧解码状态
+  /// （当前打开的块 / 工具索引切换 / 累积用量），保证逐帧解码与整批一致。
+  decoder : @lux.LucentStreamDecoder
   events : PrismEventBuffer
 }
 
@@ -190,13 +223,19 @@ pub fn Prism::stream_session(
   self : Prism,
 ) -> Result[PrismStreamSession, String] {
   match match_provider_name(self.provider) {
-    Some(reg) =>
+    Some(reg) => {
+      let decoder = match reg.stream_decoder {
+        Some(factory) => factory()
+        None => fallback_decoder(reg.events_decode)
+      }
       Ok({
         reg,
         splitter: @internal.SseFrameSplitter::new(),
         normalizer: EventNormalizer::new(),
+        decoder,
         events: PrismEventBuffer::new(),
       })
+    }
     None => Err("unknown provider: " + self.provider)
   }
 }
@@ -244,7 +283,7 @@ fn PrismStreamSession::convert_frames(
   frames : Array[String],
 ) -> Result[Array[PrismEvent], String] {
   for frame in frames {
-    match (self.reg.events_decode)(frame) {
+    match self.decoder.decode(frame) {
       Ok(dcr) => {
         let normalized = self.normalizer.normalize(dcr.value())
         for ev in normalized {
@@ -271,7 +310,7 @@ struct PrismEventBuffer {
   out : Array[PrismEvent]
   /// 当前 tool 块累积状态
   mut tool_active : Bool
-  mut tool_idx : Int
+  mut tool_idx : Int32
   mut tool_id : String
   mut tool_name : String
   mut tool_args : String

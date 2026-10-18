@@ -98,7 +98,13 @@
 | functionResponse.name | 🟡 id→name 回查表重建；orphan 时 Degraded 回退 | 🟡 同上 | 🟡 同上 | ✅ |
 | 音频/视频输入 | ❌ | ❌ | ❌ | ✅ |
 | thinking + thoughtSignature | ✅ | 🟡 部分载体 | ✅ | ✅ |
-| 全量帧覆盖（BlockDiscard） | 🟡 语义近似 | 🟡 语义近似 | 🟡 语义近似 | ✅ |
+| 全量帧覆盖（BlockDiscard） | ❌ 未实现 | ❌ 未实现 | ❌ 未实现 | ❌ 未实现 |
+
+- **`BlockDiscard` 全链路无生产者**：IR 定义并序列化了该事件，但没有任何解码器
+  会发出它（`src/provider/gemini/stream_decode.mbt` 明写"不做 full-frame diff、
+  也不发 BlockDiscard"：Gemini 官方 chunk 的 `parts[].text` 本就是增量语义，
+  "全量帧覆盖"这一前提不成立）。编码侧收到它只打 Degraded 诊断。本行因此从
+  "✅ 已实现"更正为"❌ 未实现"——原论断描述的是一条不会被触发的路径。
 
 ### 3.5 流式 usage（token 计量，CR-001）
 
@@ -113,6 +119,16 @@
   排在 usage 之后（此前 usage 落到 `[DONE]` 之后，客户端停止消费即丢用量）。
 - **增量路径**：`StreamConverter` 逐帧输出与整缓冲 `convert_stream` 逐字节一致；
   Anthropic 源的 `message_stop` 帧不再产生第二个 `message_delta(usage: 0)`。
+  该不变量此前**只在纯文本 fixture 上成立**：流式编解码的跨帧状态
+  （块→输出索引映射、跨帧累积的工具参数、块生命周期）位于 provider 的
+  函数局部变量，逐帧调用即被重置 —— 工具调用场景下 `openai→responses`
+  会丢失 `function_call_arguments.done`、`openai→gemini` 的 `args` 恒为 `{}`、
+  混合流的 `content_block_stop` 与整批逆序。已由**流式会话化**修复：
+  `@lux.LucentStreamEncoder` / `LucentStreamDecoder`（`src/lux/stream_codec.mbt`）
+  让两条路径共享同一套跨帧状态机；回归见
+  `src/sdk/test/stream_tool_equivalence_test.mbt`（17 用例，4 源 × 多目标）、
+  `src/sdk/test/stream_session_isolation_test.mbt`（任意切分点 / 截断流 / 幂等 / 隔离）、
+  `src/sdk/test/stream_semantic_test.mbt`（语义完整性，非仅两路径相等）。
 - **出站请求**：目标为 openai-chat 且 `stream=true` 且调用方未提供 `stream_options`
   时，注入 `{"include_usage": true}`（OpenAI 仅在此时于末帧返回 usage；调用方显式
   提供时以其为准）。
@@ -151,6 +167,25 @@
 > 与缓存载体 / 截断流未闭合块），回归见 `src/sdk/test/stream_meta_cr002_test.mbt` 与
 > [`cr/CR-002.md`](cr/CR-002.md)；CR-003 又补齐了 `message_start.output_tokens` 与
 > Gemini 空流首帧（回归 `src/sdk/test/stream_meta_cr003_test.mbt`）。
+
+7. **流式跨帧状态（已修复，记录根因）**：provider 的流式编解码原为"整批纯函数"，
+   跨帧状态是函数局部变量。整批路径（一次传入整条事件数组）恰好保留状态，
+   逐帧路径（`StreamConverter` 每帧一次调用）则每帧重置 —— 于是"增量 == 整批"
+   仅在纯文本流上偶然成立。受影响的三个具体点：
+   - `openai→responses`：`BlockEnd` 查不到块→item 映射与累积参数 →
+     `function_call_arguments.done` **整体消失**、`item_id` 退化为 `item_N`、
+     `output_item.done` 把 function_call item 收尾成 message item；
+   - `openai→gemini` / `messages→gemini`：跨帧累积被打断 → `functionCall.args`
+     恒为 `{}`（工具调用事实上不可用）；
+   - `openai→messages`（混合流）：解码器丢失 `current_tool_block` → 工具索引
+     切换时不再先补 `BlockEnd(旧)`，改由规整器在 Finish 处逆序补闭合 →
+     `content_block_stop` 顺序与整批相反。
+   修复方式见 §3.5 的会话化说明；`codec_pipeline.mbt` 的 `close_open_blocks`
+   双实现已删除（整批路径改走同一 `EventNormalizer`）。
+
+8. **契约文档端点口径**：`docs/api-protocol-converter.md` 标题为"三端点互转契约"
+   （Chat / Responses / Messages），而实现含第四个适配器 Gemini；`AGENTS.md` 亦
+   如此表述。形式化契约矩阵暂未给 Gemini 列 —— 切流评估以本矩阵的 §3.4 为准。
 
 ## 5. 使用建议（中间件切流前检查单）
 

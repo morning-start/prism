@@ -477,6 +477,24 @@ pub fn LucentSafetyRating::from_json(Json) -> Result[Self, String]
 pub fn LucentSafetyRating::new(String, String) -> Self
 pub fn LucentSafetyRating::to_json(Self) -> Json
 
+pub struct LucentStreamDecoder {
+  decode_frame : (String) -> Result[ConversionResult[Array[LucentStreamEvent]], String]
+  finish_stream : () -> Array[LucentStreamEvent]
+}
+pub fn LucentStreamDecoder::decode(Self, String) -> Result[ConversionResult[Array[LucentStreamEvent]], String]
+pub fn LucentStreamDecoder::finish(Self) -> Array[LucentStreamEvent]
+pub fn LucentStreamDecoder::new((String) -> Result[ConversionResult[Array[LucentStreamEvent]], String], () -> Array[LucentStreamEvent]) -> Self
+
+pub struct LucentStreamEncoder {
+  encode_events : (Array[LucentStreamEvent]) -> Result[ConversionResult[String], String]
+  finish_stream : () -> Result[ConversionResult[String], String]
+  apply_ctx : (LucentConversationMeta?) -> Unit
+}
+pub fn LucentStreamEncoder::encode(Self, Array[LucentStreamEvent]) -> Result[ConversionResult[String], String]
+pub fn LucentStreamEncoder::finish(Self) -> Result[ConversionResult[String], String]
+pub fn LucentStreamEncoder::new((Array[LucentStreamEvent]) -> Result[ConversionResult[String], String], () -> Result[ConversionResult[String], String], (LucentConversationMeta?) -> Unit) -> Self
+pub fn LucentStreamEncoder::set_ctx(Self, LucentConversationMeta?) -> Unit
+
 pub(all) enum LucentStreamEvent {
   ConversationStart(LucentConversationMeta)
   ItemStart(Int, LucentConversationItem)

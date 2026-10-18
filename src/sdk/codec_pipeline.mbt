@@ -46,41 +46,12 @@ fn decode_encode_response(
 }
 
 ///|
-/// CR-002 A5：为仍打开的内容块合成 BlockEnd（截断流收尾）。
+/// CR-002 A5 / P1：整缓冲路径的块收尾改由共享的 `EventNormalizer` 完成。
 ///
-/// 整缓冲路径没有跨帧状态，故在此按事件流本身重放块的开关，逆序闭合仍打开的块
-/// —— 与 `StreamConverter::finish` 的行为一致（两条路径必须逐字节一致）。
-fn close_open_blocks(
-  events : Array[@lux.LucentStreamEvent],
-) -> Array[@lux.LucentStreamEvent] {
-  let mut open : Array[Int] = []
-  let result : Array[@lux.LucentStreamEvent] = []
-  for ev in events {
-    match ev {
-      BlockStart(idx, _) => {
-        if !open.contains(idx) {
-          open.push(idx)
-        }
-        result.push(ev)
-      }
-      BlockEnd(idx) => {
-        open = remove_int(open, idx)
-        result.push(ev)
-      }
-      BlockDiscard(idx) => {
-        open = remove_int(open, idx)
-        result.push(ev)
-      }
-      _ => result.push(ev)
-    }
-  }
-  let mut k = open.length() - 1
-  while k >= 0 {
-    result.push(BlockEnd(open[k]))
-    k = k - 1
-  }
-  result
-}
+/// 历史上这里另写了一套 `close_open_blocks`（按插入顺序升序闭合），而增量
+/// 路径用 normalizer 的 Finish 分支（逆序闭合）—— 两套实现对同一语义各写
+/// 一遍，结果混合流的 `content_block_stop` 顺序在两条路径上相反。现在两条
+/// 路径共用同一实现：逐帧 == 整批由构造保证，而非靠对齐两个算法。
 
 ///|
 /// 通用：source 事件解码 → target 事件编码（合并诊断）
@@ -108,9 +79,19 @@ fn decode_encode_stream(
           _ => kept.push(ev)
         }
       }
-      // CR-002 A5：截断流闭合仍打开的块（与 StreamConverter::finish 同构），
-      // 且必须排在终止符之前
-      let closed = close_open_blocks(kept)
+      // P1：与增量路径共用同一规整器（块去重/孤儿过滤/Finish 合成 BlockEnd）。
+      // 截断流仍打开的块由 Finish 分支逆序补齐，且排在终止符之前。
+      let normalizer = EventNormalizer::new()
+      let closed = normalizer.normalize(kept)
+      // 整场无 Finish（截断流）：规整器不会合成 BlockEnd，这里显式收尾，
+      // 与 StreamConverter::finish 的截断流分支同构。
+      if !normalizer.finish_seen {
+        let mut k = normalizer.open_blocks.length() - 1
+        while k >= 0 {
+          closed.push(BlockEnd(normalizer.open_blocks[k]))
+          k = k - 1
+        }
+      }
       closed.push(Done)
       match encode(closed) {
         Ok(ecr) => Ok(merge_diagnostics(ecr, dcr.diagnostics()))

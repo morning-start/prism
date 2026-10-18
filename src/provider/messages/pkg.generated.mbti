@@ -17,6 +17,8 @@ pub fn lux_response_to_messages(@lux.LucentResponse) -> Result[@lux.ConversionRe
 
 pub fn messages_sse_to_events(String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String]
 
+pub fn messages_stream_decoder() -> @lux.LucentStreamDecoder
+
 pub fn messages_to_lux_request(String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String]
 
 pub fn messages_to_lux_response(String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String]
@@ -28,6 +30,13 @@ pub fn schema() -> @meta.ProviderSchema
 // Errors
 
 // Types and methods
+pub struct MessagesStreamState {
+  mut usage_input : Int?
+  mut usage_cached : Int?
+  mut usage_cache_creation : Int?
+  mut finish_seen : Bool
+}
+pub fn MessagesStreamState::new() -> Self
 
 // Type aliases
 

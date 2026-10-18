@@ -11,6 +11,8 @@ pub fn capability() -> @lux.ProviderCapability
 
 pub fn gemini_sse_to_events(String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String]
 
+pub fn gemini_stream_encoder() -> @lux.LucentStreamEncoder
+
 pub fn gemini_to_lux_request(String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String]
 
 pub fn gemini_to_lux_response(String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String]
@@ -28,6 +30,14 @@ pub fn schema() -> @meta.ProviderSchema
 // Errors
 
 // Types and methods
+pub struct GeminiStreamState {
+  mut pending_tool_index : Int?
+  mut pending_tool_id : String
+  mut pending_tool_name : String
+  mut pending_tool_args : String
+  mut acc_signature : String
+}
+pub fn GeminiStreamState::new() -> Self
 
 // Type aliases
 

@@ -170,6 +170,40 @@ pub fn convert_stream_typed(
 /// ═══ 增量流转换（T5，中间件逐帧转发）═══
 
 ///|
+/// 回退路径的 ctx 持有者：动态注册的 provider 未提供会话工厂时，用
+/// `events_encode_with_ctx` 逐帧无状态编码（行为与修复前一致）。
+priv struct StreamCtxHolder {
+  mut meta : @lux.LucentConversationMeta?
+}
+
+///|
+/// 无会话工厂时的编码载体：每帧调用 ctx 感知编码器（无跨帧编码状态）。
+fn fallback_encoder(
+  f : (Array[@lux.LucentStreamEvent], @lux.LucentConversationMeta?) -> Result[
+    @lux.ConversionResult[String],
+    String,
+  ],
+  holder : StreamCtxHolder,
+) -> @lux.LucentStreamEncoder {
+  @lux.LucentStreamEncoder::new(
+    fn(events) { f(events, holder.meta) },
+    fn() { Ok(@lux.ConversionResult::new("")) },
+    fn(ctx) { holder.meta = ctx },
+  )
+}
+
+///|
+/// 无会话工厂时的解码载体（每帧调用，无跨帧解码状态）。
+fn fallback_decoder(
+  f : (String) -> Result[
+    @lux.ConversionResult[Array[@lux.LucentStreamEvent]],
+    String,
+  ],
+) -> @lux.LucentStreamDecoder {
+  @lux.LucentStreamDecoder::new(f, fn() { [] })
+}
+
+///|
 /// StreamConverter — 增量流转换会话
 ///
 /// 场景 2（中转中间件）逐帧转发：host 持有会话对象，把上游 SSE chunk
@@ -198,6 +232,13 @@ pub struct StreamConverter {
   /// 跨帧解码侧规整器（块去重/Finish 去重/usage 回填/Done 丢弃），
   /// 与 Prism::stream_session 共享同一实现（event_stream.mbt）。
   normalizer : EventNormalizer
+  /// 目标编码会话（P0/P1 修复）：跨帧编码状态（块→输出索引/累积参数/
+  /// 计数器）由会话持有，逐帧编码与整批编码共享同一状态机。
+  /// provider 未提供工厂时回退到逐帧无状态 ctx 编码。
+  encoder : @lux.LucentStreamEncoder
+  /// 源解码会话（P1 修复）：跨帧解码状态（当前打开的块、工具索引切换、
+  /// 累积用量）由会话持有，逐帧解码与整批解码共享同一状态机。
+  decoder : @lux.LucentStreamDecoder
   /// Finish 帧保持：推迟一帧发射，让紧随其后的 Usage 帧并入同一次
   /// 编码（messages 编码器把 Finish+Usage 合并为单条 message_delta），
   /// 保证逐帧输出与整缓冲输出逐字节一致。
@@ -215,15 +256,27 @@ pub fn StreamConverter::new(
   target : String,
 ) -> Result[StreamConverter, String] {
   match resolve_pair(source, target) {
-    Ok((src, dst)) =>
+    Ok((src, dst)) => {
+      let holder : StreamCtxHolder = { meta: None, }
+      let encoder = match dst.stream_encoder {
+        Some(factory) => factory()
+        None => fallback_encoder(dst.events_encode_with_ctx, holder)
+      }
+      let decoder = match src.stream_decoder {
+        Some(factory) => factory()
+        None => fallback_decoder(src.events_decode)
+      }
       Ok({
         source: src,
         target: dst,
         splitter: @internal.SseFrameSplitter::new(),
         normalizer: EventNormalizer::new(),
+        encoder,
+        decoder,
         held_events: [],
         closed: false,
       })
+    }
     Err(e) => Err(e)
   }
 }
@@ -265,11 +318,29 @@ pub fn StreamConverter::finish(
         k = k - 1
       }
       self.normalizer.open_blocks = []
+      // 源解码会话的收尾事件（P1：openai 解码器在流尾闭合仍打开的块，
+      // 与整批路径的 Finish 分支行为一致）；规整化后并入待编码事件。
+      let closing = self.decoder.finish()
+      for ev in self.normalizer.normalize(closing) {
+        pending.push(ev)
+      }
       if pending.length() > 0 {
         match self.encode_events(pending) {
           Ok(sse) => if sse.trim().length() > 0 { emitted.push(sse) }
           Err(e) => return Err(e)
         }
+      }
+      // 编码器自身的悬挂状态冲刷（P1：gemini 的工具块在 BlockStart 打开、
+      // 参数跨帧累积、BlockEnd 才输出完整 functionCall；上游未给 BlockEnd 的
+      // 截断流必须在此把累积参数发出，否则工具调用随流尾静默丢失）。
+      match self.encoder.finish() {
+        Ok(ecr) => {
+          let sse = ecr.value()
+          if sse.trim().length() > 0 {
+            emitted.push(sse)
+          }
+        }
+        Err(e) => return Err(e)
       }
       // 终止符：会话唯一，且必定排在最后（其后不再有内容）
       let tail : Array[@lux.LucentStreamEvent] = [Done]
@@ -291,7 +362,7 @@ fn StreamConverter::convert_frames(
 ) -> Result[Array[String], String] {
   let out : Array[String] = []
   for frame in frames {
-    match (self.source.events_decode)(frame) {
+    match self.decoder.decode(frame) {
       Ok(dcr) => {
         let events = self.normalizer.normalize(dcr.value())
         // Finish 帧保持：与后续帧合并发射（usage 合并 + 字节一致）
@@ -325,19 +396,21 @@ fn StreamConverter::convert_frames(
 }
 
 ///|
-/// 编码事件组（ctx 感知）+ 跟踪会话元信息
+/// 编码事件组（会话编码器）+ 跟踪会话元信息
 fn StreamConverter::encode_events(
   self : StreamConverter,
   events : Array[@lux.LucentStreamEvent],
 ) -> Result[String, String] {
   for ev in events {
     match ev {
-      ConversationStart(meta) => self.normalizer.stream_ctx = Some(meta)
+      ConversationStart(meta) => {
+        self.normalizer.stream_ctx = Some(meta)
+        self.encoder.set_ctx(Some(meta))
+      }
       _ => ()
     }
   }
-  match
-    (self.target.events_encode_with_ctx)(events, self.normalizer.stream_ctx) {
+  match self.encoder.encode(events) {
     Ok(ecr) => Ok(ecr.value())
     Err(e) => Err(e)
   }
@@ -350,8 +423,8 @@ fn StreamConverter::encode_events(
 
 ///|
 /// 从数组中移除指定元素（保持顺序）
-fn remove_int(arr : Array[Int], value : Int) -> Array[Int] {
-  let result : Array[Int] = []
+fn remove_int(arr : Array[Int32], value : Int32) -> Array[Int32] {
+  let result : Array[Int32] = []
   for v in arr {
     if v != value {
       result.push(v)
@@ -376,7 +449,7 @@ fn ends_with_finish(events : Array[@lux.LucentStreamEvent]) -> Bool {
 ///|
 /// CR-001：读取会话元信息 `extra` 中透传的输入侧缓存用量（messages 解码器写入）。
 /// 非 messages 源或上游未提供时为 (None, None)，不影响其他 provider。
-fn meta_cache_usage(meta : @lux.LucentConversationMeta) -> (Int?, Int?) {
+fn meta_cache_usage(meta : @lux.LucentConversationMeta) -> (Int32?, Int32?) {
   match meta.extra {
     Some(jv) =>
       (

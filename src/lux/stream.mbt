@@ -64,8 +64,8 @@ pub extend LucentError with @moonbitlang/core/debug.Debug::{to_repr}
 pub struct LucentConversationMeta {
   id : String?
   model : String?
-  usage_input : Int?
-  created_at : Int?
+  usage_input : Int32?
+  created_at : Int32?
   extra : Json?
 } derive(Eq, Debug)
 
@@ -141,19 +141,20 @@ pub(all) enum LucentStreamEvent {
   /// 会话开始（Anthropic message_start / Responses response.created）
   ConversationStart(LucentConversationMeta)
   /// 新会话项开始（Responses output_item.added）
-  ItemStart(Int, LucentConversationItem) // item_index, item skeleton
+  ItemStart(Int32, LucentConversationItem) // item_index, item skeleton
   /// 内容块开始（Anthropic content_block_start）
-  BlockStart(Int, LucentBlockType) // block_index, 类型化块类型
+  BlockStart(Int32, LucentBlockType) // block_index, 类型化块类型
   /// 内容块增量（Anthropic content_block_delta / OpenAI delta.content / Gemini parts[].text）
-  BlockDelta(Int, LucentBlockDelta) // block_index, 类型化增量
+  BlockDelta(Int32, LucentBlockDelta) // block_index, 类型化增量
   /// 内容块结束（Anthropic content_block_stop）
-  BlockEnd(Int) // block_index
+  BlockEnd(Int32) // block_index
   /// 会话项结束（Responses output_item.done）
-  ItemEnd(Int) // item_index
-  /// 块丢弃（Gemini 全量帧覆盖前一帧时用，其他厂商不触发）
-  BlockDiscard(Int) // block_index
+  ItemEnd(Int32) // item_index
+  /// 块丢弃（IR 定义保留；当前无解码器生产该事件 —— Gemini 官方 chunk 的
+  /// parts[].text 本就是增量语义，不存在"全量帧覆盖"，编码侧收到只打 Degraded）
+  BlockDiscard(Int32) // block_index
   /// 标注事件（OpenAI Responses annotations.delta / 各家 URL/file 引用）
-  Annotations(Int, Array[LucentAnnotation]) // block_index, annotations
+  Annotations(Int32, Array[LucentAnnotation]) // block_index, annotations
   /// 结束原因
   Finish(LucentFinishReason)
   /// Token 用量
@@ -211,7 +212,7 @@ pub fn LucentError::simple(message : String) -> LucentError {
 pub fn LucentConversationMeta::new(
   id : String?,
   model : String?,
-  usage_input : Int?,
+  usage_input : Int32?,
 ) -> LucentConversationMeta {
   { id, model, usage_input, created_at: None, extra: None, }
 }
@@ -221,8 +222,8 @@ pub fn LucentConversationMeta::new(
 pub fn LucentConversationMeta::new_full(
   id : String?,
   model : String?,
-  usage_input : Int?,
-  created_at : Int?,
+  usage_input : Int32?,
+  created_at : Int32?,
   extra : Json?,
 ) -> LucentConversationMeta {
   { id, model, usage_input, created_at, extra, }
@@ -361,7 +362,7 @@ pub fn BlockAccumulator::new() -> BlockAccumulator {
 /// 确保 block_index 在跟踪数组中占位
 pub fn BlockAccumulator::ensure_block(
   self : BlockAccumulator,
-  idx : Int,
+  idx : Int32,
 ) -> Unit {
   while self.block_types.length() <= idx {
     self.block_types.push(Text)
@@ -377,7 +378,7 @@ pub fn BlockAccumulator::ensure_block(
 /// 按类型把已累加内容刷入 content 数组
 pub fn BlockAccumulator::flush_block(
   self : BlockAccumulator,
-  idx : Int,
+  idx : Int32,
   content : Array[LucentContent],
   reasoning : LucentThinking?,
 ) -> LucentThinking? {
@@ -436,7 +437,7 @@ pub fn BlockAccumulator::flush_block(
 /// 丢弃该块已累加内容（Gemini 全量帧覆盖语义），保留类型信息
 pub fn BlockAccumulator::discard_block(
   self : BlockAccumulator,
-  idx : Int,
+  idx : Int32,
 ) -> Unit {
   self.ensure_block(idx)
   self.block_texts[idx].reset()
@@ -495,10 +496,10 @@ fn merge_reasoning(
 /// 处理 BlockDelta 事件
 fn handle_block_delta(
   acc : BlockAccumulator,
-  idx : Int,
+  idx : Int32,
   delta : LucentBlockDelta,
   events : Array[LucentStreamEvent],
-  event_idx : Int,
+  event_idx : Int32,
   diagnostics : Array[ConversionDiagnostic],
   native_events : Array[LucentStreamEvent],
 ) -> Unit {

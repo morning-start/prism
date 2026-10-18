@@ -12,15 +12,50 @@
 /// - finish_reason → Finish
 /// - usage → Usage（最后一帧）
 /// - [DONE] → Done
+
+///|
+/// OpenAI Chat 流解码的跨帧状态（P1 修复）。
+///
+/// 块生命周期（文本块是否打开、thinking 块是否打开、当前工具块索引）是
+/// **跨帧**的：OpenAI 无显式块边界，工具索引切换时必须由解码器先补
+/// `BlockEnd(旧)` 再发 `BlockStart(新)`。此前这些状态是解码函数的局部变量，
+/// 逐帧调用时每帧重建 → 切换不再补 BlockEnd，改由下游规整器在 Finish 处
+/// 逆序补闭合 → `content_block_stop` 顺序与整批不一致。会话化后两条路径
+/// 共享同一份状态机。
+pub struct OpenaiStreamState {
+  mut text_block_open : Bool
+  mut thinking_block_open : Bool
+  mut current_tool_block : Int32
+}
+
+///|
+pub fn OpenaiStreamState::new() -> OpenaiStreamState {
+  {
+    text_block_open: false,
+    thinking_block_open: false,
+    current_tool_block: -1,
+  }
+}
+
+///|
 pub fn openai_sse_to_events(
   sse_str : String,
 ) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String] {
+  openai_decode_frames(sse_str, OpenaiStreamState::new())
+}
+
+///|
+/// 解码一帧 SSE（复用会话内跨帧状态）
+fn openai_decode_frames(
+  sse_str : String,
+  st : OpenaiStreamState,
+) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String] {
   let events : Array[@lux.LucentStreamEvent] = []
   let messages = @internal.parse_sse_messages(sse_str)
-  let mut text_block_open = false // 是否有未闭合的文本块
-  let mut thinking_block_open = false // 是否有未闭合的 thinking 块
+  let mut text_block_open = st.text_block_open // 是否有未闭合的文本块
+  let mut thinking_block_open = st.thinking_block_open // 是否有未闭合的 thinking 块
   let thinking_block_idx = 1 // thinking 块使用固定索引 1，避免与 text 块（索引 0）冲突
-  let mut current_tool_block = -1 // 当前工具调用块索引（-1 表示无）
+  let mut current_tool_block = st.current_tool_block // 当前工具调用块索引（-1 表示无）
   let mut i = 0
   while i < messages.length() {
     let payload_raw = messages[i].data.trim().to_owned()
@@ -230,5 +265,34 @@ pub fn openai_sse_to_events(
     }
     i = i + 1
   }
+  // 跨帧状态写回会话
+  st.text_block_open = text_block_open
+  st.thinking_block_open = thinking_block_open
+  st.current_tool_block = current_tool_block
   Ok(@lux.ConversionResult::new(events))
+}
+
+///|
+/// 创建 openai 流解码会话（T5 增量转换入口，跨帧状态由会话持有）
+///
+/// `decode` 逐帧调用复用同一状态：工具索引切换时仍会先补 BlockEnd(旧)，
+/// 使逐帧输出的块闭合顺序与整批一致。`finish` 闭合仍打开的块（截断流）。
+pub fn openai_stream_decoder() -> @lux.LucentStreamDecoder {
+  let st = OpenaiStreamState::new()
+  @lux.LucentStreamDecoder::new(fn(frame) { openai_decode_frames(frame, st) }, fn() {
+    let closing : Array[@lux.LucentStreamEvent] = []
+    if st.text_block_open {
+      closing.push(BlockEnd(0))
+      st.text_block_open = false
+    }
+    if st.thinking_block_open {
+      closing.push(BlockEnd(1))
+      st.thinking_block_open = false
+    }
+    if st.current_tool_block >= 0 {
+      closing.push(BlockEnd(st.current_tool_block))
+      st.current_tool_block = -1
+    }
+    closing
+  })
 }

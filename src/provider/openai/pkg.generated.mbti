@@ -21,6 +21,8 @@ pub fn metadata() -> @meta.ProviderMeta
 
 pub fn openai_sse_to_events(String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String]
 
+pub fn openai_stream_decoder() -> @lux.LucentStreamDecoder
+
 pub fn openai_to_lux_request(String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String]
 
 pub fn openai_to_lux_response(String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String]
@@ -30,6 +32,12 @@ pub fn schema() -> @meta.ProviderSchema
 // Errors
 
 // Types and methods
+pub struct OpenaiStreamState {
+  mut text_block_open : Bool
+  mut thinking_block_open : Bool
+  mut current_tool_block : Int
+}
+pub fn OpenaiStreamState::new() -> Self
 
 // Type aliases
 

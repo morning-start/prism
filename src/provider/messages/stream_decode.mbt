@@ -6,8 +6,44 @@
 ///   data: {...}
 ///
 /// 用 \n\n 分隔 SSE 消息，再逐条解析 event/data 行
+
+///|
+/// Anthropic Messages 流解码的跨帧状态（P1 修复）。
+///
+/// `message_delta.usage` 只保证 `output_tokens`；`input_tokens` 与缓存计费项
+/// 挂在更早的 `message_start.usage` —— 逐帧解码时后续帧看不到首帧，必须靠
+/// 会话把输入侧用量带到 `message_delta`（此前是函数局部变量，逐帧即丢失，
+/// 导致 `prompt_tokens` 恒 0）。会话化后两条路径共享同一份状态机。
+pub struct MessagesStreamState {
+  mut usage_input : Int32?
+  mut usage_cached : Int32?
+  mut usage_cache_creation : Int32?
+  /// 本会话是否已发出 message_stop 的 Done（逐帧路径由会话层统一补终止符）
+  mut finish_seen : Bool
+}
+
+///|
+pub fn MessagesStreamState::new() -> MessagesStreamState {
+  {
+    usage_input: None,
+    usage_cached: None,
+    usage_cache_creation: None,
+    finish_seen: false,
+  }
+}
+
+///|
 pub fn messages_sse_to_events(
   sse_str : String,
+) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String] {
+  messages_decode_frames(sse_str, MessagesStreamState::new())
+}
+
+///|
+/// 解码一帧 SSE（复用会话内跨帧状态）
+fn messages_decode_frames(
+  sse_str : String,
+  st : MessagesStreamState,
 ) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String] {
   let events : Array[@lux.LucentStreamEvent] = []
   let messages = @internal.parse_sse_messages(sse_str)
@@ -15,9 +51,9 @@ pub fn messages_sse_to_events(
   // output_tokens；input_tokens / 缓存计费项既可能挂在 message_start.usage，
   // 也可能重复挂在 message_delta.usage —— 两处都读，缺失时回落到已记录值，
   // 避免"输入侧恒 0"。
-  let mut usage_input : Int? = None
-  let mut usage_cached : Int? = None
-  let mut usage_cache_creation : Int? = None
+  let mut usage_input : Int32? = st.usage_input
+  let mut usage_cached : Int32? = st.usage_cached
+  let mut usage_cache_creation : Int32? = st.usage_cache_creation
   let mut i = 0
   while i < messages.length() {
     let event_type = messages[i].event_type.unwrap_or("")
@@ -50,11 +86,11 @@ pub fn messages_sse_to_events(
             // 该载体回填输入侧用量，从而与整缓冲输出保持一致。
             let cache_fields : Map[String, Json] = Map([])
             match usage_cached {
-              Some(n) => cache_fields["usage_cached"] = n.to_json()
+              Some(n) => cache_fields["usage_cached"] = Json(n)
               None => ()
             }
             match usage_cache_creation {
-              Some(n) => cache_fields["usage_cache_creation"] = n.to_json()
+              Some(n) => cache_fields["usage_cache_creation"] = Json(n)
               None => ()
             }
             let meta_extra : Json? = if cache_fields.length() > 0 {
@@ -151,10 +187,12 @@ pub fn messages_sse_to_events(
         match @internal.obj_get(jv, "delta") {
           Some(delta) =>
             match @internal.field_str(delta, "stop_reason") {
-              Some(reason) =>
+              Some(reason) => {
                 events.push(
                   Finish(@lux.LucentFinishReason::from_string(reason)),
                 )
+                st.finish_seen = true
+              }
               None => ()
             }
           None => ()
@@ -192,15 +230,13 @@ pub fn messages_sse_to_events(
         }
       }
       "message_stop" => {
-        // 如果没有 Finish 事件，补一个默认的 Finish(Stop)
-        let has_finish = events.any(fn(e) {
-          match e {
-            Finish(_) => true
-            _ => false
-          }
-        })
-        if !has_finish {
+        // 如果没有 Finish 事件，补一个默认的 Finish(Stop)。
+        // 跨帧：Finish 可能落在更早的 message_delta 帧，用会话标记而非本帧
+        // 事件判断，否则逐帧路径会重复补 Finish（规整器虽会去重，但语义应
+        // 在解码侧就正确）。
+        if !st.finish_seen {
           events.push(Finish(Stop))
+          st.finish_seen = true
         }
         events.push(Done)
       }
@@ -232,5 +268,22 @@ pub fn messages_sse_to_events(
     }
     i = i + 1
   }
+  // 跨帧状态写回会话
+  st.usage_input = usage_input
+  st.usage_cached = usage_cached
+  st.usage_cache_creation = usage_cache_creation
   Ok(@lux.ConversionResult::new(events))
+}
+
+///|
+/// 创建 messages 流解码会话（T5 增量转换入口，跨帧状态由会话持有）
+///
+/// `decode` 逐帧调用复用同一状态：`message_delta` 帧仍能读到 `message_start`
+/// 记录的输入侧用量（否则 `prompt_tokens` 恒 0）。
+pub fn messages_stream_decoder() -> @lux.LucentStreamDecoder {
+  let st = MessagesStreamState::new()
+  @lux.LucentStreamDecoder::new(
+    fn(frame) { messages_decode_frames(frame, st) },
+    fn() { [] },
+  )
 }

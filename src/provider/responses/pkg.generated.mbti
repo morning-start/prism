@@ -23,6 +23,10 @@ pub fn responses_json_to_lux_response(Json) -> Result[@lux.ConversionResult[@lux
 
 pub fn responses_sse_to_events(String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String]
 
+pub fn responses_stream_decoder() -> @lux.LucentStreamDecoder
+
+pub fn responses_stream_encoder() -> @lux.LucentStreamEncoder
+
 pub fn responses_to_lux_request(String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String]
 
 pub fn responses_to_lux_response(String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String]
@@ -32,6 +36,22 @@ pub fn schema() -> @meta.ProviderSchema
 // Errors
 
 // Types and methods
+pub struct ResponsesStreamState {
+  block_output : Map[Int, Int]
+  block_content : Map[Int, Int]
+  block_is_tool : Map[Int, Bool]
+  block_is_thinking : Map[Int, Bool]
+  block_tool_args : Map[Int, StringBuilder]
+  block_tool_name : Map[Int, String]
+  block_item_id : Map[Int, String]
+  mut next_output_index : Int
+  mut message_output_index : Int
+  mut cur_content_index : Int
+  mut item_counter : Int
+  mut resp_id : String
+  mut ctx : @lux.LucentConversationMeta?
+}
+pub fn ResponsesStreamState::new() -> Self
 
 // Type aliases
 

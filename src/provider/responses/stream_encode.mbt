@@ -13,32 +13,94 @@ pub fn lux_events_to_responses_sse(
 /// 用 ctx 的 id 保证 response.completed 等收尾帧的 id 与首帧一致；
 /// 帧内 ConversationStart 优先覆盖 ctx。
 /// ctx=None 时与 lux_events_to_responses_sse 行为逐字节一致。
+
+///|
+/// Responses 流编码的跨帧状态（P0 修复）。
+///
+/// 块级簿记（block → output_index/content_index/item_id 映射、跨帧累积的
+/// 工具参数、计数器）必须**跨帧存活**：BlockStart 在首帧、BlockEnd 可能在
+/// 数帧之后，done 事件要向映射里反查完整参数。此前这些状态是编码函数的
+/// 局部变量，逐帧调用（StreamConverter 每帧调一次）时每帧重建 → BlockEnd
+/// 查不到工具块 → `function_call_arguments.done` 整体消失、item_id 退化为
+/// 占位符。整批调用因整条事件数组一次传入而恰好保留 → 两路径不一致。
+/// 会话化后两条路径共享同一份状态机。
+pub struct ResponsesStreamState {
+  block_output : Map[Int32, Int32]
+  block_content : Map[Int32, Int32]
+  block_is_tool : Map[Int32, Bool]
+  block_is_thinking : Map[Int32, Bool]
+  block_tool_args : Map[Int32, StringBuilder]
+  block_tool_name : Map[Int32, String]
+  block_item_id : Map[Int32, String]
+  mut next_output_index : Int32
+  mut message_output_index : Int32
+  mut cur_content_index : Int32
+  mut item_counter : Int32
+  mut resp_id : String
+  /// 跨帧会话元信息（逐帧转换时后续帧不含 ConversationStart）
+  mut ctx : @lux.LucentConversationMeta?
+}
+
+///|
+pub fn ResponsesStreamState::new() -> ResponsesStreamState {
+  {
+    block_output: Map([]),
+    block_content: Map([]),
+    block_is_tool: Map([]),
+    block_is_thinking: Map([]),
+    block_tool_args: Map([]),
+    block_tool_name: Map([]),
+    block_item_id: Map([]),
+    next_output_index: 0,
+    message_output_index: -1,
+    cur_content_index: 0,
+    item_counter: 0,
+    resp_id: "resp_0",
+    ctx: None,
+  }
+}
+
+///|
+/// 整批入口：每条事件数组用**全新**状态编码（行为与修复前逐字节一致）
 pub fn lux_events_to_responses_sse_with_ctx(
   events : Array[@lux.LucentStreamEvent],
   ctx : @lux.LucentConversationMeta?,
+) -> Result[@lux.ConversionResult[String], String] {
+  let st = ResponsesStreamState::new()
+  st.ctx = ctx
+  responses_encode_frames(events, st)
+}
+
+///|
+/// 编码一帧事件（复用会话内跨帧状态）
+fn responses_encode_frames(
+  events : Array[@lux.LucentStreamEvent],
+  st : ResponsesStreamState,
 ) -> Result[@lux.ConversionResult[String], String] {
   let lines : Array[String] = []
   // Responses 流状态（标准 §10.2）：output_index 与 content_index 是独立空间。
   // - output_index：output item 索引（ItemStart 提供，或自动分配）
   // - content_index：单个 message item 内部 content part 索引，从 0 起独立计数
   // 维护 block index → (output_index, content_index, is_tool) 映射供 delta/end 反查。
-  let block_output : Map[Int, Int] = Map([])
-  let block_content : Map[Int, Int] = Map([])
-  let block_is_tool : Map[Int, Bool] = Map([])
-  let block_is_thinking : Map[Int, Bool] = Map([])
+  // Map 是引用类型，别名即共享同一份状态；标量在函数末尾写回。
+  let ctx = st.ctx
+  let block_output = st.block_output
+  let block_content = st.block_content
+  let block_is_tool = st.block_is_tool
+  let block_is_thinking = st.block_is_thinking
   // 工具块累积：BlockEnd 的 function_call_arguments.done / output_item.done
   // 需要完整 arguments 与函数名（官方 done 帧携带完整载荷，AI SDK 由此收尾
   // function_call item；此前恒发空串且从不发 output_item.done）。
-  let block_tool_args : Map[Int, StringBuilder] = Map([])
-  let block_tool_name : Map[Int, String] = Map([])
-  let mut next_output_index = 0
-  let mut message_output_index : Int = -1 // message item 的 output_index（Thinking 不修改）
-  let mut cur_content_index = 0
+  let block_tool_args = st.block_tool_args
+  let block_tool_name = st.block_tool_name
+  let mut next_output_index = st.next_output_index
+  let mut message_output_index : Int32 = st.message_output_index
+  let mut cur_content_index = st.cur_content_index
   // item_id 生成：AI SDK 要求 output_item 必须有 id、delta 事件必须有 item_id。
   // 用固定前缀 + 递增计数器保证流内唯一（不依赖系统时间/随机数）。
-  let mut item_counter = 0
-  let block_item_id : Map[Int, String] = Map([]) // block idx → item id
-  let mut resp_id = "resp_0" // response.created 生成的 id，Finish 时复用
+  let mut item_counter = st.item_counter
+  let block_item_id = st.block_item_id // block idx → item id
+  let mut resp_id = st.resp_id // response.created 生成的 id，Finish 时复用
   // ctx 预置（逐帧转换跨帧复用 id）：帧内 ConversationStart 会覆盖
   match ctx {
     Some(meta) =>
@@ -471,8 +533,8 @@ pub fn lux_events_to_responses_sse_with_ctx(
         let mut ct = 0
         let mut tt = 0
         let mut has_usage = false
-        let mut last_usage_reasoning : Int? = None
-        let mut last_usage_cached : Int? = None
+        let mut last_usage_reasoning : Int32? = None
+        let mut last_usage_cached : Int32? = None
         let mut j = i + 1
         while j < events.length() {
           match events[j] {
@@ -547,5 +609,46 @@ pub fn lux_events_to_responses_sse_with_ctx(
     }
     i = i + 1
   }
+  // 标量状态写回会话（Map 是引用类型，已就地生效）
+  st.next_output_index = next_output_index
+  st.message_output_index = message_output_index
+  st.cur_content_index = cur_content_index
+  st.item_counter = item_counter
+  st.resp_id = resp_id
   Ok(@lux.ConversionResult::new(lines.join("\n\n") + "\n\n"))
+}
+
+///|
+/// 创建 responses 流编码会话（T5 增量转换入口，跨帧状态由会话持有）
+///
+/// `encode` 每次调用复用同一状态：BlockStart 在首帧、BlockEnd 可能在后续帧，
+/// done 事件仍能反查到累积参数与 item_id。`set_ctx` 注入跨帧会话元信息。
+pub fn responses_stream_encoder() -> @lux.LucentStreamEncoder {
+  let st = ResponsesStreamState::new()
+  @lux.LucentStreamEncoder::new(
+    fn(events) { responses_encode_frames(events, st) },
+    fn() {
+      // responses 编码器无未闭合的自身状态（块闭合由解码侧规整器补齐）
+      Ok(@lux.ConversionResult::new(""))
+    },
+    fn(ctx) { st.ctx = ctx },
+  )
+}
+
+///|
+/// 创建 responses 流解码会话（跨帧状态由会话持有）
+///
+/// responses 源逐帧解码本身无跨帧状态（FrameEnd 由各自事件携带索引），
+/// 会话化只是把「一帧 = 一条 SSE 消息」的入口统一到会话载体。
+pub fn responses_stream_decoder() -> @lux.LucentStreamDecoder {
+  @lux.LucentStreamDecoder::new(
+    fn(frame) {
+      let r = responses_sse_to_events(frame)
+      match r {
+        Ok(cr) => Ok(cr)
+        Err(e) => Err(e)
+      }
+    },
+    fn() { [] },
+  )
 }

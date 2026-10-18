@@ -9,6 +9,15 @@
 pub fn responses_sse_to_events(
   sse_str : String,
 ) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String] {
+  responses_decode_frames(sse_str)
+}
+
+///|
+/// 解码一帧 SSE（responses 源无跨帧标量状态：各事件的索引由帧自身携带，
+/// 故此处不额外持有会话状态；保留帧级入口以便与会话载体统一）
+fn responses_decode_frames(
+  sse_str : String,
+) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String] {
   let events : Array[@lux.LucentStreamEvent] = []
   let diagnostics : Array[@lux.ConversionDiagnostic] = []
   // 统一换行符：CRLF → LF，再用统一 SSE 解析

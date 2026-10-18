@@ -233,6 +233,7 @@ pub struct PrismStreamSession {
   reg : ProviderRegistration
   splitter : @internal.SseFrameSplitter
   normalizer : EventNormalizer
+  decoder : @lux.LucentStreamDecoder
   events : PrismEventBuffer
 }
 pub fn PrismStreamSession::feed(Self, String) -> Result[Array[PrismEvent], String]
@@ -270,6 +271,8 @@ pub struct ProviderRegistration {
   events_decode : (String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String]
   events_encode : (Array[@lux.LucentStreamEvent]) -> Result[@lux.ConversionResult[String], String]
   events_encode_with_ctx : (Array[@lux.LucentStreamEvent], @lux.LucentConversationMeta?) -> Result[@lux.ConversionResult[String], String]
+  stream_encoder : (() -> @lux.LucentStreamEncoder)?
+  stream_decoder : (() -> @lux.LucentStreamDecoder)?
   base_url : String?
   auth_header : String?
   api_version : String?
@@ -277,6 +280,7 @@ pub struct ProviderRegistration {
 pub fn ProviderRegistration::from_metadata(@meta.ProviderMeta, (String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String], (@lux.LucentRequest) -> Result[@lux.ConversionResult[String], String], (String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String], (@lux.LucentResponse) -> Result[@lux.ConversionResult[String], String], (String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String], (Array[@lux.LucentStreamEvent]) -> Result[@lux.ConversionResult[String], String], (Array[@lux.LucentStreamEvent], @lux.LucentConversationMeta?) -> Result[@lux.ConversionResult[String], String], String?, String?, String?) -> Self
 pub fn ProviderRegistration::new(String, Array[String], @lux.ProviderCapability, String, @meta.ProviderSchema, (String) -> Result[@lux.ConversionResult[@lux.LucentRequest], String], (@lux.LucentRequest) -> Result[@lux.ConversionResult[String], String], (String) -> Result[@lux.ConversionResult[@lux.LucentResponse], String], (@lux.LucentResponse) -> Result[@lux.ConversionResult[String], String], (String) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String], (Array[@lux.LucentStreamEvent]) -> Result[@lux.ConversionResult[String], String], (Array[@lux.LucentStreamEvent], @lux.LucentConversationMeta?) -> Result[@lux.ConversionResult[String], String], String?, String?, String?) -> Self
 pub fn ProviderRegistration::with_overrides(Self, RegistrationOverrides) -> Self
+pub fn ProviderRegistration::with_stream_sessions(Self, (() -> @lux.LucentStreamEncoder)?, (() -> @lux.LucentStreamDecoder)?) -> Self
 
 pub struct ProviderSchema {
   provider_name : String
@@ -344,6 +348,8 @@ pub struct StreamConverter {
   target : ProviderRegistration
   splitter : @internal.SseFrameSplitter
   normalizer : EventNormalizer
+  encoder : @lux.LucentStreamEncoder
+  decoder : @lux.LucentStreamDecoder
   mut held_events : Array[@lux.LucentStreamEvent]
   mut closed : Bool
 }

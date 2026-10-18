@@ -58,6 +58,13 @@ pub struct ProviderRegistration {
     Array[@lux.LucentStreamEvent],
     @lux.LucentConversationMeta?,
   ) -> Result[@lux.ConversionResult[String], String]
+  /// 流式编码会话工厂（P0 修复）：逐帧转换时同一会话复用跨帧状态
+  /// （块→输出索引/累积参数/计数器）。None 时回退到 events_encode_with_ctx
+  /// 逐帧无状态调用（动态注册的 provider 保持既有行为）。
+  stream_encoder : (() -> @lux.LucentStreamEncoder)?
+  /// 流式解码会话工厂（P1 修复）：逐帧解码时同一会话复用跨帧状态
+  /// （当前打开的块/工具索引/累积用量）。None 时回退到 events_decode。
+  stream_decoder : (() -> @lux.LucentStreamDecoder)?
   /// 部署态端点基址（Extension：可选，SDK 不发起 HTTP，仅供宿主路由读取）
   base_url : String?
   /// 认证头名（Extension：可选，如 "Authorization" / "x-api-key"）
@@ -118,9 +125,43 @@ pub fn ProviderRegistration::new(
     events_decode,
     events_encode,
     events_encode_with_ctx,
+    stream_encoder: None,
+    stream_decoder: None,
     base_url,
     auth_header,
     api_version,
+  }
+}
+
+///|
+/// 附加流式会话工厂（P0/P1 修复）：逐帧转换时同一会话复用跨帧状态。
+///
+/// 与 `new` 的逐帧无状态回退相比，会话化保证「逐帧 == 整批」由构造成立——
+/// provider 的两条路径共享同一状态机，而非各自实现后互相对齐。
+/// 动态注册的 provider 可不设置（回退既有行为）。
+pub fn ProviderRegistration::with_stream_sessions(
+  self : ProviderRegistration,
+  stream_encoder : (() -> @lux.LucentStreamEncoder)?,
+  stream_decoder : (() -> @lux.LucentStreamDecoder)?,
+) -> ProviderRegistration {
+  {
+    name: self.name,
+    aliases: self.aliases,
+    capability: self.capability,
+    model_pattern: self.model_pattern,
+    schema: self.schema,
+    request_decode: self.request_decode,
+    request_encode: self.request_encode,
+    response_decode: self.response_decode,
+    response_encode: self.response_encode,
+    events_decode: self.events_decode,
+    events_encode: self.events_encode,
+    events_encode_with_ctx: self.events_encode_with_ctx,
+    stream_encoder,
+    stream_decoder,
+    base_url: self.base_url,
+    auth_header: self.auth_header,
+    api_version: self.api_version,
   }
 }
 
@@ -241,6 +282,8 @@ pub fn ProviderRegistration::with_overrides(
     events_decode: self.events_decode,
     events_encode: self.events_encode,
     events_encode_with_ctx: self.events_encode_with_ctx,
+    stream_encoder: self.stream_encoder,
+    stream_decoder: self.stream_decoder,
     base_url: override_or(overrides.base_url, self.base_url),
     auth_header: override_or(overrides.auth_header, self.auth_header),
     api_version: override_or(overrides.api_version, self.api_version),
@@ -348,6 +391,9 @@ fn build_providers() -> Array[ProviderRegistration] {
       None,
       None,
       None,
+    ).with_stream_sessions(
+      Some(@responses.responses_stream_encoder),
+      Some(@responses.responses_stream_decoder),
     ),
     // OpenAI Chat Completions
     ProviderRegistration::from_metadata(
@@ -362,7 +408,7 @@ fn build_providers() -> Array[ProviderRegistration] {
       None,
       None,
       None,
-    ),
+    ).with_stream_sessions(None, Some(@openai.openai_stream_decoder)),
     // Anthropic Messages
     ProviderRegistration::from_metadata(
       @messages.metadata(),
@@ -382,7 +428,7 @@ fn build_providers() -> Array[ProviderRegistration] {
       None,
       None,
       None,
-    ),
+    ).with_stream_sessions(None, Some(@messages.messages_stream_decoder)),
     // Google Gemini（REST API）
     ProviderRegistration::from_metadata(
       @gemini.metadata(),
@@ -392,7 +438,7 @@ fn build_providers() -> Array[ProviderRegistration] {
       @gemini.lux_response_to_gemini,
       @gemini.gemini_sse_to_events,
       @gemini.lux_events_to_gemini_sse,
-      // gemini 编码无跨帧状态，忽略 ctx
+      // gemini 编码无跨帧上下文需求，忽略 ctx
       fn(
         events : Array[@lux.LucentStreamEvent],
         _ctx : @lux.LucentConversationMeta?,
@@ -402,6 +448,6 @@ fn build_providers() -> Array[ProviderRegistration] {
       None,
       None,
       None,
-    ),
+    ).with_stream_sessions(Some(@gemini.gemini_stream_encoder), None),
   ]
 }

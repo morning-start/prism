@@ -44,18 +44,60 @@ fn normalize_tool_args(
 }
 
 ///|
+
+///|
+/// Gemini 流编码的跨帧状态（P1 修复）。
+///
+/// 工具块参数必须**跨帧累积**：BlockStart 在首帧开块、参数增量分布在后续帧、
+/// BlockEnd 时才一次性输出完整 `functionCall`。此前这些状态是编码函数的局部
+/// 变量，逐帧调用（StreamConverter 每帧调一次）时每帧重建 → 参数累积被打断
+/// → 输出的 `args` 恒为 `{}`（整批调用因整条数组一次传入而恰好保留）。
+/// 会话化后两条路径共享同一份状态机。
+pub struct GeminiStreamState {
+  mut pending_tool_index : Int32?
+  mut pending_tool_id : String
+  mut pending_tool_name : String
+  mut pending_tool_args : String
+  mut acc_signature : String
+}
+
+///|
+pub fn GeminiStreamState::new() -> GeminiStreamState {
+  {
+    pending_tool_index: None,
+    pending_tool_id: "",
+    pending_tool_name: "",
+    pending_tool_args: "",
+    acc_signature: "",
+  }
+}
+
+///|
 pub fn lux_events_to_gemini_sse(
   events : Array[@lux.LucentStreamEvent],
+) -> Result[@lux.ConversionResult[String], String] {
+  gemini_encode_frames(events, GeminiStreamState::new(), true)
+}
+
+///|
+/// 编码一帧事件（复用会话内跨帧状态）
+///
+/// `flush_at_end`：整批路径在数组处理完后冲刷悬挂的工具块（一次性输入的
+/// 语义完整）；逐帧路径由 `finish()` 显式冲刷（会话仍可能收到后续帧）。
+fn gemini_encode_frames(
+  events : Array[@lux.LucentStreamEvent],
+  st : GeminiStreamState,
+  flush_at_end : Bool,
 ) -> Result[@lux.ConversionResult[String], String] {
   let lines : Array[String] = []
   let diagnostics : Array[@lux.ConversionDiagnostic] = []
   // 工具块：BlockStart(ToolCall) 打开，参数增量累积，BlockEnd 时一次性输出
-  let mut pending_tool_index : Int? = None
-  let mut pending_tool_id = ""
-  let mut pending_tool_name = ""
-  let mut pending_tool_args = ""
+  let mut pending_tool_index = st.pending_tool_index
+  let mut pending_tool_id = st.pending_tool_id
+  let mut pending_tool_name = st.pending_tool_name
+  let mut pending_tool_args = st.pending_tool_args
   // thinking signature 是完整不透明令牌：累积到当前值后再发
-  let mut acc_signature = ""
+  let mut acc_signature = st.acc_signature
   let mut i = 0
   while i < events.length() {
     match events[i] {
@@ -231,25 +273,51 @@ pub fn lux_events_to_gemini_sse(
     i = i + 1
   }
   // 兜底：流结束时仍有未闭合的工具块
-  if pending_tool_index is Some(_) {
-    let id_part = if pending_tool_id == "" {
-      ""
-    } else {
-      ",\"id\":\"" + @internal.json_escape(pending_tool_id) + "\""
+  if flush_at_end {
+    if pending_tool_index is Some(_) {
+      let id_part = if pending_tool_id == "" {
+        ""
+      } else {
+        ",\"id\":\"" + @internal.json_escape(pending_tool_id) + "\""
+      }
+      lines.push(
+        "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"" +
+        @internal.json_escape(pending_tool_name) +
+        "\"" +
+        id_part +
+        ",\"args\":" +
+        normalize_tool_args(pending_tool_args, diagnostics) +
+        "}}]}}]}",
+      )
+      pending_tool_index = None
+      pending_tool_id = ""
+      pending_tool_name = ""
+      pending_tool_args = ""
     }
-    lines.push(
-      "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"" +
-      @internal.json_escape(pending_tool_name) +
-      "\"" +
-      id_part +
-      ",\"args\":" +
-      normalize_tool_args(pending_tool_args, diagnostics) +
-      "}}]}}]}",
-    )
   }
+  // 标量状态写回会话
+  st.pending_tool_index = pending_tool_index
+  st.pending_tool_id = pending_tool_id
+  st.pending_tool_name = pending_tool_name
+  st.pending_tool_args = pending_tool_args
+  st.acc_signature = acc_signature
   Ok(
     @lux.ConversionResult::new(lines.join("\n") + "\n").with_diagnostics(
       diagnostics,
     ),
+  )
+}
+
+///|
+/// 创建 gemini 流编码会话（T5 增量转换入口，跨帧状态由会话持有）
+///
+/// `encode` 逐帧调用复用同一状态（工具参数跨帧累积）；`finish` 冲刷流尾
+/// 仍悬挂的工具块（上游未给出 BlockEnd 的截断流）。
+pub fn gemini_stream_encoder() -> @lux.LucentStreamEncoder {
+  let st = GeminiStreamState::new()
+  @lux.LucentStreamEncoder::new(
+    fn(events) { gemini_encode_frames(events, st, false) },
+    fn() { gemini_encode_frames([], st, true) },
+    fn(_ctx) { () },
   )
 }

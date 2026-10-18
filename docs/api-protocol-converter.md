@@ -4,8 +4,12 @@
 > gitignored）。本文档为**正式契约**，是 AGENTS.md 引用的权威版本；
 > 详细协议规范与 curl 用例仍在研究目录的 `references/` 中按需查阅。
 
-Prism 在 Lucent IR 与三个 wire protocol（OpenAI `/v1/chat/completions`、
-OpenAI `/v1/responses`、Anthropic `/v1/messages`）之间互转。
+Prism 在 Lucent IR 与 wire protocol 之间互转：正式契约覆盖三个端点
+（OpenAI `/v1/chat/completions`、OpenAI `/v1/responses`、Anthropic
+`/v1/messages`）；**Google Gemini `/v1beta/models/*:streamGenerateContent`
+作为第四个适配器同样实现**，其保真度论断见
+[fidelity-matrix.md](fidelity-matrix.md) §3.4（本契约的 12-case 矩阵与下方
+对照表尚未包含 Gemini 列，切流评估以保真度矩阵为准）。
 Adapter 位于 `src/provider/<name>/`，实现统一的 6-函数契约（见
 [provider-guide.md](provider-guide.md)）。
 
@@ -17,20 +21,21 @@ Adapter 位于 `src/provider/<name>/`，实现统一的 6-函数契约（见
 3. **不支持的能力必须显式报错**，不要静默吞掉
 4. **先实现公共交集**（文本、工具调用、流式），再扩展高级能力
 
-## 三端点快速对照
+## 端点快速对照
 
-| 维度 | Chat Completions | Responses | Messages (Claude) |
-|---|---|---|---|
-| 端点 | `/v1/chat/completions` | `/v1/responses` | `/v1/messages` |
-| 认证 | `Authorization: Bearer KEY` | `Authorization: Bearer KEY` | `x-api-key: KEY` |
-| system 指令 | `messages[].role=system` | `instructions` | 顶层 `system` 字段 |
-| 工具定义 | `tools[].function.parameters` | `tools[].parameters` | `tools[].input_schema` |
-| 工具选择 | `"none"/"auto"/"required"/指定函数` | 同 Chat | `{type:none/auto/any/tool}` |
-| 工具调用输出 | `message.tool_calls[]` | `output[].type=function_call` | `content[].type=tool_use` |
-| 工具结果回填 | `role:"tool"` + `tool_call_id` | `function_call_output` | `role:"user"` + `tool_result` |
-| 参数类型 | JSON 字符串 | JSON 字符串 | **对象** |
-| 停止原因 | `finish_reason: stop/tool_calls/length` | `status: completed` | `stop_reason: end_turn/tool_use/max_tokens` |
-| 流式格式 | `data: {chunk}` + `data: [DONE]` | `event: response.*` 系列 | `event: message_start/content_block_delta/message_stop` |
+| 维度 | Chat Completions | Responses | Messages (Claude) | Gemini |
+|---|---|---|---|---|
+| 端点 | `/v1/chat/completions` | `/v1/responses` | `/v1/messages` | `/v1beta/models/*:streamGenerateContent` |
+| 认证 | `Authorization: Bearer KEY` | `Authorization: Bearer KEY` | `x-api-key: KEY` | `x-goog-api-key: KEY` |
+| system 指令 | `messages[].role=system` | `instructions` | 顶层 `system` 字段 | `systemInstruction` |
+| 工具定义 | `tools[].function.parameters` | `tools[].parameters` | `tools[].input_schema` | `tools[].functionDeclarations[].parameters` |
+| 工具选择 | `"none"/"auto"/"required"/指定函数` | 同 Chat | `{type:none/auto/any/tool}` | `toolConfig.functionCallingConfig.mode` |
+| 工具调用输出 | `message.tool_calls[]` | `output[].type=function_call` | `content[].type=tool_use` | `parts[].functionCall` |
+| 工具结果回填 | `role:"tool"` + `tool_call_id` | `function_call_output` | `role:"user"` + `tool_result` | `parts[].functionResponse` |
+| 参数类型 | JSON 字符串 | JSON 字符串 | **对象** | **对象** |
+| 停止原因 | `finish_reason: stop/tool_calls/length` | `status: completed` | `stop_reason: end_turn/tool_use/max_tokens` | `finishReason: STOP/MAX_TOKENS/SAFETY` |
+| 流式格式 | `data: {chunk}` + `data: [DONE]` | `event: response.*` 系列 | `event: message_start/content_block_delta/message_stop` | 无 `[DONE]`，逐帧 `parts[]` **增量** |
+| 终止符 | 显式 `[DONE]` | `response.completed` | `message_stop` | `finishReason`（无独立终止帧） |
 
 ## 五大关键转换点
 
@@ -100,6 +105,15 @@ Adapter 位于 `src/provider/<name>/`，实现统一的 6-函数契约（见
 
 流式转换必须维护的状态：content block index、tool call index、已累计的
 partial_json、当前 stop_reason。
+
+> **跨帧状态的落点（硬规则）**：这些状态必须放在**会话对象**里，不能放在
+> 编解码函数的局部变量中。整批路径一次传入整条事件数组，局部变量恰好够用；
+> 而增量路径（`StreamConverter`）每帧调用一次编解码函数，局部变量每帧重建 ——
+> 于是"增量 == 整批"只在纯文本流上偶然成立，工具调用场景会静默丢事件
+> （详见 [fidelity-matrix.md](fidelity-matrix.md) §3.5 与 §4 第 7 条）。
+> 实现载体：`@lux.LucentStreamEncoder` / `@lux.LucentStreamDecoder`
+> （`src/lux/stream_codec.mbt`），由 provider 提供工厂闭包捕获状态，
+> 经 `ProviderRegistration::with_stream_sessions` 注册。
 
 ## 最小测试矩阵（12 条验收标准）
 
