@@ -507,7 +507,27 @@ pub fn lux_request_to_gemini(
       gc_parts.push("\"responseMimeType\":\"application/json\"")
       gc_parts.push("\"responseSchema\":" + schema)
     }
-    _ => ()
+    // Text：Gemini 的 responseMimeType 仅接受 "text/plain" / "application/json"。
+    // "text/plain" 是默认值且不被官方枚举推荐（显式设置曾在部分模型上被拒）→
+    // 等价于省略；但"省略"必须打诊断才算不静默丢弃。
+    Some(Text) =>
+      diagnostics.push(
+        @lux.ConversionDiagnostic::unsupported(
+          "options.structured_output",
+          Some(
+            "gemini responseMimeType has no explicit text mode; text is the default, field omitted",
+          ),
+        ),
+      )
+    // Native（其他 provider 原生格式值）：Gemini 无对应载体 → 显式 Unsupported
+    Some(Native(_)) =>
+      diagnostics.push(
+        @lux.ConversionDiagnostic::unsupported(
+          "options.structured_output",
+          Some("native structured_output has no gemini responseMimeType value"),
+        ),
+      )
+    None => ()
   }
   // thinking config（Gemini 3 优先 thinkingLevel；legacy 回退 thinkingBudget）
   match req.reasoning {
@@ -546,6 +566,19 @@ pub fn lux_request_to_gemini(
         }
       }
     None => ()
+  }
+  // stream：Gemini 的流式开关不在 request body，而由端点路径决定
+  // （`generateContent` vs `streamGenerateContent`）。body 里不写 `stream`
+  // 是正确的，但必须显式告知 —— 否则调用方无法知道该字段的落点是路径。
+  if opts.stream {
+    diagnostics.push(
+      @lux.ConversionDiagnostic::exact(
+        "options.stream",
+        Some(
+          "gemini selects streaming by endpoint path (streamGenerateContent), not request body",
+        ),
+      ),
+    )
   }
   // store：官方 GenerateContentRequest.store 描述的是请求级日志行为，
   // 但生成端点不使用该语义 → 不静默丢弃，显式 Unsupported
@@ -588,7 +621,8 @@ pub fn lux_request_to_gemini(
     "previous_response_id",
   )
   // extras：合并进 generationConfig
-  @internal.merge_extras_json(gc_parts, stripped_extras)
+  let dropped = @internal.merge_extras_json_dedup(gc_parts, stripped_extras)
+  @lux.push_extras_collisions(dropped, diagnostics)
   if gc_parts.length() > 0 {
     parts.push("\"generationConfig\":{" + gc_parts.join(",") + "}")
   }

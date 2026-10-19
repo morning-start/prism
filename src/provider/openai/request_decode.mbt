@@ -329,6 +329,14 @@ pub fn openai_to_lux_request(
   let stream = @internal.field_bool(jv, "stream").unwrap_or(false)
   let stop = @internal.parse_string_array(jv, "stop")
   let store = @internal.field_bool(jv, "store")
+  // top_k：OpenAI 官方 CreateChatCompletionRequest 无此参数，但 OpenAI 兼容
+  // 端点（vLLM / SGLang 等）普遍支持，且与 IR 标准字段同名同义 → 提升为标准
+  // 字段而非落入 extras（extras 会在跨端出站时被原样回写，产出目标协议
+  // 不认识的字段）。IR 有对应载体时不走 extras，是"有载体就用载体"的界限。
+  let top_k = @internal.field_int(jv, "top_k")
+  // n（"How many chat completion choices to generate"）与 IR candidate_count
+  // 同义 → 精确映射；IR 无载体时才是扩展字段。
+  let candidate_count = @internal.field_int(jv, "n")
   // reasoning_effort → IR reasoning.effort（o-series / gpt-5 推理控制）
   // "minimal" 在 IR 无对等档位 → 降级为 Low + 诊断（IR 演进项：补 Minimal）
   let reasoning_effort : @lux.LucentReasoningEffort? = match
@@ -355,6 +363,7 @@ pub fn openai_to_lux_request(
   let extras = @internal.collect_extra_fields(jv, [
     "model", "messages", "tools", "tool_choice", "temperature", "top_p", "max_completion_tokens",
     "max_tokens", "stream", "stop", "response_format", "store", "reasoning_effort",
+    "top_k", "n",
   ])
   // response_format → structured_output
   let structured = match @internal.obj_get(jv, "response_format") {
@@ -404,16 +413,8 @@ pub fn openai_to_lux_request(
       tools,
       tool_choice,
       @lux.LucentOptions::new(
-        temperature,
-        top_p,
-        None,
-        max_tokens,
-        stop,
-        stream,
-        None,
-        structured,
-        store,
-        extras,
+        temperature, top_p, top_k, max_tokens, stop, stream, candidate_count, structured,
+        store, extras,
       ),
       None,
       reasoning,

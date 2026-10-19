@@ -1758,9 +1758,13 @@ test "encode - options map top_p top_k stop sequences and stream" {
 ///|
 /// request_encode：structured_output 的 JsonObject 与 Text 两分支（并入单个 output_config）。
 /// 断言形状相同，用 Array 循环展开为两个用例。
+///
+/// JsonObject：Anthropic json_schema 必须携带具体 schema，此前伪造的空
+/// `"schema":{}` 不是合法 JSON Schema，已改为最宽合法形式
+/// `"schema":{"type":"object"}` 并打 Degraded 诊断。
 test "encode - structured output emits output_config format" {
   let cases : Array[(@lux.LucentStructuredOutput, String)] = [
-    (JsonObject, "\"schema\":{}"),
+    (JsonObject, "\"schema\":{\"type\":\"object\"}"),
     (Text, "\"format\":{\"type\":\"text\"}"),
   ]
   for kv in cases {

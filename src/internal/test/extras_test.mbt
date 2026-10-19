@@ -45,24 +45,40 @@ test "internal extras - collect_extra_fields keeps only unknown keys" {
 }
 
 ///|
-/// === merge_extras_json ===
-test "internal extras - merge_extras_json appends escaped pairs" {
-  let parts : Array[String] = ["{\"a\":1}"]
+/// === merge_extras_json_dedup ===
+///
+/// 安全版本：跳过与已编码片段撞名的键并返回被跳过的键列表。
+/// （不安全的 `merge_extras_json` 已删除 —— 它会产出重复 JSON 键。）
+test "internal extras - merge_extras_json_dedup skips colliding keys" {
+  // parts 的元素在真实编码器里是裸的 `"key":value` 片段（花括号由 join 时补），
+  // 因此这里也用裸片段。
+  let parts : Array[String] = ["\"a\":1"]
 
-  // extras 为 None → 不追加
-  @internal.merge_extras_json(parts, None)
+  // extras 为 None → 不追加、无丢弃
+  assert_true(@internal.merge_extras_json_dedup(parts, None).length() == 0)
   assert_eq(parts.length(), 1)
 
-  // extras 为 Some → 追加 `"key":value`
+  // 不撞名 → 追加 `"key":value`，无丢弃
   let m : Map[String, Json] = Map([])
   m["note"] = extras_parse("\"hello\"")
-  @internal.merge_extras_json(parts, Some(m))
+  assert_true(@internal.merge_extras_json_dedup(parts, Some(m)).length() == 0)
   assert_eq(parts.length(), 2)
   assert_true(parts[1].contains("\"note\":"))
 
   // 空 Map → 不追加
   let empty : Map[String, Json] = Map([])
-  @internal.merge_extras_json(parts, Some(empty))
+  assert_true(
+    @internal.merge_extras_json_dedup(parts, Some(empty)).length() == 0,
+  )
+  assert_eq(parts.length(), 2)
+
+  // 撞名（键 "a" 已在 parts 里）→ 跳过并把键报回来
+  let collide : Map[String, Json] = Map([])
+  collide["a"] = extras_parse("999")
+  let dropped = @internal.merge_extras_json_dedup(parts, Some(collide))
+  assert_eq(dropped.length(), 1)
+  assert_true(dropped.contains("a"))
+  // 未新增片段 → 不会出现第二个 "a"
   assert_eq(parts.length(), 2)
 }
 

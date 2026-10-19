@@ -470,12 +470,25 @@ pub fn lux_request_to_messages(
   // structured output → output_config.format
   // output_effort_part（来自 reasoning.effort）与 format 合并为单个 output_config 对象
   match opts.structured_output {
-    Some(JsonObject) =>
+    Some(JsonObject) => {
+      // Anthropic 无"任意 JSON 对象"格式：json_schema 必须携带具体 schema。
+      // 此前伪造 `"schema":{}` —— 空 schema 不是合法 JSON Schema，上游会
+      // 拒绝或退化为"必须返回一个空对象"。改为布尔 schema 的最宽合法形式
+      // （`{"type":"object"}`）并打 Degraded 诊断。
       parts.push(
         "\"output_config\":{" +
         output_effort_part_with_prefix(output_effort_part) +
-        "\"format\":{\"type\":\"json_schema\",\"schema\":{}}}",
+        "\"format\":{\"type\":\"json_schema\",\"schema\":{\"type\":\"object\"}}}",
       )
+      diagnostics.push(
+        @lux.ConversionDiagnostic::degraded(
+          "options.structured_output",
+          Some(
+            "anthropic json_schema has no \"any JSON object\" mode; widened to {\"type\":\"object\"}",
+          ),
+        ),
+      )
+    }
     Some(JsonSchema(schema)) =>
       parts.push(
         "\"output_config\":{" +
@@ -490,7 +503,20 @@ pub fn lux_request_to_messages(
         output_effort_part_with_prefix(output_effort_part) +
         "\"format\":{\"type\":\"text\"}}",
       )
-    _ => ()
+    // Native（其他 provider 原生格式值）：Anthropic output_config.format 无
+    // 对应值 → 显式 Unsupported；此前落入 `_ => ()` 静默丢弃
+    Some(Native(tag)) =>
+      diagnostics.push(
+        @lux.ConversionDiagnostic::unsupported(
+          "options.structured_output",
+          Some(
+            "native structured_output (" +
+            tag +
+            ") not supported by anthropic-messages",
+          ),
+        ),
+      )
+    None => ()
   }
   // effort 无 structured output 时独立成 output_config
   if output_effort_part != "" {
@@ -513,6 +539,17 @@ pub fn lux_request_to_messages(
   }
   if opts.stream {
     parts.push("\"stream\":true")
+  }
+  // candidate_count：Anthropic 无多候选参数（单候选协议）→ 显式 Unsupported
+  match opts.candidate_count {
+    Some(_) =>
+      diagnostics.push(
+        @lux.ConversionDiagnostic::unsupported(
+          "options.candidate_count",
+          Some("anthropic has no candidate_count parameter"),
+        ),
+      )
+    None => ()
   }
   // metadata
   match req.metadata {
@@ -601,7 +638,8 @@ pub fn lux_request_to_messages(
     )
   }
   // extras：合并进请求 JSON 顶层
-  @internal.merge_extras_json(parts, merged_extras)
+  let dropped = @internal.merge_extras_json_dedup(parts, merged_extras)
+  @lux.push_extras_collisions(dropped, diagnostics)
   let result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
   Ok(result.with_diagnostics(diagnostics))
 }

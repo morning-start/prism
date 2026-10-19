@@ -82,7 +82,11 @@ function Get-StreamEvents([string]$SchemaText, [string]$SourceText) {
 
 function Get-AdapterExpectedFields([string]$Adapter) {
   $sets = @{
-    "openai" = @("model","messages","max_tokens","temperature","top_p","stop","stream","store",
+    # openai 字段集以仓库内 vendored 官方 OpenAPI 为准
+    # （schemas/endpoints/openai-openapi.yaml, CreateChatCompletionRequest）。
+    # "n" = "How many chat completion choices to generate for each input message"，
+    # 是 IR candidate_count 的精确对等参数。
+    "openai" = @("model","messages","max_tokens","n","temperature","top_p","stop","stream","store",
       "response_format","tool_choice","tools","reasoning_effort","role","content","name",
       "tool_call_id","tool_calls","refusal","type","text","image_url","url","function","id",
       "arguments","description","parameters","strict","parallel_tool_calls","schema","json_schema",

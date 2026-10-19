@@ -403,3 +403,34 @@ pub fn push_unsupported(
 ) -> Unit {
   diagnostics.push(ConversionDiagnostic::unsupported(field, Some(detail)))
 }
+
+///|
+/// 为 extras 键撞名导致丢弃的条目补 Degraded 诊断。
+///
+/// 与 `@internal.merge_extras_json_dedup` 配对使用：后者负责跳过与已编码
+/// 目标字段同名的 extras 键（避免同一 JSON 对象出现重复键），本函数负责把
+/// 被跳过的事实显式报出来 —— 这些键来自源协议 wire，与目标协议按 IR 重新
+/// 编码出的同名字段语义不同，丢弃绝不能静默。
+///
+/// 用法：
+/// ```
+/// let dropped = @internal.merge_extras_json_dedup(parts, extras)
+/// push_extras_collisions(dropped, diagnostics)
+/// ```
+pub fn push_extras_collisions(
+  dropped_keys : Array[String],
+  diagnostics : Array[ConversionDiagnostic],
+) -> Unit {
+  for k in dropped_keys {
+    diagnostics.push(
+      ConversionDiagnostic::degraded(
+        "options.extras." + k,
+        Some(
+          "extras key \"" +
+          k +
+          "\" collides with an encoded target field; dropped to keep the JSON object free of duplicate keys",
+        ),
+      ),
+    )
+  }
+}

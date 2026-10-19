@@ -34,27 +34,63 @@ pub fn collect_extra_fields(
 }
 
 ///|
-/// 将 extras Map 合并到 JSON 编码的 parts 数组中
+/// extras 合并的键撞名检测（纯函数，不依赖 lux 诊断类型）。
 ///
-/// 四个 provider 的 request_encode 中都有相同的 extras 合并逻辑：
-/// ```
-/// match opts.extras {
-///   Some(m) => for k, v in m { parts.push("\"" + json_escape(k) + "\":" + v.stringify()) }
-///   None => ()
-/// }
-/// ```
-/// 此 helper 封装该模式，接收 parts 数组（引用语义）和 extras（可选 Map）。
-pub fn merge_extras_json(
+/// 返回与 `parts` 中任一已编码片段同名的 extras 键。**为什么必须检测**：
+/// `parts` 的每个元素都是一个已编码的 `"key":value` 片段，而 extras 是直接
+/// 字符串拼接在末尾的。若 extras 里存在与 body 已发出的键同名的条目（跨协议
+/// 中转时很常见 —— 例如把含 `messages` 的 body 按 responses 解码，`messages`
+/// 落入 extras，再编码到 messages 目标时又与编码器自己发出的 `messages`
+/// 撞名），结果就是同一对象里出现**重复键**：严格 JSON 解析器拒绝，宽容
+/// 解析器静默丢弃先前那个键 —— 两者都不是想要的语义。
+///
+/// 调用方对返回的每个键打 Degraded 诊断并跳过写入（不是"无损"：它来自源
+/// 协议的 wire 字段，与目标协议按 IR 重新编码出的同名字段语义不同）。
+fn extras_colliding_keys(
   parts : Array[String],
   extras : Map[String, Json]?,
-) -> Unit {
+) -> Array[String] {
+  let out : Array[String] = []
   match extras {
     Some(m) =>
-      for k, v in m {
-        parts.push("\"" + json_escape(k) + "\":" + v.stringify())
+      for k, _ in m {
+        let prefix = "\"" + json_escape(k) + "\":"
+        let mut collides = false
+        for part in parts {
+          if part.has_prefix(prefix) {
+            collides = true
+          }
+        }
+        if collides {
+          out.push(k)
+        }
       }
     None => ()
   }
+  out
+}
+
+///|
+/// 合并 extras 到已编码片段数组，**跳过**与已有键撞名的条目，返回被跳过的键。
+///
+/// 这是 `merge_extras_json` 的安全版本：调用方应先检查返回值非空，并为每个
+/// 被跳过的键补一条 Degraded 诊断 —— 该键来自源协议 wire，与目标协议按 IR
+/// 重新编码出的同名字段语义不同，丢弃必须显式。
+pub fn merge_extras_json_dedup(
+  parts : Array[String],
+  extras : Map[String, Json]?,
+) -> Array[String] {
+  let dropped = extras_colliding_keys(parts, extras)
+  match extras {
+    Some(m) =>
+      for k, v in m {
+        if !dropped.contains(k) {
+          parts.push("\"" + json_escape(k) + "\":" + v.stringify())
+        }
+      }
+    None => ()
+  }
+  dropped
 }
 
 ///|

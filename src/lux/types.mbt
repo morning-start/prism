@@ -949,6 +949,16 @@ pub fn ConversionDiagnostic::degraded(
 }
 
 ///|
+/// 构造 Exact 诊断（场景说明用：字段确实无损，但承载位置非直觉 —— 例如
+/// 目标协议的流式开关由端点路径而非请求体决定）。不表示降级。
+pub fn ConversionDiagnostic::exact(
+  field : String,
+  detail : String?,
+) -> ConversionDiagnostic {
+  { field, status: Exact, detail, }
+}
+
+///|
 /// 构造 Invalid 诊断（provider 适配器共用样板：入站载荷格式非法、无法编码为
 /// 合法的目标请求体时使用，调用方通常同时回退到安全默认值）。
 pub fn ConversionDiagnostic::invalid(

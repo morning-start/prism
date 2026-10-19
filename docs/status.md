@@ -37,12 +37,12 @@ live in a dedicated `test/` subpackage (`import ... for "test"`); **whitebox**
 compilation to reach non-public members).
 
 - **lux**: Whitebox (`lux_wbtest`, `serialize_wbtest`, `deserialize_wbtest`, `diagnostics_json_wbtest` in `src/lux/`) + blackbox (`lux_test`, `from_json_error_test`, `snapshot_test` in `src/lux/test/`) — extensive
-- **sdk**: Cross-protocol (`cross_protocol_test`), convert matrix (`convert_matrix_test`), registry (`provider_registry_wbtest`, `dynamic_registry_wbtest`), integration (`sdk_test`, `convert_test`), iteration-009 新增：`context_toolcall_test` / `events_to_context_test` / `options_ext_test` / `hooks_test` / `stream_converter_test` / `error_typed_test` / `snapshot_store_test` / `diagnostics_policy_test` — blackbox in `src/sdk/test/`；首字实时增量解码会话：`stream_session_test`（`Prism::stream_session`，逐 chunk feed 即时产出事件，与整批 `decode_sse` 等价）
+- **sdk**: Cross-protocol (`cross_protocol_test`), convert matrix (`convert_matrix_test`), registry (`provider_registry_wbtest`, `dynamic_registry_wbtest`), integration (`sdk_test`, `convert_test`), iteration-009 新增：`context_toolcall_test` / `events_to_context_test` / `options_ext_test` / `hooks_test` / `stream_converter_test` / `error_typed_test` / `snapshot_store_test` / `diagnostics_policy_test` — blackbox in `src/sdk/test/`；首字实时增量解码会话：`stream_session_test`（`Prism::stream_session`，逐 chunk feed 即时产出事件，与整批 `decode_sse` 等价）；2026-10-19 audit 新增：`option_matrix_contract_test`（标准 options 字段 × 4 目标的「有表示 / 有诊断 / 绝不静默丢弃」逐格断言）、`extras_duplicate_key_test`（extras 键撞名 → 重复 JSON 键回归）
 - **provider/\***: Each adapter has whitebox `_wbtest` (package dir) + blackbox `_test` (`test/` subpackage)
 - **wasm**: `wasm_test` + `stream_session_test` + `abi_version_test` covering all exports (in `src/wasm/test/`)
 - **internal**: Coverage in `internal/test/` subdirectory（含 T5 SseFrameSplitter 测试）
 
-**Total: 1210 tests passing (native + wasm-gc), 2026-10-03 stream_session 后（`moon test` 全量）。**
+**Total: 1333 tests passing (native + wasm-gc), 2026-10-19（`moon test` 全量）。**
 
 ### 实时流式（首字延迟）
 

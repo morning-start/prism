@@ -427,6 +427,10 @@ pub fn responses_to_lux_request(
   }
   let temperature = @internal.field_num(jv, "temperature")
   let top_p = @internal.field_num(jv, "top_p")
+  // top_k：Responses 官方 CreateResponse 无此参数（vendored 官方 OpenAPI 已核），
+  // 但 OpenAI 兼容网关普遍接受，且与 IR 标准字段同名同义 → 提升为标准字段，
+  // 避免落入 extras 后被原样回写到其它目标协议的请求体。
+  let top_k = @internal.field_int(jv, "top_k")
   let max_tokens = @internal.field_int(jv, "max_output_tokens")
   let stream = @internal.field_bool(jv, "stream").unwrap_or(false)
   let reasoning = parse_reasoning(jv, diagnostics)
@@ -435,13 +439,14 @@ pub fn responses_to_lux_request(
   let extras = @internal.collect_extra_fields(jv, [
     "model", "instructions", "input", "tools", "tool_choice", "temperature", "top_p",
     "max_output_tokens", "stream", "reasoning", "text", "store", "previous_response_id",
+    "top_k",
   ])
   // previous_response_id（T8）：提升为 IR 标准可选字段，不再落 extras
   //（消除双载体）。旧 extras 载荷在 encode 侧回退识别（兼容）。
   let opts = @lux.LucentOptions::new(
     temperature,
     top_p,
-    None,
+    top_k,
     max_tokens,
     None,
     stream,

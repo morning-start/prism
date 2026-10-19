@@ -20,6 +20,8 @@ pub fn lucent_stream_events_to_response(Array[LucentStreamEvent], String, String
 
 pub fn lux_to_json_string(Json) -> String
 
+pub fn push_extras_collisions(Array[String], Array[ConversionDiagnostic]) -> Unit
+
 pub fn push_unsupported(String, String, Array[ConversionDiagnostic]) -> Unit
 
 pub fn push_unsupported_content(String, String, Array[ConversionDiagnostic]) -> Unit
@@ -69,6 +71,7 @@ pub struct ConversionDiagnostic {
 } derive(Eq, @debug.Debug)
 pub fn ConversionDiagnostic::degraded(String, String?) -> Self
 pub fn ConversionDiagnostic::equal(Self, Self) -> Bool
+pub fn ConversionDiagnostic::exact(String, String?) -> Self
 pub fn ConversionDiagnostic::from_json(Json) -> Result[Self, String]
 pub fn ConversionDiagnostic::invalid(String, String?) -> Self
 pub fn ConversionDiagnostic::new(String, ConversionStatus, String?) -> Self

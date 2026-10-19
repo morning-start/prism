@@ -380,6 +380,25 @@ pub fn lux_request_to_openai(
     Some(n) => parts.push("\"max_tokens\":" + n.to_string())
     None => ()
   }
+  // top_k：OpenAI 官方 Chat Completions 无此参数（vendored 官方 OpenAPI 已核）。
+  // 不静默丢弃：显式 Unsupported 诊断，让中间件能按租户统计降级率。
+  match opts.top_k {
+    Some(_) =>
+      diagnostics.push(
+        @lux.ConversionDiagnostic::unsupported(
+          "options.top_k",
+          Some(
+            "top_k has no openai-chat parameter (vendor-compatible endpoints may accept it)",
+          ),
+        ),
+      )
+    None => ()
+  }
+  // candidate_count ↔ n（"How many chat completion choices to generate"）同义
+  match opts.candidate_count {
+    Some(n) => parts.push("\"n\":" + n.to_string())
+    None => ()
+  }
   match opts.stop {
     Some(arr) => {
       let stops : Array[String] = []
@@ -526,7 +545,8 @@ pub fn lux_request_to_openai(
       parts.push("\"stream_options\":{\"include_usage\":true}")
     }
   }
-  @internal.merge_extras_json(parts, merged_extras)
+  let dropped = @internal.merge_extras_json_dedup(parts, merged_extras)
+  @lux.push_extras_collisions(dropped, diagnostics)
   let result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
   Ok(result.with_diagnostics(diagnostics))
 }

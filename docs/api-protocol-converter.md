@@ -143,6 +143,22 @@ partial_json、当前 stop_reason。
 > `stream_session_isolation_test.mbt`（切分/截断/幂等/隔离）与
 > `stream_semantic_test.mbt`（语义完整性，非仅两路径相等）。
 
+## 生成参数（LucentOptions）的逐格保真度
+
+上表 12 条矩阵只覆盖**内容**（文本 / 工具 / 流式），不含生成参数。
+`options` 内部各字段在不同目标下的支持度差异很大，逐格论断与判定依据
+（仓库内 vendored 官方 OpenAPI）见
+[fidelity-matrix.md](fidelity-matrix.md) §3.6，可执行断言见
+`src/sdk/test/option_matrix_contract_test.mbt`。要点：
+
+- `top_k` / `stop` / `candidate_count` 在无载体目标上**必须打诊断**，
+  不允许静默丢弃（OpenAI 官方两个端点均无 `top_k`；`n` ↔ `candidate_count`
+  是同义精确映射）。
+- `structured_output=JsonObject` 转到 Anthropic 时不能伪造空 schema
+  （空对象不是合法 JSON Schema）。
+- `extras` 的跨端透传语义与其两个缺陷见
+  [fidelity-matrix.md](fidelity-matrix.md) §3.7 与 §4 第 9 条。
+
 ## 不在第一版互转范围的内容
 
 以下能力需要单独做能力分层，不要直接纳入公共交集：

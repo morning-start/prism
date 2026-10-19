@@ -327,6 +327,38 @@ pub fn lux_request_to_responses(
     Some(p) => parts.push("\"top_p\":" + p.to_string())
     None => ()
   }
+  // top_k / stop / candidate_count：Responses 官方 CreateResponse 均无这些
+  // 参数（vendored 官方 OpenAPI 已核）。不静默丢弃 —— 显式 Unsupported 诊断。
+  match opts.top_k {
+    Some(_) =>
+      diagnostics.push(
+        @lux.ConversionDiagnostic::unsupported(
+          "options.top_k",
+          Some("top_k has no responses parameter"),
+        ),
+      )
+    None => ()
+  }
+  match opts.stop {
+    Some(_) =>
+      diagnostics.push(
+        @lux.ConversionDiagnostic::unsupported(
+          "options.stop",
+          Some("stop has no responses parameter"),
+        ),
+      )
+    None => ()
+  }
+  match opts.candidate_count {
+    Some(_) =>
+      diagnostics.push(
+        @lux.ConversionDiagnostic::unsupported(
+          "options.candidate_count",
+          Some("candidate_count has no responses parameter"),
+        ),
+      )
+    None => ()
+  }
   if opts.stream {
     parts.push("\"stream\":true")
   }
@@ -437,7 +469,8 @@ pub fn lux_request_to_responses(
   merged_extras = @internal.extras_without(
     merged_extras, "previous_response_id",
   )
-  @internal.merge_extras_json(parts, merged_extras)
+  let dropped = @internal.merge_extras_json_dedup(parts, merged_extras)
+  @lux.push_extras_collisions(dropped, diagnostics)
   let result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
   Ok(result.with_diagnostics(diagnostics))
 }

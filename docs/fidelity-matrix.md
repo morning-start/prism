@@ -139,6 +139,64 @@
 - 测试：`src/sdk/test/stream_usage_cr001_test.mbt`（T1.1–T1.4）+ 1 字节切分一致性；
   残余限制见 §4 第 5–8 条。
 
+### 3.6 标准生成参数（LucentOptions）跨端保真度
+
+> 本节为 2026-10-19 audit 新增。原矩阵未覆盖 `options` 内部字段的逐格保真度，
+> 而实测发现 **11 个静默丢弃格**（标准字段在无载体目标上被整体丢弃且无诊断），
+> 违反 AGENTS.md 硬规则「不支持的能力必须显式报错」。现已全部补齐诊断，
+> 逐格断言见 `src/sdk/test/option_matrix_contract_test.mbt`。
+
+图例：✅ Exact（目标原生字段） · 🟡 Degraded / ❌ Unsupported（**均带诊断，不再静默**）
+
+| 字段 | → openai-chat | → responses | → messages | → gemini |
+|---|---|---|---|---|
+| temperature / top_p | ✅ | ✅ | ✅ | ✅（`topP`） |
+| top_k | ❌ 诊断 | ❌ 诊断 | ✅ `top_k` | ✅ `topK` |
+| max_output_tokens | ✅ `max_tokens` | ✅ `max_output_tokens` | ✅ `max_tokens` | ✅ `maxOutputTokens` |
+| stop | ✅ `stop` | ❌ 诊断 | ✅ `stop_sequences` | ✅ `stopSequences` |
+| stream | ✅ | ✅ | ✅ | ✅ 路径承载（Exact 诊断说明落点） |
+| candidate_count | ✅ `n` | ❌ 诊断 | ❌ 诊断 | ✅ `candidateCount` |
+| store | ✅ | ✅ | ❌ 诊断 | ❌ 诊断 |
+| structured_output=JsonObject | ✅ | ✅ | 🟡 拓宽为 `{"type":"object"}` + 诊断 | ✅ |
+| structured_output=JsonSchema | ✅ | ✅ | ✅ | ✅ `responseSchema` |
+| structured_output=Text | ✅ | ✅ | ✅ | ❌ 诊断（Gemini 无显式 text 模式，默认即 text） |
+| structured_output=Native | ❌ 诊断 | ❌ 诊断 | ❌ 诊断 | ❌ 诊断 |
+
+修正的三处具体缺陷：
+
+1. **`top_k` / `candidate_count` 静默丢弃**：二者是 **IR 标准字段**
+   （`schemas/lux-ir-v1.json`），却只在能承载它们的 gemini（+ messages 的
+   `top_k`）被编码，其余目标整体丢弃且无诊断。
+2. **`n` ↔ `candidate_count` 语义未接**：OpenAI 官方 spec 对 `n` 的定义是
+   "How many chat completion choices to generate for each input message"，
+   与 IR `candidate_count` 同义，此前只落在 `extras` 里被原样透传（跨端时
+   变成目标协议不认识的字段）。
+3. **`messages` 的 `JsonObject` 伪造空 schema**：产出
+   `{"type":"json_schema","schema":{}}`，而空对象**不是**合法 JSON Schema，
+   上游会拒绝或退化为"必须返回空对象"。改为最宽合法形式
+   `{"type":"object"}` 并打 Degraded 诊断。
+
+判定依据为仓库内 vendored 的官方 OpenAPI
+（`schemas/endpoints/openai-openapi.yaml`，MIT，version 2.3.0）：`CreateChatCompletionRequest`
+含 `n`/`stop`，`CreateResponse` 含 `stop`/`n` 之外的 `max_output_tokens`，
+二者均无 `top_k` —— 故 `top_k` 对 OpenAI 两个端点都按 Unsupported 诊断处理
+（OpenAI 兼容网关如 vLLM 仍可在解码侧接受它，不拒绝）。
+
+### 3.7 `extras` 透传的两个缺陷（跨协议出站）
+
+- **键撞名 → 重复 JSON 键（结构非法）**：`merge_extras_json` 把 extras 直接
+  字符串拼接在已编码片段之后，不检查键是否与 body 已有字段同名。同源配对即可
+  复现：messages 源带 `disable_parallel_tool_use=true`（合法官方参数）→ 落入
+  extras → 编码到 messages 目标时编码器自己也会发出该键 → 同一对象出现重复键
+  （严格解析器拒绝、宽容解析器静默丢弃先前那个键）。已由
+  `@internal.merge_extras_json_dedup` 修复：跳过撞名键并返回被跳过的键，
+  调用方经 `@lux.push_extras_collisions` 补 Degraded 诊断。不安全的
+  `merge_extras_json` 已删除，杜绝再被误用。回归见
+  `src/sdk/test/extras_duplicate_key_test.mbt`。
+- **IR 有载体却走 extras**：源协议 wire 字段若与 IR 标准字段同名同义
+  （`top_k`、`n`），此前会落入 extras 并被原样回写到**任意**目标协议的请求体
+  （目标不认识 → 可能 400）。现提升为标准字段，跨端时按 §3.6 处理。
+
 ## 4. 已知技术债（不影响上表论断，随 iteration 推进）
 
 1. **ToolResult name carrier**：`LucentToolResult` 仅携带 `tool_use_id`，
@@ -186,6 +244,22 @@
 8. **契约文档端点口径**：`docs/api-protocol-converter.md` 标题为"三端点互转契约"
    （Chat / Responses / Messages），而实现含第四个适配器 Gemini；`AGENTS.md` 亦
    如此表述。形式化契约矩阵暂未给 Gemini 列 —— 切流评估以本矩阵的 §3.4 为准。
+
+9. **`extras` 的跨端语义（已部分修复，剩余属设计决策）**：`options.extras`
+   的本意是"厂商私有扩展软失败保留"，但它同时被用作出站透传通道 ——
+   源协议的 wire 专属字段会被**原样回写**到任意目标协议的请求体里。本次已处理
+   两类：
+   - 与 IR 标准字段同名同义的（`top_k` / `n`）→ 提升为标准字段（§3.6）；
+   - 与目标自产键撞名的（`disable_parallel_tool_use` 等）→ 跳过并打诊断（§3.7）。
+
+   **仍存在**：纯源协议专属、IR 无载体的字段（openai 的 `seed`、`logit_bias`、
+   `frequency_penalty`、`stream_options`；responses 的 `truncation`、`include`、
+   `background`）转出到其它协议时仍会被回写，目标收到不认识的字段可能 400。
+   这**不是本次引入的缺陷**，但也不应继续沉默。可选方向（需治理决策，未在本次实施）：
+   - A：出站时按目标的已知字段白名单过滤 extras，被剔除的键打 Unsupported 诊断；
+   - B：给 extras 增加来源标记，仅回写到**同源**协议；
+   - C：维持现状，但在 §3.7 明示"跨端透传 extras 需调用方自行保证目标可接受"。
+   选 A/B 会让同一份 IR 在不同目标下产出不同 diagnostics，属行为变更，故留待决策。
 
 ## 5. 使用建议（中间件切流前检查单）
 
