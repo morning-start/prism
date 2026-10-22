@@ -620,12 +620,30 @@ pub fn lux_request_to_gemini(
     opts.extras,
     "previous_response_id",
   )
+  // 扩展通道（见 docs/lux-ir-design.md）：`request.extra` 是程序作者显式给定的
+  // 目标端扩展（落在**请求体顶层**，gemini 的请求级扩展 safetySettings /
+  // cachedContent / toolConfig 都在顶层），`options.extras` 是解码侧保留的源协议
+  // wire 遗留（落在 generationConfig 内）。优先级
+  // 目标按 IR 编码出的字段 > `request.extra` > `options.extras`。
+  let overridden = @internal.overlapping_extra_keys(stripped_extras, req.extra)
+  @lux.push_extras_overridden(overridden, diagnostics)
+  let extras_kept = @internal.extras_without_keys(stripped_extras, overridden)
+  // extras 跨端过滤：可证明属于其它协议的键剔除并报 Unsupported 诊断
+  // （extras 在 gemini 落在 generationConfig 内，故「原生」包含 generationConfig 键）
+  let foreign = @internal.foreign_extra_keys(extras_kept, "gemini")
+  @lux.push_extras_foreign(foreign, diagnostics)
   // extras：合并进 generationConfig
-  let dropped = @internal.merge_extras_json_dedup(gc_parts, stripped_extras)
+  let dropped = @internal.merge_extras_json_dedup(
+    gc_parts,
+    @internal.extras_excluding(extras_kept, foreign),
+  )
   @lux.push_extras_collisions(dropped, diagnostics)
   if gc_parts.length() > 0 {
     parts.push("\"generationConfig\":{" + gc_parts.join(",") + "}")
   }
+  // 必须在 generationConfig 入 parts 之后再合并，否则顶层撞名不会被发现
+  let extra_dropped = @internal.merge_extras_json_dedup(parts, req.extra)
+  @lux.push_extras_collisions_at("extra", extra_dropped, diagnostics)
   let result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
   Ok(result.with_diagnostics(diagnostics))
 }

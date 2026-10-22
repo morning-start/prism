@@ -28,6 +28,32 @@ Complete LLM request with conversation, tools, and generation options.
 | `metadata` | `Map[String, String]?` | | Opaque metadata |
 | `extra` | `Map[String, Json]?` | | Provider-specific extensions |
 
+### Extension channels
+
+The IR has **two** extension carriers with deliberately different semantics. They
+are not interchangeable — pick by intent:
+
+| | `LucentRequest.extra` | `LucentOptions.extras` |
+|---|---|---|
+| Written by | the program author, explicitly | the decoders, automatically |
+| Meaning | provider-specific extension **for the target** | source-protocol wire field the IR does not model (soft-fail preservation) |
+| Wire destination | request body top level | generation-parameter position (`generationConfig` for Gemini) |
+| Cross-protocol filtering | **none** — emitted verbatim, the author is responsible for target validity | keys provably native to *another* protocol are dropped with an `Unsupported` diagnostic |
+| Unknown keys | emitted verbatim | emitted verbatim (never a hard failure) |
+
+Precedence when several sources write the same key:
+
+> fields the target derives from IR standard fields **>** `request.extra` **>**
+> `options.extras`
+
+Every override or drop is reported through `ConversionDiagnostic`
+(`Degraded` / `Unsupported`) — never silently — and a key appears **at most once**
+in the emitted JSON object.
+
+Both stay optional (`T?`, empty-by-default maps) and neither can make
+deserialization fail; this is the "extension fields must always be optional" rule
+in `AGENTS.md`.
+
 ### LucentResponse
 
 Non-streaming LLM response with choices and usage.

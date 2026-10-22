@@ -14,7 +14,11 @@ pub fn extract_sse_events(String) -> Array[String]
 
 pub fn extract_text_content(Json, String) -> Array[String]
 
+pub fn extras_excluding(Map[String, Json]?, Map[String, String]) -> Map[String, Json]?
+
 pub fn extras_without(Map[String, Json]?, String) -> Map[String, Json]?
+
+pub fn extras_without_keys(Map[String, Json]?, Array[String]) -> Map[String, Json]?
 
 pub fn field_arr(Json, String) -> Array[Json]?
 
@@ -28,6 +32,8 @@ pub fn field_num(Json, String) -> Double?
 
 pub fn field_str(Json, String) -> String?
 
+pub fn foreign_extra_keys(Map[String, Json]?, String) -> Map[String, String]
+
 pub fn is_json_truncated(String) -> Bool
 
 pub fn json_escape(String) -> String
@@ -39,6 +45,8 @@ pub fn obj_delete(Json, String) -> Json
 pub fn obj_get(Json, String) -> Json?
 
 pub fn obj_set(Json, String, Json) -> Json
+
+pub fn overlapping_extra_keys(Map[String, Json]?, Map[String, Json]?) -> Array[String]
 
 pub fn parse_cache_creation_tokens(Json, Array[String]) -> Int?
 
@@ -67,6 +75,8 @@ pub fn parse_sse_messages(String) -> Array[SseMessage]
 pub fn parse_string_array(Json, String) -> Array[String]?
 
 pub fn parse_usage_json(Json, String, String, String?) -> (Int, Int, Int)
+
+pub fn protocol_native_keys(String) -> Array[String]
 
 pub fn sanitize_json_escapes(String) -> String
 

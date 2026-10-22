@@ -22,6 +22,12 @@ pub fn lux_to_json_string(Json) -> String
 
 pub fn push_extras_collisions(Array[String], Array[ConversionDiagnostic]) -> Unit
 
+pub fn push_extras_collisions_at(String, Array[String], Array[ConversionDiagnostic]) -> Unit
+
+pub fn push_extras_foreign(Map[String, String], Array[ConversionDiagnostic]) -> Unit
+
+pub fn push_extras_overridden(Array[String], Array[ConversionDiagnostic]) -> Unit
+
 pub fn push_unsupported(String, String, Array[ConversionDiagnostic]) -> Unit
 
 pub fn push_unsupported_content(String, String, Array[ConversionDiagnostic]) -> Unit

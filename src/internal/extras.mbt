@@ -116,3 +116,55 @@ pub fn extras_without(
     None => None
   }
 }
+
+///|
+/// 从 extras Map 中移除一组键（返回新 Map；移除后为空返回 None）。
+/// 用于扩展通道优先级（`request.extra` 高于 `options.extras`）与跨端过滤。
+pub fn extras_without_keys(
+  extras : Map[String, Json]?,
+  keys : Array[String],
+) -> Map[String, Json]? {
+  match extras {
+    Some(m) => {
+      let nm : Map[String, Json] = Map([])
+      for k, v in m {
+        if !keys.contains(k) {
+          nm[k] = v
+        }
+      }
+      if nm.is_empty() {
+        None
+      } else {
+        Some(nm)
+      }
+    }
+    None => None
+  }
+}
+
+///|
+/// 两个 extras map 的公共键（按 `a` 的遍历顺序）。
+///
+/// 用途：`a` = `options.extras`（源协议 wire 遗留），`b` = `request.extra`
+/// （程序作者显式给定的目标端扩展）。同名键表示作者对同一字段给了两次值，
+/// 约定 `extra` 胜出，返回值即需要从 `a` 中剔除并报诊断的键。
+pub fn overlapping_extra_keys(
+  a : Map[String, Json]?,
+  b : Map[String, Json]?,
+) -> Array[String] {
+  let out : Array[String] = []
+  match b {
+    Some(mb) =>
+      match a {
+        Some(ma) =>
+          for k, _ in ma {
+            if mb.contains(k) {
+              out.push(k)
+            }
+          }
+        None => ()
+      }
+    None => ()
+  }
+  out
+}

@@ -405,30 +405,98 @@ pub fn push_unsupported(
 }
 
 ///|
-/// 为 extras 键撞名导致丢弃的条目补 Degraded 诊断。
+/// 为扩展通道键撞名导致丢弃的条目补 Degraded 诊断（通道名由 `prefix` 指定）。
 ///
 /// 与 `@internal.merge_extras_json_dedup` 配对使用：后者负责跳过与已编码
-/// 目标字段同名的 extras 键（避免同一 JSON 对象出现重复键），本函数负责把
-/// 被跳过的事实显式报出来 —— 这些键来自源协议 wire，与目标协议按 IR 重新
-/// 编码出的同名字段语义不同，丢弃绝不能静默。
+/// 目标字段同名的键（避免同一 JSON 对象出现重复键），本函数负责把被跳过的
+/// 事实显式报出来。撞名有两种来源，都不允许静默：
+///
+/// 1. 目标是按 IR 重新编码出的同名字段（与源协议 wire 上那个同名字段语义
+///    不同）；
+/// 2. 优先级更高的扩展通道已经写过该键（`request.extra` 高于
+///    `options.extras`，见 `docs/lux-ir-design.md` 的扩展通道说明）。
 ///
 /// 用法：
 /// ```
 /// let dropped = @internal.merge_extras_json_dedup(parts, extras)
-/// push_extras_collisions(dropped, diagnostics)
+/// push_extras_collisions_at("extra", dropped, diagnostics)
 /// ```
-pub fn push_extras_collisions(
+pub fn push_extras_collisions_at(
+  prefix : String,
   dropped_keys : Array[String],
   diagnostics : Array[ConversionDiagnostic],
 ) -> Unit {
   for k in dropped_keys {
     diagnostics.push(
       ConversionDiagnostic::degraded(
+        prefix + "." + k,
+        Some(
+          "extension key \"" +
+          k +
+          "\" collides with a field already encoded for the target (IR-mapped, or from a higher-priority extension channel); dropped to keep the JSON object free of duplicate keys",
+        ),
+      ),
+    )
+  }
+}
+
+///|
+/// 为 `request.extra` 与 `options.extras` 同名的键补 Degraded 诊断。
+///
+/// IR 有两个扩展通道：`request.extra` 是程序作者显式给定的目标端扩展，
+/// `options.extras` 是解码侧保留的源协议 wire 遗留。同名时约定 `extra` 胜出
+/// （作者显式意图优先于自动保留），`extras` 侧的同名键剔除并在此报出。
+/// 调用方应先用 `@internal.overlapping_extra_keys` 取交集、再剔除。
+pub fn push_extras_overridden(
+  keys : Array[String],
+  diagnostics : Array[ConversionDiagnostic],
+) -> Unit {
+  for k in keys {
+    diagnostics.push(
+      ConversionDiagnostic::degraded(
+        "options.extras." + k,
+        Some(
+          "request.extra also supplies \"" +
+          k +
+          "\"; extra wins (it is the explicit target-directed channel) and the options.extras copy is dropped",
+        ),
+      ),
+    )
+  }
+}
+
+///|
+/// `options.extras` 通道的撞名诊断（字段名 `options.extras.<key>`）。
+pub fn push_extras_collisions(
+  dropped_keys : Array[String],
+  diagnostics : Array[ConversionDiagnostic],
+) -> Unit {
+  push_extras_collisions_at("options.extras", dropped_keys, diagnostics)
+}
+
+///|
+/// 为 extras 中「可证明属于其它协议」而被剔除的键补 Unsupported 诊断。
+///
+/// 判定与归属计算见 `@internal.foreign_extra_keys` /
+/// `@internal.protocol_native_keys`：该键是另一个协议的原生字段，而本目标没有
+/// 同名字段，下发只会让目标收到不认识的字段（常见后果是 400 拒绝）。剔除必须
+/// 显式 —— 它属于 Unsupported，不是「软失败保留」的成功路径。
+///
+/// `owners` 为 键 → 归属协议（逗号分隔），例如 `"seed" -> "openai, gemini"`。
+pub fn push_extras_foreign(
+  owners : Map[String, String],
+  diagnostics : Array[ConversionDiagnostic],
+) -> Unit {
+  for k, who in owners {
+    diagnostics.push(
+      ConversionDiagnostic::unsupported(
         "options.extras." + k,
         Some(
           "extras key \"" +
           k +
-          "\" collides with an encoded target field; dropped to keep the JSON object free of duplicate keys",
+          "\" is native to " +
+          who +
+          ", not to this target; dropped instead of emitting a field the target does not define",
         ),
       ),
     )

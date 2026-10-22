@@ -182,20 +182,75 @@
 二者均无 `top_k` —— 故 `top_k` 对 OpenAI 两个端点都按 Unsupported 诊断处理
 （OpenAI 兼容网关如 vLLM 仍可在解码侧接受它，不拒绝）。
 
-### 3.7 `extras` 透传的两个缺陷（跨协议出站）
+### 3.7 扩展通道的四个缺陷（跨协议出站）
 
-- **键撞名 → 重复 JSON 键（结构非法）**：`merge_extras_json` 把 extras 直接
-  字符串拼接在已编码片段之后，不检查键是否与 body 已有字段同名。同源配对即可
-  复现：messages 源带 `disable_parallel_tool_use=true`（合法官方参数）→ 落入
-  extras → 编码到 messages 目标时编码器自己也会发出该键 → 同一对象出现重复键
-  （严格解析器拒绝、宽容解析器静默丢弃先前那个键）。已由
-  `@internal.merge_extras_json_dedup` 修复：跳过撞名键并返回被跳过的键，
-  调用方经 `@lux.push_extras_collisions` 补 Degraded 诊断。不安全的
-  `merge_extras_json` 已删除，杜绝再被误用。回归见
-  `src/sdk/test/extras_duplicate_key_test.mbt`。
-- **IR 有载体却走 extras**：源协议 wire 字段若与 IR 标准字段同名同义
-  （`top_k`、`n`），此前会落入 extras 并被原样回写到**任意**目标协议的请求体
-  （目标不认识 → 可能 400）。现提升为标准字段，跨端时按 §3.6 处理。
+IR 有两个扩展载体，文档语义不同（见 `docs/lux-ir-design.md`「扩展通道」）：
+
+- `LucentRequest.extra` —— 程序作者**显式给定**的目标端扩展；作者知道目标是谁，
+  出站时始终下发。
+- `LucentOptions.extras` —— **解码侧**填充的源协议 wire 遗留
+  （`schemas/lux-ir-v1.json` 对该字段的说明：「厂商私有扩展（软失败保留）」）；
+  来源天然是源协议。
+
+audit（2026-10-19 / 2026-10-22 两轮）共发现四个缺陷，均已修复：
+
+1. **`request.extra` 是死载体（静默丢弃）**：4 个 request encoder 没有一个读
+   `req.extra`，SDK 用户写入的扩展在出站 body 里完全不出现、也没有任何诊断。
+   现 4 端均下发：gemini 落**请求体顶层**（请求级扩展位置：`safetySettings` /
+   `cachedContent` / `toolConfig` 都在顶层），其余端同样落顶层。
+2. **`extras` 跨端原样回写**：纯源协议专属、IR 无载体的键被回写到**任意**目标
+   （openai 的 `seed` / `logit_bias` / `frequency_penalty` / `stream_options`；
+   responses 的 `truncation` / `include` / `background`），目标收到不认识的字段
+   会导致 400。现按**归属过滤**（规则见 §3.8）。
+3. **键撞名 → 重复 JSON 键（结构非法）**：`merge_extras_json` 把 extras 直接
+   字符串拼接在已编码片段之后，不检查键是否与 body 已有字段同名。同源配对即可
+   复现：messages 源带 `disable_parallel_tool_use=true`（合法官方参数）→ 落入
+   extras → 编码到 messages 目标时编码器自己也会发出该键 → 同一对象出现重复键
+   （严格解析器拒绝、宽容解析器静默丢弃先前那个键）。已由
+   `@internal.merge_extras_json_dedup` 修复：跳过撞名键并返回被跳过的键，
+   调用方经 `@lux.push_extras_collisions` 补 Degraded 诊断。不安全的
+   `merge_extras_json` 已删除，杜绝再被误用。
+4. **IR 有载体却走 extras**：源协议 wire 字段若与 IR 标准字段同名同义
+   （`top_k`、`n`），会落入 extras 并被原样回写到任意目标协议的请求体。
+   现提升为标准字段，跨端时按 §3.6 处理。
+
+回归见 `src/sdk/test/extras_duplicate_key_test.mbt` 与
+`src/sdk/test/extension_channel_test.mbt`。
+
+### 3.8 扩展通道的落点、优先级与归属过滤
+
+| 维度 | `request.extra` | `options.extras` |
+|---|---|---|
+| 谁写 | 程序作者（显式） | 解码侧（自动保留） |
+| 语义 | 目标端厂商扩展 | 源协议 wire 遗留（软失败保留） |
+| 落点 | 请求体顶层 | 生成参数位（gemini 为 `generationConfig`） |
+| 跨端过滤 | **不过滤**（作者对目标负责） | 只剔除「可证明属于其它协议」的键 |
+| 未知键 | 原样下发 | 原样下发 |
+
+优先级：**目标按 IR 编码出的字段 > `request.extra` > `options.extras`**。
+任一方被覆盖或被剔除都留 Degraded / Unsupported 诊断，绝不静默；同名键在
+body 里**只出现一次**（gemini 此前会把同名键分别写进 `generationConfig` 与顶层，
+属语义歧义，已修）。
+
+归属过滤的判定方向（实现与依据见 `src/internal/protocol_keys.mbt`）：
+
+> 键 k 在目标 T 上被剔除 ⟺ k ∉ native(T) 且 ∃S≠T, k ∈ native(S)
+
+刻意**不**采用「白名单内才放行」：
+
+- 未知键（厂商私有键、未来新增字段）一律放行 → 同源往返（openai→openai 的
+  `seed`、未来新参数）与厂商注入都不受影响；
+- 表**漏项**只降低过滤强度、不会误丢数据；表**多列**才可能误丢，而每次剔除
+  都带诊断、可被发现。
+
+因此各表力求「该协议自己的顶层字段完备」。`openai` / `responses` 的原生表由
+仓库内 vendored 官方 OpenAPI 按 `allOf`/`$ref` 展开得到（`CreateChatCompletionRequest`
+/ `CreateResponse`）；`messages` / `gemini` 无 vendored spec，按公开 API 手工维护。
+
+代价（**行为变更，中间件需知悉**）：同一份 IR 在不同目标下产出不同
+diagnostics —— 例如 `seed` 转 openai/gemini 保留（gemini 落
+`generationConfig.seed`），转 responses/messages 剔除并报 Unsupported。
+
 
 ## 4. 已知技术债（不影响上表论断，随 iteration 推进）
 
@@ -245,21 +300,23 @@
    （Chat / Responses / Messages），而实现含第四个适配器 Gemini；`AGENTS.md` 亦
    如此表述。形式化契约矩阵暂未给 Gemini 列 —— 切流评估以本矩阵的 §3.4 为准。
 
-9. **`extras` 的跨端语义（已部分修复，剩余属设计决策）**：`options.extras`
-   的本意是"厂商私有扩展软失败保留"，但它同时被用作出站透传通道 ——
-   源协议的 wire 专属字段会被**原样回写**到任意目标协议的请求体里。本次已处理
-   两类：
-   - 与 IR 标准字段同名同义的（`top_k` / `n`）→ 提升为标准字段（§3.6）；
-   - 与目标自产键撞名的（`disable_parallel_tool_use` 等）→ 跳过并打诊断（§3.7）。
-
-   **仍存在**：纯源协议专属、IR 无载体的字段（openai 的 `seed`、`logit_bias`、
-   `frequency_penalty`、`stream_options`；responses 的 `truncation`、`include`、
-   `background`）转出到其它协议时仍会被回写，目标收到不认识的字段可能 400。
-   这**不是本次引入的缺陷**，但也不应继续沉默。可选方向（需治理决策，未在本次实施）：
+9. **`extras` 的跨端语义（已修复，2026-10-22）**：原状是「纯源协议专属、IR 无
+   载体的字段被原样回写到任意目标协议的请求体」，例如 openai 的 `seed`、
+   `logit_bias`、`frequency_penalty`、`stream_options`；responses 的
+   `truncation`、`include`、`background`；目标收到不认识的字段可能 400。
+   当时记录的三个候选方向：
    - A：出站时按目标的已知字段白名单过滤 extras，被剔除的键打 Unsupported 诊断；
    - B：给 extras 增加来源标记，仅回写到**同源**协议；
-   - C：维持现状，但在 §3.7 明示"跨端透传 extras 需调用方自行保证目标可接受"。
-   选 A/B 会让同一份 IR 在不同目标下产出不同 diagnostics，属行为变更，故留待决策。
+   - C：维持现状，由调用方自行保证目标可接受。
+
+   **最终采用 A 的变体「证明为外来才剔除」**（判定式见 §3.8）：不引入 IR 结构
+   变更（B 要给 extras 加来源标记，属 IR 变更、需走
+   `docs/rules/lucent-ir-evolution.md` 治理流程），也不接受 C 的静默 400。
+   与 A 原型的关键差异是判定方向反过来 —— 未知键一律放行，因此没有「白名单外
+   一律丢弃」的副作用，同源往返与厂商私有键注入都不受影响。
+   落地：`src/internal/protocol_keys.mbt`、4 个 request encoder、
+   `src/sdk/test/extension_channel_test.mbt`；同一轮还修掉了 `request.extra`
+   死载体（§3.7 缺陷 1）。
 
 ## 5. 使用建议（中间件切流前检查单）
 

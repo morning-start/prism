@@ -156,8 +156,13 @@ partial_json、当前 stop_reason。
   是同义精确映射）。
 - `structured_output=JsonObject` 转到 Anthropic 时不能伪造空 schema
   （空对象不是合法 JSON Schema）。
-- `extras` 的跨端透传语义与其两个缺陷见
-  [fidelity-matrix.md](fidelity-matrix.md) §3.7 与 §4 第 9 条。
+- `extras` 的跨端透传语义与其四个缺陷见
+  [fidelity-matrix.md](fidelity-matrix.md) §3.7；两个扩展通道的落点、优先级与
+  归属过滤规则见同文 §3.8。要点：`request.extra` 是程序作者显式给定的目标端
+  扩展（始终下发，落请求体顶层），`options.extras` 是解码侧保留的源协议 wire
+  遗留（落生成参数位，只向归属协议下发）；可证明属于其它协议的 extras 键会被
+  剔除并报 Unsupported 诊断，未知键一律放行。可执行断言见
+  `src/sdk/test/extension_channel_test.mbt`。
 
 ## 不在第一版互转范围的内容
 

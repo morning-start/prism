@@ -469,7 +469,21 @@ pub fn lux_request_to_responses(
   merged_extras = @internal.extras_without(
     merged_extras, "previous_response_id",
   )
-  let dropped = @internal.merge_extras_json_dedup(parts, merged_extras)
+  // 扩展通道（见 docs/lux-ir-design.md）：`request.extra` 是程序作者显式给定的
+  // 目标端扩展，`options.extras` 是解码侧保留的源协议 wire 遗留。优先级
+  // 目标按 IR 编码出的字段 > `request.extra` > `options.extras`。
+  let overridden = @internal.overlapping_extra_keys(merged_extras, req.extra)
+  @lux.push_extras_overridden(overridden, diagnostics)
+  let extras_kept = @internal.extras_without_keys(merged_extras, overridden)
+  // extras 跨端过滤：可证明属于其它协议的键剔除并报 Unsupported 诊断
+  let foreign = @internal.foreign_extra_keys(extras_kept, "responses")
+  @lux.push_extras_foreign(foreign, diagnostics)
+  let extra_dropped = @internal.merge_extras_json_dedup(parts, req.extra)
+  @lux.push_extras_collisions_at("extra", extra_dropped, diagnostics)
+  let dropped = @internal.merge_extras_json_dedup(
+    parts,
+    @internal.extras_excluding(extras_kept, foreign),
+  )
   @lux.push_extras_collisions(dropped, diagnostics)
   let result = @lux.ConversionResult::new("{" + parts.join(",") + "}")
   Ok(result.with_diagnostics(diagnostics))
