@@ -400,3 +400,213 @@ test "response matrix - gemini promptFeedback branch edges" {
     }
   }
 }
+
+///|
+/// 缺陷 7：`status:"incomplete"` 此前一律映射为 Length。但 vendored 官方
+/// OpenAPI 的 `incomplete_details.reason`（**Response 级**，注意与 Message 级
+/// 枚举不同）是 `max_output_tokens` / `max_messages` / `content_filter` /
+/// `steered` —— 其中 `content_filter` 是**被内容过滤截断**，与「达到 token
+/// 上限」是完全不同的语义，压成 Length 会让调用方误以为只是没写完。
+test "response matrix - responses incomplete reason distinguishes filter from truncation" {
+  let decode = fn(
+    status : String,
+    details : String,
+  ) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
+    let j = "{\"id\":\"r1\",\"model\":\"m\",\"status\":\"" +
+      status +
+      "\"" +
+      details +
+      ",\"output\":[{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"t\"}]}]}"
+    @responses.responses_to_lux_response(j)
+  }
+  // content_filter 截断 → ContentFilter（不是 Length）
+  match
+    decode(
+      "incomplete", ",\"incomplete_details\":{\"reason\":\"content_filter\"}",
+    ) {
+    Err(e) => fail("decode failed: " + e)
+    Ok(cr) => assert_eq(cr.value().choices[0].finish_reason, ContentFilter)
+  }
+  // 限额类原因 → Length
+  for reason in ["max_output_tokens", "max_messages"] {
+    match
+      decode(
+        "incomplete",
+        ",\"incomplete_details\":{\"reason\":\"" + reason + "\"}",
+      ) {
+      Err(e) => fail("decode " + reason + " failed: " + e)
+      Ok(cr) => assert_eq(cr.value().choices[0].finish_reason, Length)
+    }
+  }
+  // `steered` 无 IR 对等值 → Native 原样保留（不丢数据）
+  let steered : @lux.LucentFinishReason = Native("steered")
+  match
+    decode("incomplete", ",\"incomplete_details\":{\"reason\":\"steered\"}") {
+    Err(e) => fail("decode steered failed: " + e)
+    Ok(cr) => assert_eq(cr.value().choices[0].finish_reason, steered)
+  }
+  // reason / incomplete_details 缺失 → 保守默认 Length
+  match decode("incomplete", "") {
+    Err(e) => fail("decode bare incomplete failed: " + e)
+    Ok(cr) => assert_eq(cr.value().choices[0].finish_reason, Length)
+  }
+  // incomplete_details 存在但 reason 缺失（Response 级为可选字段）→ 同样保守默认
+  match decode("incomplete", ",\"incomplete_details\":{}") {
+    Err(e) => fail("decode empty details failed: " + e)
+    Ok(cr) => assert_eq(cr.value().choices[0].finish_reason, Length)
+  }
+}
+
+///|
+/// 缺陷 8：`status:"failed"` 时官方的 `error` 对象（{code, message}，均
+/// required）此前被整体丢弃 —— 调用方只知道失败了，不知道为什么。
+test "response matrix - responses failure error object is surfaced, not dropped" {
+  let j = "{\"id\":\"r1\",\"model\":\"m\",\"status\":\"failed\",\"error\":{\"code\":\"server_error\",\"message\":\"boom\"},\"output\":[]}"
+  match @responses.responses_to_lux_response(j) {
+    Err(e) => fail("decode failed: " + e)
+    Ok(cr) => {
+      assert_eq(cr.value().choices[0].finish_reason, Error)
+      let mut found = false
+      for d in cr.diagnostics() {
+        if d.field == "response.error" && d.status() is Degraded {
+          match d.detail {
+            Some(text) =>
+              if text.contains("server_error") && text.contains("boom") {
+                found = true
+              }
+            None => ()
+          }
+        }
+      }
+      assert_true(found)
+    }
+  }
+  // error 缺失时不应产生假诊断
+  match
+    @responses.responses_to_lux_response(
+      "{\"id\":\"r1\",\"model\":\"m\",\"status\":\"failed\",\"output\":[]}",
+    ) {
+    Err(e) => fail("decode failed: " + e)
+    Ok(cr) =>
+      for d in cr.diagnostics() {
+        if d.field == "response.error" {
+          fail("no error object must not produce an error diagnostic")
+        }
+      }
+  }
+}
+
+///|
+/// 编码侧对称性：ContentFilter 必须写成 `incomplete` + reason=content_filter
+/// （此前落进 `_ => "completed"`，一个被内容过滤截断的响应被报告为**成功
+/// 完成**）；Length 必须带上 reason=max_output_tokens（此前裸 incomplete）。
+test "response matrix - responses encode carries incomplete_details" {
+  let make = fn(
+    fr : @lux.LucentFinishReason,
+  ) -> @lux.ConversionResult[String] raise {
+    let resp = @lux.LucentResponse::new(
+      "id-1",
+      "m-1",
+      None,
+      [
+        @lux.LucentChoice::new(
+          0,
+          @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("t")]),
+          fr,
+          None,
+        ),
+      ],
+      None,
+      None,
+    )
+    match @responses.lux_response_to_responses(resp) {
+      Ok(cr) => cr
+      Err(e) => fail("encode failed: " + e)
+    }
+  }
+  // 内容过滤 → incomplete + content_filter
+  // （顶层 status 形如 ,"status":"...","incomplete_details" / ,"status":"...","model"；
+  //   不能只查 "status":"completed"，因为每个 output item 内部也有自己的 status）
+  let cf = make(ContentFilter)
+  assert_true(
+    cf
+    .value()
+    .contains(
+      ",\"status\":\"incomplete\",\"incomplete_details\":{\"reason\":\"content_filter\"}",
+    ),
+  )
+  assert_false(cf.value().contains(",\"status\":\"completed\",\"model\""))
+  // 限额 → incomplete + max_output_tokens
+  let len = make(Length)
+  assert_true(
+    len
+    .value()
+    .contains(
+      ",\"status\":\"incomplete\",\"incomplete_details\":{\"reason\":\"max_output_tokens\"}",
+    ),
+  )
+  // 无对等值收敛为 completed 但必须诊断
+  let safe = make(Safety)
+  assert_true(safe.value().contains(",\"status\":\"completed\",\"model\""))
+  assert_true(rsp_diag(safe, "choices.finish_reason"))
+  // ToolCalls → completed 是语义对等（function_call item 承载），不诊断
+  let tc = make(ToolCalls)
+  assert_true(tc.value().contains(",\"status\":\"completed\",\"model\""))
+  assert_false(rsp_diag(tc, "choices.finish_reason"))
+}
+
+///|
+/// `Native(s)` 在 responses 编码侧没有合法落点（status 是封闭枚举），
+/// 必须诊断而非静默压成 completed。与 openai/messages/gemini 的 Native
+/// 透传不同 —— 那三者的 finish_reason 是自由字符串，responses 不是。
+test "response matrix - responses Native finish reason is diagnosed" {
+  let fr : @lux.LucentFinishReason = Native("vendor_pause")
+  let resp = @lux.LucentResponse::new(
+    "id-1",
+    "m-1",
+    None,
+    [
+      @lux.LucentChoice::new(
+        0,
+        @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("t")]),
+        fr,
+        None,
+      ),
+    ],
+    None,
+    None,
+  )
+  match @responses.lux_response_to_responses(resp) {
+    Err(e) => fail("encode failed: " + e)
+    Ok(cr) => {
+      // 不得把 vendor 值泄漏进 status
+      assert_true(cr.value().contains(",\"status\":\"completed\",\"model\""))
+      assert_false(cr.value().contains("vendor_pause"))
+      assert_true(rsp_diag(cr, "choices.finish_reason"))
+    }
+  }
+}
+
+///|
+/// 往返闭环：responses `incomplete+content_filter` → IR ContentFilter →
+/// responses `incomplete+content_filter`。截断原因跨往返不退化成「没写完」。
+test "response matrix - content filter truncation survives the responses round trip" {
+  let j = "{\"id\":\"r1\",\"model\":\"m\",\"status\":\"incomplete\",\"incomplete_details\":{\"reason\":\"content_filter\"},\"output\":[{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"partial\"}]}]}"
+  match @responses.responses_to_lux_response(j) {
+    Err(e) => fail("decode failed: " + e)
+    Ok(cr) => {
+      assert_eq(cr.value().choices[0].finish_reason, ContentFilter)
+      match @responses.lux_response_to_responses(cr.value()) {
+        Err(e) => fail("encode failed: " + e)
+        Ok(out) => {
+          assert_true(out.value().contains("\"status\":\"incomplete\""))
+          assert_true(
+            out
+            .value()
+            .contains("\"incomplete_details\":{\"reason\":\"content_filter\"}"),
+          )
+        }
+      }
+    }
+  }
+}

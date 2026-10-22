@@ -283,8 +283,32 @@ diagnostics —— 例如 `seed` 转 openai/gemini 保留（gemini 落
 属**语义对等**而非丢失。给它加诊断会让每次工具调用都报假 Unsupported，
 故明确记录为「不诊断」并写进测试。
 
-回归：`src/sdk/test/response_fidelity_test.mbt`（8 用例）。每个用例都做过
+回归：`src/sdk/test/response_fidelity_test.mbt`。每个用例都做过
 **反向验证**：临时回退修复后测试必须失败，避免写出「永远通过」的断言。
+
+### 3.10 Responses 的 incomplete_details（响应侧第二轮补充）
+
+vendored 官方 OpenAPI 的 **Response 级** `incomplete_details.reason` 枚举是
+`max_output_tokens` / `max_messages` / `content_filter` / `steered` —— 注意与
+Message 级枚举（`content_filter` / `max_tokens` / `run_cancelled` /
+`run_expired` / `run_failed`）**不同**。此前解码只看 `status`，把
+`incomplete` 一律压成 `Length`。
+
+| 格子 | 此前 | 现状 |
+|---|---|---|
+| decode `reason=content_filter` | 压成 `Length`（内容过滤截断被报成「没写完」） | `ContentFilter` |
+| decode `reason=max_output_tokens` / `max_messages` | `Length` | `Length`（不变） |
+| decode `reason=steered` | `Length`（丢失） | `Native("steered")` 原样保留 |
+| decode reason / incomplete_details 缺失 | `Length` | `Length`（保守默认，不变） |
+| decode `status=failed` 的 `error` 对象 | **整体丢弃**，调用方不知道失败原因 | Degraded 诊断带出 code + message |
+| encode `ContentFilter` | 落进 `_ => "completed"`（截断被报成**成功完成**） | `incomplete` + `reason=content_filter` |
+| encode `Length` | 裸 `incomplete`（缺 reason） | 补 `reason=max_output_tokens` |
+| encode `Native(s)` | 静默 `completed` | `completed` + Unsupported 诊断（responses 的 status 是封闭枚举，与 openai/messages/gemini 的自由字符串不同） |
+| encode `ToolCalls` | `completed` | `completed`（**语义对等**：function_call item 承载工具调用，不诊断） |
+
+往返闭环已断言：`incomplete+content_filter` → IR `ContentFilter` →
+`incomplete+content_filter`，截断原因跨往返不退化。`reason=content_filter` 的
+encode 侧做过反向验证。
 
 ## 4. 已知技术债（不影响上表论断，随 iteration 推进）
 

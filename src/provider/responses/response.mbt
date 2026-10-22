@@ -155,10 +155,53 @@ pub fn responses_json_to_lux_response(
     None => ()
   }
   let msg = @lux.LucentMessage::new(Assistant, content)
+  // status → finish_reason
+  //
+  // `status: "incomplete"` 此前一律映射为 Length —— 但 vendored 官方 OpenAPI 的
+  // `incomplete_details.reason`（Response 级）枚举是
+  // `max_output_tokens` / `max_messages` / `content_filter` / `steered`，
+  // 其中 **content_filter 是被内容过滤截断**，与「达到 token 上限」是完全不同
+  // 的语义，压成 Length 会让调用方误以为只是没写完。
+  //
+  // `failed` 时的 `error` 对象（{code, message}，均 required）此前被整体丢弃，
+  // 调用方只知道失败了、不知道为什么 —— 补 Degraded 诊断显式带出。
   let finish = match @internal.field_str(jv, "status") {
     Some("completed") => @lux.Stop
-    Some("incomplete") => Length
-    Some("failed") => Error
+    Some("incomplete") =>
+      match @internal.obj_get(jv, "incomplete_details") {
+        Some(d) =>
+          match @internal.field_str(d, "reason") {
+            // 内容过滤截断 ≠ token 上限截断
+            Some("content_filter") => ContentFilter
+            // 官方 reason 枚举里其余的「限额」类原因都是 Length 语义
+            Some("max_output_tokens") => Length
+            Some("max_messages") => Length
+            // `steered`（安全边界主动停）等无 IR 对等值 → 原样保留，不丢数据
+            Some(other) => @lux.LucentFinishReason::from_string(other)
+            // reason 缺失（Response 级为可选字段）→ 保持保守默认 Length
+            None => Length
+          }
+        // incomplete_details 缺失 → 保持保守默认 Length
+        None => Length
+      }
+    Some("failed") => {
+      match @internal.obj_get(jv, "error") {
+        Some(err) => {
+          let code = @internal.field_str(err, "code").unwrap_or("")
+          let message = @internal.field_str(err, "message").unwrap_or("")
+          if code != "" || message != "" {
+            diagnostics.push(
+              @lux.ConversionDiagnostic::degraded(
+                "response.error",
+                Some("response failed (code: " + code + "): " + message),
+              ),
+            )
+          }
+        }
+        None => ()
+      }
+      Error
+    }
     Some(other) => @lux.LucentFinishReason::from_string(other)
     None => Stop
   }
@@ -308,11 +351,55 @@ pub fn lux_response_to_responses(
     }
     i = i + 1
   }
-  let status_str = match choice.finish_reason {
-    Stop => "\"completed\""
-    Length => "\"incomplete\""
-    Error => "\"failed\""
-    _ => "\"completed\""
+  // status + incomplete_details
+  //
+  // vendored 官方 OpenAPI（Response 级）：`status` 枚举为
+  // completed / failed / in_progress / cancelled / queued / incomplete；
+  // `incomplete_details.reason` 枚举为
+  // max_output_tokens / max_messages / content_filter / steered。
+  //
+  // 此前 ContentFilter 落进 `_ => "completed"` 分支 —— 一个被内容过滤截断的
+  // 响应被报告为**成功完成**。现映射为 incomplete + reason=content_filter。
+  // Length 补上 reason=max_output_tokens（此前裸 incomplete 缺原因）。
+  //
+  // ToolCalls → completed 是**语义对等**：Responses 用 output 里的
+  // function_call item 承载工具调用，status 本就是 completed，不诊断。
+  let mut status_str = "\"completed\""
+  let mut incomplete_part = ""
+  match choice.finish_reason {
+    Stop => ()
+    ToolCalls => ()
+    Length => {
+      status_str = "\"incomplete\""
+      incomplete_part = ",\"incomplete_details\":{\"reason\":\"max_output_tokens\"}"
+    }
+    ContentFilter => {
+      status_str = "\"incomplete\""
+      incomplete_part = ",\"incomplete_details\":{\"reason\":\"content_filter\"}"
+    }
+    Error => status_str = "\"failed\""
+    Native(s) =>
+      diagnostics.push(
+        @lux.ConversionDiagnostic::unsupported(
+          "choices.finish_reason",
+          Some(
+            "finish_reason \"" +
+            s +
+            "\" has no openai-responses equivalent; emitted \"completed\" instead",
+          ),
+        ),
+      )
+    other =>
+      diagnostics.push(
+        @lux.ConversionDiagnostic::unsupported(
+          "choices.finish_reason",
+          Some(
+            "finish_reason \"" +
+            other.to_string() +
+            "\" has no openai-responses equivalent; emitted \"completed\" instead",
+          ),
+        ),
+      )
   }
   let usage_json = match resp.usage {
     Some(u) => {
@@ -352,6 +439,7 @@ pub fn lux_response_to_responses(
     created_part +
     ",\"status\":" +
     status_str +
+    incomplete_part +
     ",\"model\":\"" +
     @internal.json_escape(resp.model) +
     "\",\"output\":[" +
