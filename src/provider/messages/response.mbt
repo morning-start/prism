@@ -56,6 +56,20 @@ pub fn lux_response_to_messages(
     return Err("response has no choices")
   }
   let diagnostics : Array[@lux.ConversionDiagnostic] = []
+  // Anthropic Messages 是**单结果**协议（无 candidate 概念），只能承载
+  // choices[0]；choices[1..] 此前被静默丢弃。显式诊断，不静默。
+  if resp.choices.length() > 1 {
+    diagnostics.push(
+      @lux.ConversionDiagnostic::unsupported(
+        "response.choices",
+        Some(
+          "anthropic-messages carries a single message; " +
+          (resp.choices.length() - 1).to_string() +
+          " additional choice(s) dropped",
+        ),
+      ),
+    )
+  }
   let choice = resp.choices[0]
   // content blocks
   let content_blocks : Array[String] = []
@@ -86,17 +100,28 @@ pub fn lux_response_to_messages(
   // Anthropic stop_reason 枚举：end_turn/max_tokens/stop_sequence/tool_use/
   // refusal/pause_turn/model_context_window_exceeded。
   // IR ContentFilter 无对等值 → 映射为 "refusal"（Anthropic 语义最近的载体）；
-  // Safety/Recitation/MalformedToolCall/Error 等无对等值 → 收敛为 "end_turn"。
+  // Safety/Recitation/MalformedToolCall/Error 无对等值 → 收敛为 "end_turn"，
+  // **但必须留诊断**：这四个值语义差异很大（安全拦截 / 复述 / 工具调用畸形 /
+  // 上游出错），全部压成 "end_turn" 会让调用方误以为模型正常说完。
   let stop_reason = match choice.finish_reason {
     Stop => "\"end_turn\""
     Length => "\"max_tokens\""
     ToolCalls => "\"tool_use\""
     ContentFilter => "\"refusal\""
-    Safety => "\"end_turn\""
-    Recitation => "\"end_turn\""
-    MalformedToolCall => "\"end_turn\""
-    Error => "\"end_turn\""
     Native(s) => "\"" + @internal.json_escape(s) + "\""
+    other => {
+      diagnostics.push(
+        @lux.ConversionDiagnostic::unsupported(
+          "choices.finish_reason",
+          Some(
+            "finish_reason \"" +
+            other.to_string() +
+            "\" has no anthropic stop_reason equivalent; emitted \"end_turn\" instead",
+          ),
+        ),
+      )
+      "\"end_turn\""
+    }
   }
   // usage（cached / cache_creation 细化用量输出，标准 §9）
   let usage_json = match resp.usage {

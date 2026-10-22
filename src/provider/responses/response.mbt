@@ -1,5 +1,12 @@
 ///|
 /// 解析 output Item 为 LucentContent[]
+///
+/// 官方 `RefusalContent` 的形态是 `{"type":"refusal","refusal":"<text>"}`
+/// （vendored `schemas/endpoints/openai-openapi.yaml` `RefusalContent`，`refusal`
+/// 是 required 字段）—— **不是** `text`。此前只读 `text`，导致官方形态的
+/// refusal 内容块被**整体静默丢弃**（无 block、无诊断），这是最能说明「解码
+/// 侧缺矩阵审计」的一例。现在两种键都读，`refusal` 优先，`text` 作为兼容回退。
+///
 /// 未知 server-side item（web_search_call / file_search_call 等）不发诊断——
 /// 本函数无诊断通道，由 responses_json_to_lux_response 的 output 级扫描兜底。
 fn parse_output_content(output_item : Json) -> Array[@lux.LucentContent] {
@@ -17,9 +24,14 @@ fn parse_output_content(output_item : Json) -> Array[@lux.LucentContent] {
                   None => ()
                 }
               Some("refusal") =>
-                match @internal.field_str(parts[i], "text") {
+                // 官方键是 `refusal`；`text` 仅作历史/兼容回退
+                match @internal.field_str(parts[i], "refusal") {
                   Some(t) => result.push(@lux.LucentContent::refusal(t))
-                  None => ()
+                  None =>
+                    match @internal.field_str(parts[i], "text") {
+                      Some(t) => result.push(@lux.LucentContent::refusal(t))
+                      None => ()
+                    }
                 }
               _ => ()
             }
@@ -227,6 +239,20 @@ pub fn lux_response_to_responses(
     return Err("response has no choices")
   }
   let diagnostics : Array[@lux.ConversionDiagnostic] = []
+  // OpenAI Responses 的 `output` 是**单一**结果（无 candidate 概念），因此只能
+  // 承载 choices[0]；choices[1..] 此前被静默丢弃。显式诊断，不静默。
+  if resp.choices.length() > 1 {
+    diagnostics.push(
+      @lux.ConversionDiagnostic::unsupported(
+        "response.choices",
+        Some(
+          "openai-responses carries a single output; " +
+          (resp.choices.length() - 1).to_string() +
+          " additional choice(s) dropped",
+        ),
+      ),
+    )
+  }
   let choice = resp.choices[0]
   // build output items
   let output_items : Array[String] = []

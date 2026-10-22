@@ -86,6 +86,46 @@ fn parse_choices(jv : Json) -> Array[@lux.LucentChoice] {
 }
 
 ///|
+/// IR finish_reason → OpenAI Chat `finish_reason` 的**合法**取值。
+///
+/// OpenAI Chat 的官方枚举只有 5 个值（vendored 官方 OpenAPI
+/// `schemas/endpoints/openai-openapi.yaml`，`CreateChatCompletionResponse.choices[].finish_reason`）：
+/// `stop` / `length` / `tool_calls` / `content_filter` / `function_call`。
+///
+/// 此前直接把 `LucentFinishReason::to_string()` 写进 body，而那个词表是 **IR 自己
+/// 的**（`safety` / `recitation` / `malformed_tool_call` / `error` 都不是 OpenAI
+/// 的合法值）。对端做严格枚举校验时会拒绝整个响应体。
+///
+/// 无对等值的 IR 原因收敛为 `stop`（最接近「正常结束」），并补 Unsupported
+/// 诊断 —— 收敛必须显式，不能静默。
+fn openai_finish_reason(
+  fr : @lux.LucentFinishReason,
+  diagnostics : Array[@lux.ConversionDiagnostic],
+) -> String {
+  match fr {
+    Stop => "stop"
+    Length => "length"
+    ToolCalls => "tool_calls"
+    ContentFilter => "content_filter"
+    Native(s) => s
+    // 以下 IR 值在 OpenAI Chat 无合法对等枚举 → 收敛为 stop 并诊断
+    other => {
+      diagnostics.push(
+        @lux.ConversionDiagnostic::unsupported(
+          "choices.finish_reason",
+          Some(
+            "finish_reason \"" +
+            other.to_string() +
+            "\" has no openai-chat equivalent; emitted \"stop\" instead",
+          ),
+        ),
+      )
+      "stop"
+    }
+  }
+}
+
+///|
 /// 3. openai_to_lux_response — 响应解码
 pub fn openai_to_lux_response(
   json_str : String,
@@ -211,7 +251,7 @@ pub fn lux_response_to_openai(
     }
     msg_obj = msg_obj +
       "},\"finish_reason\":\"" +
-      @internal.json_escape(c.finish_reason.to_string()) +
+      @internal.json_escape(openai_finish_reason(c.finish_reason, diagnostics)) +
       "\""
     choices_json.push("{" + msg_obj + "}")
     i = i + 1

@@ -75,6 +75,67 @@ pub fn gemini_to_lux_response(
     None => ()
   }
   if choices.length() == 0 {
+    // 零 candidate 有两种截然不同的原因，必须区分：
+    //  1. `promptFeedback.blockReason` 有值 → 提示词被安全策略**整体拦截**。
+    //     这是有效业务结果（finish_reason = Safety），不是转换失败；
+    //     此前一律 `Err`，调用方拿不到 blockReason，也拿不到 usage。
+    //  2. 其它 → 协议残缺，确实无法转换。
+    match @internal.obj_get(jv, "promptFeedback") {
+      Some(pf) =>
+        match @internal.field_str(pf, "blockReason") {
+          Some(reason) => {
+            let ratings = match @internal.field_arr(pf, "safetyRatings") {
+              Some(arr) => {
+                let out : Array[@lux.LucentSafetyRating] = []
+                let mut k = 0
+                while k < arr.length() {
+                  let cat = @internal.field_str(arr[k], "category").unwrap_or(
+                    "",
+                  )
+                  let prob = @internal.field_str(arr[k], "probability").unwrap_or(
+                    "",
+                  )
+                  out.push(@lux.LucentSafetyRating::new(cat, prob))
+                  k = k + 1
+                }
+                Some(out)
+              }
+              None => None
+            }
+            let empty_msg = @lux.LucentMessage::new(Assistant, [])
+            let blocked = @lux.LucentChoice::new(0, empty_msg, Safety, ratings)
+            let usage : @lux.LucentUsage? = match
+              @internal.obj_get(jv, "usageMetadata") {
+              Some(u) => {
+                let (pt, ct, tt) = @internal.parse_usage_json(
+                  u,
+                  "promptTokenCount",
+                  "candidatesTokenCount",
+                  Some("totalTokenCount"),
+                )
+                Some(@lux.LucentUsage::full(pt, ct, tt, None, None, None))
+              }
+              None => None
+            }
+            diagnostics.push(
+              @lux.ConversionDiagnostic::degraded(
+                "promptFeedback.blockReason",
+                Some(
+                  "prompt blocked by gemini safety policy: " +
+                  reason +
+                  "; represented as an empty choice with finish_reason=safety",
+                ),
+              ),
+            )
+            let result = @lux.ConversionResult::new(
+              @lux.LucentResponse::new(id, model, None, [blocked], usage, None),
+            )
+            return Ok(result.with_diagnostics(diagnostics))
+          }
+          None => ()
+        }
+      None => ()
+    }
     return Err("response has no candidates")
   }
   // usage（含 thoughtsTokenCount / cachedContentTokenCount 细化用量，标准 §9）
@@ -205,12 +266,29 @@ pub fn lux_response_to_gemini(
     let finish_str = match c.finish_reason {
       Stop => "STOP"
       Length => "MAX_TOKENS"
+      // Gemini 的 FinishReason 枚举没有「工具调用」这一项：模型发起函数调用时
+      // 正常结束，官方返回的是 STOP。**不是丢失**，属语义对等，故不诊断。
       ToolCalls => "STOP"
       Safety => "SAFETY"
       Recitation => "RECITATION"
       MalformedToolCall => "MALFORMED_FUNCTION_CALL"
       Error => "OTHER"
-      _ => "STOP"
+      Native(s) => s
+      // ContentFilter 在 Gemini 侧由 safetyRatings 的 blockReason 承载，
+      // FinishReason 无对等值 → 收敛为 STOP 并诊断
+      other => {
+        diagnostics.push(
+          @lux.ConversionDiagnostic::unsupported(
+            "candidates.finishReason",
+            Some(
+              "finish_reason \"" +
+              other.to_string() +
+              "\" has no gemini FinishReason equivalent; emitted \"STOP\" instead",
+            ),
+          ),
+        )
+        "STOP"
+      }
     }
     let mut cand = "{\"index\":" +
       c.index.to_string() +
@@ -240,14 +318,26 @@ pub fn lux_response_to_gemini(
     i = i + 1
   }
   let usage_part = match resp.usage {
-    Some(u) =>
-      ",\"usageMetadata\":{\"promptTokenCount\":" +
-      u.prompt_tokens.to_string() +
-      ",\"candidatesTokenCount\":" +
-      u.completion_tokens.to_string() +
-      ",\"totalTokenCount\":" +
-      u.total_tokens.to_string() +
-      "}"
+    Some(u) => {
+      // thoughtsTokenCount / cachedContentTokenCount 是 decoded 侧读取的标准细化
+      // 用量（见 usage.mbt），编码侧必须对称写出 —— 否则「解→编」往返丢数据，
+      // 且与本文件解码路径自相矛盾。
+      let mut s = ",\"usageMetadata\":{\"promptTokenCount\":" +
+        u.prompt_tokens.to_string() +
+        ",\"candidatesTokenCount\":" +
+        u.completion_tokens.to_string() +
+        ",\"totalTokenCount\":" +
+        u.total_tokens.to_string()
+      match u.reasoning_tokens {
+        Some(n) => s = s + ",\"thoughtsTokenCount\":" + n.to_string()
+        None => ()
+      }
+      match u.cached_tokens {
+        Some(n) => s = s + ",\"cachedContentTokenCount\":" + n.to_string()
+        None => ()
+      }
+      s + "}"
+    }
     None => ""
   }
   // GenerateContentResponse 无 model 字段：只输出 responseId + modelVersion

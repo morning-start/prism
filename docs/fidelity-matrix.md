@@ -252,6 +252,40 @@ diagnostics —— 例如 `seed` 转 openai/gemini 保留（gemini 落
 `generationConfig.seed`），转 responses/messages 剔除并报 Unsupported。
 
 
+### 3.9 响应侧（response）保真度 —— 六个静默缺陷
+
+> 2026-10-22 audit 新增。前两轮矩阵都只覆盖**请求**侧（§3.6 生成参数、
+> §3.7/§3.8 扩展通道），响应侧从未建过逐格断言。补建后实测发现 6 个缺陷，
+> 全部是「目标协议无法承载 → 数据消失，且无诊断」，且**1354 个测试全绿**下长期
+> 存在 —— 它们不是分支没覆盖，而是从没有断言问过这个问题。
+
+| # | 目标 | 缺陷 | 现状 |
+|---|---|---|---|
+| 1 | openai | `finish_reason` 直接输出 IR 词表（`safety`/`recitation`/`malformed_tool_call`/`error`），**不是** OpenAI 的合法枚举 | 收敛为 `stop` + Unsupported 诊断 |
+| 2 | responses | 官方 `RefusalContent` 键是 **`refusal`**，解码只读 `text` → 官方形态 refusal **整块静默丢弃** | 两种键都读，`refusal` 优先 |
+| 3 | responses / messages | 单结果协议，`choices[1..]` 静默丢弃 | 补 Unsupported 诊断 |
+| 4 | messages | `Safety`/`Recitation`/`MalformedToolCall`/`Error` 全压成 `end_turn`，**无诊断** | 保持收敛但补诊断 |
+| 5 | gemini | 解码读 `thoughtsTokenCount`/`cachedContentTokenCount`，编码不写 → 往返丢数据（自相矛盾） | 编码侧对称写出 |
+| 6 | gemini | `promptFeedback.blockReason`（提示词被整体拦截）一律返回 `Err`，blockReason 与 usage 全丢 | 转为 `finish_reason=Safety` 的空 choice + Degraded 诊断 |
+
+其中 **#2 与 #5 是自相矛盾型**：编码产出的形态解码读不懂（#2），解码读取的
+字段编码不写出（#5）。这类缺陷只能由**往返测试**发现，单向断言看不出来。
+
+**判定依据**（均为仓库内 vendored 官方 OpenAPI，MIT）：
+- `CreateChatCompletionResponse.choices[].finish_reason` 枚举仅
+  `stop` / `length` / `tool_calls` / `content_filter` / `function_call`；
+- `RefusalContent` = `{type: "refusal", refusal: <string>}`，`refusal` 为
+  required 字段；
+- Responses 的 `output` 是单一结果（无 candidate 概念）。
+
+**一个刻意不诊断为缺陷的格子**：gemini 的 `ToolCalls → STOP`。Gemini 的
+`FinishReason` 枚举没有「工具调用」项，模型发起函数调用时官方就返回 `STOP`，
+属**语义对等**而非丢失。给它加诊断会让每次工具调用都报假 Unsupported，
+故明确记录为「不诊断」并写进测试。
+
+回归：`src/sdk/test/response_fidelity_test.mbt`（8 用例）。每个用例都做过
+**反向验证**：临时回退修复后测试必须失败，避免写出「永远通过」的断言。
+
 ## 4. 已知技术债（不影响上表论断，随 iteration 推进）
 
 1. **ToolResult name carrier**：`LucentToolResult` 仅携带 `tool_use_id`，
@@ -264,6 +298,14 @@ diagnostics —— 例如 `seed` 转 openai/gemini 保留（gemini 落
 3. **parallel_tool_calls 能力声明**与协议实际能力不一致（§1 注释）。
 4. **ReasoningEffort 档位**：`minimal`（openai）与 `max`（anthropic）
    在跨端时降级到最近档位并打诊断。
+5. **响应侧 `stop_sequence` 无 IR 载体**（2026-10-22 记录）：Anthropic
+   Messages 响应可返回 `stop_sequence`（实际命中的那条停止序列），
+   OpenAI Chat 的 `stop` 只存在于**请求**。`LucentResponse` 没有承载「命中了
+   哪条 stop 序列」的字段，因此 `messages → IR → messages` 往返后
+   `stop_sequence` 恒为 `null`（实测确认）。这是 **IR 能力缺口**，不是适配器
+   缺陷 —— 补载体需走 `docs/rules/lucent-ir-evolution.md` 治理流程（新增标准
+   可选字段），故本轮仅记录，未改 schema。当前行为：不报错、不诊断（因为
+   缺失的是响应元数据而非内容，且没有可打的字段名）。
 
 5. **裸解码仍带帧级 `Done`（有意保留，非缺陷）**：`wasm_sse_to_events` 与各 provider 的
    `events_decode` 不经会话层，Gemini 的帧级兜底 `Done` 仍出现在其返回值中。
