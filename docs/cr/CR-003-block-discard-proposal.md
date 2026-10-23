@@ -1,6 +1,6 @@
 # IR 变更提案：BlockDiscard 的去留
 
-> 状态：**待决策**（提案，未实施）· 提出日期：2026-10-18
+> 状态：**已决策 — 选项 B（保留 + 标记 deprecated）** · 提出日期：2026-10-18 · 决策日期：2026-10-23
 > 依据：`docs/rules/lucent-ir-evolution.md` §5「破坏性变更判定」与 §2「影响面声明」
 > 触发：流式会话化修复（P0/P1）审计中发现该事件**全链路无生产者**
 
@@ -96,8 +96,23 @@
 - `src/sdk/event_stream.mbt`：消费分支加注「当前无解码器生产」。
 - `docs/api-protocol-converter.md`：补 Gemini 列与跨帧状态落点硬规则。
 
-## 5. 遗留待办（本次未做）
+## 5. 决策落地（2026-10-23，选项 B）
 
-- [ ] 决策 A / B / C（需产品侧确认是否存在真实「块撤销」需求）
-- [ ] 若选 A：`schemas/lux-ir-v1.json` 版本策略与迁移测试
-- [ ] 若选 C：`BlockDiscard` 的真实语义定义与至少一个 provider 的实现
+- [x] 决策 A / B / C —— **选 B**（用户批准）：保留 + 标记 deprecated，暂缓移除。
+      C 在无真实用例前不启动；A 的前置问题（是否存在需要「块撤销」语义的
+      provider）保持开放，回答为「是」时再以独立 CR 重开。
+- [x] `src/lux/stream.mbt`：变体注释升级为完整废弃记录（决策出处、无生产者
+      事实、B 的理由、新代码不依赖的告诫；MoonBit `#deprecated` 不支持枚举
+      变体级标注——`unused_attribute` 警告，与 `--deny-warn` 门禁冲突——故用
+      文档注释表达废弃语义）。
+- [x] `src/lux/deserialize_stream.mbt`：`block_discard` 读取分支加注容错语义
+      （存量 JSON 可读入；本实现不产出）。
+- [x] `schemas/lux-ir-v1.json`：`block_discard` oneOf 分支加 `description`
+      废弃标记；保留为**合法输入**（向后兼容读取），输出契约不变。
+- [x] `src/provider/gemini/stream_encode.mbt`：Degraded 死分支加注（仅手工
+      构造/第三方事件流可达）。
+- [x] 事实锁定：`src/sdk/test/stream_event_coverage_test.mbt`
+      "no provider decoder emits BlockDiscard" —— 无生产者事实被回归测试
+      锚定，未来任何解码器产出该事件都会令测试失败并提示重审本 CR。
+- [ ] 若后续选 A：`schemas/lux-ir-v1.json` 版本策略与迁移测试
+      （前置：确认无外部 SDK 消费方依赖该变体）。

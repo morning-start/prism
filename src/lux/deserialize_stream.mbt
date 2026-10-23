@@ -79,6 +79,10 @@ pub fn LucentStreamEvent::from_json(
               Ok(ItemEnd(idx))
             }
             "block_discard" => {
+              // 已废弃事件（CR-003 选项 B）：保留读取路径以兼容存量 JSON。
+              // 上游可能仍发出该事件（旧版本或第三方实现），读入后由编码侧
+              // 打 Degraded（gemini）或静默忽略（无载体的目标）。
+              // 反向：本实现**不产出**该事件（全链路无生产者）。
               let idx = match get_int(m, "index") {
                 Ok(n) => n
                 Err(e) => return Err(e)

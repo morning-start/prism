@@ -132,7 +132,8 @@ fn lucent_events_to_prism(
           tool_args = ""
         }
       BlockDiscard(idx) =>
-        // Gemini 全量帧覆盖：丢弃该块（不发射 ToolCall）
+        // 已废弃事件（CR-003 选项 B）：无解码器生产；语义为丢弃该块的
+        // 累积工具调用（不发射），仅手工构造/第三方事件流可达。
         if tool_active && idx == tool_idx {
           tool_active = false
           tool_args = ""

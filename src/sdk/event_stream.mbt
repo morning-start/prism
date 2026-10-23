@@ -32,7 +32,7 @@ fn block_kind(bt : @lux.LucentBlockType) -> Int32 {
 /// - Done：一律丢弃（CR-002 D5：终止符由会话层在收尾时唯一产生）
 ///
 /// BlockStart 去重键是 (index, block_kind)：
-/// - 同索引同种类才是真重复（gemini 全量帧覆盖前的重发）；
+/// - 同索引同种类才是真重复（如上游对同一块的重发）；
 /// - 同索引不同种类说明该索引被另一类块复用 —— openai 流里 tool_calls 的
 ///   wire index 与 text（0）/thinking（1）固定索引分区重叠，逐帧解码时
 ///   上一帧的 text 块仍开着，本帧工具块 BlockStart(0) 到不了"先闭合"的
@@ -119,6 +119,9 @@ fn EventNormalizer::normalize(
         result.push(ev)
       }
       BlockDiscard(idx) =>
+        // 已废弃事件（CR-003 选项 B）：当前无解码器生产此事件，此分支仅在
+        // 手工构造 / 反序列化存量 JSON 的第三方事件流时可达。保留注销逻辑
+        // 以维持「打开的块/项集合与事件流一致」这一不变量。
         if self.open_blocks.contains(idx) {
           self.open_blocks = remove_int(self.open_blocks, idx)
           self.open_block_kinds.remove(idx)
@@ -368,7 +371,8 @@ fn PrismEventBuffer::absorb(
         self.emit_tool_call()
       }
     BlockDiscard(idx) =>
-      // Gemini 全量帧覆盖：丢弃该块（不发射 ToolCall）
+      // 已废弃事件（CR-003 选项 B）：无解码器生产；语义为丢弃该块的
+      // 累积工具调用（不发射），仅手工构造/第三方事件流可达。
       if self.tool_active && idx == self.tool_idx {
         self.tool_active = false
         self.tool_args = ""

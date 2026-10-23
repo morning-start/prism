@@ -91,7 +91,7 @@ Normalized streaming events. See `src/lux/stream.mbt` for the full enum.
 | `BlockDelta` | `(index, LucentBlockDelta)` | Incremental content |
 | `BlockEnd` | `index` | Content block ends |
 | `ItemEnd` | `index` | Item complete |
-| `BlockDiscard` | `index` | Block discarded (Gemini full-frame overwrite) |
+| `BlockDiscard` | `index` | 已废弃（CR-003 选项 B）：无生产者；读取兼容保留 |
 | `Annotations` | `(index, Array[LucentAnnotation])` | Citation/annotation side-channel |
 | `Usage` | `LucentUsage` | Token counts |
 | `Finish` | `LucentFinishReason` | Stream complete |

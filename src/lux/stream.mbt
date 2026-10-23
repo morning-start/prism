@@ -150,8 +150,25 @@ pub(all) enum LucentStreamEvent {
   BlockEnd(Int32) // block_index
   /// 会话项结束（Responses output_item.done）
   ItemEnd(Int32) // item_index
-  /// 块丢弃（IR 定义保留；当前无解码器生产该事件 —— Gemini 官方 chunk 的
-  /// parts[].text 本就是增量语义，不存在"全量帧覆盖"，编码侧收到只打 Degraded）
+  /// 块丢弃（**已废弃（deprecated），保留仅为兼容**）
+  ///
+  /// 决策记录：`docs/cr/CR-003-block-discard-proposal.md` 选项 B（2026-10-23
+  /// 用户批准）。原设计意图是「Gemini 全量帧覆盖前一帧时用」，但 Gemini 官方
+  /// chunk 的 `parts[].text` 本就是增量语义（"the new text, not the running
+  /// total. Concatenate; do not replace"），该前提不成立 —— **全链路无生产者**，
+  /// 四个 provider 的 stream_decode 均不产生此事件。
+  ///
+  /// 选 B 而非移除（A）的理由：
+  /// 1. 移除是破坏性变更（治理 §5 明列「移除现有枚举变体」），需 major 版本
+  ///    与全链路适配；当前无真实用例支撑这个成本。
+  /// 2. 前置问题未答：「是否存在某个未支持的 provider，其流式协议真的需要
+  ///    『撤销已发内容块』语义？」在回答前移除是信息不足下的破坏性决策。
+  /// 3. 死代码本身不产生错误行为（危害是「文档声称已实现」，已通过修正
+  ///    fidelity-matrix 与本注释消除）。
+  ///
+  /// **新代码不应依赖此变体**。后续若选 A，应作为独立 CR 走完整流程。
+  /// 注意：MoonBit 的 `#deprecated` 不支持枚举变体级标注（会触发
+  /// unused_attribute 警告），故此处用文档注释表达废弃语义。
   BlockDiscard(Int32) // block_index
   /// 标注事件（OpenAI Responses annotations.delta / 各家 URL/file 引用）
   Annotations(Int32, Array[LucentAnnotation]) // block_index, annotations
@@ -437,7 +454,9 @@ pub fn BlockAccumulator::flush_block(
 }
 
 ///|
-/// 丢弃该块已累加内容（Gemini 全量帧覆盖语义），保留类型信息
+/// 丢弃该块已累加内容（BlockDiscard 的累加器语义），保留类型信息。
+/// BlockDiscard 本身已废弃（CR-003 选项 B）：无解码器生产，此方法仅在
+/// 反序列化存量 JSON 的事件流被累加时可达。
 pub fn BlockAccumulator::discard_block(
   self : BlockAccumulator,
   idx : Int32,

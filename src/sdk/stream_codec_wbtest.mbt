@@ -69,7 +69,7 @@ test "wbtest - normalizer index reuse emits closing BlockEnd before new start" {
 }
 
 ///|
-/// 同索引同种类重复 BlockStart 丢弃（gemini 全量帧覆盖前的重发）
+/// 同索引同种类重复 BlockStart 丢弃（上游对同一块的重发）
 test "wbtest - normalizer drops duplicate same-kind BlockStart" {
   let n : EventNormalizer = EventNormalizer::new()
   let out = n.normalize([

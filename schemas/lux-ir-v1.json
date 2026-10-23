@@ -568,6 +568,7 @@
         },
         {
           "type": "object",
+          "description": "已废弃事件（CR-003 选项 B，2026-10-23）：保留为合法输入以兼容存量 JSON（反序列化容错读取），但本实现不产出该事件 —— 全链路无生产者（Gemini 官方 chunk 的 parts[].text 是增量语义，「全量帧覆盖」前提不成立）。新代码不应依赖；若未来移除，需独立 CR 走完整流程。",
           "properties": {
             "event": { "type": "string", "const": "block_discard" },
             "index": { "type": "integer" }

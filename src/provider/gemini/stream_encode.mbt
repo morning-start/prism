@@ -231,7 +231,10 @@ fn gemini_encode_frames(
           ),
         )
       BlockDiscard(idx) =>
-        // 官方 chunk 是增量语义，不存在「整帧覆盖」，BlockDiscard 在 Gemini 无载体
+        // 已废弃事件（CR-003 选项 B）的死路径：本实现的解码器从不产出
+        // BlockDiscard，此分支仅在手工构造/第三方事件流时可达。
+        // 保留而非删除：与 IR 侧选项 B 一致（不打破消费方匹配分支）。
+        // 官方 chunk 是增量语义，不存在「整帧覆盖」，Gemini 无对应载体。
         diagnostics.push(
           @lux.ConversionDiagnostic::degraded(
             "stream.block_discard",
