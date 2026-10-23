@@ -264,9 +264,9 @@ pub fn lux_response_to_gemini(
       j = j + 1
     }
     // 收敛到 Gemini 合法 FinishReason。实现集中到
-    // `@meta.gemini_finish_reason_string`，与流式编码共用（此前流式路径
+    // `@meta.gemini_finish_reason`，与流式编码共用（此前流式路径
     // 自带一份简化映射，两处漂移）。
-    let finish_str = @meta.gemini_finish_reason_string(
+    let finish_str = @meta.gemini_finish_reason(
       c.finish_reason,
       "candidates",
       diagnostics,

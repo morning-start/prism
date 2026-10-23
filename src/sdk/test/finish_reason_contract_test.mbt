@@ -222,6 +222,8 @@ test "cr005 - gemini stream passes Native finish reason through" {
 
 ///|
 /// 无对等值的收敛必须留诊断（收敛不能静默）。
+/// 诊断键使用目标协议的**真实字段名**（stop_reason / finish_reason /
+/// finishReason / status），而不是统一叫 finish_reason。
 test "cr005 - converged finish_reason is diagnosed" {
   let events : Array[@lux.LucentStreamEvent] = [
     ConversationStart(
@@ -236,7 +238,7 @@ test "cr005 - converged finish_reason is diagnosed" {
     Ok(cr) => {
       let mut found = false
       for d in cr.diagnostics() {
-        if d.field.contains("finish_reason") && d.status is Unsupported {
+        if d.field.contains("stop_reason") && d.status is Unsupported {
           found = true
         }
       }

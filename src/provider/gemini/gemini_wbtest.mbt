@@ -1642,8 +1642,11 @@ test "encode - stream finish reason mapping covers all variants" {
     (Recitation, "RECITATION"),
     (MalformedToolCall, "MALFORMED_FUNCTION_CALL"),
     (Error, "OTHER"),
-    (ContentFilter, "STOP"),
-    (Native("nft"), "nft"),
+    // ContentFilter → SAFETY（内容拦截在 Gemini 的语义载体）
+    (ContentFilter, "SAFETY"),
+    // Native 合法值透传；非 Gemini 词汇表的值收敛到 OTHER
+    (Native("BLOCKLIST"), "BLOCKLIST"),
+    (Native("nft"), "OTHER"),
   ]
   for c in cases {
     let reason = c.0

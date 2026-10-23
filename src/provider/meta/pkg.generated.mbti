@@ -6,7 +6,7 @@ import {
 }
 
 // Values
-pub fn gemini_finish_reason_string(@lux.LucentFinishReason, String, Array[@lux.ConversionDiagnostic]) -> String
+pub fn gemini_finish_reason(@lux.LucentFinishReason, String, Array[@lux.ConversionDiagnostic]) -> String
 
 pub fn messages_stop_reason_json(@lux.LucentFinishReason, String, Array[@lux.ConversionDiagnostic]) -> String
 
@@ -15,6 +15,10 @@ pub fn meta_extra_fragments(Json?, String, Array[String], String, Array[@lux.Con
 pub fn openai_finish_reason_json(@lux.LucentFinishReason, String, Array[@lux.ConversionDiagnostic]) -> String
 
 pub fn payload_fragments(Json?, String, Array[String], Array[@lux.ConversionDiagnostic]) -> String
+
+pub fn responses_incomplete_reason(@lux.LucentFinishReason) -> String?
+
+pub fn responses_status_json(@lux.LucentFinishReason, String, Array[@lux.ConversionDiagnostic]) -> String
 
 // Errors
 
@@ -40,6 +44,11 @@ pub fn FieldConstraint::one_of(Array[String]) -> Self
 pub fn FieldConstraint::range(Double, Double) -> Self
 pub fn FieldConstraint::range_required(Double, Double) -> Self
 pub fn FieldConstraint::required(Bool) -> Self
+
+pub struct FinishVerdict {
+  value : String
+  degraded : Bool
+}
 
 pub struct ProviderMeta {
   name : String

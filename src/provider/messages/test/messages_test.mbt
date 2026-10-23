@@ -642,8 +642,8 @@ fn encode_resp(
 
 ///|
 /// 响应编码：finish_reason 全谱系 → Anthropic stop_reason（已知映射 / 无对等值收敛为
-/// "end_turn" / Native 透传）；usage 携带 cache_creation / cached tokens →
-/// cache_creation_input_tokens / cache_read_input_tokens。
+/// "end_turn" / Native 合法值透传、非法值收敛）；usage 携带 cache_creation /
+/// cached tokens → cache_creation_input_tokens / cache_read_input_tokens。
 test "messages encode - response finish reason and cache usage details" {
   let cases : Array[(@lux.LucentFinishReason, String)] = [
     (Stop, "end_turn"),
@@ -654,7 +654,10 @@ test "messages encode - response finish reason and cache usage details" {
     (Recitation, "end_turn"),
     (MalformedToolCall, "end_turn"),
     (Error, "end_turn"),
-    (Native("vendor_x"), "vendor_x"),
+    // Native 只有落在 Anthropic 合法集合内才透传；pause_turn 是其合法值
+    (Native("pause_turn"), "pause_turn"),
+    // 非 Anthropic 词汇表的值必须收敛，不得溢出
+    (Native("vendor_x"), "end_turn"),
   ]
   for c in cases {
     assert_true(

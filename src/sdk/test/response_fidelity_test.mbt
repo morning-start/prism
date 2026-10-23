@@ -225,8 +225,8 @@ test "response matrix - messages diagnoses converged stop_reason" {
       Ok(cr) => {
         // 收敛值仍是合法枚举
         assert_true(cr.value().contains("\"stop_reason\":\"end_turn\""))
-        // 但必须留诊断
-        if !rsp_diag(cr, "choices.finish_reason") {
+        // 但必须留诊断（诊断键用目标协议的真实字段名 stop_reason）
+        if !rsp_diag(cr, "choices.stop_reason") {
           fail(
             "messages converged " +
             fr.to_string() +
@@ -334,11 +334,17 @@ test "response matrix - gemini tool call finish reason is equivalent, not lossy"
 }
 
 ///|
-/// `Native(s)` 的 finish_reason 是**源协议原始字符串**，出站时必须原样透传
-/// 而不是被当作「无对等值」收敛掉 —— 透传是无损路径，也不该有诊断。
-/// （三个目标的收敛分支都靠这条覆盖，否则 `Native(s) => s` 永不执行。）
-test "response matrix - Native finish reason passes through verbatim" {
-  let fr : @lux.LucentFinishReason = Native("vendor_pause")
+/// `Native(s)` 的 finish_reason 是**源协议原始字符串**。
+///
+/// 关键区分（第一版设计在这里是错的）：
+/// - 该值 ∈ **目标**协议合法集合 → 原样透传，无诊断（无损）；
+/// - 该值 ∉ 目标协议合法集合 → 收敛到目标兜底值 + 诊断。
+///
+/// 合法性是**目标槽位的属性**，不是 IR 值的属性 —— 同一个 `Native("pause_turn")`
+/// 在 messages 目标是 Exact，在 openai 目标必须收敛。
+test "response matrix - Native finish reason passes through only when legal for target" {
+  // Anthropic 的 pause_turn：messages 合法，openai / gemini 非法
+  let fr : @lux.LucentFinishReason = Native("pause_turn")
   let resp = @lux.LucentResponse::new(
     "id-1",
     "m-1",
@@ -354,22 +360,57 @@ test "response matrix - Native finish reason passes through verbatim" {
     None,
     None,
   )
+  // messages：pause_turn 是合法 stop_reason → 透传，无诊断
+  match @messages.lux_response_to_messages(resp) {
+    Err(e) => fail("messages encode failed: " + e)
+    Ok(cr) => {
+      assert_true(cr.value().contains("\"stop_reason\":\"pause_turn\""))
+      assert_false(rsp_diag(cr, "choices.stop_reason"))
+    }
+  }
+  // openai：pause_turn 不在官方 5 值内 → 收敛 stop + 诊断
   match @openai.lux_response_to_openai(resp) {
     Err(e) => fail("openai encode failed: " + e)
     Ok(cr) => {
-      assert_true(cr.value().contains("\"finish_reason\":\"vendor_pause\""))
-      assert_false(rsp_diag(cr, "choices.finish_reason"))
+      assert_true(cr.value().contains("\"finish_reason\":\"stop\""))
+      assert_true(rsp_diag(cr, "choices.finish_reason"))
     }
   }
-  match @messages.lux_response_to_messages(resp) {
-    Err(e) => fail("messages encode failed: " + e)
-    Ok(cr) =>
-      assert_true(cr.value().contains("\"stop_reason\":\"vendor_pause\""))
-  }
+  // gemini：不在官方 FinishReason 内 → 收敛 OTHER + 诊断
   match @gemini.lux_response_to_gemini(resp) {
     Err(e) => fail("gemini encode failed: " + e)
-    Ok(cr) =>
-      assert_true(cr.value().contains("\"finishReason\":\"vendor_pause\""))
+    Ok(cr) => {
+      assert_true(cr.value().contains("\"finishReason\":\"OTHER\""))
+      assert_true(rsp_diag(cr, "candidates.finishReason"))
+    }
+  }
+}
+
+///|
+/// Gemini 自有合法值在 Gemini 目标上透传（不因「IR 不认识」而被收敛）。
+test "response matrix - gemini-native reason passes through to gemini" {
+  let fr : @lux.LucentFinishReason = Native("BLOCKLIST")
+  let resp = @lux.LucentResponse::new(
+    "id-1",
+    "m-1",
+    None,
+    [
+      @lux.LucentChoice::new(
+        0,
+        @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("t")]),
+        fr,
+        None,
+      ),
+    ],
+    None,
+    None,
+  )
+  match @gemini.lux_response_to_gemini(resp) {
+    Err(e) => fail("gemini encode failed: " + e)
+    Ok(cr) => {
+      assert_true(cr.value().contains("\"finishReason\":\"BLOCKLIST\""))
+      assert_false(rsp_diag(cr, "candidates.finishReason"))
+    }
   }
 }
 
@@ -545,20 +586,27 @@ test "response matrix - responses encode carries incomplete_details" {
       ",\"status\":\"incomplete\",\"incomplete_details\":{\"reason\":\"max_output_tokens\"}",
     ),
   )
-  // 无对等值收敛为 completed 但必须诊断
+  // 无对等值收敛为 failed 但必须诊断（Safety 是安全拦截，不是正常完成）
   let safe = make(Safety)
-  assert_true(safe.value().contains(",\"status\":\"completed\",\"model\""))
-  assert_true(rsp_diag(safe, "choices.finish_reason"))
+  assert_true(safe.value().contains(",\"status\":\"failed\""))
+  assert_true(rsp_diag(safe, "choices.status"))
+  // Recitation / MalformedToolCall 同样收敛为 failed 并诊断
+  let rec = make(Recitation)
+  assert_true(rec.value().contains(",\"status\":\"failed\""))
+  assert_true(rsp_diag(rec, "choices.status"))
+  let mal = make(MalformedToolCall)
+  assert_true(mal.value().contains(",\"status\":\"failed\""))
+  assert_true(rsp_diag(mal, "choices.status"))
   // ToolCalls → completed 是语义对等（function_call item 承载），不诊断
   let tc = make(ToolCalls)
   assert_true(tc.value().contains(",\"status\":\"completed\",\"model\""))
-  assert_false(rsp_diag(tc, "choices.finish_reason"))
+  assert_false(rsp_diag(tc, "choices.status"))
 }
 
 ///|
 /// `Native(s)` 在 responses 编码侧没有合法落点（status 是封闭枚举），
 /// 必须诊断而非静默压成 completed。与 openai/messages/gemini 的 Native
-/// 透传不同 —— 那三者的 finish_reason 是自由字符串，responses 不是。
+/// 裁决不同 —— 那三者的 finish_reason 是自由字符串，responses 的 status 不是。
 test "response matrix - responses Native finish reason is diagnosed" {
   let fr : @lux.LucentFinishReason = Native("vendor_pause")
   let resp = @lux.LucentResponse::new(
@@ -582,7 +630,7 @@ test "response matrix - responses Native finish reason is diagnosed" {
       // 不得把 vendor 值泄漏进 status
       assert_true(cr.value().contains(",\"status\":\"completed\",\"model\""))
       assert_false(cr.value().contains("vendor_pause"))
-      assert_true(rsp_diag(cr, "choices.finish_reason"))
+      assert_true(rsp_diag(cr, "choices.status"))
     }
   }
 }

@@ -447,6 +447,39 @@ pub fn push_extras_collisions_at(
 }
 
 ///|
+/// 为「finish_reason 被收敛到目标兜底值」补 Unsupported 诊断。
+///
+/// 收敛是合法的（不是错误），但**必须显式**：调用方读到 `end_turn` / `stop`
+/// / `completed` 时不可能自行察觉「这其实是安全拦截 / 上游出错 / 其它协议的
+/// 词汇」。本函数把「原始候选值 → 实际写出值」带进诊断。
+///
+/// 参数 `field` 是目标协议里的字段名（`stop_reason` / `finish_reason` /
+/// `finishReason` / `status`），`field_prefix` 是事件/响应级前缀
+/// （如 `"choices"` / `"stream.delta"`），用于拼出稳定可断言的诊断键。
+pub fn push_finish_converged(
+  field_prefix : String,
+  field : String,
+  original : String,
+  emitted : String,
+  diagnostics : Array[ConversionDiagnostic],
+) -> Unit {
+  diagnostics.push(
+    ConversionDiagnostic::unsupported(
+      field_prefix + "." + field,
+      Some(
+        "\"" +
+        original +
+        "\" is not a legal " +
+        field +
+        " value for the target protocol; emitted \"" +
+        emitted +
+        "\" instead",
+      ),
+    ),
+  )
+}
+
+///|
 /// 为 `request.extra` 与 `options.extras` 同名的键补 Degraded 诊断。
 ///
 /// IR 有两个扩展通道：`request.extra` 是程序作者显式给定的目标端扩展，

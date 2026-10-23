@@ -373,53 +373,24 @@ pub fn lux_response_to_responses(
   }
   // status + incomplete_details
   //
-  // vendored 官方 OpenAPI（Response 级）：`status` 枚举为
-  // completed / failed / in_progress / cancelled / queued / incomplete；
-  // `incomplete_details.reason` 枚举为
-  // max_output_tokens / max_messages / content_filter / steered。
-  //
-  // 此前 ContentFilter 落进 `_ => "completed"` 分支 —— 一个被内容过滤截断的
-  // 响应被报告为**成功完成**。现映射为 incomplete + reason=content_filter。
-  // Length 补上 reason=max_output_tokens（此前裸 incomplete 缺原因）。
+  // 与流式编码共用 `@meta.responses_status_json` / `responses_incomplete_reason`
+  // —— 此前两处各写一份 match，是漂移的根源（流式曾把 Safety/ContentFilter
+  // 全落进 `_ => "completed"`，把内容过滤伪装成成功完成）。
   //
   // ToolCalls → completed 是**语义对等**：Responses 用 output 里的
-  // function_call item 承载工具调用，status 本就是 completed，不诊断。
-  let mut status_str = "\"completed\""
-  let mut incomplete_part = ""
-  match choice.finish_reason {
-    Stop => ()
-    ToolCalls => ()
-    Length => {
-      status_str = "\"incomplete\""
-      incomplete_part = ",\"incomplete_details\":{\"reason\":\"max_output_tokens\"}"
-    }
-    ContentFilter => {
-      status_str = "\"incomplete\""
-      incomplete_part = ",\"incomplete_details\":{\"reason\":\"content_filter\"}"
-    }
-    Error => status_str = "\"failed\""
-    Native(s) =>
-      diagnostics.push(
-        @lux.ConversionDiagnostic::unsupported(
-          "choices.finish_reason",
-          Some(
-            "finish_reason \"" +
-            s +
-            "\" has no openai-responses equivalent; emitted \"completed\" instead",
-          ),
-        ),
-      )
-    other =>
-      diagnostics.push(
-        @lux.ConversionDiagnostic::unsupported(
-          "choices.finish_reason",
-          Some(
-            "finish_reason \"" +
-            other.to_string() +
-            "\" has no openai-responses equivalent; emitted \"completed\" instead",
-          ),
-        ),
-      )
+  // function_call item 承载工具调用，status 本就是 completed，收敛器不报警。
+  let status_str = @meta.responses_status_json(
+    choice.finish_reason,
+    "choices",
+    diagnostics,
+  )
+  let incomplete_part = match
+    @meta.responses_incomplete_reason(choice.finish_reason) {
+    Some(reason) =>
+      ",\"incomplete_details\":{\"reason\":\"" +
+      @internal.json_escape(reason) +
+      "\"}"
+    None => ""
   }
   let usage_json = match resp.usage {
     Some(u) => {

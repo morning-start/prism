@@ -30,6 +30,8 @@ pub fn push_extras_foreign_at(String, Map[String, String], Array[ConversionDiagn
 
 pub fn push_extras_overridden(Array[String], Array[ConversionDiagnostic]) -> Unit
 
+pub fn push_finish_converged(String, String, String, String, Array[ConversionDiagnostic]) -> Unit
+
 pub fn push_unsupported(String, String, Array[ConversionDiagnostic]) -> Unit
 
 pub fn push_unsupported_content(String, String, Array[ConversionDiagnostic]) -> Unit

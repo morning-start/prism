@@ -534,12 +534,55 @@ gemini = `modelStatus`（无 vendored spec，手工维护）。
 变成 `"finish_reason":"stop_sequence"` —— 非 OpenAI 合法枚举，严格校验的对端
 会**拒绝整条流**（不是降级，是协议契约破坏）。
 
-修复：新增 `src/provider/meta/finish.mbt`，三个纯函数
-（`messages_stop_reason_json` / `openai_finish_reason_json` /
-`gemini_finish_reason_string`）供**非流式与流式共用**，杜绝词汇表漂移。
-收敛必须显式：无对等值的 IR 原因一律打 Unsupported 诊断。
+修复（**第二版设计，见 [`design/finish-reason-contract.md`](design/finish-reason-contract.md)**）：
+新增 `src/provider/meta/finish.mbt`，四个目标共用**目标白名单裁决**：
 
-回归：`src/sdk/test/finish_reason_contract_test.mbt`（7 用例，四处修复均反向验证）。
+```text
+candidate = 语义映射(fr)          # 建模值才有意义
+value     = candidate ∈ legal(T) ? candidate : fallback(T)
+diagnose  = 值不合法 || 有语义损失
+```
+
+**第一版是错的**，教训值得记录：它按 IR 枚举 match、`Native(s)` 无条件透传
+—— 于是 `messages` 源解出的 `Native("pause_turn")`（Anthropic 合法）可以原样
+溢进 openai 的 `finish_reason`。根因是**裁决方向错了**：
+
+> 合法性是**目标槽位**的属性，不是 IR 值的属性。按 IR 枚举分支再给 `Native`
+> 开透传口子，天然不可能封闭。
+
+第二版让所有值（含 `Native`）统一过目标白名单，实测 7 种 Native × 3 目标
+全部落在各自合法集合内：
+
+| Native | messages | openai | gemini |
+|---|---|---|---|
+| `pause_turn` | ✅ 透传 | ✅→`stop` | ✅→`OTHER` |
+| `LANGUAGE` | ✅→`end_turn` | ✅→`stop` | ✅ 透传 |
+| `nft` | ✅→`end_turn` | ✅→`stop` | ✅→`OTHER` |
+
+**第二个坑：诊断判据**。`responses` 的 `Safety → "failed"` —— `failed` 是合法
+值，按「值被改动才报警」就不会报，但 IR 的 `Safety`（安全拦截）与 `Error`
+（执行失败）共压成 `failed` 是有损的。故判据精确化为**信息损失**，而非「值
+被改动」。三类：值不合法要报、值合法但共压要报、值合法且语义对等（如
+`ToolCalls → STOP`）不报。
+
+顺带纠正三处：
+- gemini `ContentFilter` 由 `STOP` 改为 `SAFETY` —— 前者把「被拦截」伪装成
+  「正常结束」，后者才是 Gemini 侧内容拦截的语义载体。
+- responses 流式 `status` 此前把 `Safety`/`ContentFilter` 全落进
+  `_ => "completed"`；现 `ContentFilter → incomplete` + `reason=content_filter`,
+  其余按语义收敛并诊断。且非流式与流式**共用**同一函数（此前各写一份，已漂移）。
+- 诊断键统一为**目标协议真实字段名**（`choices.stop_reason` /
+  `candidates.finishReason` / `choices.status`），此前 messages 侧误用
+  `choices.finish_reason`。
+
+**IR 建模粒度不足（新发现，记为技术债）**：实测往返发现两处真实丢失 ——
+1. `stop_sequence` 命中值无载体（CR-005 缺陷 A，待决策）；
+2. **`function_call` vs `tool_calls`**：OpenAI 合法枚举里这是两个不同项，但
+   IR 都映射到 `ToolCalls`，回程一律输出 `tool_calls` —— OpenAI → IR → OpenAI
+   无法保住 `function_call`。此前无人记录。修复需增 IR 变体，属破坏性变更，
+   与缺陷 A 一并等决策。
+
+回归：`src/sdk/test/finish_reason_contract_test.mbt`（7 用例）。
 提案与完整分析见 [`cr/CR-005-stop-sequence-carrier.md`](cr/CR-005-stop-sequence-carrier.md)。
 
 ## 5. 使用建议（中间件切流前检查单）

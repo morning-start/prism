@@ -14,6 +14,7 @@
 | [`api-protocol-converter.md`](api-protocol-converter.md) | 协议转换契约（4 端点对照 + 12-case 测试矩阵 + 6 函数契约；Gemini 已纳入矩阵） |
 | [`fidelity-matrix.md`](fidelity-matrix.md) | 4×4 provider 转换保真度矩阵（切流决策依据） |
 | [`provider-guide.md`](provider-guide.md) | Adapter 实现指南 |
+| [`design/finish-reason-contract.md`](design/finish-reason-contract.md) | **设计说明**：finish_reason / status 的封闭枚举裁决模型（目标白名单裁决、诊断判据是「信息损失」而非「值被改动」、四目标映射依据、既有约定的逐条审视） |
 
 ## 变更单与验收
 

@@ -533,11 +533,22 @@ fn responses_encode_frames(
           )
         }
       Finish(fr) => {
-        let status_str = match fr {
-          Stop => "\"completed\""
-          Length => "\"incomplete\""
-          Error => "\"failed\""
-          _ => "\"completed\""
+        // status 收敛到官方封闭枚举（completed/failed/in_progress/cancelled/
+        // queued/incomplete）。此前 Safety/Recitation/MalformedToolCall/
+        // ContentFilter 全部落到 `_ => "completed"` —— 把安全拦截与内容截断
+        // 伪装成正常完成。现在 ContentFilter → incomplete（官方
+        // incomplete_details.reason 含 content_filter），其余按语义收敛并诊断。
+        let status_str = @meta.responses_status_json(
+          fr, "stream.response", diagnostics,
+        )
+        // status=incomplete 时必须带出 incomplete_details.reason
+        // （官方枚举：max_output_tokens / max_messages / content_filter / steered）
+        let incomplete_json = match @meta.responses_incomplete_reason(fr) {
+          Some(reason) =>
+            ",\"incomplete_details\":{\"reason\":\"" +
+            @internal.json_escape(reason) +
+            "\"}"
+          None => ""
         }
         // 向后查找 Usage 事件，合并到 response.completed 中
         let mut pt = 0
@@ -593,6 +604,7 @@ fn responses_encode_frames(
           @internal.json_escape(resp_id) +
           "\",\"status\":" +
           status_str +
+          incomplete_json +
           usage_json +
           "}}",
         )

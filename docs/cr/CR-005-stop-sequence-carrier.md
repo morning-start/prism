@@ -268,11 +268,45 @@ OpenAI Chat 官方 `finish_reason` 合法值只有 `stop` / `length` / `tool_cal
 - openai 流式回退 → 合法枚举断言失败
 - gemini `Native` 回退为 STOP → 透传断言失败
 - `from_string` 回退 → `Native("stop_sequence") != Stop`
+- **`arbitrate` 白名单回退为无条件透传** → 三个"只输出合法枚举"用例失败
 
-门禁：fmt / check(+73, deny-warn) / native + wasm-gc **1408/1408** /
+门禁：fmt / check(+73, deny-warn) / native + wasm-gc **1409/1409** /
 drift `-Strict` PASS / coverage **199**（阈值 200）。
 
-### 6.5 仍未做（A）
+### 6.5 重新设计（2026-10-24，第二版）
+
+§6.1–6.4 记录的是**第一版**实现。第一版有一个结构性漏洞，已在第二版修正，
+完整设计见 [`design/finish-reason-contract.md`](../design/finish-reason-contract.md)。
+
+**漏洞**：第一版按 IR 枚举 match，`Native(s)` 无条件透传。实测
+`messages` 源 `Native("pause_turn")`（Anthropic 合法值）会原样溢进 openai 的
+`finish_reason`。根因：**合法性是目标槽位的属性，不是 IR 值的属性**；按 IR
+枚举分支再给 `Native` 开口子，天然无法封闭。
+
+**第二版模型**：所有值（含 `Native`）统一过**目标白名单**：
+
+```text
+value    = candidate ∈ legal(target) ? candidate : fallback(target)
+diagnose = 值不合法 || 有语义损失
+```
+
+新增：`responses_status_json` / `responses_incomplete_reason`（responses 的
+status 也是封闭枚举，第一版完全没纳入）；非流式 responses 也改为调用共享
+函数（此前它与流式各写一份 match，已漂移）。
+
+**第二个坑（诊断判据）**：`Safety → "failed"` 的 `failed` 是合法值，按「值被
+改动才报警」不报 —— 但 IR `Safety`（安全拦截）与 `Error`（执行失败）共压成
+`failed` 是有损的。判据精确化为**信息损失**而非「值被改动」。
+
+**顺带纠正**：gemini `ContentFilter` 由 `STOP` 改为 `SAFETY`（前者把「被拦截」
+伪装成「正常结束」）；诊断键统一为目标真实字段名。
+
+**新发现的技术债（不在本次范围）**：OpenAI 的 `function_call` 与 `tool_calls`
+是合法枚举里的两个不同项，但 IR 都映射到 `ToolCalls`，回程一律输出
+`tool_calls` —— OpenAI → IR → OpenAI 无法保住 `function_call`。此前无人记录。
+修复需增 IR 变体（破坏性），与缺陷 A 一并等决策。
+
+### 6.6 仍未做（A）
 
 `LucentChoice.stop_sequence` 新字段（§2 方案 B）**未实施**，因此：
 - messages 非流式仍把 `stop_sequence` 命中值丢弃（`response.mbt` 映射为

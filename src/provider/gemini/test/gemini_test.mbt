@@ -854,12 +854,16 @@ test "gemini decode - response encode finish reasons" {
   let cases : Array[(@lux.LucentFinishReason, String)] = [
     (Stop, "\"finishReason\":\"STOP\""),
     (Length, "\"finishReason\":\"MAX_TOKENS\""),
+    // Gemini 的 FinishReason 无工具调用枚举：工具调用由 functionCall part
+    // 表达，语义对等 STOP（不是降级，故无诊断）
     (ToolCalls, "\"finishReason\":\"STOP\""),
     (Safety, "\"finishReason\":\"SAFETY\""),
     (Recitation, "\"finishReason\":\"RECITATION\""),
     (MalformedToolCall, "\"finishReason\":\"MALFORMED_FUNCTION_CALL\""),
     (Error, "\"finishReason\":\"OTHER\""),
-    (ContentFilter, "\"finishReason\":\"STOP\""),
+    // ContentFilter → SAFETY：Gemini 侧内容拦截的语义载体就是 SAFETY。
+    // 此前收敛到 STOP 会把「被拦截」伪装成「正常结束」。
+    (ContentFilter, "\"finishReason\":\"SAFETY\""),
   ]
   for c in cases {
     let resp = @lux.LucentResponse::new(

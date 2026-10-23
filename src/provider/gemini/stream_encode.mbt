@@ -279,8 +279,8 @@ fn gemini_encode_frames(
         }
         // 收敛到 Gemini 合法 FinishReason。此前此处自带一份简化映射，
         // 与非流式路径（response.mbt）漂移；现两路径共用
-        // `@meta.gemini_finish_reason_string`。
-        let finish_str = @meta.gemini_finish_reason_string(
+        // `@meta.gemini_finish_reason`。
+        let finish_str = @meta.gemini_finish_reason(
           fr, "candidates", diagnostics,
         )
         lines.push(
