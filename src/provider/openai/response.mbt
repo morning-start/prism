@@ -225,6 +225,22 @@ pub fn lux_response_to_openai(
     msg_obj = msg_obj +
       "},\"finish_reason\":" +
       @meta.openai_finish_reason_json(c.finish_reason, "choices", diagnostics)
+    // CR-005：`stop_sequence` 是 Anthropic 的响应侧概念（实际命中的终止序列）。
+    // OpenAI Chat 的 finish_reason 是封闭枚举且无此值，无载体 → 显式诊断。
+    match c.stop_sequence {
+      Some(v) =>
+        diagnostics.push(
+          @lux.ConversionDiagnostic::unsupported(
+            "choices.stop_sequence",
+            Some(
+              "hit stop sequence \"" +
+              v +
+              "\" has no openai-chat carrier (finish_reason has no stop_sequence value); dropped",
+            ),
+          ),
+        )
+      None => ()
+    }
     choices_json.push("{" + msg_obj + "}")
     i = i + 1
   }

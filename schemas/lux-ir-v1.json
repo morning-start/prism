@@ -401,7 +401,11 @@
         "index": { "type": "integer" },
         "message": { "$ref": "#/definitions/LucentMessage" },
         "finish_reason": { "$ref": "#/definitions/LucentFinishReason" },
-        "safety_ratings": { "type": "array", "items": { "$ref": "#/definitions/LucentSafetyRating" } }
+        "safety_ratings": { "type": "array", "items": { "$ref": "#/definitions/LucentSafetyRating" } },
+        "stop_sequence": {
+          "type": "string",
+          "description": "实际命中的自定义终止序列（CR-005）。与请求侧 LucentOptions.stop（候选列表）是不同的事实：这里是响应侧「最终命中了哪一个」。非 None 时语义等价于 Anthropic stop_reason=stop_sequence。标准可选字段：缺失表示未命中任何自定义序列；实现侧 None 时不输出该键以保持既有字节形态。"
+        }
       },
       "required": ["index", "message", "finish_reason"]
     },

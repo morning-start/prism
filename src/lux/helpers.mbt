@@ -188,7 +188,21 @@ pub fn LucentChoice::new(
   finish_reason : LucentFinishReason,
   safety_ratings : Array[LucentSafetyRating]?,
 ) -> LucentChoice {
-  { index, message, finish_reason, safety_ratings, }
+  // stop_sequence 默认 None：保持既有 4 参数构造的调用点不变（88 处）。
+  // 需要携带命中序列时用 `with_stop_sequence`。
+  { index, message, finish_reason, safety_ratings, stop_sequence: None, }
+}
+
+///|
+/// 携带「实际命中的自定义终止序列」（CR-005）。
+///
+/// 用 builder 而非扩构造参数：`LucentChoice::new` 有 88 处调用点，加必选参数
+/// 会全部破坏；而该字段只在 messages 解码路径才可能为非 `None`。
+pub fn LucentChoice::with_stop_sequence(
+  self : LucentChoice,
+  stop_sequence : String,
+) -> LucentChoice {
+  { ..self, stop_sequence: Some(stop_sequence), }
 }
 
 ///|

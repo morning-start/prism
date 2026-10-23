@@ -733,6 +733,15 @@ pub struct LucentChoice {
   message : LucentMessage
   finish_reason : LucentFinishReason
   safety_ratings : Array[LucentSafetyRating]?
+  /// 实际命中的自定义终止序列（CR-005）。
+  ///
+  /// 与 `LucentOptions.stop`（请求侧的**候选**列表）是不同的事实：这里是
+  /// 响应侧「最终命中了哪一个」。Anthropic Messages 的 `stop_sequence` 字段
+  /// 即此语义，且与 `stop_reason: "stop_sequence"` 配对出现。
+  ///
+  /// 标准可选字段（治理 §6「新增可选标准字段」）：`None` 表示未命中任何
+  /// 自定义序列。只有 messages 有该概念，其余目标编码时若不支持须显式诊断。
+  stop_sequence : String?
 } derive(Eq, Debug)
 
 ///|

@@ -392,6 +392,22 @@ pub fn lux_response_to_responses(
       "\"}"
     None => ""
   }
+  // CR-005：`stop_sequence` 是 Anthropic 的响应侧概念，Responses 无自定义
+  // 终止序列概念（status 与 incomplete_details.reason 均为封闭枚举）→ 显式诊断。
+  match choice.stop_sequence {
+    Some(v) =>
+      diagnostics.push(
+        @lux.ConversionDiagnostic::unsupported(
+          "choices.stop_sequence",
+          Some(
+            "hit stop sequence \"" +
+            v +
+            "\" has no openai-responses carrier (no custom stop sequence concept); dropped",
+          ),
+        ),
+      )
+    None => ()
+  }
   let usage_json = match resp.usage {
     Some(u) => {
       let mut s = ",\"usage\":{\"input_tokens\":" +

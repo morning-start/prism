@@ -46,6 +46,12 @@ pub fn LucentChoice::to_json(self : LucentChoice) -> Json {
       fields["safety_ratings"] = Json::array(arr.map(fn(sr) { sr.to_json() }))
     None => ()
   }
+  // CR-005：实际命中的自定义终止序列。None 时**不输出该键**（而非输出 null），
+  // 保持与既有字节形态一致，不扰动任何快照/往返断言。
+  match self.stop_sequence {
+    Some(s) => fields["stop_sequence"] = Json::string(s)
+    None => ()
+  }
   Json::object(fields)
 }
 

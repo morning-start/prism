@@ -46,6 +46,7 @@ fn messages_decode_frames(
   st : MessagesStreamState,
 ) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String] {
   let events : Array[@lux.LucentStreamEvent] = []
+  let diagnostics : Array[@lux.ConversionDiagnostic] = []
   let messages = @internal.parse_sse_messages(sse_str)
   // CR-001 D1：跨帧累积输入侧用量。Anthropic 的 message_delta.usage 只保证
   // output_tokens；input_tokens / 缓存计费项既可能挂在 message_start.usage，
@@ -192,6 +193,26 @@ fn messages_decode_frames(
                   Finish(@lux.LucentFinishReason::from_string(reason)),
                 )
                 st.finish_seen = true
+                // CR-005：流式的「命中序列」值无 IR 载体（`Finish` 只有一个
+                // 位置参数；改载荷属破坏性变更，见 CR-005 §2.2 方案 A/C，
+                // 另立提案）。此处是**有意识的降级**，因此必须显式诊断，
+                // 不能静默丢失。
+                match @internal.field_str(delta, "stop_sequence") {
+                  Some(v) =>
+                    if v != "" {
+                      diagnostics.push(
+                        @lux.ConversionDiagnostic::degraded(
+                          "stream.delta.stop_sequence",
+                          Some(
+                            "hit stop sequence \"" +
+                            v +
+                            "\" has no IR carrier on the streaming path (Finish carries only the reason); value dropped. Non-streaming path preserves it via LucentChoice.stop_sequence",
+                          ),
+                        ),
+                      )
+                    }
+                  None => ()
+                }
               }
               None => ()
             }
@@ -272,7 +293,7 @@ fn messages_decode_frames(
   st.usage_input = usage_input
   st.usage_cached = usage_cached
   st.usage_cache_creation = usage_cache_creation
-  Ok(@lux.ConversionResult::new(events))
+  Ok(@lux.ConversionResult::new(events).with_diagnostics(diagnostics))
 }
 
 ///|

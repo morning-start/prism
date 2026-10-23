@@ -47,7 +47,9 @@ compilation to reach non-public members).
 - **sdk/test**: 2026-10-23（第六轮）新增 `stream_event_coverage_test`（IR 流事件 × provider 的生产者/消费者矩阵：responses `output_item.done` → `ItemEnd`、`output_text.annotation.added` → `Annotations`（官方 four-way oneOf）、openai 官方错误帧 → `Error`（含 `_error` 后缀 kind 映射）、四个 encoder 的 `Annotations` 显式 Degraded、`BlockDiscard` 无生产者事实锁定；顺带修 messages 双 Finish 的 usage 重复发射与 `message_delta.usage.input_tokens` 缺失）
 - **sdk/test**: 2026-10-24（第七轮）新增 `finish_reason_contract_test`（finish_reason 的协议枚举契约：messages / openai 流式逐值只输出合法枚举、`ToolCalls → tool_use` 定点锁定、messages 源 `stop_sequence` 不泄漏进 openai 流、流式与非流式对同值解出同一 IR 值、gemini `Native` 原样透传、收敛必带诊断；七个用例），配套新增 `src/provider/meta/finish.mbt`（四个收敛器：messages / openai / gemini / responses，非流式与流式共用）+ 设计文档 [`design/finish-reason-contract.md`](design/finish-reason-contract.md)（目标白名单裁决模型、诊断判据是「信息损失」而非「值被改动」、四目标映射依据、既有约定逐条审视）
 
-**Total: 1409 tests passing (native + wasm-gc), 2026-10-24（`moon test` 全量；未覆盖行 199，阈值 200）。**
+- **sdk/test**: 2026-10-24（第八轮）新增 `stop_sequence_carrier_test`（CR-005 缺陷 A：`LucentChoice.stop_sequence` 同源往返 Exact、null 保持字节形态、缺失/空串/类型不符软失败为 None、跨三端 Unsupported 诊断、流式 Degraded 诊断且与非流式解出同一 finish_reason、IR JSON 往返；七个用例，解码与编码两处均反向验证）
+
+**Total: 1416 tests passing (native + wasm-gc), 2026-10-24（`moon test` 全量；未覆盖行 199，阈值 200）。**
 
 ### 实时流式（首字延迟）
 

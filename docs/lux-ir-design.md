@@ -79,6 +79,33 @@ Non-streaming LLM response with choices and usage.
 | `usage` | `LucentUsage?` | | Token counts |
 | `provider_payload` | `Json?` | | Raw provider data |
 
+### LucentChoice
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `index` | `Int32` | ✅ | Candidate index |
+| `message` | `LucentMessage` | ✅ | The reply |
+| `finish_reason` | `LucentFinishReason` | ✅ | Why generation stopped |
+| `safety_ratings` | `Array[LucentSafetyRating]?` | | Provider safety ratings |
+| `stop_sequence` | `String?` | | **CR-005**: the custom stop sequence that was actually hit |
+
+`stop_sequence` carries the **response-side fact** "which configured stop string
+terminated generation" — distinct from `LucentOptions.stop`, which is the
+**request-side candidate list**. The two must not be conflated: one is what you
+allowed, the other is what happened.
+
+Semantics: `stop_sequence.is_some()` ⟺ the source protocol reported
+`stop_reason == "stop_sequence"` (Anthropic Messages). Only Messages has this
+concept; the other three targets drop it with an explicit `Unsupported`
+diagnostic. On the **streaming** path the value currently has no IR carrier
+(`Finish` takes only the reason), so it is dropped **with a `Degraded`
+diagnostic** — a deliberate, diagnosed degradation pending a separate proposal
+for the stream payload (changing `Finish`'s arity is a breaking change).
+
+Serialization: `None` emits no key at all (preserves the pre-existing byte
+shape); deserialization treats missing / empty / non-string as `None` (soft
+failure for an optional field, governance §4).
+
 ### LucentStreamEvent
 
 Normalized streaming events. See `src/lux/stream.mbt` for the full enum.

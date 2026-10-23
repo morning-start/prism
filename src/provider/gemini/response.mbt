@@ -271,6 +271,22 @@ pub fn lux_response_to_gemini(
       "candidates",
       diagnostics,
     )
+    // CR-005：`stop_sequence` 是 Anthropic 的响应侧概念，Gemini 的
+    // finishReason 是封闭枚举且无此值 → 显式诊断。
+    match c.stop_sequence {
+      Some(v) =>
+        diagnostics.push(
+          @lux.ConversionDiagnostic::unsupported(
+            "candidates.stop_sequence",
+            Some(
+              "hit stop sequence \"" +
+              v +
+              "\" has no gemini carrier (finishReason has no stop_sequence value); dropped",
+            ),
+          ),
+        )
+      None => ()
+    }
     let mut cand = "{\"index\":" +
       c.index.to_string() +
       ",\"content\":{\"role\":\"model\",\"parts\":[" +

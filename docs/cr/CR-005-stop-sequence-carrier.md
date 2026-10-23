@@ -1,12 +1,26 @@
 # IR 变更提案：`stop_sequence` 的 IR 载体（CR-005）
 
-> 状态：**部分实施** —— 缺陷 B / C 已修（纯 bug fix，见 §6）；缺陷 A（非流式
-> 命中值载体）**待决策**。
-> 提出日期：2026-10-23 · B/C 修复日期：2026-10-24
+> 状态：**已决策并实施（选项 B）** —— 缺陷 A / B / C 全部修复。
+> 提出：2026-10-23 · B/C 修复：2026-10-24 · A 实施：2026-10-24
 > 依据：`docs/rules/lucent-ir-evolution.md` §2「影响面声明」、§4「标准 vs 扩展」、
 > §6「非破坏性变更」
 > 触发：第七轮审计（IR 字段级往返完整性）中发现 messages 源 `stop_sequence`
 > 在 IR 中无载体，并顺带实证两条路径的行为矛盾与一个**非法枚举溢出**
+
+## 0. 最终选型（2026-10-24）
+
+在 A（`stop_sequence` 载体）与「`function_call` / `tool_calls` 区分度」两个
+候选之间，**选 A**。依据：
+
+| 维度 | A：`stop_sequence` | `function_call` 区分度 |
+|---|---|---|
+| 上游状态 | Anthropic **活跃功能** | OpenAI 官方 schema 标注 **`(deprecated)`** |
+| 信息价值 | 区分「命中 END」与「模型自然说完」 | 保住一个正在淘汰的遗留值 |
+| 结构冲击 | 加**可选字段**：`LucentChoice::new` 签名不变，88 处调用**零改动** | 加**枚举变体**：`LucentFinishReason` 有 35 处穷尽 match，**全部编译失败** |
+| 治理类型 | 非破坏性（§6） | 破坏性（§5） |
+
+`function_call` 那条记为技术债（见 §7），不实施 —— 为其加永久 IR 变体，
+投入产出不匹配。
 
 ## 1. 现状事实（已实证）
 
@@ -306,11 +320,68 @@ status 也是封闭枚举，第一版完全没纳入）；非流式 responses �
 `tool_calls` —— OpenAI → IR → OpenAI 无法保住 `function_call`。此前无人记录。
 修复需增 IR 变体（破坏性），与缺陷 A 一并等决策。
 
-### 6.6 仍未做（A）
+### 6.6 缺陷 A 实施（2026-10-24，选项 B）
 
-`LucentChoice.stop_sequence` 新字段（§2 方案 B）**未实施**，因此：
-- messages 非流式仍把 `stop_sequence` 命中值丢弃（`response.mbt` 映射为
-  `Stop`，且无诊断）；
-- 回写仍恒为 `"stop_sequence":null`。
+`LucentChoice` 新增 `stop_sequence : String?`（治理 §6「新增可选标准字段」）。
 
-这是**已知的有意识降级**，等待本提案批准后按 §2.1 方案 B 实施。
+**结构选择的理由**：`LucentChoice::new` 保持 4 参数不变，88 处调用点零改动；
+需要携带时用新 builder `with_stop_sequence`（沿用本仓既有 `with_*` 惯例与
+`{ ..self, ... }` 结构更新）。若改为扩构造参数，88 处调用全部破坏，而该字段
+只在 messages 解码路径才可能非 `None`。
+
+**实施清单**：
+
+- `src/lux/types.mbt`：`LucentChoice` 加字段 + 文档语义；
+- `src/lux/helpers.mbt`：`LucentChoice::new` 默认 `None`；新增
+  `with_stop_sequence` builder；
+- `src/lux/serialize_response.mbt`：`Some` 输出键、`None` **不输出**（保持既有
+  字节形态，不扰动快照）；
+- `src/lux/deserialize_response.mbt`：缺失 / 空串 / 类型不符一律软失败为 `None`
+  （可选字段不得因反序列化失败报错，治理 §4）；
+- `src/provider/messages/response.mbt` 解码：仅在 `stop_reason=="stop_sequence"`
+  时携带命中值（官方语义：该字段只在此情形非 null）；
+- `src/provider/messages/response.mbt` 编码：既有值时**强制**写
+  `stop_reason:"stop_sequence"` 并回写真实值（两字段必须自洽）；否则保持
+  收敛结果 + `stop_sequence:null`；
+- `openai` / `responses` / `gemini` 编码：无载体 → **Unsupported 诊断**；
+- `messages` 流式解码：命中值无 IR 载体 → **Degraded 诊断**（有意识降级，
+  不能静默）。为此给 `messages_decode_frames` 补了诊断通道。
+
+**实测结果**：
+
+```
+输入 {"stop_reason":"stop_sequence","stop_sequence":"END_TURN"}
+  解码: stop_sequence = Some("END_TURN"), finish_reason = Stop
+  回写: {"stop_reason":"stop_sequence","stop_sequence":"END_TURN"}   ← Exact
+  跨端: openai / responses / gemini 各 1 条 Unsupported 诊断
+  流式: 1 条 Degraded 诊断（值确实丢弃，但有告知）
+end_turn + stop_sequence:null → None，回写仍 null（字节形态不变）
+```
+
+回归：`src/sdk/test/stop_sequence_carrier_test.mbt`（7 用例）。
+**反向验证**：回退解码捕获 → `None != Some("END_TURN")`；回退编码回写 →
+往返断言失败。两处均确认。
+
+### 6.7 仍未做：`function_call` / `tool_calls` 区分度（新技术债）
+
+实测往返发现：OpenAI `finish_reason` 的 `function_call` 与 `tool_calls` 是
+**合法枚举里的两个不同项**，但 IR 都映射到 `ToolCalls`，回程一律输出
+`tool_calls` —— 即 OpenAI → IR → OpenAI 保不住 `function_call`。
+
+**决策：不实施。** 理由见 §0 —— 官方 schema 在 `finish_reason` 的说明里明确
+标注 `function_call (deprecated)`，字段定义亦带 `deprecated: true`。为一个正在
+淘汰的遗留值给 IR 加永久枚举变体（35 处穷尽 match 全部受影响），投入产出不
+匹配。
+
+若未来确有需要，正确做法是在 `LucentChoice` 上加一个可选的子类型标记
+（与 `stop_sequence` 同构，非破坏性），而不是扩 `LucentFinishReason`。
+
+### 6.8 流式载荷（仍未做，需独立提案）
+
+流式的「命中序列」值至今无 IR 载体：`LucentStreamEvent::Finish` 只有一个
+位置参数。当前处理是**有意识降级 + 诊断**（§6.6）。
+
+改 `Finish` 的载荷结构属治理 §5 明列的破坏性变更（「修改 stream event 的
+载荷结构」），需 major 版本与全链路适配。可选方向已在 §2.2 列出：
+A 改载荷（破坏性）/ C 新增 `FinishDetail` 事件（非破坏但需下游学习）。
+留待独立提案决策。

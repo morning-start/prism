@@ -26,6 +26,18 @@ pub fn messages_to_lux_response(
     None => Stop
   }
   let choice = @lux.LucentChoice::new(0, msg, finish, None)
+  // CR-005：实际命中的自定义终止序列（官方 `stop_sequence` 字段）。
+  // 此前该值被整体丢弃，且回写恒为 null —— 「被 END 截断」与「模型自然说完」
+  // 无法区分。现仅在 `stop_reason == "stop_sequence"` 时携带（官方语义：
+  // 该字段只在此时非 null）；为空串按缺失处理。
+  let choice = match @internal.field_str(jv, "stop_reason") {
+    Some("stop_sequence") =>
+      match @internal.field_str(jv, "stop_sequence") {
+        Some(v) => if v == "" { choice } else { choice.with_stop_sequence(v) }
+        None => choice
+      }
+    _ => choice
+  }
   // usage（cached / cache_creation 细化用量：prompt caching 计费核心，标准 §9）
   let usage = match @internal.obj_get(jv, "usage") {
     Some(u) => {
@@ -99,11 +111,23 @@ pub fn lux_response_to_messages(
   // stop_reason：收敛到 Anthropic 合法枚举。实现集中到
   // `@meta.messages_stop_reason_json`，与流式编码共用同一套规则
   // （此前流式路径直接写 IR 词汇表，与非流式输出不同词汇表）。
-  let stop_reason = @meta.messages_stop_reason_json(
-    choice.finish_reason,
-    "choices",
-    diagnostics,
-  )
+  //
+  // CR-005：`choice.stop_sequence` 有值时，语义等价于官方
+  // `stop_reason: "stop_sequence"` —— 强制覆写并写回命中值；反之保持收敛结果
+  // 且序列字段写 null（官方形态）。
+  let stop_reason = match choice.stop_sequence {
+    Some(_) => "\"stop_sequence\""
+    None =>
+      @meta.messages_stop_reason_json(
+        choice.finish_reason,
+        "choices",
+        diagnostics,
+      )
+  }
+  let stop_sequence_json = match choice.stop_sequence {
+    Some(v) => "\"" + @internal.json_escape(v) + "\""
+    None => "null"
+  }
   // usage（cached / cache_creation 细化用量输出，标准 §9）
   let usage_json = match resp.usage {
     Some(u) => {
@@ -165,7 +189,8 @@ pub fn lux_response_to_messages(
     content_json +
     ",\"stop_reason\":" +
     stop_reason +
-    ",\"stop_sequence\":null" +
+    ",\"stop_sequence\":" +
+    stop_sequence_json +
     usage_json +
     payload_json +
     "}"

@@ -97,7 +97,14 @@ pub fn LucentChoice::from_json(jv : Json) -> Result[LucentChoice, String] {
           }
         _ => None
       }
-      Ok({ index, message, finish_reason, safety_ratings, })
+      // 实际命中的自定义终止序列（CR-005）：官方 messages 为
+      // `"stop_sequence": "END"`，未命中时为 null。软失败 —— 缺失或类型不符
+      // 一律视为 None（可选字段不得因反序列化失败而报错，治理 §4）。
+      let stop_sequence : String? = match m.get("stop_sequence") {
+        Some(String(s)) => if s == "" { None } else { Some(s) }
+        _ => None
+      }
+      Ok({ index, message, finish_reason, safety_ratings, stop_sequence, })
     }
     _ => Err("expected object for LucentChoice")
   }

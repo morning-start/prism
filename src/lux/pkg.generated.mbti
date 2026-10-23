@@ -206,11 +206,13 @@ pub struct LucentChoice {
   message : LucentMessage
   finish_reason : LucentFinishReason
   safety_ratings : Array[LucentSafetyRating]?
+  stop_sequence : String?
 } derive(Eq, @debug.Debug)
 pub fn LucentChoice::equal(Self, Self) -> Bool
 pub fn LucentChoice::from_json(Json) -> Result[Self, String]
 pub fn LucentChoice::new(Int, LucentMessage, LucentFinishReason, Array[LucentSafetyRating]?) -> Self
 pub fn LucentChoice::to_json(Self) -> Json
+pub fn LucentChoice::with_stop_sequence(Self, String) -> Self
 
 pub(all) enum LucentContent {
   Text(String, Array[LucentAnnotation]?)
