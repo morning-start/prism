@@ -116,6 +116,29 @@ fn responses_decode_frames(
             let idx = @internal.field_int(jv, "content_index").unwrap_or(0)
             events.push(BlockEnd(idx))
           }
+          "response.output_item.done" => {
+            // 官方 output_item.done 携带该 item 的终态（status / 完整 content）。
+            // 此前该帧被完全丢弃：item 的终态信息（status=completed/failed 等）
+            // 与整帧载荷无从恢复。映射为 IR 的 ItemEnd —— IR 用 BlockEnd 承载
+            // 内容块边界，item 级边界由 ItemEnd 表达，语义一一对应。
+            let idx = @internal.field_int(jv, "output_index").unwrap_or(0)
+            events.push(ItemEnd(idx))
+          }
+          "response.output_text.annotation.added" => {
+            // 官方注解帧：annotation 对象为 url_citation / file_citation /
+            // container_file_citation / file_path 之一。此前被完全丢弃 →
+            // 引用来源（citation）在流式路径整体消失。映射为 IR 的
+            // Annotations 事件（lux 侧已有 LucentAnnotation 模型）。
+            let idx = @internal.field_int(jv, "content_index").unwrap_or(0)
+            match @internal.obj_get(jv, "annotation") {
+              Some(ann) =>
+                match parse_annotation(ann) {
+                  Some(a) => events.push(Annotations(idx, [a]))
+                  None => ()
+                }
+              None => ()
+            }
+          }
           "response.refusal.delta" => {
             let idx = @internal.field_int(jv, "content_index").unwrap_or(0)
             match @internal.field_str(jv, "delta") {
@@ -220,4 +243,48 @@ fn responses_decode_frames(
   }
   let result = @lux.ConversionResult::new(events)
   Ok(result.with_diagnostics(diagnostics))
+}
+
+///|
+/// 解析 Responses 注解对象 → LucentAnnotation
+///
+/// 官方 `Annotation` 是 four-way oneOf（schemas/endpoints/openai-openapi.yaml
+/// `Annotation`）：url_citation / file_citation / container_file_citation /
+/// file_path。前两者有 IR 原生 kind；后两者退化为 Native(type) 保留类型标签。
+/// `annotation` 本身可为 null（官方 anyOf 含 null），此时返回 None。
+fn parse_annotation(ann : Json) -> @lux.LucentAnnotation? {
+  let ann_type = @internal.field_str(ann, "type").unwrap_or("")
+  match ann_type {
+    "url_citation" =>
+      Some(
+        @lux.LucentAnnotation::new(
+          Url,
+          @internal.field_str(ann, "title"),
+          @internal.field_str(ann, "url"),
+          @internal.field_int(ann, "start_index"),
+          @internal.field_int(ann, "end_index"),
+        ),
+      )
+    "file_citation" =>
+      Some(
+        @lux.LucentAnnotation::new(
+          FileCitation,
+          @internal.field_str(ann, "filename"),
+          @internal.field_str(ann, "file_id"),
+          None,
+          None,
+        ),
+      )
+    "container_file_citation" | "file_path" =>
+      Some(
+        @lux.LucentAnnotation::new(
+          Native(ann_type),
+          @internal.field_str(ann, "filename"),
+          None,
+          None,
+          None,
+        ),
+      )
+    _ => None
+  }
 }

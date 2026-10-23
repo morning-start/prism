@@ -2,6 +2,13 @@
 /// Anthropic Messages 适配器白盒测试
 
 ///|
+/// 统计子串出现次数（用于「usage 不被重复发射」这类不变量）。
+/// 用 split 段数 -1 实现（MoonBit 的 `find` 返回子串而非位置）。
+fn count_occurrences(haystack : String, needle : String) -> Int32 {
+  haystack.split(needle).to_array().length() - 1
+}
+
+///|
 /// === 1. 请求解码 ===
 
 ///|
@@ -1555,6 +1562,78 @@ test "encode - redacted_thinking with and without signature" {
   )
   let without_sig = thinking_to_block(@lux.LucentThinking::redacted(None))
   assert_eq(without_sig, "{\"type\":\"redacted_thinking\",\"signature\":null}")
+}
+
+///|
+/// stream_encode：双 Finish 的 usage 配对 —— 第二个 Finish 的窗口下界必须
+/// 由「上一个 Finish」确定（messages_pair_usages 的回扫分支）。
+///
+/// 事件序 [Usage1, Finish1, Usage2, Finish2] 的配对语义：Usage2 落在
+/// Finish1 的窗口内（上界是下一个 Finish），故归 Finish1；Finish2 窗口内
+/// 无 Usage → output_tokens:0。Usage1 未被任何 Finish 消费 → 独立发一帧。
+/// 关键不变量：**同一个 Usage 不得被两个 Finish 重复发射**（此前 consumed[]
+/// 不防重配对，Usage2 会跟着两个 Finish 各发一遍）。
+test "encode - stream double finish pairs usages with lower bound" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new(Some("msg_df"), Some("claude"), None),
+    ),
+    Usage(@lux.LucentUsage::new(11, 22, 33)),
+    Finish(Stop),
+    Usage(@lux.LucentUsage::new(44, 55, 99)),
+    Finish(Stop),
+    Done,
+  ]
+  match lux_events_to_messages_sse(events) {
+    Ok(cr) => {
+      let sse = cr.value()
+      // Usage1 独立发射（未被 Finish 配对）
+      assert_true(sse.contains("\"input_tokens\":11,\"output_tokens\":22"))
+      // Usage2 归 Finish1，且只出现一次
+      assert_true(sse.contains("\"input_tokens\":44,\"output_tokens\":55"))
+      assert_eq(count_occurrences(sse, "\"input_tokens\":44"), 1)
+      // 三帧 message_delta：Usage1 独立 + Finish1 + Finish2
+      let mut delta_count = 0
+      for line in sse.split("\n") {
+        if line.has_prefix("data: {\"type\":\"message_delta\"") {
+          delta_count = delta_count + 1
+        }
+      }
+      assert_eq(delta_count, 3)
+    }
+    Err(e) => fail("encode error: \{e}")
+  }
+}
+
+///|
+/// stream_encode：Finish 在 Usage **之前** 的配对（IR 事件序 [Finish, Usage]）
+/// —— 回退分支「Finish 之前窗口内最后一个 Usage」。此时 Finish 自身窗口内
+/// （下一个 Finish 之前）的 Usage 应归它。
+test "encode - stream finish before usage pairs forward" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new(Some("msg_fb"), Some("claude"), None),
+    ),
+    Finish(Stop),
+    Usage(@lux.LucentUsage::new(7, 8, 15)),
+    Done,
+  ]
+  match lux_events_to_messages_sse(events) {
+    Ok(cr) => {
+      let sse = cr.value()
+      // Usage 归 Finish 合并发射（不重复独立发）
+      assert_true(sse.contains("\"input_tokens\":7,\"output_tokens\":8"))
+      assert_eq(count_occurrences(sse, "\"input_tokens\":7"), 1)
+      let mut delta_count = 0
+      for line in sse.split("\n") {
+        if line.has_prefix("data: {\"type\":\"message_delta\"") {
+          delta_count = delta_count + 1
+        }
+      }
+      assert_eq(delta_count, 1)
+    }
+    Err(e) => fail("encode error: \{e}")
+  }
 }
 
 ///|

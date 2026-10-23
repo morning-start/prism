@@ -532,19 +532,20 @@ test "messages decode - sse frames missing required fields emit no events" {
 }
 
 ///|
-/// error 事件：error 对象缺 message → 用 error.type 兜底为 message；
-/// error 为字符串（非对象）→ type/message 均取不到 → "unknown error"；
-/// 顶层无 error 键 → None 分支静默跳过。三者都不抛错。
+/// error 事件的三种形态：error 对象缺 message → 用 error.type 兜底；
+/// error 为字符串 → 该字符串本身就是 message（obj_get 返回键值本身，
+/// 字符串值若落进对象分支会退化成 "unknown error" 并丢掉真正的错误文本）；
+/// 顶层无 error 键 → 静默跳过。三者都不抛错。
 test "messages decode - sse error events without message and without error key" {
   // error 对象有 type 无 message → message 回退为 type
   let type_only = sse_frame(
     "error", "{\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\"}}",
   )
-  // error 为字符串（非对象）→ type/message 均取不到 → "unknown error" 兜底
+  // error 为字符串 → 字符串本身作为 message（simple 构造）
   let string_error = sse_frame(
     "error", "{\"type\":\"error\",\"error\":\"boom\"}",
   )
-  // 顶层无 error 键 → None 分支静默跳过，不产生事件
+  // 顶层无 error 键 → 静默跳过，不产生事件
   let no_error_key = sse_frame("error", "{\"type\":\"error\"}")
   let events = sse_events_ok(type_only + string_error + no_error_key)
   let msgs : Array[String] = []
@@ -554,8 +555,8 @@ test "messages decode - sse error events without message and without error key" 
       _ => ()
     }
   }
-  // 前两帧各产一个 Error（分别是 type 兜底 / "unknown error"），无 error 键的帧被跳过。
-  assert_eq(msgs, ["overloaded_error", "unknown error"])
+  // 前两帧各产一个 Error（分别是 type 兜底 / 字符串原文），无 error 键的帧被跳过。
+  assert_eq(msgs, ["overloaded_error", "boom"])
 }
 
 ///|

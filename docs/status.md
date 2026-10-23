@@ -44,8 +44,9 @@ compilation to reach non-public members).
 - **internal**: Coverage in `internal/test/` subdirectory（含 T5 SseFrameSplitter 测试）；2026-10-22 新增 `protocol_keys_test`（`protocol_native_keys` / `protocol_native_response_keys` / `foreign_extra_keys` / `split_provider_payload` / `extras_excluding` / `extras_without_keys` / `overlapping_extra_keys` 的纯函数契约与空值边界；`openai`/`responses` 的请求级与响应级原生表与 vendored 官方 OpenAPI 的锚定断言；编码旋钮跳过断言）
 - **sdk/test**: 2026-10-22（第二轮）新增 `response_fidelity_test`（响应侧逐格矩阵：openai `finish_reason` 合法枚举、responses 官方 `RefusalContent` 键名、单结果协议的 choices[1..] 诊断、messages 收敛 stop_reason 诊断、gemini 细化用量往返、gemini 拦截响应、`ToolCalls→STOP` 语义对等、`Native` 透传；第三轮补 responses `incomplete_details.reason` 的 decode/encode/往返闭环、`failed` 响应 `error` 对象带出、`Native` 在封闭枚举协议下的诊断；第四轮补 `provider_payload` 从死端改为归属门控载体 —— 同源往返、旋钮不外泄、未知键放行、四目标撞名矩阵、原生键逐目标写出、responses 捕获 moderation；第五轮补 `stream_meta_channel_contract_test`（流式侧 `ConversationStart.extra` 四端 decode 捕获 + encode 门控、跨端泄漏、未知键放行、旋钮不外泄、撞名、空/非对象/全旋钮边界、往返闭环）—— 每个用例都做过反向验证，回退修复后必须失败）
 - **provider/meta**: 2026-10-23 新增 `extras.mbt`（`meta_extra_fragments` / `payload_fragments`：流式与响应侧元数据扩展载体的出站门控，四端共用；落点在 meta 是因为它同时依赖 internal 的归属表与 lux 的诊断类型）
+- **sdk/test**: 2026-10-23（第六轮）新增 `stream_event_coverage_test`（IR 流事件 × provider 的生产者/消费者矩阵：responses `output_item.done` → `ItemEnd`、`output_text.annotation.added` → `Annotations`（官方 four-way oneOf）、openai 官方错误帧 → `Error`（含 `_error` 后缀 kind 映射）、四个 encoder 的 `Annotations` 显式 Degraded、`BlockDiscard` 无生产者事实锁定；顺带修 messages 双 Finish 的 usage 重复发射与 `message_delta.usage.input_tokens` 缺失）
 
-**Total: 1383 tests passing (native + wasm-gc), 2026-10-23（`moon test` 全量；未覆盖行 197，阈值 200）。**
+**Total: 1401 tests passing (native + wasm-gc), 2026-10-23（`moon test` 全量；未覆盖行 199，阈值 200）。**
 
 ### 实时流式（首字延迟）
 

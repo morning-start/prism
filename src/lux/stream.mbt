@@ -185,11 +185,14 @@ pub extend LucentStreamEvent with @moonbitlang/core/debug.Debug::{to_repr}
 ///|
 pub fn LucentErrorKind::from_string(s : String) -> LucentErrorKind {
   match s {
-    "rate_limit" | "rate_limit_exceeded" | "429" => RateLimit
+    "rate_limit" | "rate_limit_exceeded" | "rate_limit_error" | "429" =>
+      RateLimit
     "invalid_request" | "invalid_request_error" | "400" => InvalidRequest
-    "authentication" | "auth_error" | "401" | "403" => Authentication
+    "authentication" | "auth_error" | "authentication_error" | "401" | "403" =>
+      Authentication
     "server_error" | "internal_server_error" | "500" | "503" => ServerError
-    "content_filter" | "content_policy" => ContentFilter
+    "content_filter" | "content_policy" | "content_filter_error" =>
+      ContentFilter
     other => Native(other)
   }
 }

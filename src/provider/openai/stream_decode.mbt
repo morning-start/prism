@@ -84,6 +84,41 @@ fn openai_decode_frames(
         continue
       }
     }
+    // 错误帧：官方错误帧不包 chunk 外壳（无 id / choices），
+    // 形如 data: {"error":{"type":"rate_limit_error","message":"...","code":"429"}}
+    // 此前 openai 源不识别该帧 → 整帧静默丢弃，流式错误链路断在解码侧
+    // （encode 侧一直有 Error → error 帧的映射，响应侧 response.mbt 也解 error）。
+    //
+    // 必须先判字符串形态：`obj_get` 返回的是 error 键的值本身，字符串值若
+    // 落进对象分支，field_str 取不到 message/type → 退化成 "unknown error"，
+    // 真正的错误文本被丢掉。顺序：String → 对象 → 缺失。
+    match @internal.obj_get(jv, "error") {
+      Some(String(err_str)) =>
+        events.push(Error(@lux.LucentError::simple(err_str)))
+      Some(err_obj) => {
+        let err_type = @internal.field_str(err_obj, "type")
+        let err_code = @internal.field_str(err_obj, "code")
+        let msg = match @internal.field_str(err_obj, "message") {
+          Some(m) => m
+          None =>
+            match err_type {
+              Some(t) => t
+              None => "unknown error"
+            }
+        }
+        let kind = @lux.LucentErrorKind::from_string(err_type.unwrap_or(""))
+        let code = match err_code {
+          Some(c) => c
+          None =>
+            match err_type {
+              Some(t) => t
+              None => ""
+            }
+        }
+        events.push(Error(@lux.LucentError::new(kind, msg, Some(code))))
+      }
+      None => ()
+    }
     // usage 帧（choices 空的最后一帧）
     match @internal.obj_get(jv, "usage") {
       Some(u) => {

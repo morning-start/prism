@@ -85,7 +85,19 @@ pub fn lux_events_to_openai_sse_with_ctx(
           "\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}",
         )
       }
-      ItemStart(_, _) | ItemEnd(_) | BlockDiscard(_) | Annotations(_, _) => ()
+      ItemStart(_, _) | ItemEnd(_) | BlockDiscard(_) => ()
+      Annotations(_, anns) =>
+        // 侧信道数据：openai-chat 无流式注解载体。与请求侧
+        // request_encode.mbt 的 content.annotations 一致，显式 Degraded
+        // 而非静默丢弃。
+        if anns.length() > 0 {
+          diagnostics.push(
+            @lux.ConversionDiagnostic::degraded(
+              "stream.annotations",
+              Some("text annotations not supported by openai-chat"),
+            ),
+          )
+        }
       // 块边界在 OpenAI Chat 流中不显式（无 BlockStart/BlockEnd 对应）
       // 但 ToolCall 的 BlockStart 携带 id/name，需编码为 tool_calls 首帧
       BlockStart(idx, bt) =>

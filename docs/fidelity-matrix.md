@@ -388,6 +388,60 @@ gemini = `modelStatus`（无 vendored spec，手工维护）。
 因为放行的失败模式（目标多收一个请求语义的字段）轻于误丢，且未知键放行
 本就是厂商兼容所需。
 
+### 3.13 IR 流事件的生产者/消费者矩阵（第六轮）
+
+> 2026-10-23 audit 新增。前几轮逐格检查了内容、文本、工具、帧序、生成参数、
+> 扩展通道，但从未把 **IR 流事件 × provider 的生产者/消费者矩阵**整体铺开。
+> 铺开后三类缺陷暴露：
+
+| 事件 | 生产者（decode） | 消费者（encode） | 结论 |
+|---|---|---|---|
+| `BlockDiscard` | **0 家** | 4 家 | 死事件（CR-003 选 B，保留+标记） |
+| `ItemEnd` | 1 家（responses） | 3 家 | **产消失衡**：官方帧被丢弃 |
+| `Annotations` | **0 家** | 3 家 | **无生产者**：官方 citation 帧被丢弃 |
+| `Error` | 2 家（responses / messages） | 4 家 | **openai 无生产者**：错误帧整帧丢弃 |
+
+三类修复（全部先实测确认缺陷、后反向验证）：
+
+1. **responses `output_item.done` → `ItemEnd`**：该帧携带 item 终态
+   （`status` / 完整 content），此前被 `_ => ()` 丢弃。
+2. **responses `output_text.annotation.added` → `Annotations`**：注解是引用
+   来源（citation），此前整帧丢弃 → 流式路径 citation 全失。官方 `Annotation`
+   是 four-way oneOf（`url_citation` / `file_citation` /
+   `container_file_citation` / `file_path`，见 vendored OpenAPI），前两者映射
+   IR 原生 kind，后两者退化 `Native(type)` 保留类型标签；`annotation: null`
+   （官方 anyOf 含 null）不产出事件。
+3. **openai 官方错误帧 → `Error`**：`data: {"error":{...}}` 不包 chunk 外壳，
+   此前 openai 源整帧丢弃 → 流式错误链路断在解码侧（encode 侧与响应侧一直
+   有 error 映射）。同时修 `LucentErrorKind::from_string`：官方 `error.type`
+   常量带 `_error` 后缀（`rate_limit_error` 等）此前落到达 `Native` 字符串，
+   未映射到语义 kind。
+
+**两个由测试暴露的次生缺陷**（写测试时实测发现，一并修）：
+
+- **openai / messages 错误帧的字符串形态被吞**：`obj_get(jv, "error")` 返回的
+  是 **error 键的值本身**，`{"error":"boom"}` 的字符串值会落进对象分支，
+  `field_str` 取不到 message/type → 退化成 `"unknown error"`，真正的错误文本
+  被丢掉。修法：match 顺序改为 `String → 对象 → 缺失`。messages 侧一条既有
+  测试原本断言 `"unknown error"`（把缺陷当预期），已修正。
+- **messages 双 Finish 的 usage 重复发射**：`messages_pair_usages` 的
+  `consumed[]` 不防重配对 —— 第二个 Finish 的 before 窗口回扫会取走已被
+  上一个 Finish 用 after 窗口消费的 Usage，导致同一 usage 跟两个 Finish 各发
+  一遍 `message_delta`。修法：before 窗口判 `consumed`。（after 窗口无需判：
+  其上界是下一个 Finish，两窗口不重叠。）
+
+顺带补齐 **`message_delta.usage.input_tokens`**：Anthropic 官方只保证
+`output_tokens`，故历史上只发 output_tokens + 缓存项；但 IR 的 `prompt_tokens`
+在跨协议转换（openai 源）时有值，不发即丢数据。改为有值时补发，字段序与官方
+一致（`input_tokens` 在前）。
+
+编码侧对应契约：四个 stream encoder 的 `Annotations` 分支从静默丢弃改为
+显式 Degraded（openai / messages / responses / gemini 均无流式注解载体；
+空数组不制造噪音诊断）。
+
+回归：`src/sdk/test/stream_event_coverage_test.mbt`（16 用例；
+`consumed` 防重与 `input_tokens` 两处均做过反向验证）。
+
 ## 4. 已知技术债（不影响上表论断，随 iteration 推进）
 
 1. **ToolResult name carrier**：`LucentToolResult` 仅携带 `tool_use_id`，

@@ -519,7 +519,19 @@ fn responses_encode_frames(
           )
         }
       }
-      BlockDiscard(_) | Annotations(_, _) => ()
+      BlockDiscard(_) => ()
+      Annotations(_, anns) =>
+        // 侧信道数据：responses 流式侧有原生注解帧（annotation.added），但
+        // IR 注解不带 content_index 级联定位所需的 item_id 关联信息，
+        // 在此路径显式 Degraded 而非静默丢弃。
+        if anns.length() > 0 {
+          diagnostics.push(
+            @lux.ConversionDiagnostic::degraded(
+              "stream.annotations",
+              Some("text annotations not supported by responses streaming path"),
+            ),
+          )
+        }
       Finish(fr) => {
         let status_str = match fr {
           Stop => "\"completed\""

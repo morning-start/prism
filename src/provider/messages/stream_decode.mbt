@@ -242,8 +242,12 @@ fn messages_decode_frames(
       }
       "error" =>
         // Anthropic error 事件：{"type":"error","error":{"type":"...","message":"..."}}
-        // error 是对象而非字符串；兼容字符串形态的容错写法
+        // error 是对象而非字符串；兼容字符串形态的容错写法。
+        // 顺序 String → 对象：obj_get 返回 error 键的值本身，字符串值若先进
+        // 对象分支会退化成 "unknown error" 并丢掉真正的错误文本。
         match @internal.obj_get(jv, "error") {
+          Some(String(err_str)) =>
+            events.push(Error(@lux.LucentError::simple(err_str)))
           Some(err_obj) => {
             let err_type = @internal.field_str(err_obj, "type")
             let err_msg = @internal.field_str(err_obj, "message")
@@ -258,11 +262,7 @@ fn messages_decode_frames(
             let kind = @lux.LucentErrorKind::from_string(err_type.unwrap_or(""))
             events.push(Error(@lux.LucentError::new(kind, msg, err_type)))
           }
-          None =>
-            match @internal.field_str(jv, "error") {
-              Some(e_msg) => events.push(Error(@lux.LucentError::simple(e_msg)))
-              None => ()
-            }
+          None => ()
         }
       _ => ()
     }

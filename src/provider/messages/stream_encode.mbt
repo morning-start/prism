@@ -1,8 +1,17 @@
 ///|
 /// CR-001：message_delta.usage 渲染。prompt caching 的缓存计费项是 Anthropic
 /// 用量核算的核心，有值时必须透传（无值时保持既有字节形态）。
+///
+/// `input_tokens`：Anthropic 官方 `message_delta.usage` 只保证 `output_tokens`，
+/// 因此历史上这里只发 output_tokens + 缓存项。但 IR 侧的 `prompt_tokens` 在
+/// 跨协议转换（如 openai 源）时是有值的，不发即丢数据 —— 有值时补发，
+/// 为 0 时保持既有字节形态（不改变无输入用量来源的输出）。
 fn messages_usage_json(u : @lux.LucentUsage) -> String {
-  let mut s = "{\"output_tokens\":" + u.completion_tokens.to_string()
+  let mut s = "{"
+  if u.prompt_tokens > 0 {
+    s = s + "\"input_tokens\":" + u.prompt_tokens.to_string() + ","
+  }
+  s = s + "\"output_tokens\":" + u.completion_tokens.to_string()
   match u.cached_tokens {
     Some(n) => s = s + ",\"cache_read_input_tokens\":" + n.to_string()
     None => ()
@@ -81,7 +90,9 @@ fn messages_pair_usages(
             _ => nxt = nxt + 1
           }
         }
-        // 1) Finish 之后窗口内最后一个 Usage
+        // 1) Finish 之后窗口内最后一个 Usage。
+        // 此处无需 consumed 守卫：窗口上界是下一个 Finish，两个 Finish 的
+        // after 窗口互不重叠，同一 Usage 不会同时落在两个 after 窗口内。
         let mut after_last = -1
         let mut j = i + 1
         while j < upper {
@@ -91,13 +102,16 @@ fn messages_pair_usages(
           }
           j = j + 1
         }
-        // 2) 否则取 Finish 之前窗口内最后一个 Usage
+        // 2) 否则取 Finish 之前窗口内最后一个 Usage。
+        // 此处**必须**判 consumed：before 窗口的下界只是「上一个 Finish」，
+        // 其间的 Usage 可能已被上一个 Finish 通过 after 窗口取走 —— 不判重
+        // 会让同一个 usage 跟着两个 Finish 各发一遍 message_delta。
         let mut before_last = -1
         if after_last < 0 {
           let mut j2 = lower
           while j2 < i {
             match events[j2] {
-              Usage(_) => before_last = j2
+              Usage(_) => if !consumed[j2] { before_last = j2 }
               _ => ()
             }
             j2 = j2 + 1
@@ -184,7 +198,17 @@ pub fn lux_events_to_messages_sse(
           "}}",
         )
       }
-      ItemStart(_, _) | ItemEnd(_) | BlockDiscard(_) | Annotations(_, _) => ()
+      ItemStart(_, _) | ItemEnd(_) | BlockDiscard(_) => ()
+      Annotations(_, anns) =>
+        // 侧信道数据：Anthropic Messages 无流式注解载体，显式 Degraded。
+        if anns.length() > 0 {
+          diagnostics.push(
+            @lux.ConversionDiagnostic::degraded(
+              "stream.annotations",
+              Some("text annotations not supported by messages"),
+            ),
+          )
+        }
       BlockStart(idx, bt) => {
         let block_json = match bt {
           Text => "{\"type\":\"text\",\"text\":\"\"}"

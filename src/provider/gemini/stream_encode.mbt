@@ -242,6 +242,16 @@ fn gemini_encode_frames(
             ),
           ),
         )
+      Annotations(_, anns) =>
+        // Gemini 无注解载体：显式 Degraded 而非静默丢弃。
+        if anns.length() > 0 {
+          diagnostics.push(
+            @lux.ConversionDiagnostic::degraded(
+              "stream.annotations",
+              Some("text annotations not supported by gemini"),
+            ),
+          )
+        }
       Finish(fr) => {
         // 先补发未结束的工具块，保证工具链不丢参数
         if pending_tool_index is Some(_) {
