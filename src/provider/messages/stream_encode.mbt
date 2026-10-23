@@ -276,10 +276,16 @@ pub fn lux_events_to_messages_sse(
           Some(u) => messages_usage_json(u)
           None => messages_usage_json(@lux.LucentUsage::new(0, 0, 0))
         }
+        // 收敛到 Anthropic 合法枚举（此前直接写 fr.to_string()，把 IR 词汇表
+        // 的 stop/length/tool_calls/safety/... 原样输出 —— 8 个值里 8 个非法，
+        // 严格校验的对端会拒绝整条流）。与非流式 response.mbt 共用同一收敛器。
+        let stop_reason_json = @meta.messages_stop_reason_json(
+          fr, "stream.delta", diagnostics,
+        )
         lines.push(
-          "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"" +
-          @internal.json_escape(fr.to_string()) +
-          "\"},\"usage\":" +
+          "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":" +
+          stop_reason_json +
+          "},\"usage\":" +
           usage_json +
           "}",
         )

@@ -158,13 +158,22 @@ pub fn lux_events_to_openai_sse_with_ctx(
             )
           NativeDelta(_, _) => ()
         }
-      Finish(fr) =>
+      Finish(fr) => {
+        // 收敛到 OpenAI Chat 合法枚举：此前直接写 fr.to_string()，绕过了
+        // 非流式路径的 openai_finish_reason 收敛器 —— IR 的 safety / recitation
+        // / malformed_tool_call / error 以及 messages 源解出的
+        // Native("stop_sequence") 都会被原样写进 finish_reason，产生非法值，
+        // 严格校验的对端会拒绝整条流。现与非流式共用同一收敛器。
+        let finish_json = @meta.openai_finish_reason_json(
+          fr, "stream.delta", diagnostics,
+        )
         out.push(
           chunk_prefix(chat_id, chat_model, chat_created) +
-          "\"choices\":[{\"delta\":{},\"finish_reason\":\"" +
-          @internal.json_escape(fr.to_string()) +
-          "\"}]}",
+          "\"choices\":[{\"delta\":{},\"finish_reason\":" +
+          finish_json +
+          "}]}",
         )
+      }
       Usage(u) => {
         // 附带空 choices 保证 Chat Completions 格式合法
         let mut usage_json = "\"choices\":[],\"usage\":{\"prompt_tokens\":" +

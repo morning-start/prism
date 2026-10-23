@@ -96,33 +96,14 @@ pub fn lux_response_to_messages(
     i = i + 1
   }
   let content_json = "[" + content_blocks.join(",") + "]"
-  // stop_reason
-  // Anthropic stop_reason 枚举：end_turn/max_tokens/stop_sequence/tool_use/
-  // refusal/pause_turn/model_context_window_exceeded。
-  // IR ContentFilter 无对等值 → 映射为 "refusal"（Anthropic 语义最近的载体）；
-  // Safety/Recitation/MalformedToolCall/Error 无对等值 → 收敛为 "end_turn"，
-  // **但必须留诊断**：这四个值语义差异很大（安全拦截 / 复述 / 工具调用畸形 /
-  // 上游出错），全部压成 "end_turn" 会让调用方误以为模型正常说完。
-  let stop_reason = match choice.finish_reason {
-    Stop => "\"end_turn\""
-    Length => "\"max_tokens\""
-    ToolCalls => "\"tool_use\""
-    ContentFilter => "\"refusal\""
-    Native(s) => "\"" + @internal.json_escape(s) + "\""
-    other => {
-      diagnostics.push(
-        @lux.ConversionDiagnostic::unsupported(
-          "choices.finish_reason",
-          Some(
-            "finish_reason \"" +
-            other.to_string() +
-            "\" has no anthropic stop_reason equivalent; emitted \"end_turn\" instead",
-          ),
-        ),
-      )
-      "\"end_turn\""
-    }
-  }
+  // stop_reason：收敛到 Anthropic 合法枚举。实现集中到
+  // `@meta.messages_stop_reason_json`，与流式编码共用同一套规则
+  // （此前流式路径直接写 IR 词汇表，与非流式输出不同词汇表）。
+  let stop_reason = @meta.messages_stop_reason_json(
+    choice.finish_reason,
+    "choices",
+    diagnostics,
+  )
   // usage（cached / cache_creation 细化用量输出，标准 §9）
   let usage_json = match resp.usage {
     Some(u) => {

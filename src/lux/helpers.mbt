@@ -245,6 +245,12 @@ pub fn LucentResponse::reasoning(self : LucentResponse) -> LucentThinking? {
 pub fn LucentFinishReason::from_string(s : String) -> LucentFinishReason {
   match s {
     "stop" | "end_turn" | "completed" | "STOP" => Stop
+    // CR-005 缺陷 B：`stop_sequence` 此前无分支 → 落入 Native("stop_sequence")，
+    // 而 messages 非流式路径（response.mbt）同值映射为 Stop —— 同一语义两个
+    // 入口解出不同 IR 值，违反流式/非流式等价性。语义上「命中自定义终止序列」
+    // 与「模型自然说完」同属非异常终止，故统一为 Stop（是否命中哪个序列由
+    // 响应侧 stop_sequence 字段承载，见 CR-005）。
+    "stop_sequence" | "STOP_SEQUENCE" => Stop
     "length" | "max_tokens" | "MAX_TOKENS" | "incomplete" => Length
     "tool_calls" | "tool_use" | "function_call" => ToolCalls
     "content_filter" => ContentFilter

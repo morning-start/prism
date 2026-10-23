@@ -1627,9 +1627,12 @@ test "encode - structured output json schema emits responseSchema" {
 }
 
 ///|
-/// finish_reason 映射全覆盖：每个显式 LucentFinishReason 变体逐一锁定映射字符串，
-/// ContentFilter / Native 走兜底 `_ => "STOP"`。不依赖他处测试的偶然覆盖，
-/// 使 finish match 的所有分支稳定覆盖。
+/// finish_reason 映射全覆盖：每个显式 LucentFinishReason 变体逐一锁定映射字符串。
+///
+/// `Native` 是**透传**而非收敛：流式旧实现的兜底 `_ => "STOP"` 会把厂商自定义
+/// 值（如 gemini 自己解出的 LANGUAGE / BLOCKLIST / SPII）静默吞成 STOP，
+/// 与同协议的非流式路径（原样透传）不一致 —— 那正是数据丢失。现已统一为
+/// 共用 `@meta.gemini_finish_reason_string`，此处锁定透传行为。
 test "encode - stream finish reason mapping covers all variants" {
   let cases : Array[(@lux.LucentFinishReason, String)] = [
     (Stop, "STOP"),
@@ -1640,7 +1643,7 @@ test "encode - stream finish reason mapping covers all variants" {
     (MalformedToolCall, "MALFORMED_FUNCTION_CALL"),
     (Error, "OTHER"),
     (ContentFilter, "STOP"),
-    (Native("nft"), "STOP"),
+    (Native("nft"), "nft"),
   ]
   for c in cases {
     let reason = c.0

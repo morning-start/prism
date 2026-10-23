@@ -1,6 +1,8 @@
 # IR 变更提案：`stop_sequence` 的 IR 载体（CR-005）
 
-> 状态：**待决策**（提案，未实施）· 提出日期：2026-10-23
+> 状态：**部分实施** —— 缺陷 B / C 已修（纯 bug fix，见 §6）；缺陷 A（非流式
+> 命中值载体）**待决策**。
+> 提出日期：2026-10-23 · B/C 修复日期：2026-10-24
 > 依据：`docs/rules/lucent-ir-evolution.md` §2「影响面声明」、§4「标准 vs 扩展」、
 > §6「非破坏性变更」
 > 触发：第七轮审计（IR 字段级往返完整性）中发现 messages 源 `stop_sequence`
@@ -207,3 +209,74 @@ OpenAI Chat 官方 `finish_reason` 合法值只有 `stop` / `length` / `tool_cal
   响应侧字段**与**非法值溢出**。
 - 缺陷 C（openai 流式绕过收敛器）**应先以独立 bug fix 提交**，不等本提案
   批准——它是协议契约破坏，与是否新增 IR 字段无关。
+
+## 6. 已实施（2026-10-24）：缺陷 B / C
+
+按「把破坏性 IR 决策拆成纯 bug fix + 字段提案」的思路，B 与 C 不依赖任何
+新增 IR 字段，已先落地。**A 仍未实施**（需按 §2 走治理）。
+
+### 6.1 新增共享收敛器 `src/provider/meta/finish.mbt`
+
+三个纯函数，**非流式与流式共用**，杜绝两路径词汇表漂移：
+
+| 函数 | 目标 | 合法枚举 |
+|---|---|---|
+| `messages_stop_reason_json` | Anthropic | `end_turn` / `max_tokens` / `tool_use` / `stop_sequence` / `refusal` / `pause_turn` / `model_context_window_exceeded` |
+| `openai_finish_reason_json` | OpenAI Chat | `stop` / `length` / `tool_calls` / `content_filter` / `function_call` |
+| `gemini_finish_reason_string` | Gemini | `STOP` / `MAX_TOKENS` / `SAFETY` / `RECITATION` / `OTHER` / … |
+
+落点选 `meta` 的理由与 `extras.mbt` 相同：需要 `@lux` 类型 + `@internal`
+转义，且要被四个 provider 共享；放 `lux` 破坏分层，四处复制会漂移。
+
+### 6.2 修复清单
+
+- **缺陷 C（messages 流式）**：`Finish(fr)` 此前直接写 `fr.to_string()` ——
+  实测 **8 个 IR 值里 8 个非法**（`stop` / `length` / `tool_calls` / `safety` /
+  `recitation` / `malformed_tool_call` / `error` / `content_filter` 均非
+  Anthropic `stop_reason`）。特别是 `ToolCalls` 输出 `tool_calls`，而 Anthropic
+  的合法值是 **`tool_use`**。现改用共享收敛器。
+- **缺陷 C（openai 流式）**：此前绕过非流式已有的 `openai_finish_reason`，
+  直接把 IR 词汇表写进 `finish_reason`（含 messages 源解出的
+  `Native("stop_sequence")` → 输出 `"finish_reason":"stop_sequence"`，非法）。
+  现改用共享收敛器；非流式侧同时删除了「剥引号」的包装函数，调用点直接
+  使用返回带引号字面量的收敛器（避免一层无意义转换与一个不可达分支）。
+- **缺陷 C（gemini 流式，顺带发现）**：流式自带一份简化映射，`Native(v)` 走
+  `_ => "STOP"` 兜底 —— **静默吞掉厂商自定义值**（如 gemini 自己解出的
+  `LANGUAGE` / `BLOCKLIST` / `SPII`），而同协议非流式是原样透传。现统一为透传。
+- **缺陷 B**：`LucentFinishReason::from_string` 补 `"stop_sequence" => Stop`。
+  此前无该分支 → 流式落入 `Native("stop_sequence")`，而非流式（messages
+  `response.mbt`）映射为 `Stop` —— 同一语义两个入口解出不同 IR 值。
+
+### 6.3 一处既有测试修正
+
+`src/provider/gemini/gemini_wbtest.mbt` 的流式映射用例原断言
+`(Native("nft"), "STOP")` —— 它锁定的正是上述数据丢失（兜底吞掉自定义值），
+已改为 `"nft"`（透传），与同协议非流式契约一致。
+
+### 6.4 回归与验证
+
+`src/sdk/test/finish_reason_contract_test.mbt`（7 用例）：
+- messages / openai 流式逐值断言**只输出合法枚举**；
+- `ToolCalls → tool_use`（不是 `tool_calls`）定点锁定；
+- messages 源 `stop_sequence` 不再泄漏进 openai 流；
+- 流式与非流式对同值解出**同一** IR 值；
+- gemini `Native` 原样透传；
+- 无对等值的收敛必须带 Unsupported 诊断。
+
+四处修复均做过**反向验证**（回退修复 → 测试必须失败），命中记录：
+- messages 流式回退 → `"tool_calls" != "tool_use"` + 合法枚举断言失败
+- openai 流式回退 → 合法枚举断言失败
+- gemini `Native` 回退为 STOP → 透传断言失败
+- `from_string` 回退 → `Native("stop_sequence") != Stop`
+
+门禁：fmt / check(+73, deny-warn) / native + wasm-gc **1408/1408** /
+drift `-Strict` PASS / coverage **199**（阈值 200）。
+
+### 6.5 仍未做（A）
+
+`LucentChoice.stop_sequence` 新字段（§2 方案 B）**未实施**，因此：
+- messages 非流式仍把 `stop_sequence` 命中值丢弃（`response.mbt` 映射为
+  `Stop`，且无诊断）；
+- 回写仍恒为 `"stop_sequence":null`。
+
+这是**已知的有意识降级**，等待本提案批准后按 §2.1 方案 B 实施。

@@ -277,16 +277,12 @@ fn gemini_encode_frames(
           pending_tool_name = ""
           pending_tool_args = ""
         }
-        let finish_str = match fr {
-          Stop => "STOP"
-          Length => "MAX_TOKENS"
-          ToolCalls => "STOP"
-          Safety => "SAFETY"
-          Recitation => "RECITATION"
-          MalformedToolCall => "MALFORMED_FUNCTION_CALL"
-          Error => "OTHER"
-          _ => "STOP"
-        }
+        // 收敛到 Gemini 合法 FinishReason。此前此处自带一份简化映射，
+        // 与非流式路径（response.mbt）漂移；现两路径共用
+        // `@meta.gemini_finish_reason_string`。
+        let finish_str = @meta.gemini_finish_reason_string(
+          fr, "candidates", diagnostics,
+        )
         lines.push(
           "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[]},\"finishReason\":\"" +
           finish_str +

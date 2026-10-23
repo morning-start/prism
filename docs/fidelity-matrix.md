@@ -516,6 +516,32 @@ gemini = `modelStatus`（无 vendored spec，手工维护）。
    `src/sdk/test/extension_channel_test.mbt`；同一轮还修掉了 `request.extra`
    死载体（§3.7 缺陷 1）。
 
+### 3.14 finish_reason 的协议枚举契约（第七轮）
+
+> 2026-10-24 audit 新增。前几轮的保真度矩阵按「字段是否送达」检查，从未检查
+> **「送达的值是否是该协议合法枚举」**。铺开这一维度后发现：流式编码器普遍
+> 直接把 IR 词汇表写进出口，而非流式路径早已逐协议收敛 —— 同一协议两条路径
+> 输出不同词汇表。
+
+| 目标 | 流式（修复前） | 结果 |
+|---|---|---|
+| messages | `stop` / `length` / `tool_calls` / `safety` / `recitation` / `malformed_tool_call` / `error` / `content_filter` | **8/8 非法**（Anthropic 合法值是 `end_turn` / `max_tokens` / `tool_use` / `refusal` …）|
+| openai | `safety` / `recitation` / `stop_sequence` / … | 非法（官方仅 5 值）|
+| gemini | `Native(v)` → 兜底 `STOP` | **数据丢失**（同协议非流式是透传）|
+
+典型危害：messages 流式的 `ToolCalls` 输出 `tool_calls`，而 Anthropic 的合法值
+是 `tool_use`；messages 源解出的 `Native("stop_sequence")` 经 openai 流式出站会
+变成 `"finish_reason":"stop_sequence"` —— 非 OpenAI 合法枚举，严格校验的对端
+会**拒绝整条流**（不是降级，是协议契约破坏）。
+
+修复：新增 `src/provider/meta/finish.mbt`，三个纯函数
+（`messages_stop_reason_json` / `openai_finish_reason_json` /
+`gemini_finish_reason_string`）供**非流式与流式共用**，杜绝词汇表漂移。
+收敛必须显式：无对等值的 IR 原因一律打 Unsupported 诊断。
+
+回归：`src/sdk/test/finish_reason_contract_test.mbt`（7 用例，四处修复均反向验证）。
+提案与完整分析见 [`cr/CR-005-stop-sequence-carrier.md`](cr/CR-005-stop-sequence-carrier.md)。
+
 ## 5. 使用建议（中间件切流前检查单）
 
 1. 确认目标链路只依赖 §2 公共交集 → 任意切流，保真度 Exact。

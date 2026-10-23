@@ -263,33 +263,14 @@ pub fn lux_response_to_gemini(
       }
       j = j + 1
     }
-    let finish_str = match c.finish_reason {
-      Stop => "STOP"
-      Length => "MAX_TOKENS"
-      // Gemini 的 FinishReason 枚举没有「工具调用」这一项：模型发起函数调用时
-      // 正常结束，官方返回的是 STOP。**不是丢失**，属语义对等，故不诊断。
-      ToolCalls => "STOP"
-      Safety => "SAFETY"
-      Recitation => "RECITATION"
-      MalformedToolCall => "MALFORMED_FUNCTION_CALL"
-      Error => "OTHER"
-      Native(s) => s
-      // ContentFilter 在 Gemini 侧由 safetyRatings 的 blockReason 承载，
-      // FinishReason 无对等值 → 收敛为 STOP 并诊断
-      other => {
-        diagnostics.push(
-          @lux.ConversionDiagnostic::unsupported(
-            "candidates.finishReason",
-            Some(
-              "finish_reason \"" +
-              other.to_string() +
-              "\" has no gemini FinishReason equivalent; emitted \"STOP\" instead",
-            ),
-          ),
-        )
-        "STOP"
-      }
-    }
+    // 收敛到 Gemini 合法 FinishReason。实现集中到
+    // `@meta.gemini_finish_reason_string`，与流式编码共用（此前流式路径
+    // 自带一份简化映射，两处漂移）。
+    let finish_str = @meta.gemini_finish_reason_string(
+      c.finish_reason,
+      "candidates",
+      diagnostics,
+    )
     let mut cand = "{\"index\":" +
       c.index.to_string() +
       ",\"content\":{\"role\":\"model\",\"parts\":[" +
