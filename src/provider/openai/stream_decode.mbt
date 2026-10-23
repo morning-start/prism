@@ -116,6 +116,13 @@ fn openai_decode_frames(
                   let chunk_id = @internal.field_str(jv, "id")
                   let chunk_model = @internal.field_str(jv, "model")
                   let chunk_created = @internal.field_int(jv, "created")
+                  // 首帧 chunk 顶层的非建模字段（system_fingerprint / service_tier 等）
+                  // 进 ConversationStart.extra —— 非流式响应路径同样保留这些字段
+                  // （见 openai/response.mbt 的 payload_fields），流式此前一律填 None，
+                  // 造成「流式丢、非流式留」的不一致。
+                  let extra = @internal.build_meta_extra(jv, [
+                    "id", "model", "created", "object", "choices", "usage",
+                  ])
                   events.push(
                     ConversationStart(
                       @lux.LucentConversationMeta::new_full(
@@ -123,7 +130,7 @@ fn openai_decode_frames(
                         chunk_model,
                         None,
                         chunk_created,
-                        None,
+                        extra,
                       ),
                     ),
                   )

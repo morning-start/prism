@@ -98,6 +98,8 @@ fn gemini_encode_frames(
   let mut pending_tool_args = st.pending_tool_args
   // thinking signature 是完整不透明令牌：累积到当前值后再发
   let mut acc_signature = st.acc_signature
+  // ConversationStart 是否已产出首帧（元数据帧只发一次）
+  let mut conv_started = false
   let mut i = 0
   while i < events.length() {
     match events[i] {
@@ -108,6 +110,37 @@ fn gemini_encode_frames(
           @internal.json_escape(s) +
           "\"}]}}]}",
         )
+      ConversationStart(meta) =>
+        // 元数据扩展载体：Gemini 顶层唯一的非建模字段是 modelStatus
+        // （见 @internal.protocol_native_response_keys）。此前 gemini 流编码
+        // 完全不处理 ConversationStart，元数据无处可去。
+        // 写到**首帧**顶层（与解码侧 build_meta_extra 的排除口径一致）。
+        //
+        // IR 不变量保证 ConversationStart 是流的**第一个**事件（见
+        // LucentStreamEvent 文档），故无需处理「已有内容帧」的情形；保留
+        // conv_started 只作为断言性防护（若被违反则跳过而非发第二帧）。
+        if !conv_started {
+          conv_started = true
+          let extra_json = @meta.payload_fragments(
+            meta.extra,
+            "gemini",
+            [
+              "responseId", "modelVersion", "candidates", "usageMetadata", "promptFeedback",
+            ],
+            diagnostics,
+          )
+          let id_part = match meta.id {
+            Some(v) => "\"responseId\":\"" + @internal.json_escape(v) + "\","
+            None => ""
+          }
+          let model_part = match meta.model {
+            Some(v) => "\"modelVersion\":\"" + @internal.json_escape(v) + "\","
+            None => ""
+          }
+          lines.push(
+            "data: {" + id_part + model_part + extra_json + "\"candidates\":[]}",
+          )
+        }
       BlockDelta(_, ThinkingDelta(s)) =>
         // Gemini 有原生 thought 载体（thought:true part），增量透传
         lines.push(

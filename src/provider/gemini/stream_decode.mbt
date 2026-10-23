@@ -65,13 +65,21 @@ pub fn gemini_sse_to_events(
     // ConversationStart 发首帧的 messages / responses 目标因此缺 message_start /
     // response.created，openai 目标的 id/model 为空。首个可解析帧发一次，字段
     // 缺失为 None（保证协议首帧存在；batch 与逐帧路径形态一致）。
+    //
+    // 非建模顶层字段（modelStatus 等）进 extra，与非流式响应路径的
+    // provider_payload 捕获口径一致（见 gemini/response.mbt）。
     if !conv_started {
+      let extra = @internal.build_meta_extra(jv, [
+        "responseId", "modelVersion", "candidates", "usageMetadata", "promptFeedback",
+      ])
       events.push(
         ConversationStart(
-          @lux.LucentConversationMeta::new(
+          @lux.LucentConversationMeta::new_full(
             @internal.field_str(jv, "responseId"),
             @internal.field_str(jv, "modelVersion"),
             None,
+            None,
+            extra,
           ),
         ),
       )

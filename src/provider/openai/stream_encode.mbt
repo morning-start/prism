@@ -41,6 +41,7 @@ pub fn lux_events_to_openai_sse_with_ctx(
   ctx : @lux.LucentConversationMeta?,
 ) -> Result[@lux.ConversionResult[String], String] {
   let out : Array[String] = []
+  let diagnostics : Array[@lux.ConversionDiagnostic] = []
   let mut i = 0
   // 从 ConversationStart 提取，注入每个 chunk；ctx 预置供逐帧转换跨帧复用
   let mut chat_id = ""
@@ -60,8 +61,27 @@ pub fn lux_events_to_openai_sse_with_ctx(
         chat_id = meta.id.unwrap_or("chatcmpl-0")
         chat_model = meta.model.unwrap_or("")
         chat_created = meta.created_at.unwrap_or(0)
+        // 元数据扩展载体：按归属门控分拣后写到首帧 chunk 顶层
+        // （与非流式响应编码的 provider_payload 口径一致，见 response.mbt）。
+        // 逐帧路径下后续帧没有 ConversationStart，此时用 ctx 的 extra。
+        let meta_extra = match meta.extra {
+          Some(ex) => Some(ex)
+          None =>
+            match ctx {
+              Some(c) => c.extra
+              None => None
+            }
+        }
+        let extra_json = @meta.meta_extra_fragments(
+          meta_extra,
+          "openai",
+          ["id", "object", "created", "model", "choices", "usage"],
+          "provider_payload",
+          diagnostics,
+        )
         out.push(
           chunk_prefix(chat_id, chat_model, chat_created) +
+          extra_json +
           "\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}",
         )
       }
@@ -184,5 +204,9 @@ pub fn lux_events_to_openai_sse_with_ctx(
     }
     i = i + 1
   }
-  Ok(@lux.ConversionResult::new(out.join("\n\n") + "\n\n"))
+  Ok(
+    @lux.ConversionResult::new(out.join("\n\n") + "\n\n").with_diagnostics(
+      diagnostics,
+    ),
+  )
 }

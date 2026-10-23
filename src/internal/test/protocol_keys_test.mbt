@@ -78,6 +78,42 @@ test "protocol keys - split_provider_payload skips encoder knobs" {
 }
 
 ///|
+/// build_meta_extra / build_json_object 的边界分支：
+/// 空 map → None；全被排除 → None；非 Object → None。
+test "protocol keys - build_meta_extra and build_json_object edges" {
+  // 全部键被排除 → None
+  let full = @internal.parse_json_opt("{\"id\":\"a\",\"model\":\"b\"}")
+  match full {
+    None => fail("test payload must parse")
+    Some(v) => assert_eq(@internal.build_meta_extra(v, ["id", "model"]), None)
+  }
+  // 部分排除 → 保留其余
+  match full {
+    None => fail("test payload must parse")
+    Some(v) =>
+      match @internal.build_meta_extra(v, ["id"]) {
+        Some(rest) => assert_true(rest.stringify().contains("model"))
+        None => fail("expected remaining key")
+      }
+  }
+  // 非 Object → None
+  let scalar = @internal.parse_json_opt("42")
+  match scalar {
+    None => fail("test payload must parse")
+    Some(v) => assert_eq(@internal.build_meta_extra(v, []), None)
+  }
+  // 空 map → None
+  assert_eq(@internal.build_json_object(Map([])), None)
+  // 有值 map → 可解析的 JSON 对象
+  let m : Map[String, Json] = Map([])
+  m["k"] = Json::number(1)
+  match @internal.build_json_object(m) {
+    Some(v) => assert_true(v.stringify().contains("\"k\":1"))
+    None => fail("expected a JSON object")
+  }
+}
+
+///|
 /// `openai` / `responses` 的原生表由 vendored 官方 OpenAPI 展开得到，
 /// 这里锚定几个关键事实（改表时若与 spec 冲突，这些断言会先失败）：
 /// - `stop` / `logit_bias` / `seed` / `n` 是 Chat Completions 顶层参数；

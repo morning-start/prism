@@ -346,6 +346,48 @@ gemini = `modelStatus`（无 vendored spec，手工维护）。
 死载体修复做过反向验证）。另见 `src/internal/test/protocol_keys_test.mbt`
 的响应表锚定与旋钮跳过断言。
 
+### 3.12 流式侧元数据扩展通道（`ConversationStart.extra`）
+
+> 2026-10-23 audit（第五轮）新增。至此**请求侧**（`request.extra` /
+> `options.extras`）与**响应侧非流式**（`provider_payload`）的扩展通道都已按
+> 归属门控统一；流式侧的 `ConversationStart.extra` 是最后一块缺口。
+
+四格实测形态（修复前）：
+
+| 协议 | decode 填 extra | encode 读 extra |
+|---|---|---|
+| openai | 丢弃 `system_fingerprint` 等 → `None` | 不读 |
+| responses | 全量保留（无归属判定） | **无门控**直接展开 |
+| messages | 只填缓存计费项 | 不读 |
+| gemini | `None` | 不处理 `ConversationStart` |
+
+即：**openai/gemini 的元数据根本进不了 IR**（流式丢、非流式留，不一致）；
+**responses 的元数据会原样泄漏到任意目标**（源协议的请求字段被写进
+`response.created`）。
+
+修复（与 §3.8 / §3.11 同一套判定方向，实现在
+`src/provider/meta/extras.mbt` 的 `meta_extra_fragments` / `payload_fragments`）：
+
+- decode：openai 补捕首帧 chunk 顶层的非建模字段；gemini 补捕首帧顶层
+  （`modelStatus` 等）；messages 保留既有缓存计费项。
+- encode：四端均按归属门控分拣后写出（openai/gemini 写**首帧顶层**，
+  messages 写 `message_start`，responses 写 `response.created`）；
+  外来键剔除 + Unsupported 诊断；与自产键撞名 → Degraded；旋钮跳过。
+
+一个实现注记：判定需要 `@internal` 的归属表、诊断需要 `@lux` 的类型，
+因此共享辅助放在 `provider/meta`（同时依赖两者的 provider 共享叶子包）——
+`lux` 反向依赖 `internal` 会破坏分层。这是本轮唯一可行的落点。
+
+回归：`src/sdk/test/stream_meta_channel_contract_test.mbt`（13 用例；responses
+无门控泄漏与 openai decode 丢元数据两处均做过反向验证）。
+
+**已知边界**：响应级原生表与请求级原生表是两套。一个**请求**侧字段
+（如 responses 的 `parallel_tool_calls`）出现在元数据载体里时，会被判为
+「未知键」而放行 —— 它对任何协议都不是**响应**原生字段。若要严格拦截，
+需把两张表合并成「协议全部原生字段」并区分请求/响应上下文；当前选择放行，
+因为放行的失败模式（目标多收一个请求语义的字段）轻于误丢，且未知键放行
+本就是厂商兼容所需。
+
 ## 4. 已知技术债（不影响上表论断，随 iteration 推进）
 
 1. **ToolResult name carrier**：`LucentToolResult` 仅携带 `tool_use_id`，

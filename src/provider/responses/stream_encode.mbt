@@ -101,6 +101,7 @@ fn responses_encode_frames(
   let mut item_counter = st.item_counter
   let block_item_id = st.block_item_id // block idx → item id
   let mut resp_id = st.resp_id // response.created 生成的 id，Finish 时复用
+  let diagnostics : Array[@lux.ConversionDiagnostic] = []
   // ctx 预置（逐帧转换跨帧复用 id）：帧内 ConversationStart 会覆盖
   match ctx {
     Some(meta) =>
@@ -131,22 +132,20 @@ fn responses_encode_frames(
         let mut fields = "\"id\":\"" + @internal.json_escape(rid) + "\""
         fields = fields + ",\"created_at\":" + created_at.to_string()
         fields = fields + ",\"model\":\"" + @internal.json_escape(model) + "\""
-        // 合并 extra 中的非通用字段（instructions, status 等）
-        match meta.extra {
-          Some(ex) =>
-            match ex {
-              Object(m) =>
-                m.each(fn(key, val) {
-                  fields = fields +
-                    ",\"" +
-                    @internal.json_escape(key) +
-                    "\":" +
-                    val.stringify()
-                })
-              _ => ()
-            }
-          None => ()
-        }
+        // 元数据扩展载体按归属门控合并：此前是**无门控直接展开** —— 源协议
+        // 的专属字段（如 openai 的 system_fingerprint）会被原样写进
+        // response.created，目标收到不认识的字段可能 400。现只写 responses
+        // 原生键（moderation）与未知键，外来键剔除并诊断。
+        fields = fields +
+          @meta.payload_fragments(
+            meta.extra,
+            "responses",
+            [
+              "id", "object", "created_at", "status", "model", "output", "usage",
+              "incomplete_details",
+            ],
+            diagnostics,
+          )
         lines.push(
           "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{" +
           fields +
@@ -615,7 +614,11 @@ fn responses_encode_frames(
   st.cur_content_index = cur_content_index
   st.item_counter = item_counter
   st.resp_id = resp_id
-  Ok(@lux.ConversionResult::new(lines.join("\n\n") + "\n\n"))
+  Ok(
+    @lux.ConversionResult::new(lines.join("\n\n") + "\n\n").with_diagnostics(
+      diagnostics,
+    ),
+  )
 }
 
 ///|

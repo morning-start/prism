@@ -1301,8 +1301,14 @@ test "encode - request options top_p reasoning summary structured output and par
 
 ///|
 /// lux_events_to_responses_sse_with_ctx：ctx 预置 response id（帧内无
-/// ConversationStart 时复用），ConversationStart.extra 非标准字段合并进
-/// response.created，以及 extra 非 Object 时静默不合并。
+/// ConversationStart 时复用），ConversationStart.extra 按归属门控合并进
+/// response.created，以及 extra 非 Object 时不合并。
+///
+/// 归属门控：未知键（instructions / status 等 Responses 顶层自有字段）与
+/// moderation（响应级原生）写出；**请求**侧字段（service_tier /
+/// parallel_tool_calls 是 CreateResponse 请求参数，不是响应字段）被剔除
+/// 并打 Unsupported 诊断 —— 此前是无门控直接展开，会把源协议的请求字段
+/// 原样写进响应体。
 test "encode - stream ctx and conversation start extra fields" {
   // ctx Some(meta) 且 meta.id Some(id)：无 ConversationStart → 收尾帧复用该 id
   let ctx = @lux.LucentConversationMeta::new_full(
@@ -1330,7 +1336,8 @@ test "encode - stream ctx and conversation start extra fields" {
     Err(e) => fail("encode error: \{e}")
   }
 
-  // ConversationStart.extra = Object：非标准字段逐条合并进 response.created
+  // ConversationStart.extra = Object：未知键合并进 response.created；
+  // 请求侧字段被归属门控剔除 + 诊断
   let with_extra : Array[@lux.LucentStreamEvent] = [
     ConversationStart(
       @lux.LucentConversationMeta::new_full(
@@ -1341,6 +1348,8 @@ test "encode - stream ctx and conversation start extra fields" {
         Some(
           Json::object({
             "instructions": Json::string("be brief"),
+            "status": Json::string("completed"),
+            "moderation": Json::object({ "flagged": Json::boolean(false) }),
             "service_tier": Json::string("priority"),
             "parallel_tool_calls": Json::boolean(true),
           }),
@@ -1354,8 +1363,29 @@ test "encode - stream ctx and conversation start extra fields" {
       let sse = cr.value()
       assert_true(sse.contains("\"created_at\":1700000000"))
       assert_true(sse.contains("\"instructions\":\"be brief\""))
-      assert_true(sse.contains("\"service_tier\":\"priority\""))
-      assert_true(sse.contains("\"parallel_tool_calls\":true"))
+      // 此序列无 Finish 事件 → response.created 不带 status（status 由
+      // finish_reason 决定）；extra 里的 status 与编码器自产键撞名 → 剔除 + 诊断
+      assert_true(sse.contains("provider_payload") == false)
+      // moderation 是 responses 响应级原生字段 → 写出
+      assert_true(sse.contains("\"moderation\":"))
+      // service_tier 是 openai 专属 → 归属门控剔除 + Unsupported 诊断
+      assert_false(sse.contains("\"service_tier\":\"priority\""))
+      // 剔除必须显式诊断
+      let mut diagnosed = false
+      for d in cr.diagnostics() {
+        if d.field == "provider_payload.service_tier" {
+          diagnosed = true
+        }
+      }
+      assert_true(diagnosed)
+      // 撞名键也必须有诊断
+      let mut collision_diagnosed = false
+      for d in cr.diagnostics() {
+        if d.field == "provider_payload.status" {
+          collision_diagnosed = true
+        }
+      }
+      assert_true(collision_diagnosed)
     }
     Err(e) => fail("encode error: \{e}")
   }

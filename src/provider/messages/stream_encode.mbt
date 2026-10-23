@@ -128,6 +128,7 @@ pub fn lux_events_to_messages_sse(
 ) -> Result[@lux.ConversionResult[String], String] {
   let (usage_consumed, finish_usage) = messages_pair_usages(events)
   let lines : Array[String] = []
+  let diagnostics : Array[@lux.ConversionDiagnostic] = []
   let mut i = 0
   while i < events.length() {
     match events[i] {
@@ -167,6 +168,16 @@ pub fn lux_events_to_messages_sse(
         // CR-003 R1：Anthropic 的 message_start.usage 同时给出 output_tokens
         // （首帧语义为 1，与官方响应一致）；此前只输出 input_tokens + 缓存项。
         fields = fields + ",\"usage\":" + usage_fields + ",\"output_tokens\":1}"
+        // 元数据扩展载体：Anthropic 顶层唯一的非建模字段是 container
+        // （见 @internal.protocol_native_response_keys），其它协议的键被
+        // 归属门控剔除并诊断（对称于请求侧 options.extras）。
+        fields = fields +
+          @meta.payload_fragments(
+            meta.extra,
+            "messages",
+            ["id", "type", "role", "model", "usage", "content", "stop_reason"],
+            diagnostics,
+          )
         lines.push(
           "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{" +
           fields +
@@ -281,5 +292,9 @@ pub fn lux_events_to_messages_sse(
     }
     i = i + 1
   }
-  Ok(@lux.ConversionResult::new(lines.join("\n\n") + "\n\n"))
+  Ok(
+    @lux.ConversionResult::new(lines.join("\n\n") + "\n\n").with_diagnostics(
+      diagnostics,
+    ),
+  )
 }

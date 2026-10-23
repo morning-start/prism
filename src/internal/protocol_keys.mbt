@@ -158,14 +158,60 @@ pub fn protocol_native_response_keys(protocol : String) -> Array[String] {
 }
 
 ///|
-/// `provider_payload` 中的**编码控制旋钮** —— 由调用方显式设置、用于改变编码
-/// 行为的键（如 openai 的 `reasoning_field` 指定消息级 reasoning 的字段名）。
+/// `provider_payload` 与 `ConversationMeta.extra` 共用的**编码控制旋钮**清单
+/// （如 openai 的 `reasoning_field` 指定消息级 reasoning 的字段名）。
 ///
 /// 它们不是 wire 数据：解码器从不产出，出站时必须跳过 —— 既不能写进响应体
 /// （目标会收到不认识的字段），也不能当「外来键」报诊断（那是调用方的合法
 /// 输入）。
-fn provider_payload_knobs() -> Array[String] {
+pub fn payload_encoder_knobs() -> Array[String] {
   ["reasoning_field"]
+}
+
+///|
+/// 从 JSON 对象中剔除已建模字段，构造**元数据扩展载体**（软失败保留）。
+///
+/// 与 `collect_extra_fields` 的区别：本函数按 `exclude` 列表剔除后**直接保留
+/// 其余键**（不判定归属），用于「源协议 wire 顶层字段 → 元数据载体」的搬运。
+/// 归属门控在**出站**时做（见 `split_provider_payload` / `split_meta_extra`），
+/// 不在解码时做 —— 解码侧不预判目标是谁，先全量保留。
+///
+/// 空对象返回 `None`；非 Object 输入返回 `None`（无元数据可保留）。
+pub fn build_meta_extra(jv : Json, exclude : Array[String]) -> Json? {
+  match jv {
+    Object(m) => {
+      let fields : Map[String, Json] = Map([])
+      for k, v in m {
+        if !exclude.contains(k) {
+          fields[k] = v
+        }
+      }
+      if fields.is_empty() {
+        None
+      } else {
+        build_json_object(fields)
+      }
+    }
+    _ => None
+  }
+}
+
+///|
+/// 从 `Map[String, Json]` 构造 Json 对象（拼串再解析，绕开对外只读的
+/// `Json::Object` 构造器）。空 map 返回 `None`。
+pub fn build_json_object(fields : Map[String, Json]) -> Json? {
+  if fields.is_empty() {
+    None
+  } else {
+    let parts : Array[String] = []
+    for k, v in fields {
+      parts.push("\"" + json_escape(k) + "\":" + v.stringify())
+    }
+    match parse_json_opt("{" + parts.join(",") + "}") {
+      Some(v) => Some(v)
+      None => None
+    }
+  }
 }
 
 ///|
@@ -183,26 +229,39 @@ pub fn split_provider_payload(
   payload : Json?,
   self : String,
 ) -> (Map[String, Json]?, Map[String, String]) {
+  split_native_extra(payload, self, protocol_native_response_keys)
+}
+
+///|
+/// 归属门控的通用实现：`native_of` 给出某协议的「原生键表」。
+///
+/// `split_provider_payload`（响应级）与流式侧的元数据载体（见下）共用同一
+/// 套判定逻辑，只是原生表不同 —— 避免两处各写一遍、各错一次。
+fn split_native_extra(
+  payload : Json?,
+  self : String,
+  native_of : (String) -> Array[String],
+) -> (Map[String, Json]?, Map[String, String]) {
   let kept : Map[String, Json] = Map([])
   let dropped : Map[String, String] = Map([])
   match payload {
     Some(Object(m)) => {
-      let mine = protocol_native_response_keys(self)
-      let knobs = provider_payload_knobs()
+      let mine = native_of(self)
+      let knobs = payload_encoder_knobs()
       for k, v in m {
         if knobs.contains(k) {
           // 编码旋钮：跳过，不写出也不诊断
         } else if !mine.contains(k) {
           let owners : Array[String] = []
           for p in known_protocols() {
-            if p != self && protocol_native_response_keys(p).contains(k) {
+            if p != self && native_of(p).contains(k) {
               owners.push(p)
             }
           }
           if owners.length() > 0 {
             dropped[k] = owners.join(", ")
           } else {
-            // 未知键：放行（厂商网关可能添加响应级字段）
+            // 未知键：放行（厂商网关可能添加自定义字段）
             kept[k] = v
           }
         } else {

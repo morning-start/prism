@@ -6,6 +6,10 @@ import {
 }
 
 // Values
+pub fn build_json_object(Map[String, Json]) -> Json?
+
+pub fn build_meta_extra(Json, Array[String]) -> Json?
+
 pub fn clean_sse_heartbeat(String) -> String
 
 pub fn collect_extra_fields(Json, Array[String]) -> Map[String, Json]?
@@ -75,6 +79,8 @@ pub fn parse_sse_messages(String) -> Array[SseMessage]
 pub fn parse_string_array(Json, String) -> Array[String]?
 
 pub fn parse_usage_json(Json, String, String, String?) -> (Int, Int, Int)
+
+pub fn payload_encoder_knobs() -> Array[String]
 
 pub fn protocol_native_keys(String) -> Array[String]
 

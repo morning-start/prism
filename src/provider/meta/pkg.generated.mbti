@@ -6,6 +6,9 @@ import {
 }
 
 // Values
+pub fn meta_extra_fragments(Json?, String, Array[String], String, Array[@lux.ConversionDiagnostic]) -> String
+
+pub fn payload_fragments(Json?, String, Array[String], Array[@lux.ConversionDiagnostic]) -> String
 
 // Errors
 
