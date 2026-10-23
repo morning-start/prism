@@ -310,6 +310,42 @@ Message 级枚举（`content_filter` / `max_tokens` / `run_cancelled` /
 `incomplete+content_filter`，截断原因跨往返不退化。`reason=content_filter` 的
 encode 侧做过反向验证。
 
+### 3.11 `provider_payload`：响应侧扩展载体从死端改为归属门控
+
+> 2026-10-22 audit（第四轮）新增。IR 的两个**请求**侧扩展通道（§3.8）修完
+> 之后，**响应**侧的 `LucentResponse.provider_payload` 还是死端：openai 解码
+> 把 `system_fingerprint` / `service_tier` 写进去，四个响应编码器却从不吐出
+> —— `openai → IR → openai` 往返丢失响应级元数据，且无诊断。
+
+**语义定位**：`provider_payload` 对称于请求侧的 `options.extras` —— 都是
+「源协议 wire 上、IR 未建模字段的软失败保留载体」。因此出站采用**同一套归属
+门控**（`@internal.split_provider_payload`，判定方向与 §3.8 一致）：
+
+| 键类别 | 行为 |
+|---|---|
+| ∈ native_response(T) | 写出到目标响应体 |
+| 可证明属于其它协议 | 剔除 + Unsupported 诊断（`provider_payload.<key>`） |
+| 未知键（厂商网关自定义） | 放行 |
+| `reasoning_field` 等编码旋钮 | **跳过** —— 它们是编码行为开关，不是 wire 数据，既不写出也不报诊断 |
+| 与目标自产键撞名 | 跳过 + Degraded 诊断（目标自产值胜，绝不产生重复键） |
+
+响应级原生表（`@internal.protocol_native_response_keys`，依据同 §3.8）：
+openai = `system_fingerprint` / `service_tier` / `metadata` / `moderation`
+（vendored `CreateChatCompletionResponse` 顶层）；responses = `moderation`
+（`service_tier` 只出现在 CreateResponse **请求**侧）；messages = `container`、
+gemini = `modelStatus`（无 vendored spec，手工维护）。
+
+同步补齐的**解码侧捕获**：openai 增捕 `metadata` / `moderation`（此前只捕
+2 个键）；responses 增捕 `moderation`（此前 `provider_payload` 恒为 `None`）。
+
+一个实现注记：`Json::Object` 构造器对外只读，故解码侧沿用「拼串再
+`parse_json_opt`」的模式把捕获值包回载体。
+
+回归：`src/sdk/test/response_fidelity_test.mbt`（死载体往返、旋钮不外泄、
+未知键放行、四目标撞名矩阵、原生键逐目标写出、responses 捕获 moderation；
+死载体修复做过反向验证）。另见 `src/internal/test/protocol_keys_test.mbt`
+的响应表锚定与旋钮跳过断言。
+
 ## 4. 已知技术债（不影响上表论断，随 iteration 推进）
 
 1. **ToolResult name carrier**：`LucentToolResult` 仅携带 `tool_use_id`，

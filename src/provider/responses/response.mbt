@@ -223,8 +223,28 @@ pub fn responses_json_to_lux_response(
     }
     None => None
   }
+  // 响应级扩展载体：vendored 官方 OpenAPI 的 Response 顶层非建模字段是
+  // moderation（对称于请求侧 options.extras，出站按归属门控，见
+  // @internal.split_provider_payload）。此前 provider_payload 恒为 None。
+  // 载体形态与 openai 解码一致：键 = wire 字段名，值 = 原始 JSON。
+  let provider_payload : Json? = match @internal.obj_get(jv, "moderation") {
+    // Json 的 Object 构造器对外只读，沿用 openai 解码的「拼串再解析」模式
+    Some(v) =>
+      match @internal.parse_json_opt("{\"moderation\":" + v.stringify() + "}") {
+        Some(wrapped) => Some(wrapped)
+        None => None
+      }
+    None => None
+  }
   let result = @lux.ConversionResult::new(
-    @lux.LucentResponse::new(id, model, created, [choice], usage, None),
+    @lux.LucentResponse::new(
+      id,
+      model,
+      created,
+      [choice],
+      usage,
+      provider_payload,
+    ),
   )
   Ok(result.with_diagnostics(diagnostics))
 }
@@ -433,6 +453,40 @@ pub fn lux_response_to_responses(
     Some(n) => ",\"created_at\":" + n.to_string()
     None => ""
   }
+  // provider_payload 出站：响应级扩展载体（对称于请求侧 options.extras）。
+  // reasoning_field 等编码旋钮由分拣自动跳过。
+  let (payload_kept, payload_foreign) = @internal.split_provider_payload(
+    resp.provider_payload,
+    "responses",
+  )
+  @lux.push_extras_foreign_at("provider_payload", payload_foreign, diagnostics)
+  let reserved : Array[String] = [
+    "id", "object", "created_at", "status", "incomplete_details", "model", "output",
+    "usage",
+  ]
+  let payload_collided : Array[String] = []
+  match payload_kept {
+    Some(m) =>
+      for k, _ in m {
+        if reserved.contains(k) {
+          payload_collided.push(k)
+        }
+      }
+    None => ()
+  }
+  let payload_clean = @internal.extras_without_keys(
+    payload_kept, payload_collided,
+  )
+  @lux.push_extras_collisions_at(
+    "provider_payload", payload_collided, diagnostics,
+  )
+  let payload_parts : Array[String] = []
+  let _ = @internal.merge_extras_json_dedup(payload_parts, payload_clean)
+  let payload_json = if payload_parts.length() > 0 {
+    "," + payload_parts.join(",")
+  } else {
+    ""
+  }
   let body = "{\"id\":\"" +
     @internal.json_escape(resp.id) +
     "\",\"object\":\"response\"" +
@@ -446,6 +500,7 @@ pub fn lux_response_to_responses(
     output_items.join(",") +
     "]" +
     usage_json +
+    payload_json +
     "}"
   let result = @lux.ConversionResult::new(body)
   Ok(result.with_diagnostics(diagnostics))

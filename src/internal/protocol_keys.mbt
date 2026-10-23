@@ -133,3 +133,89 @@ pub fn extras_excluding(
   }
   extras_without_keys(extras, arr)
 }
+
+///|
+/// 各协议的**响应级**原生字段表 —— `LucentResponse.provider_payload` 出站门控
+/// 的判定依据（对称于请求侧的 `protocol_native_keys`）。
+///
+/// 只列「该协议响应体顶层、且 IR 未建模」的字段；IR 已建模的字段（id / model /
+/// created_at / choices / usage / status 等）由标准字段路径承载，不在此列。
+///
+/// - `openai`：`CreateChatCompletionResponse` 顶层（vendored 官方 OpenAPI），
+///   非建模字段为 `system_fingerprint` / `service_tier` / `metadata` / `moderation`。
+/// - `responses`：`Response` 顶层，非建模字段为 `moderation`（`service_tier`
+///   只出现在 CreateResponse **请求**侧，不在响应对象里）。
+/// - `messages` / `gemini`：无 vendored spec，按公开 API 手工维护
+///   （Anthropic 的 `container`、Gemini 的 `modelStatus`）。
+pub fn protocol_native_response_keys(protocol : String) -> Array[String] {
+  match protocol {
+    "openai" => ["system_fingerprint", "service_tier", "metadata", "moderation"]
+    "responses" => ["moderation"]
+    "messages" => ["container"]
+    "gemini" => ["modelStatus"]
+    _ => []
+  }
+}
+
+///|
+/// `provider_payload` 中的**编码控制旋钮** —— 由调用方显式设置、用于改变编码
+/// 行为的键（如 openai 的 `reasoning_field` 指定消息级 reasoning 的字段名）。
+///
+/// 它们不是 wire 数据：解码器从不产出，出站时必须跳过 —— 既不能写进响应体
+/// （目标会收到不认识的字段），也不能当「外来键」报诊断（那是调用方的合法
+/// 输入）。
+fn provider_payload_knobs() -> Array[String] {
+  ["reasoning_field"]
+}
+
+///|
+/// `provider_payload` 出站分拣：把响应级扩展载体拆成「可写出」与「需剔除」。
+///
+/// 判定方向与请求侧 `extras` 完全一致（见 `protocol_native_keys` 文件头）：
+/// 键 ∈ native_response(T) 或键不属于任何已知协议 → 放行；键可证明属于其它
+/// 协议 → 剔除并记入返回的归属表（调用方补 Unsupported 诊断）。
+///
+/// 另有一个硬规则：`provider_payload_knobs()` 里的控制旋钮一律跳过 —— 它们
+/// 是编码行为开关，不是数据。
+///
+/// 返回 `(可写出的子集, 被剔除的键 → 归属协议)`；可写出子集为空时为 None。
+pub fn split_provider_payload(
+  payload : Json?,
+  self : String,
+) -> (Map[String, Json]?, Map[String, String]) {
+  let kept : Map[String, Json] = Map([])
+  let dropped : Map[String, String] = Map([])
+  match payload {
+    Some(Object(m)) => {
+      let mine = protocol_native_response_keys(self)
+      let knobs = provider_payload_knobs()
+      for k, v in m {
+        if knobs.contains(k) {
+          // 编码旋钮：跳过，不写出也不诊断
+        } else if !mine.contains(k) {
+          let owners : Array[String] = []
+          for p in known_protocols() {
+            if p != self && protocol_native_response_keys(p).contains(k) {
+              owners.push(p)
+            }
+          }
+          if owners.length() > 0 {
+            dropped[k] = owners.join(", ")
+          } else {
+            // 未知键：放行（厂商网关可能添加响应级字段）
+            kept[k] = v
+          }
+        } else {
+          kept[k] = v
+        }
+      }
+    }
+    _ => ()
+  }
+  let kept_opt : Map[String, Json]? = if kept.is_empty() {
+    None
+  } else {
+    Some(kept)
+  }
+  (kept_opt, dropped)
+}

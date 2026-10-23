@@ -610,3 +610,276 @@ test "response matrix - content filter truncation survives the responses round t
     }
   }
 }
+
+///|
+/// 缺陷 9（扩展通道闭环的响应侧）：`provider_payload` 此前是**死载体** ——
+/// openai 解码把 system_fingerprint / service_tier 写进去，四个响应编码器
+/// 却从不吐出，openai→openai 往返丢失响应级元数据。
+///
+/// 语义上它对称于请求侧的 `options.extras`（源协议响应级字段的软失败保留），
+/// 因此出站同样按**归属门控**：目标原生 → 写出；可证明属于其它协议 → 诊断；
+/// 未知键 → 放行；`reasoning_field` 等编码旋钮 → 跳过（不是数据）。
+test "response matrix - provider_payload is a gated round-trip carrier" {
+  let j = "{\"id\":\"c1\",\"object\":\"chat.completion\",\"model\":\"m\",\"system_fingerprint\":\"fp_abc\",\"service_tier\":\"default\",\"metadata\":{\"user_id\":\"u1\"},\"moderation\":{\"flagged\":true},\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"hi\"},\"finish_reason\":\"stop\"}]}"
+  match @openai.openai_to_lux_response(j) {
+    Err(e) => fail("decode failed: " + e)
+    Ok(cr) => {
+      // 解码侧把四个非建模字段都保留进载体
+      let payload = match cr.value().provider_payload {
+        Some(v) => v
+        None => fail("expected provider_payload")
+      }
+      assert_true(payload.stringify().contains("system_fingerprint"))
+      assert_true(payload.stringify().contains("moderation"))
+      // 同源往返：openai → IR → openai，四个字段全部保留
+      match @openai.lux_response_to_openai(cr.value()) {
+        Err(e) => fail("encode failed: " + e)
+        Ok(out) => {
+          let body = out.value()
+          for
+            marker in [
+              "\"system_fingerprint\":\"fp_abc\"", "\"service_tier\":\"default\"",
+              "\"metadata\":", "\"moderation\":",
+            ] {
+            if !body.contains(marker) {
+              fail(
+                "round trip lost response-level field " + marker + ": " + body,
+              )
+            }
+          }
+          assert_false(rsp_diag(out, "provider_payload"))
+        }
+      }
+      // 跨端：system_fingerprint 是 openai 专属 → messages 必须剔除并诊断，
+      // 而不是静默丢弃（此前正是静默丢弃）
+      match @messages.lux_response_to_messages(cr.value()) {
+        Err(e) => fail("messages encode failed: " + e)
+        Ok(out) => {
+          assert_false(out.value().contains("system_fingerprint"))
+          assert_true(rsp_diag(out, "provider_payload.system_fingerprint"))
+        }
+      }
+    }
+  }
+}
+
+///|
+/// 编码旋钮不外泄：`reasoning_field` 是调用方控制 openai 消息级 reasoning
+/// 字段名的开关，不是 wire 数据 —— 出站时必须跳过，既不能写进响应体，也
+/// 不能被误报为「外来键」。
+test "response matrix - provider_payload encoder knobs never leak to the wire" {
+  let resp = @lux.LucentResponse::with_provider_payload(
+    @lux.LucentResponse::new(
+      "id-1",
+      "m-1",
+      None,
+      [
+        @lux.LucentChoice::new(
+          0,
+          @lux.LucentMessage::with_reasoning(
+            Assistant,
+            [@lux.LucentContent::text("t")],
+            Some(@lux.LucentThinking::visible("think", None)),
+          ),
+          Stop,
+          None,
+        ),
+      ],
+      None,
+      None,
+    ),
+    Some(
+      @json.parse(
+        "{\"reasoning_field\":\"reasoning_content\",\"system_fingerprint\":\"fp\"}",
+      ),
+    ),
+  )
+  match @openai.lux_response_to_openai(resp) {
+    Err(e) => fail("encode failed: " + e)
+    Ok(cr) => {
+      // 旋钮生效：reasoning 写进了 reasoning_content 字段
+      assert_true(cr.value().contains("\"reasoning_content\":"))
+      // 但旋钮本身绝不出现在响应体里
+      assert_false(cr.value().contains("\"reasoning_field\""))
+      // 也不被误报为外来键
+      assert_false(rsp_diag(cr, "provider_payload.reasoning_field"))
+      // 同载体里的原生字段照常写出
+      assert_true(cr.value().contains("\"system_fingerprint\":\"fp\""))
+    }
+  }
+}
+
+///|
+/// 未知键放行：厂商网关可能添加响应级字段，判定方向与请求侧 extras 一致 ——
+/// 只剔除**可证明属于其它协议**的键，未知键不得误丢。
+test "response matrix - provider_payload unknown keys pass through" {
+  let resp = @lux.LucentResponse::with_provider_payload(
+    @lux.LucentResponse::new(
+      "id-1",
+      "m-1",
+      None,
+      [
+        @lux.LucentChoice::new(
+          0,
+          @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("t")]),
+          Stop,
+          None,
+        ),
+      ],
+      None,
+      None,
+    ),
+    Some(@json.parse("{\"gateway_custom_field\":{\"v\":1}}")),
+  )
+  match @openai.lux_response_to_openai(resp) {
+    Err(e) => fail("encode failed: " + e)
+    Ok(cr) => {
+      assert_true(cr.value().contains("gateway_custom_field"))
+      assert_false(rsp_diag(cr, "provider_payload.gateway_custom_field"))
+    }
+  }
+}
+
+///|
+/// responses 解码侧补捕 `moderation`（vendored spec 的 Response 顶层非建模
+/// 字段）→ 同源往返保留。
+test "response matrix - responses captures response-level moderation" {
+  let j = "{\"id\":\"r1\",\"model\":\"m\",\"status\":\"completed\",\"moderation\":{\"flagged\":false},\"output\":[{\"type\":\"message\",\"id\":\"msg_1\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"t\"}]}]}"
+  match @responses.responses_to_lux_response(j) {
+    Err(e) => fail("decode failed: " + e)
+    Ok(cr) => {
+      let payload = match cr.value().provider_payload {
+        Some(v) => v
+        None => fail("expected provider_payload to capture moderation")
+      }
+      assert_true(payload.stringify().contains("moderation"))
+      match @responses.lux_response_to_responses(cr.value()) {
+        Err(e) => fail("encode failed: " + e)
+        Ok(out) => assert_true(out.value().contains("\"moderation\":"))
+      }
+    }
+  }
+}
+
+///|
+/// 四个编码器的**自产键撞名分支**与**非空 payload 出站分支**。
+///
+/// 撞名（provider_payload 与编码器自己会写的键同名）必须：目标自产值胜、
+/// body 里该键只出现一次、留 Degraded 诊断 —— 绝不产生重复 JSON 键。
+/// 注意各目标的自产键不同：gemini 顶层没有 `model`（只有 `modelVersion`），
+/// 所以 gemini 用 `modelVersion` 做撞名样本。
+test "response matrix - provider_payload collisions with encoder-owned keys" {
+  let resp_with = fn(payload : Json) -> @lux.LucentResponse {
+    @lux.LucentResponse::with_provider_payload(
+      @lux.LucentResponse::new(
+        "id-1",
+        "m-1",
+        None,
+        [
+          @lux.LucentChoice::new(
+            0,
+            @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("t")]),
+            Stop,
+            None,
+          ),
+        ],
+        None,
+        None,
+      ),
+      Some(payload),
+    )
+  }
+  let payload = @json.parse(
+    "{\"model\":\"zz-openai\",\"modelVersion\":\"zz-gemini\",\"gateway_x\":1}",
+  )
+  let resp = resp_with(payload)
+  // openai：model 撞名
+  match @openai.lux_response_to_openai(resp) {
+    Err(e) => fail("openai encode failed: " + e)
+    Ok(cr) => {
+      assert_true(cr.value().contains("\"model\":\"m-1\""))
+      if count_key_occurrences(cr.value(), "model") != 1 {
+        fail("duplicate model key: " + cr.value())
+      }
+      assert_true(rsp_diag(cr, "provider_payload.model"))
+      // 未知键放行（这也是非空 payload 出站分支的 openai 覆盖）
+      assert_true(cr.value().contains("gateway_x"))
+    }
+  }
+  // responses：model 撞名
+  match @responses.lux_response_to_responses(resp) {
+    Err(e) => fail("responses encode failed: " + e)
+    Ok(cr) => {
+      assert_true(cr.value().contains("\"model\":\"m-1\""))
+      assert_true(rsp_diag(cr, "provider_payload.model"))
+      assert_true(cr.value().contains("gateway_x"))
+    }
+  }
+  // messages：model 撞名
+  match @messages.lux_response_to_messages(resp) {
+    Err(e) => fail("messages encode failed: " + e)
+    Ok(cr) => {
+      assert_true(cr.value().contains("\"model\":\"m-1\""))
+      assert_true(rsp_diag(cr, "provider_payload.model"))
+      assert_true(cr.value().contains("gateway_x"))
+    }
+  }
+  // gemini：顶层没有 model，modelVersion 才是自产键
+  match @gemini.lux_response_to_gemini(resp) {
+    Err(e) => fail("gemini encode failed: " + e)
+    Ok(cr) => {
+      assert_true(cr.value().contains("\"modelVersion\":\"m-1\""))
+      assert_true(rsp_diag(cr, "provider_payload.modelVersion"))
+      assert_false(rsp_diag(cr, "provider_payload.model"))
+      assert_true(cr.value().contains("gateway_x"))
+    }
+  }
+}
+
+///|
+/// 原生键在**每个目标**上都应写出（此前 gemini/messages/responses 的 payload
+/// 出站分支完全不可达 —— 载体是死端，连合法数据都发不出去）。
+test "response matrix - provider_payload native keys are emitted per target" {
+  let resp = @lux.LucentResponse::with_provider_payload(
+    @lux.LucentResponse::new(
+      "id-1",
+      "m-1",
+      None,
+      [
+        @lux.LucentChoice::new(
+          0,
+          @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("t")]),
+          Stop,
+          None,
+        ),
+      ],
+      None,
+      None,
+    ),
+    Some(
+      @json.parse(
+        "{\"system_fingerprint\":\"fp\",\"container\":\"c1\",\"modelStatus\":\"STOP\",\"moderation\":{\"f\":true}}",
+      ),
+    ),
+  )
+  // openai：system_fingerprint 原生
+  match @openai.lux_response_to_openai(resp) {
+    Err(e) => fail("openai encode failed: " + e)
+    Ok(cr) => assert_true(cr.value().contains("\"system_fingerprint\":\"fp\""))
+  }
+  // messages：container 原生
+  match @messages.lux_response_to_messages(resp) {
+    Err(e) => fail("messages encode failed: " + e)
+    Ok(cr) => assert_true(cr.value().contains("\"container\":\"c1\""))
+  }
+  // gemini：modelStatus 原生
+  match @gemini.lux_response_to_gemini(resp) {
+    Err(e) => fail("gemini encode failed: " + e)
+    Ok(cr) => assert_true(cr.value().contains("\"modelStatus\":\"STOP\""))
+  }
+  // responses：moderation 原生
+  match @responses.lux_response_to_responses(resp) {
+    Err(e) => fail("responses encode failed: " + e)
+    Ok(cr) => assert_true(cr.value().contains("\"moderation\":"))
+  }
+}

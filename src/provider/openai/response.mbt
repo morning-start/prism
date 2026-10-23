@@ -138,7 +138,9 @@ pub fn openai_to_lux_response(
   let model = @internal.field_str(jv, "model").unwrap_or("")
   let created = @internal.field_int(jv, "created")
   let choices = parse_choices(jv)
-  // 响应级元数据 → provider_payload（system_fingerprint / service_tier / logprobs 归属等，
+  // 响应级元数据 → provider_payload（响应级扩展载体，对称于请求侧 options.extras。
+  // vendored 官方 OpenAPI `CreateChatCompletionResponse` 顶层的非建模字段为
+  // system_fingerprint / service_tier / metadata / moderation，全部软失败保留；
   // 标准 §9：不进 IR 字段的响应级信息保留给调用方，不静默丢弃）
   let payload_fields : Array[String] = []
   match @internal.field_str(jv, "system_fingerprint") {
@@ -154,6 +156,13 @@ pub fn openai_to_lux_response(
         "\"service_tier\":\"" + @internal.json_escape(tier) + "\"",
       )
     None => ()
+  }
+  // metadata / moderation 是对象形态，原样 stringify 保留
+  for key in ["metadata", "moderation"] {
+    match @internal.obj_get(jv, key) {
+      Some(v) => payload_fields.push("\"" + key + "\":" + v.stringify())
+      None => ()
+    }
   }
   let provider_payload : Json? = if payload_fields.length() > 0 {
     match @internal.parse_json_opt("{" + payload_fields.join(",") + "}") {
@@ -289,6 +298,42 @@ pub fn lux_response_to_openai(
     Some(n) => ",\"created\":" + n.to_string()
     None => ""
   }
+  // provider_payload 出站：响应级扩展载体（对称于请求侧 options.extras，见
+  // @internal.split_provider_payload）。此前是**死载体**——解码写入了
+  // system_fingerprint / service_tier，编码却从不吐出，openai→openai 往返丢失。
+  // reasoning_field 是编码旋钮（本函数上方已消费），分拣时会自动跳过。
+  let (payload_kept, payload_foreign) = @internal.split_provider_payload(
+    resp.provider_payload,
+    "openai",
+  )
+  @lux.push_extras_foreign_at("provider_payload", payload_foreign, diagnostics)
+  // 与本编码器自产键撞名的键：跳过并诊断（目标自产字段优先，绝不产生重复键）
+  let reserved : Array[String] = [
+    "id", "object", "model", "created", "choices", "usage",
+  ]
+  let payload_collided : Array[String] = []
+  match payload_kept {
+    Some(m) =>
+      for k, _ in m {
+        if reserved.contains(k) {
+          payload_collided.push(k)
+        }
+      }
+    None => ()
+  }
+  let payload_clean = @internal.extras_without_keys(
+    payload_kept, payload_collided,
+  )
+  @lux.push_extras_collisions_at(
+    "provider_payload", payload_collided, diagnostics,
+  )
+  let payload_parts : Array[String] = []
+  let _ = @internal.merge_extras_json_dedup(payload_parts, payload_clean)
+  let payload_json = if payload_parts.length() > 0 {
+    "," + payload_parts.join(",")
+  } else {
+    ""
+  }
   let body = "{\"id\":\"" +
     @internal.json_escape(resp.id) +
     "\",\"object\":\"chat.completion\",\"model\":\"" +
@@ -299,6 +344,7 @@ pub fn lux_response_to_openai(
     choices_json.join(",") +
     "]" +
     usage_obj +
+    payload_json +
     "}"
   let result = @lux.ConversionResult::new(body)
   Ok(result.with_diagnostics(diagnostics))

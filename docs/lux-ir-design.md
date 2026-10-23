@@ -54,6 +54,17 @@ Both stay optional (`T?`, empty-by-default maps) and neither can make
 deserialization fail; this is the "extension fields must always be optional" rule
 in `AGENTS.md`.
 
+The **response** side has the mirrored carrier: `LucentResponse.provider_payload`
+holds source-protocol response-level fields the IR does not model (e.g. OpenAI's
+`system_fingerprint` / `service_tier` / `metadata` / `moderation`). It follows
+the same ownership gating as `options.extras`: native to the target → emitted;
+provably foreign → dropped with an `Unsupported` diagnostic; unknown keys →
+passed through. Keys used as **encoder knobs** (currently `reasoning_field`,
+which selects the field name for message-level reasoning) are never emitted —
+they are control inputs, not wire data. See
+`src/internal/protocol_keys.mbt` (`split_provider_payload`) and
+`docs/fidelity-matrix.md` §3.11.
+
 ### LucentResponse
 
 Non-streaming LLM response with choices and usage.

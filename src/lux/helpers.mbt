@@ -483,16 +483,17 @@ pub fn push_extras_collisions(
 /// 显式 —— 它属于 Unsupported，不是「软失败保留」的成功路径。
 ///
 /// `owners` 为 键 → 归属协议（逗号分隔），例如 `"seed" -> "openai, gemini"`。
-pub fn push_extras_foreign(
+pub fn push_extras_foreign_at(
+  prefix : String,
   owners : Map[String, String],
   diagnostics : Array[ConversionDiagnostic],
 ) -> Unit {
   for k, who in owners {
     diagnostics.push(
       ConversionDiagnostic::unsupported(
-        "options.extras." + k,
+        prefix + "." + k,
         Some(
-          "extras key \"" +
+          "extension key \"" +
           k +
           "\" is native to " +
           who +
@@ -501,4 +502,13 @@ pub fn push_extras_foreign(
       ),
     )
   }
+}
+
+///|
+/// `options.extras` 通道的外来键诊断（字段名 `options.extras.<key>`）。
+pub fn push_extras_foreign(
+  owners : Map[String, String],
+  diagnostics : Array[ConversionDiagnostic],
+) -> Unit {
+  push_extras_foreign_at("options.extras", owners, diagnostics)
 }

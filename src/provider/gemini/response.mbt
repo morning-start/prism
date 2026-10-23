@@ -346,6 +346,41 @@ pub fn lux_response_to_gemini(
   } else {
     "\"responseId\":\"" + @internal.json_escape(resp.id) + "\","
   }
+  // provider_payload 出站：响应级扩展载体（对称于请求侧 options.extras）。
+  // Gemini 顶层可承载的非建模字段是 modelStatus（无 vendored spec）。
+  // reserved 只含**本编码器实际会写出的键** —— promptFeedback / modelStatus
+  // 都不在其中：前者由解码侧专门处理，后者是 payload 的原生落点。
+  let (payload_kept, payload_foreign) = @internal.split_provider_payload(
+    resp.provider_payload,
+    "gemini",
+  )
+  @lux.push_extras_foreign_at("provider_payload", payload_foreign, diagnostics)
+  let reserved : Array[String] = [
+    "responseId", "modelVersion", "candidates", "usageMetadata",
+  ]
+  let payload_collided : Array[String] = []
+  match payload_kept {
+    Some(m) =>
+      for k, _ in m {
+        if reserved.contains(k) {
+          payload_collided.push(k)
+        }
+      }
+    None => ()
+  }
+  let payload_clean = @internal.extras_without_keys(
+    payload_kept, payload_collided,
+  )
+  @lux.push_extras_collisions_at(
+    "provider_payload", payload_collided, diagnostics,
+  )
+  let payload_parts : Array[String] = []
+  let _ = @internal.merge_extras_json_dedup(payload_parts, payload_clean)
+  let payload_json = if payload_parts.length() > 0 {
+    "," + payload_parts.join(",")
+  } else {
+    ""
+  }
   let result = @lux.ConversionResult::new(
     "{" +
     id_part +
@@ -355,6 +390,7 @@ pub fn lux_response_to_gemini(
     cands.join(",") +
     "]" +
     usage_part +
+    payload_json +
     "}",
   )
   Ok(result.with_diagnostics(diagnostics))

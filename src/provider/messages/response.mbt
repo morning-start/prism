@@ -142,6 +142,40 @@ pub fn lux_response_to_messages(
     }
     None => ""
   }
+  // provider_payload 出站：响应级扩展载体（对称于请求侧 options.extras）。
+  // Anthropic Messages 顶层可承载的非建模字段是 container（无 vendored spec，
+  // 见 @internal.protocol_native_response_keys）。
+  let (payload_kept, payload_foreign) = @internal.split_provider_payload(
+    resp.provider_payload,
+    "messages",
+  )
+  @lux.push_extras_foreign_at("provider_payload", payload_foreign, diagnostics)
+  let reserved : Array[String] = [
+    "id", "type", "role", "model", "content", "stop_reason", "stop_sequence", "usage",
+  ]
+  let payload_collided : Array[String] = []
+  match payload_kept {
+    Some(m) =>
+      for k, _ in m {
+        if reserved.contains(k) {
+          payload_collided.push(k)
+        }
+      }
+    None => ()
+  }
+  let payload_clean = @internal.extras_without_keys(
+    payload_kept, payload_collided,
+  )
+  @lux.push_extras_collisions_at(
+    "provider_payload", payload_collided, diagnostics,
+  )
+  let payload_parts : Array[String] = []
+  let _ = @internal.merge_extras_json_dedup(payload_parts, payload_clean)
+  let payload_json = if payload_parts.length() > 0 {
+    "," + payload_parts.join(",")
+  } else {
+    ""
+  }
   let body = "{\"id\":\"" +
     @internal.json_escape(resp.id) +
     "\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"" +
@@ -152,6 +186,7 @@ pub fn lux_response_to_messages(
     stop_reason +
     ",\"stop_sequence\":null" +
     usage_json +
+    payload_json +
     "}"
   let result = @lux.ConversionResult::new(body)
   Ok(result.with_diagnostics(diagnostics))

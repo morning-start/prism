@@ -18,9 +18,62 @@ fn keys_map(pairs : Array[(String, Json)]) -> Map[String, Json] {
 ///|
 test "protocol keys - unknown protocol has no native keys" {
   assert_eq(@internal.protocol_native_keys("no-such-protocol").length(), 0)
+  assert_eq(
+    @internal.protocol_native_response_keys("no-such-protocol").length(),
+    0,
+  )
   // 四个已知协议都非空
   for p in ["openai", "responses", "messages", "gemini"] {
     assert_true(@internal.protocol_native_keys(p).length() > 0)
+    assert_true(@internal.protocol_native_response_keys(p).length() > 0)
+  }
+}
+
+///|
+/// 响应级原生表与 vendored spec 的锚定：openai 的四个非建模响应级字段；
+/// responses 只有 moderation（service_tier 只出现在 CreateResponse 请求侧）。
+test "protocol keys - response tables match the vendored spec" {
+  let chat = @internal.protocol_native_response_keys("openai")
+  for k in ["system_fingerprint", "service_tier", "metadata", "moderation"] {
+    assert_true(chat.contains(k))
+  }
+  let resp = @internal.protocol_native_response_keys("responses")
+  assert_true(resp.contains("moderation"))
+  assert_false(resp.contains("service_tier"))
+}
+
+///|
+/// 编码旋钮（reasoning_field）在分拣时必须被跳过：既不写出、也不报外来诊断。
+test "protocol keys - split_provider_payload skips encoder knobs" {
+  let payload = @internal.parse_json_opt(
+    "{\"reasoning_field\":\"reasoning_content\",\"system_fingerprint\":\"fp\",\"gateway_x\":1}",
+  )
+  match payload {
+    None => fail("test payload must parse")
+    Some(v) => {
+      let (kept, dropped) = @internal.split_provider_payload(Some(v), "openai")
+      // 旋钮不出现在可写出集合
+      match kept {
+        Some(m) => {
+          assert_eq(m.contains("reasoning_field"), false)
+          assert_eq(m.contains("system_fingerprint"), true)
+          assert_eq(m.contains("gateway_x"), true)
+        }
+        None => fail("expected kept entries")
+      }
+      // 旋钮也不是外来键
+      assert_eq(dropped.contains("reasoning_field"), false)
+    }
+  }
+  // 非 Object 载体 → 原样为空（不崩溃、不诊断）
+  let scalar = @internal.parse_json_opt("\"just-a-string\"")
+  match scalar {
+    None => fail("test payload must parse")
+    Some(v) => {
+      let (kept, dropped) = @internal.split_provider_payload(Some(v), "openai")
+      assert_eq(kept, None)
+      assert_eq(dropped.is_empty(), true)
+    }
   }
 }
 

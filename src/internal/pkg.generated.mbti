@@ -78,9 +78,13 @@ pub fn parse_usage_json(Json, String, String, String?) -> (Int, Int, Int)
 
 pub fn protocol_native_keys(String) -> Array[String]
 
+pub fn protocol_native_response_keys(String) -> Array[String]
+
 pub fn sanitize_json_escapes(String) -> String
 
 pub fn[T] serialize_content_with_text_optimization(Array[T], (T) -> Bool, (T) -> String, (Array[T]) -> String) -> String
+
+pub fn split_provider_payload(Json?, String) -> (Map[String, Json]?, Map[String, String])
 
 // Errors
 
