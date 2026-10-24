@@ -67,26 +67,29 @@ translators — an SDK usually bundles one provider, middleware bundles N.
   subpackage breaks private access).
 - Toplevel `moon.mod` holds module metadata.
 
-## Context & Planning (flowstate)
+## Context & Planning
 
 When starting work on this project, read these in order to restore context:
 
-- `.agent-workplace/` — agent private workspace (gitignored). Contains:
-  - `modes/README.md` — flowstate mode definitions (Graph + Plan/Spec/Task/Goal)
-  - `docs/plan/` — plan mode output
-  - `docs/spec/` — spec mode output (spec + tasks + checklist)
-  - `docs/task/` — task mode output (numbered checkbox task lists)
-  - `docs/report/` — reports
-  - `shared/architecture.md`
-  - `state/checkpoint.json` — breakpoint resume state + artifact registry
-- `.moonbit-pipeline.json` — pipeline state (current phase, plan file pointer,
-  task progress). Use it as the session checkpoint.
-- `docs/architecture.md` — dual-scenario architecture design (IR hub +
-  developer SDK / relay server), the source of truth for design decisions.
-- `docs/status.md` — current project status, test inventory, and module
-  completion tracking.
+- `docs/status.md` — current project status, test inventory, module completion,
+  and known limitations (**best single entry point**; updated every iteration).
+- `docs/README.md` — index of all formal docs (architecture / IR spec /
+  conversion contract / fidelity matrix / CRs / rules).
+- `docs/architecture.md` — layered design + `Current decisions` (declined
+  splits, registry model, navigation-instead-of-folders), the source of truth
+  for design decisions.
 - `docs/rules/lucent-ir-evolution.md` — mandatory governance before changing
   any Lucent IR field, enum variant, stream event, capability, or payload.
+
+Optional agent workspace (gitignored, created on demand — do NOT assume these
+exist):
+
+- `.agent-workplace/` — `docs/plan/`, `docs/spec/`, `docs/task/`, `docs/report/`
+  (mode outputs), `research/`, `scratch/`; `state/checkpoint.json` and
+  `shared/architecture.md` are written only by flows that use them. A previous
+  convention referenced `.moonbit-pipeline.json` (repo root) and
+  `modes/README.md` as session checkpoints; neither is present in this
+  snapshot — restore context from the docs above instead.
 
 Progress convention: one feature per commit, commit after each task, pass
 `moon fmt --check` / `moon check` / `moon test` before committing. Once a task
