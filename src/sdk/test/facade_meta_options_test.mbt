@@ -92,7 +92,7 @@ test "stream - legacy signature still works with default options" {
 
 ///|
 /// 固定 SSE fixture（与 sdk_test.mbt 的 mock_send_fixed_sse 同构：
-/// 一段文本增量 + Finish(Stop)）
+/// 一段文本增量 + Finish(Stop, None)）
 fn sdk_mock_sse() -> Result[String, String] {
   let events : Array[@lux.LucentStreamEvent] = [
     ConversationStart(
@@ -105,7 +105,7 @@ fn sdk_mock_sse() -> Result[String, String] {
     BlockStart(0, Text),
     BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
     BlockEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   @openai.lux_events_to_openai_sse(events).map(cr => cr.value())

@@ -130,7 +130,7 @@ fn EventNormalizer::normalize(
           self.item_open = remove_int(self.item_open, idx)
           result.push(ev)
         }
-      Finish(_) =>
+      Finish(_, _) =>
         // CR-001 D2：同一会话只保留首个 Finish。
         if self.finish_seen {
           ()
@@ -403,7 +403,7 @@ fn PrismEventBuffer::absorb(
       }
     BlockDelta(_, ThinkingDelta(s)) =>
       self.out.push(Thinking({ text: s, signature: None, redacted: false, }))
-    Finish(fr) => {
+    Finish(fr, _) => {
       let pfr = match fr {
         Stop => Stop
         Length => Length

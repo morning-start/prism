@@ -1,7 +1,7 @@
 # CR-006：流式终止信息的载体（`Finish` 载荷）
 
-> 状态：**批次 1 已落地**（`0.1.5`，commit `d41d6bc`）；批次 2 **待决策**
->（含一个破坏性变更，需治理 §5 批准；推荐方案 A，理由见 §3.3）
+> 状态：**已全部落地** —— 批次 1（`0.1.5`，commit `d41d6bc`）+ 批次 2
+>（`0.2.0`，方案 A 获批，治理 §5）
 > 来源：CR-005 §6.8 遗留项「流式 `stop_sequence` 无 IR 载体」
 > 影响面：**协议转换 + SDK/Agent 消费**（两者兼有）
 > 变更类型：**破坏性**（§5「修改 stream event 的载荷结构」）+ 5 个非破坏性缺陷修复
@@ -362,19 +362,22 @@ pub fn LucentStreamEvent::finish(reason : LucentFinishReason) -> LucentStreamEve
       oracle run-all 6 步（validate 23 + pipeline 14 + self-check 7）/
       drift `-Strict` PASS / coverage 203≤204；`moon.mod` → `0.1.5`）
 
-**批次 2（`0.2.0`，需 §5 批准）**
+**批次 2（`0.2.0`，需 §5 批准）— ✅ 已全部落地（方案 A 获批实施）**
 
-- [ ] `Finish` arity → `(LucentFinishReason, String?)`；便利构造器 `finish(reason)`
-- [ ] `messages` 流式解码携带命中值；编码写回 `stop_sequence` 并强制 `stop_reason`
-- [ ] `openai` / `responses` / `gemini` 编码：有值 → Unsupported 诊断
-- [ ] 累加器把命中值写进 `LucentChoice.stop_sequence`（流式累加 == 非流式解码）
-- [ ] JSON 序列化/反序列化：`Some` 输出、`None` 省略、缺失/类型不符软失败为 `None`
-- [ ] `schemas/lux-ir-v1.json` + `docs/lux-ir-design.md` + `docs/fidelity-matrix.md`
-      同步（`check_schema_drift.ps1 -Strict` 必须 PASS）
-- [ ] `moon.mod` → `0.2.0`
-- [ ] 回归：`stop_sequence` 流式往返 Exact、跨三端 Unsupported、
-      流式累加与非流式解码逐字段相等
-- [ ] 门禁全绿：fmt / check(`+73, --deny-warn`) / native + wasm-gc / drift / coverage ≤ 200
+- [x] `Finish` arity → `(LucentFinishReason, String?)`；便利构造器 `finish(reason)`
+- [x] `messages` 流式解码携带命中值；编码写回 `stop_sequence` 并强制 `stop_reason`
+- [x] `openai` / `responses` / `gemini` 编码：有值 → Unsupported 诊断
+- [x] 累加器把命中值写进 `LucentChoice.stop_sequence`（流式累加 == 非流式解码）
+- [x] JSON 序列化/反序列化：`Some` 输出、`None` 省略、缺失/类型不符软失败为 `None`
+- [x] `schemas/lux-ir-v1.json` + `docs/lux-ir-design.md` + `docs/fidelity-matrix.md`
+      同步（`check_schema_drift.ps1 -Strict` 必须 PASS；stream_event 判别符
+      对照同步支持 Map 赋值发射形态）
+- [x] `moon.mod` → `0.2.0`
+- [x] 回归：`stop_sequence` 流式往返 Exact、跨三端 Unsupported、
+      流式累加与非流式解码逐字段相等（`stop_sequence_carrier_test.mbt` 更新 +
+      `stream_termination_test.mbt` 保持锁定）
+- [x] 门禁全绿：fmt / check(`+73, --deny-warn`) / native + wasm-gc 1429×2 /
+      drift `-Strict` / coverage 204（阈值内）/ oracle 73 项全过
 
 ---
 

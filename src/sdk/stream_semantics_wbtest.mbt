@@ -6,7 +6,7 @@ test "lucent_events_to_prism maps thinking delta to Thinking event" {
     @lux.BlockStart(0, @lux.LucentBlockType::thinking()),
     BlockDelta(0, @lux.LucentBlockDelta::thinking_delta("I reason...")),
     BlockEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
   ]
   let prism_events = lucent_events_to_prism(events)
   let mut found_thinking = false

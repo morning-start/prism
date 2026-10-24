@@ -298,7 +298,9 @@ fn openai_decode_frames(
                 events.push(BlockEnd(current_tool_block))
                 current_tool_block = -1
               }
-              events.push(Finish(@lux.LucentFinishReason::from_string(fr)))
+              events.push(
+                Finish(@lux.LucentFinishReason::from_string(fr), None),
+              )
             }
             None => ()
           }

@@ -87,11 +87,18 @@ pub fn LucentStreamEvent::to_json(self : LucentStreamEvent) -> Json {
         "index": Json(idx),
         "annotations": Json::array(anns.map(fn(a) { a.to_json() })),
       })
-    Finish(fr) =>
-      Json::object({
-        "event": Json::string("finish"),
-        "finish_reason": fr.to_json(),
-      })
+    Finish(fr, ss) => {
+      let m : Map[String, Json] = Map([])
+      m["event"] = Json::string("finish")
+      m["finish_reason"] = fr.to_json()
+      // CR-006 批次 2：命中序列可选键。None 时不输出 —— 与 0.1.x 字节形态
+      // 兼容（治理 §5 迁移策略第 3 条：只读 finish_reason 的旧消费端不受影响）。
+      match ss {
+        Some(v) => m["stop_sequence"] = Json::string(v)
+        None => ()
+      }
+      Json::object(m)
+    }
     Usage(u) =>
       Json::object({ "event": Json::string("usage"), "usage": u.to_json() })
     Error(e) =>

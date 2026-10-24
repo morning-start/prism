@@ -154,7 +154,7 @@ test "wasm convert - events_to_sse unknown provider with valid events" {
     BlockStart(0, bt),
     BlockDelta(0, @lux.LucentBlockDelta::text_delta("hi")),
     BlockEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   let json_arr = events.map(fn(ev) { ev.to_json() })

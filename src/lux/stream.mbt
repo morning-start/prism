@@ -172,8 +172,16 @@ pub(all) enum LucentStreamEvent {
   BlockDiscard(Int32) // block_index
   /// 标注事件（OpenAI Responses annotations.delta / 各家 URL/file 引用）
   Annotations(Int32, Array[LucentAnnotation]) // block_index, annotations
-  /// 结束原因
-  Finish(LucentFinishReason)
+  /// 结束原因 + 命中的自定义终止序列（CR-006 批次 2，治理 §5 破坏性变更）
+  ///
+  /// 第二个位置参数与 `LucentChoice.stop_sequence` **完全同构**：一个事实
+  /// 一种表达。仅 Anthropic Messages 有该概念（`message_delta.stop_sequence`，
+  /// 与 `stop_reason: "stop_sequence"` 配对出现），其余端恒 `None`。
+  ///
+  /// 便利构造器 `LucentStreamEvent::finish(reason)` 供「只关心原因」的
+  /// 调用点使用；JSON 序列化在 `None` 时不输出 `stop_sequence` 键
+  /// （字节形态与 0.1.x 兼容）。
+  Finish(LucentFinishReason, String?)
   /// Token 用量
   Usage(LucentUsage)
   /// 错误
@@ -226,6 +234,18 @@ pub fn LucentError::new(
 ///|
 pub fn LucentError::simple(message : String) -> LucentError {
   { kind: Native(""), message, provider_code: None, }
+}
+
+///|
+/// 便利构造器：只关心结束原因的 Finish 事件（CR-006 批次 2）。
+///
+/// 与 `LucentError::simple` / `LucentBlockType::text` 同风格 —— 让 0.1.x
+/// 形态的 `Finish(reason)` 调用点有一一对应的机械迁移目标（补 `None`
+/// 即可，或换用本构造器保持可读）。
+pub fn LucentStreamEvent::finish(
+  reason : LucentFinishReason,
+) -> LucentStreamEvent {
+  Finish(reason, None)
 }
 
 ///|
@@ -578,6 +598,7 @@ pub fn lucent_stream_events_to_accumulated(
   let mut resp_model = fallback_model
   let mut usage : LucentUsage? = None
   let mut finish : LucentFinishReason = Stop
+  let stop_seq : Array[String?] = [None]
   let mut had_error = false
 
   let content : Array[LucentContent] = []
@@ -655,7 +676,12 @@ pub fn lucent_stream_events_to_accumulated(
           ),
         )
       }
-      Finish(fr) => finish = fr
+      Finish(fr, ss) => {
+        // CR-006 批次 2：命中序列随 Finish 载体进入 LucentChoice，
+        // 流式累加结果与非流式解码从此共享同一字段（不再有第二套词汇表）。
+        finish = fr
+        stop_seq[0] = ss
+      }
       Usage(u) => usage = Some(u)
       Error(_) => {
         had_error = true
@@ -681,6 +707,10 @@ pub fn lucent_stream_events_to_accumulated(
     reasoning,
   }
   let choice = LucentChoice::new(0, message, finish, None)
+  let choice = match stop_seq[0] {
+    Some(v) => choice.with_stop_sequence(v)
+    None => choice
+  }
   {
     response: LucentResponse::new(
       resp_id,

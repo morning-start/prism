@@ -161,7 +161,24 @@ pub fn lux_events_to_openai_sse_with_ctx(
             )
           NativeDelta(_, _) => ()
         }
-      Finish(fr) => {
+      Finish(fr, ss) => {
+        // CR-006 批次 2：命中序列是 Anthropic 的响应侧概念，openai-chat 的
+        // finish_reason 是封闭枚举且无此值 → 显式 Unsupported（与非流式
+        // response.mbt 同规则），绝不静默丢弃。
+        match ss {
+          Some(v) =>
+            diagnostics.push(
+              @lux.ConversionDiagnostic::unsupported(
+                "choices.stop_sequence",
+                Some(
+                  "hit stop sequence \"" +
+                  v +
+                  "\" has no openai-chat carrier (finish_reason has no stop_sequence value); dropped",
+                ),
+              ),
+            )
+          None => ()
+        }
         // 收敛到 OpenAI Chat 合法枚举：此前直接写 fr.to_string()，绕过了
         // 非流式路径的 openai_finish_reason 收敛器 —— IR 的 safety / recitation
         // / malformed_tool_call / error 以及 messages 源解出的

@@ -87,8 +87,8 @@ test "wbtest - normalizer Finish synthesizes BlockEnd once and dedups" {
   let out = n.normalize([
     BlockStart(0, Text),
     BlockStart(1, Text),
-    Finish(Stop),
-    Finish(Stop),
+    Finish(Stop, None),
+    Finish(Stop, None),
   ])
   // BlockStart×2 + BlockEnd×2（逆序）+ 首个 Finish = 5
   assert_eq(out.length(), 5)

@@ -520,12 +520,13 @@ pub(all) enum LucentStreamEvent {
   ItemEnd(Int)
   BlockDiscard(Int)
   Annotations(Int, Array[LucentAnnotation])
-  Finish(LucentFinishReason)
+  Finish(LucentFinishReason, String?)
   Usage(LucentUsage)
   Error(LucentError)
   Done
 } derive(Eq, @debug.Debug)
 pub fn LucentStreamEvent::equal(Self, Self) -> Bool
+pub fn LucentStreamEvent::finish(LucentFinishReason) -> Self
 pub fn LucentStreamEvent::from_json(Json) -> Result[Self, String]
 pub fn LucentStreamEvent::to_json(Self) -> Json
 

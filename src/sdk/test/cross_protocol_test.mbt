@@ -343,7 +343,7 @@ fn base_events() -> Array[@lux.LucentStreamEvent] {
     BlockEnd(0),
     ItemEnd(0),
     Usage(@lux.LucentUsage::new(10, 20, 30)),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
 }

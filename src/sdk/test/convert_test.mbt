@@ -141,7 +141,7 @@ fn openai_sse() -> Result[String, String] {
     BlockStart(0, Text),
     BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
     BlockEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   match @openai.lux_events_to_openai_sse(events) {

@@ -532,7 +532,24 @@ fn responses_encode_frames(
             ),
           )
         }
-      Finish(fr) => {
+      Finish(fr, ss) => {
+        // CR-006 批次 2：命中序列是 Anthropic 的响应侧概念，Responses 无
+        // 自定义终止序列概念（status 与 incomplete_details.reason 均为封闭
+        // 枚举）→ 显式 Unsupported（与非流式 response.mbt 同规则）。
+        match ss {
+          Some(v) =>
+            diagnostics.push(
+              @lux.ConversionDiagnostic::unsupported(
+                "choices.stop_sequence",
+                Some(
+                  "hit stop sequence \"" +
+                  v +
+                  "\" has no openai-responses carrier (no custom stop sequence concept); dropped",
+                ),
+              ),
+            )
+          None => ()
+        }
         // status 收敛到官方封闭枚举（completed/failed/in_progress/cancelled/
         // queued/incomplete）。此前 Safety/Recitation/MalformedToolCall/
         // ContentFilter 全部落到 `_ => "completed"` —— 把安全拦截与内容截断

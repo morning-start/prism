@@ -592,7 +592,11 @@
           "type": "object",
           "properties": {
             "event": { "type": "string", "const": "finish" },
-            "finish_reason": { "$ref": "#/definitions/LucentFinishReason" }
+            "finish_reason": { "$ref": "#/definitions/LucentFinishReason" },
+            "stop_sequence": {
+              "type": "string",
+              "description": "实际命中的自定义终止序列（CR-006 批次 2）。与 LucentChoice.stop_sequence 完全同构：一个事实一种表达。仅 Anthropic Messages 有该概念（与 stop_reason=stop_sequence 配对出现），其余端恒缺失。可选键：None 时不输出以保持既有字节形态；缺失/非字符串软失败为 None（治理 §4）。"
+            }
           },
           "required": ["event", "finish_reason"]
         },

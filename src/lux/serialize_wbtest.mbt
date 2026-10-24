@@ -1045,7 +1045,7 @@ test "LucentStreamEvent::to_json - block lifecycle" {
 
 ///|
 test "LucentStreamEvent::to_json - finish" {
-  let ev = LucentStreamEvent::Finish(Stop)
+  let ev = LucentStreamEvent::Finish(Stop, None)
   let jv = ev.to_json()
   match json_str(jv, "event") {
     Some(v) => assert_eq(v, "finish")

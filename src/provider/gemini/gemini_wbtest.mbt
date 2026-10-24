@@ -941,7 +941,7 @@ test "stream encode - accumulated tool arguments emitted once as complete JSON" 
     BlockDelta(0, @lux.LucentBlockDelta::tool_arguments_delta("{\"city\":")),
     BlockDelta(0, @lux.LucentBlockDelta::tool_arguments_delta("\"Beijing\"}")),
     BlockEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
   ]
   match lux_events_to_gemini_sse(events) {
     Ok(cr) => {
@@ -1343,7 +1343,7 @@ test "encode - stream tool arguments normalization branches" {
       BlockStart(0, @lux.LucentBlockType::tool_call("call_1", "search")),
       BlockDelta(0, @lux.LucentBlockDelta::tool_arguments_delta(payload)),
       BlockEnd(0),
-      Finish(Stop),
+      Finish(Stop, None),
     ]
     match lux_events_to_gemini_sse(events) {
       Ok(cr) => {
@@ -1379,7 +1379,7 @@ test "encode - stream thinking and signature deltas pass through" {
   let events : Array[@lux.LucentStreamEvent] = [
     BlockDelta(0, @lux.LucentBlockDelta::thinking_delta("reasoning")),
     BlockDelta(0, @lux.LucentBlockDelta::signature_delta("sig-tok")),
-    Finish(Stop),
+    Finish(Stop, None),
   ]
   match lux_events_to_gemini_sse(events) {
     Ok(cr) => {
@@ -1397,7 +1397,7 @@ test "encode - stream thinking and signature deltas pass through" {
 test "encode - stream tool arguments delta without block start degrades" {
   let events : Array[@lux.LucentStreamEvent] = [
     BlockDelta(0, @lux.LucentBlockDelta::tool_arguments_delta("{\"x\":1}")),
-    Finish(Stop),
+    Finish(Stop, None),
   ]
   match lux_events_to_gemini_sse(events) {
     Ok(cr) => {
@@ -1429,7 +1429,7 @@ test "encode - stream block start flushes previous unclosed tool" {
     BlockStart(1, @lux.LucentBlockType::tool_call("id_b", "fn_b")),
     BlockDelta(1, @lux.LucentBlockDelta::tool_arguments_delta("{\"b\":2}")),
     BlockEnd(1),
-    Finish(Stop),
+    Finish(Stop, None),
   ]
   match lux_events_to_gemini_sse(events) {
     Ok(cr) => {
@@ -1456,7 +1456,7 @@ test "encode - stream BlockEnd with empty tool id omits id key" {
     BlockStart(0, @lux.LucentBlockType::tool_call("", "search")),
     BlockDelta(0, @lux.LucentBlockDelta::tool_arguments_delta("{\"q\":1}")),
     BlockEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
   ]
   match lux_events_to_gemini_sse(events) {
     Ok(cr) => {
@@ -1481,7 +1481,7 @@ test "encode - stream refusal native and block discard diagnostics" {
       @lux.LucentBlockDelta::native_delta("vendor", Json::string("raw")),
     ),
     BlockDiscard(2),
-    Finish(Stop),
+    Finish(Stop, None),
   ]
   match lux_events_to_gemini_sse(events) {
     Ok(cr) => {
@@ -1522,7 +1522,7 @@ test "encode - stream finish flushes unclosed tool and maps length reason" {
     let events : Array[@lux.LucentStreamEvent] = [
       BlockStart(0, @lux.LucentBlockType::tool_call(id, "search")),
       BlockDelta(0, @lux.LucentBlockDelta::tool_arguments_delta("{\"q\":1}")),
-      Finish(Length),
+      Finish(Length, None),
     ]
     match lux_events_to_gemini_sse(events) {
       Ok(cr) => {
@@ -1547,7 +1547,7 @@ test "encode - stream finish flushes unclosed tool and maps length reason" {
 test "encode - stream usage emits reasoning and cached token counts" {
   let events : Array[@lux.LucentStreamEvent] = [
     Usage(@lux.LucentUsage::full(10, 5, 15, Some(30), Some(40), None)),
-    Finish(Stop),
+    Finish(Stop, None),
   ]
   match lux_events_to_gemini_sse(events) {
     Ok(cr) => {
@@ -1651,7 +1651,7 @@ test "encode - stream finish reason mapping covers all variants" {
   for c in cases {
     let reason = c.0
     let expect = c.1
-    let events : Array[@lux.LucentStreamEvent] = [Finish(reason)]
+    let events : Array[@lux.LucentStreamEvent] = [Finish(reason, None)]
     match lux_events_to_gemini_sse(events) {
       Ok(cr) =>
         assert_true(cr.value().contains("\"finishReason\":\"" + expect + "\""))

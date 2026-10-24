@@ -126,11 +126,12 @@ test "stop_sequence - cross-protocol drop is diagnosed" {
 }
 
 ///|
-/// 流式路径：命中值无 IR 载体（`Finish` 只有一个位置参数），属**有意识的
-/// 降级**，因此必须留 Degraded 诊断 —— 不能静默丢弃。
+/// 流式路径：命中值有 IR 载体了（CR-006 批次 2 —— `Finish` 的第二位置参数
+/// 与 `LucentChoice.stop_sequence` 同构），流式与非流式不再有第二套词汇表。
 ///
-/// 载荷变更（改 `Finish` 或新增事件）属破坏性变更，见 CR-005 §2.2，另立提案。
-test "stop_sequence - streaming path degrades with diagnostic" {
+/// 0.1.x 时此处是「有意识的降级 + Degraded 诊断」；0.2.0 起值随 Finish
+/// 携带，且流式累加器把它写进 `LucentChoice.stop_sequence`。
+test "stop_sequence - streaming path carries hit value" {
   let sse = "event: message_start\n" +
     "data: {\"type\":\"message_start\",\"message\":{\"id\":\"m\",\"model\":\"c\"}}\n\n" +
     "event: message_delta\n" +
@@ -139,22 +140,28 @@ test "stop_sequence - streaming path degrades with diagnostic" {
   match @messages.messages_sse_to_events(sse) {
     Err(e) => fail("decode failed: " + e)
     Ok(cr) => {
-      let mut found = false
+      // 值有载体后不再有降级诊断
       for d in cr.diagnostics() {
-        if d.field.contains("stop_sequence") && d.status is Degraded {
-          found = true
-        }
+        assert_false(d.field.contains("stop_sequence"))
       }
-      assert_true(found)
-      // 且流式与非流式对同一 stop_reason 解出**同一** IR finish_reason
+      // Finish 携带命中值；且流式与非流式对同一 stop_reason 解出**同一**
+      // IR finish_reason
       let mut finish : @lux.LucentFinishReason? = None
+      let mut ss : String? = None
       for ev in cr.value() {
         match ev {
-          Finish(fr) => finish = Some(fr)
+          Finish(fr, v) => {
+            finish = Some(fr)
+            ss = v
+          }
           _ => ()
         }
       }
       assert_eq(finish, Some(Stop))
+      assert_eq(ss, Some("END"))
+      // 流式累加器：命中值进入 LucentChoice.stop_sequence（与非流式同字段）
+      let acc = @lux.lucent_stream_events_to_accumulated(cr.value(), "m", "c")
+      assert_eq(acc.response.choices[0].stop_sequence, Some("END"))
     }
   }
 }

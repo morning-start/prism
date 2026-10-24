@@ -598,7 +598,7 @@ test "LucentStreamEvent round trip - all events" {
     BlockDelta(0, LucentBlockDelta::text_delta("partial")),
     BlockEnd(0),
     BlockDiscard(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Usage(usage),
     Error(err),
     Done,

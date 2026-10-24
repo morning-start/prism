@@ -417,7 +417,7 @@ fn mock_send_fixed_sse(_req_json : String) -> Result[String, String] {
     BlockStart(0, Text),
     BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
     BlockEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   match @openai.lux_events_to_openai_sse(events) {
@@ -442,7 +442,7 @@ test "stream - returns prism events via mock transport" {
   let ctx = @sdk.Context::new().add_user("Hi")
   match prism.stream(ctx, mock_send_fixed_sse) {
     Ok(events) =>
-      // TextDelta("Hello") + Finish(Stop)
+      // TextDelta("Hello") + Finish(Stop, None)
       assert_true(events.length() >= 2)
     Err(e) => fail("stream failed: \{e}")
   }

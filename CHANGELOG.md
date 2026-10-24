@@ -3,6 +3,45 @@
 本文件记录 Prism 的用户可见变更。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)；
 0.x 阶段 minor 即 breaking（与 MoonBit 生态惯例一致）。
 
+## [0.2.0] - 2026-10-24
+
+### 破坏性变更（CR-006 批次 2，治理 §5 —— `Finish` 载荷）
+
+变更单：[`docs/cr/CR-006-stream-termination.md`](docs/cr/CR-006-stream-termination.md) §3–§5。
+
+- **`LucentStreamEvent::Finish` arity 1 → 2**：`Finish(reason)` →
+  `Finish(reason, stop_sequence?)`。第二位置参数与 `LucentChoice.stop_sequence`
+  **完全同构**——一个事实一种表达，流式侧命中序列从此有 IR 载体
+  （此前是「Degraded 诊断 + 丢弃」的有意识降级）。
+- **迁移机械式**：构造 `Finish(x)` → `Finish(x, None)` 或便利构造器
+  `LucentStreamEvent::finish(x)`；模式 `Finish(p)` → `Finish(p, _)` 或
+  `Finish(p, ss)`。全部由编译器穷举暴露（生产 19 处 + 测试字面量），
+  不存在静默通过。**JSON / WASM 字符串 ABI 字节形态不变**（`None` 不输出
+  `stop_sequence` 键），只读 `finish_reason` 的旧消费端不受影响。
+- **行为变化**：
+  - `messages` 流式解码：`message_delta.stop_sequence` 有值时随 `Finish`
+    携带（不再打 Degraded 诊断）；
+  - `messages` 流式编码：`Finish` 携带值时写 `"stop_sequence":"<v>"` 并强制
+    `stop_reason: "stop_sequence"`（与非流式同规则）；无值时该键写 `null`
+    （官方 message_delta 帧恒带该字段）；
+  - `openai` / `responses` / `gemini` 流式编码：携带值 → 显式 `Unsupported`
+    诊断（与非流式同规则）；
+  - 流式累加器把命中值写进 `LucentChoice.stop_sequence` ——
+    **流式累加结果与非流式解码完全一致**（CR-005 缺陷 A 在两条路径上的终局）。
+- **schema**：`LucentStreamEvent` finish 分支新增可选键 `stop_sequence`
+  （`required` 不变，§6 非破坏）；`docs/lux-ir-design.md`、
+  `docs/fidelity-matrix.md` 同步。
+
+### 新增（工程内部）
+
+- `@meta.pair_usages_with_finish`：Usage/Finish 配对预扫描抽为协议无关共享
+  （messages 与 gemini 流编码共用；gemini 顺带修复 usageMetadata 必须随
+  finishReason 帧发射的帧序违反）。
+- 流式管线 oracle（[6] 组，`tools/conformance/pipeline-stream.mjs`）：
+  官方 SSE → Prism → 目标 SSE 逐帧形态 + 帧序契约 36 项，首跑实锤并修复
+  4 类真实编码缺陷（gemini 分帧符 / 双逗号 JSON / responses extra 捕获口径 /
+  gemini usage 帧序）。
+
 ## [0.1.5] - 2026-10-24
 
 ### 修复（CR-006 批次 1：流式终止事件不再静默丢弃）

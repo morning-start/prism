@@ -233,7 +233,9 @@ pub fn gemini_sse_to_events(
               )
               open_text = t2
               open_thinking = th2
-              events.push(Finish(@lux.LucentFinishReason::from_string(fr)))
+              events.push(
+                Finish(@lux.LucentFinishReason::from_string(fr), None),
+              )
               // CR-001 D3：不在此就地补 Done。Gemini 的 usageMetadata 既可能挂在
               // 同一帧，也可能落在紧随其后的独立帧，而 Done 必须排在 usage 之后，
               // 故统一在本段输入处理完后补发（见函数末尾的兜底）。
@@ -278,7 +280,7 @@ pub fn gemini_sse_to_events(
             let mut k = 0
             while k < events.length() {
               match events[k] {
-                Finish(_) => finish_seen_here = true
+                Finish(_, _) => finish_seen_here = true
                 _ => ()
               }
               k = k + 1
@@ -289,7 +291,7 @@ pub fn gemini_sse_to_events(
               )
               open_text = t3
               open_thinking = th3
-              events.push(Finish(Safety))
+              events.push(Finish(Safety, None))
               diagnostics.push(
                 @lux.ConversionDiagnostic::degraded(
                   "promptFeedback.blockReason",

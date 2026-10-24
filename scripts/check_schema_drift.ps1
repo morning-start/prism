@@ -67,7 +67,12 @@ function Get-SourceVersions([string]$Text) {
 function Get-StreamEvents([string]$SchemaText, [string]$SourceText) {
   $schemaPart = ($SchemaText | ConvertFrom-Json).definitions.LucentStreamEvent | ConvertTo-Json -Depth 30 -Compress
   $expected = @([regex]::Matches($schemaPart, '"const":"([^"]+)"') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique | Sort-Object)
-  $actual = @([regex]::Matches($SourceText, '"event"\s*:\s*Json::string\("([^"]+)"') | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique | Sort-Object)
+  # Actual 侧同时接受两种发射形态：字面量对象 `"event": Json::string("x")`
+  # 与 Map 赋值 `m["event"] = Json::string("x")`（CR-006 批次 2 起 finish 分支
+  # 因可选键 stop_sequence 改用 Map 构造）。
+  $actual = @([regex]::Matches($SourceText, '"event"\s*:\s*Json::string\("([^"]+)"') | ForEach-Object { $_.Groups[1].Value }) +
+             @([regex]::Matches($SourceText, '\["event"\]\s*=\s*Json::string\("([^"]+)"') | ForEach-Object { $_.Groups[1].Value })
+  $actual = @($actual | Select-Object -Unique | Sort-Object)
   @{ Expected=$expected; Actual=$actual }
 }
 

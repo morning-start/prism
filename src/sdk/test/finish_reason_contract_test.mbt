@@ -80,7 +80,7 @@ test "cr005 - messages stream emits only legal stop_reason" {
       ConversationStart(
         @lux.LucentConversationMeta::new(Some("m"), Some("c"), None),
       ),
-      Finish(fr),
+      Finish(fr, None),
       Done,
     ]
     match @messages.lux_events_to_messages_sse(events) {
@@ -102,7 +102,7 @@ test "cr005 - messages ToolCalls maps to tool_use not tool_calls" {
     ConversationStart(
       @lux.LucentConversationMeta::new(Some("m"), Some("c"), None),
     ),
-    Finish(ToolCalls),
+    Finish(ToolCalls, None),
     Done,
   ]
   match @messages.lux_events_to_messages_sse(events) {
@@ -131,7 +131,7 @@ test "cr005 - openai stream emits only legal finish_reason" {
       ConversationStart(
         @lux.LucentConversationMeta::new(Some("m"), Some("c"), None),
       ),
-      Finish(fr),
+      Finish(fr, None),
       Done,
     ]
     match @openai.lux_events_to_openai_sse(events) {
@@ -185,7 +185,7 @@ test "cr005 - stop_sequence decodes identically in stream and non-stream" {
       let mut found : @lux.LucentFinishReason? = None
       for ev in cr.value() {
         match ev {
-          Finish(fr) => found = Some(fr)
+          Finish(fr, _) => found = Some(fr)
           _ => ()
         }
       }
@@ -211,7 +211,7 @@ test "cr005 - gemini stream passes Native finish reason through" {
     ConversationStart(
       @lux.LucentConversationMeta::new(Some("g"), Some("gm"), None),
     ),
-    Finish(Native("LANGUAGE")),
+    Finish(Native("LANGUAGE"), None),
     Done,
   ]
   match @gemini.lux_events_to_gemini_sse(events) {
@@ -234,7 +234,7 @@ test "cr005 - converged finish_reason is diagnosed" {
     ConversationStart(
       @lux.LucentConversationMeta::new(Some("m"), Some("c"), None),
     ),
-    Finish(Recitation),
+    Finish(Recitation, None),
     Done,
   ]
   // messages：Recitation 无 Anthropic 对等值 → end_turn + 诊断

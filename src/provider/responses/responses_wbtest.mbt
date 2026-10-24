@@ -322,7 +322,7 @@ test "lux_events_to_responses_sse - auto-emits output_item.added when ItemStart 
     BlockStart(0, Text),
     BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
     BlockEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   match lux_events_to_responses_sse(events) {
@@ -400,7 +400,7 @@ test "lux_events_to_responses_sse - text sequence" {
     BlockStart(0, Text),
     BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
     BlockEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   match lux_events_to_responses_sse(events) {
@@ -902,7 +902,7 @@ test "lux_events_to_responses_sse - tool call block" {
     BlockStart(0, @lux.LucentBlockType::tool_call("fc_1", "search")),
     BlockDelta(0, @lux.LucentBlockDelta::tool_arguments_delta("{\"q\":\"x\"}")),
     BlockEnd(0),
-    Finish(ToolCalls),
+    Finish(ToolCalls, None),
     Done,
   ]
   match lux_events_to_responses_sse(events) {
@@ -934,7 +934,7 @@ test "lux_events_to_responses_sse - thinking block end and signature" {
     BlockDelta(0, @lux.LucentBlockDelta::thinking_delta("thinking")),
     BlockDelta(0, @lux.LucentBlockDelta::signature_delta("sig_abc")),
     BlockEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   match lux_events_to_responses_sse(events) {
@@ -961,7 +961,7 @@ test "lux_events_to_responses_sse - usage merged into completed" {
     ConversationStart(
       @lux.LucentConversationMeta::new(Some("r_1"), Some("gpt-5"), None),
     ),
-    Finish(Stop),
+    Finish(Stop, None),
     Usage(@lux.LucentUsage::full(10, 3, 13, Some(2), Some(4), None)),
     Done,
   ]
@@ -1318,7 +1318,7 @@ test "encode - stream ctx and conversation start extra fields" {
     None,
     None,
   )
-  let no_start : Array[@lux.LucentStreamEvent] = [Finish(Stop), Done]
+  let no_start : Array[@lux.LucentStreamEvent] = [Finish(Stop, None), Done]
   match lux_events_to_responses_sse_with_ctx(no_start, Some(ctx)) {
     Ok(cr) => {
       let sse = cr.value()
@@ -1536,7 +1536,7 @@ test "encode - stream tool call block synthetic id" {
     BlockStart(0, @lux.LucentBlockType::tool_call("", "auto_tool")),
     BlockDelta(0, @lux.LucentBlockDelta::tool_arguments_delta("{\"a\":1}")),
     BlockEnd(0),
-    Finish(ToolCalls),
+    Finish(ToolCalls, None),
     Done,
   ]
   match lux_events_to_responses_sse(events) {
@@ -1587,7 +1587,7 @@ test "encode - stream signature delta event name matches data type" {
     BlockStart(0, @lux.LucentBlockType::thinking()),
     BlockDelta(0, @lux.LucentBlockDelta::signature_delta("sigdata")),
     BlockEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   match lux_events_to_responses_sse(events) {
@@ -1621,7 +1621,7 @@ test "encode - stream refusal block and delta" {
     BlockStart(0, @lux.LucentBlockType::refusal()),
     BlockDelta(0, @lux.LucentBlockDelta::refusal_delta("I cannot comply")),
     BlockEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   match lux_events_to_responses_sse(events) {
@@ -1655,7 +1655,7 @@ test "encode - stream delta fallbacks without block start" {
     ),
     BlockDelta(3, @lux.LucentBlockDelta::text_delta("orphan")),
     BlockEnd(3),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   match lux_events_to_responses_sse(events) {
@@ -1684,7 +1684,7 @@ test "encode - stream delta fallbacks without block start" {
 
 ///|
 /// BlockDelta 的 NativeDelta 落入 catch-all；BlockDiscard / Annotations 均无帧；
-/// Finish(Length) → incomplete 状态；Error(InvalidRequest) → invalid_request_error。
+/// Finish(Length, None) → incomplete 状态；Error(InvalidRequest) → invalid_request_error。
 test "encode - stream silent events incomplete finish and invalid request error" {
   let silent : Array[@lux.LucentStreamEvent] = [
     ConversationStart(
@@ -1697,14 +1697,14 @@ test "encode - stream silent events incomplete finish and invalid request error"
     BlockDiscard(1),
     Annotations(1, []),
     ItemEnd(1),
-    Finish(Length),
+    Finish(Length, None),
     Done,
   ]
   match lux_events_to_responses_sse(silent) {
     Ok(cr) => {
       let sse = cr.value()
       assert_true(sse.contains("event: response.created"))
-      // Finish(Length) → incomplete
+      // Finish(Length, None) → incomplete
       assert_true(sse.contains("\"status\":\"incomplete\""))
       // NativeDelta / BlockDiscard / Annotations / ItemEnd 均不产出帧
       assert_false(sse.contains("response.output_text.delta"))
@@ -1796,7 +1796,7 @@ test "encode - stream silent events incomplete finish and invalid request error"
 
 ///|
 /// BlockStart 的非 Text / 非 Refusal / 非 ToolCall / 非 Thinking 块类型
-/// （Image）落到输出文本 part 的兜底分支；Finish(Error) → failed 状态。
+/// （Image）落到输出文本 part 的兜底分支；Finish(Error, None) → failed 状态。
 test "encode - stream non text block start and error finish" {
   let events : Array[@lux.LucentStreamEvent] = [
     ConversationStart(
@@ -1805,7 +1805,7 @@ test "encode - stream non text block start and error finish" {
     BlockStart(0, Image),
     BlockDelta(0, @lux.LucentBlockDelta::text_delta("img block")),
     BlockEnd(0),
-    Finish(Error),
+    Finish(Error, None),
     Done,
   ]
   match lux_events_to_responses_sse(events) {
@@ -1824,7 +1824,7 @@ test "encode - stream non text block start and error finish" {
           ",\"delta\":\"img block\"",
         ),
       )
-      // Finish(Error) → failed
+      // Finish(Error, None) → failed
       assert_true(sse.contains("\"status\":\"failed\""))
     }
     Err(e) => fail("encode error: \{e}")

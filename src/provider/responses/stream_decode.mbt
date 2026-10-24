@@ -219,7 +219,10 @@ fn responses_decode_frames(
                       None => None
                     }
                     events.push(
-                      Finish(@meta.responses_termination_reason(s, reason)),
+                      Finish(
+                        @meta.responses_termination_reason(s, reason),
+                        None,
+                      ),
                     )
                   }
                   None => ()

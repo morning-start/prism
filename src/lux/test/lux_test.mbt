@@ -142,7 +142,7 @@ test "@lux.LucentStreamEvent blackbox - text block events round trip" {
     BlockDelta(0, @lux.LucentBlockDelta::text_delta("lo")),
     BlockEnd(0),
     ItemEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Usage(@lux.LucentUsage::new(10, 5, 15)),
     Done,
   ]
@@ -175,7 +175,7 @@ test "@lux.LucentStreamEvent blackbox - tool call events round trip" {
     BlockDelta(0, @lux.LucentBlockDelta::tool_arguments_delta("Beijing\"}")),
     BlockEnd(0),
     ItemEnd(0),
-    Finish(ToolCalls),
+    Finish(ToolCalls, None),
     Done,
   ]
   for ev in events {
@@ -217,7 +217,7 @@ test "@lux.lucent_stream_events_to_response blackbox - aggregates stream" {
     BlockDelta(0, @lux.LucentBlockDelta::text_delta("Stream")),
     BlockEnd(0),
     ItemEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Usage(@lux.LucentUsage::new(3, 6, 9)),
     Done,
   ]

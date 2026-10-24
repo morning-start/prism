@@ -454,14 +454,14 @@ gemini = `modelStatus`（无 vendored spec，手工维护）。
 3. **parallel_tool_calls 能力声明**与协议实际能力不一致（§1 注释）。
 4. **ReasoningEffort 档位**：`minimal`（openai）与 `max`（anthropic）
    在跨端时降级到最近档位并打诊断。
-5. **响应侧 `stop_sequence` 无 IR 载体**（2026-10-22 记录）：Anthropic
-   Messages 响应可返回 `stop_sequence`（实际命中的那条停止序列），
-   OpenAI Chat 的 `stop` 只存在于**请求**。`LucentResponse` 没有承载「命中了
-   哪条 stop 序列」的字段，因此 `messages → IR → messages` 往返后
-   `stop_sequence` 恒为 `null`（实测确认）。这是 **IR 能力缺口**，不是适配器
-   缺陷 —— 补载体需走 `docs/rules/lucent-ir-evolution.md` 治理流程（新增标准
-   可选字段），故本轮仅记录，未改 schema。当前行为：不报错、不诊断（因为
-   缺失的是响应元数据而非内容，且没有可打的字段名）。
+5. **响应侧 `stop_sequence` 无 IR 载体**（2026-10-22 记录；**CR-005 已修复**）：
+   Anthropic Messages 响应可返回 `stop_sequence`（实际命中的那条停止序列），
+   OpenAI Chat 的 `stop` 只存在于**请求**。`LucentResponse` 当时没有承载
+   「命中了哪条 stop 序列」的字段，`messages → IR → messages` 往返后
+   `stop_sequence` 恒为 `null`。现 `LucentChoice.stop_sequence`（标准可选字段，
+   CR-005）承载该事实：messages 源 decode 捕获、encode 写回并强制
+   `stop_reason: "stop_sequence"`；跨三端 Unsupported 显式诊断。回归
+   `src/sdk/test/stop_sequence_carrier_test.mbt`。流式侧载体见 CR-006 批次 2。
 
 5. **裸解码仍带帧级 `Done`（有意保留，非缺陷）**：`wasm_sse_to_events` 与各 provider 的
    `events_decode` 不经会话层，Gemini 的帧级兜底 `Done` 仍出现在其返回值中。
@@ -576,11 +576,15 @@ diagnose  = 值不合法 || 有语义损失
   `choices.finish_reason`。
 
 **IR 建模粒度不足（新发现，记为技术债）**：实测往返发现两处真实丢失 ——
-1. `stop_sequence` 命中值无载体（CR-005 缺陷 A，待决策）；
+1. `stop_sequence` 命中值无载体（CR-005 缺陷 A）——**已闭环**：响应侧由
+   CR-005（`LucentChoice.stop_sequence`，0.1.x）落地；流式侧由 CR-006 批次 2
+   （`Finish(reason, stop_sequence?)`，0.2.0）落地，累加器写进同一字段，
+   流式累加与非流式解码共享同一词汇表（回归
+   `src/sdk/test/stop_sequence_carrier_test.mbt`）；
 2. **`function_call` vs `tool_calls`**：OpenAI 合法枚举里这是两个不同项，但
    IR 都映射到 `ToolCalls`，回程一律输出 `tool_calls` —— OpenAI → IR → OpenAI
    无法保住 `function_call`。此前无人记录。修复需增 IR 变体，属破坏性变更，
-   与缺陷 A 一并等决策。
+   待治理决策。
 
 回归：`src/sdk/test/finish_reason_contract_test.mbt`（7 用例）。
 提案与完整分析见 [`cr/CR-005-stop-sequence-carrier.md`](cr/CR-005-stop-sequence-carrier.md)。

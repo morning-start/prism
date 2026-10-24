@@ -608,7 +608,7 @@ test "LucentStreamEvent variants construct" {
   let ce = BlockEnd(0)
   let tc = BlockStart(1, LucentBlockType::tool_call("call-1", "get_weather"))
   let th = BlockStart(2, Thinking)
-  let fin = Finish(Stop)
+  let fin = Finish(Stop, None)
   let us = Usage(LucentUsage::new(10, 5, 15))
   let dn = Done
   assert_eq(cs, BlockStart(0, Text))
@@ -619,7 +619,7 @@ test "LucentStreamEvent variants construct" {
     BlockStart(1, LucentBlockType::tool_call("call-1", "get_weather")),
   )
   assert_eq(th, BlockStart(2, Thinking))
-  assert_eq(fin, Finish(Stop))
+  assert_eq(fin, Finish(Stop, None))
   assert_eq(us, Usage(LucentUsage::new(10, 5, 15)))
   assert_eq(dn, Done)
 }
@@ -669,7 +669,7 @@ test "accumulate - agent actions preserved with diagnostics" {
         provider_payload: None,
       }),
     ),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   let acc = lucent_stream_events_to_accumulated(events, "r", "m")
@@ -685,7 +685,7 @@ test "accumulate - annotations preserved with diagnostics" {
     Annotations(0, [
       LucentAnnotation::new(Url, None, Some("https://x.com"), None, None),
     ]),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   let acc = lucent_stream_events_to_accumulated(events, "r", "m")
@@ -700,7 +700,7 @@ test "accumulate - native delta preserved with diagnostics" {
     BlockStart(0, Text),
     BlockDelta(0, NativeDelta("vendor-x", "raw")),
     BlockEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   let acc = lucent_stream_events_to_accumulated(events, "r", "m")
@@ -715,7 +715,7 @@ test "accumulate - response still aggregates text" {
     BlockStart(0, Text),
     BlockDelta(0, LucentBlockDelta::text_delta("Hello")),
     BlockEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   let acc = lucent_stream_events_to_accumulated(events, "r", "m")
@@ -778,7 +778,7 @@ test "accumulator text block lifecycle" {
     BlockDelta(0, LucentBlockDelta::text_delta("Hello")),
     BlockDelta(0, LucentBlockDelta::text_delta(" world")),
     BlockEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   let resp = lucent_stream_events_to_response(events, "r", "m")
@@ -798,7 +798,7 @@ test "accumulator tool call block lifecycle" {
     BlockDelta(0, LucentBlockDelta::tool_arguments_delta("{\"city\":")),
     BlockDelta(0, LucentBlockDelta::tool_arguments_delta("\"Beijing\"}")),
     BlockEnd(0),
-    Finish(ToolCalls),
+    Finish(ToolCalls, None),
     Done,
   ]
   let resp = lucent_stream_events_to_response(events, "r", "m")
@@ -822,7 +822,7 @@ test "accumulator mixed text and tool call" {
     BlockStart(1, LucentBlockType::tool_call("call-1", "get_weather")),
     BlockDelta(1, LucentBlockDelta::tool_arguments_delta("{}")),
     BlockEnd(1),
-    Finish(ToolCalls),
+    Finish(ToolCalls, None),
     Done,
   ]
   let resp = lucent_stream_events_to_response(events, "r", "m")
@@ -845,7 +845,7 @@ test "accumulator thinking block with signature" {
     BlockDelta(0, LucentBlockDelta::thinking_delta("I need to...")),
     BlockDelta(0, LucentBlockDelta::signature_delta("EqwB")),
     BlockEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   let resp = lucent_stream_events_to_response(events, "r", "m")
@@ -866,7 +866,7 @@ test "accumulator refusal block lifecycle" {
   let events = [
     BlockDelta(0, LucentBlockDelta::refusal_delta("Cannot answer")),
     BlockEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   let resp = lucent_stream_events_to_response(events, "r", "m")
@@ -883,7 +883,7 @@ test "accumulator Usage event" {
     BlockDelta(0, LucentBlockDelta::text_delta("OK")),
     BlockEnd(0),
     Usage(LucentUsage::new(5, 1, 6)),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   let resp = lucent_stream_events_to_response(events, "r", "m")
@@ -914,7 +914,7 @@ test "accumulator BlockDiscard clears block content" {
     BlockDiscard(0),
     BlockDelta(0, LucentBlockDelta::text_delta("second")),
     BlockEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   let resp = lucent_stream_events_to_response(events, "r", "m")
@@ -934,7 +934,7 @@ test "accumulator ItemStart with ToolCall flushes to content" {
       ),
     ),
     ItemEnd(0),
-    Finish(ToolCalls),
+    Finish(ToolCalls, None),
     Done,
   ]
   let resp = lucent_stream_events_to_response(events, "r", "m")
@@ -954,7 +954,7 @@ test "accumulator ItemStart with Message merges content" {
       ),
     ),
     ItemEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   let resp = lucent_stream_events_to_response(events, "r", "m")
@@ -978,7 +978,7 @@ test "accumulator Annotations events ignored in response" {
     BlockDelta(0, LucentBlockDelta::text_delta("foo")),
     Annotations(0, [ann]),
     BlockEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   let resp = lucent_stream_events_to_response(events, "r", "m")
@@ -1044,7 +1044,7 @@ test "accumulate - thinking delta does not leak into text" {
     BlockDelta(1, LucentBlockDelta::thinking_delta("hidden")),
     BlockEnd(1),
     BlockEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   let acc = lucent_stream_events_to_accumulated(events, "r1", "m1")
@@ -1073,7 +1073,7 @@ test "accumulate - thinking delta on non-thinking block yields Degraded diagnost
     BlockStart(0, Text),
     BlockDelta(0, LucentBlockDelta::thinking_delta("stray")),
     BlockEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   let acc = lucent_stream_events_to_accumulated(events, "r1", "m1")

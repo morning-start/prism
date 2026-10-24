@@ -965,7 +965,7 @@ test "messages_sse_to_events - tool call with thinking" {
         let mut found = false
         for ev in events {
           match ev {
-            Finish(ToolCalls) => found = true
+            Finish(ToolCalls, None) => found = true
             _ => ()
           }
         }
@@ -1005,7 +1005,7 @@ test "lux_events_to_messages_sse - text sequence" {
     BlockStart(0, Text),
     BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
     BlockEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   match lux_events_to_messages_sse(events) {
@@ -1044,7 +1044,7 @@ test "lux_events_to_messages_sse - tool call with thinking" {
       @lux.LucentBlockDelta::tool_arguments_delta("{\"city\":\"Beijing\"}"),
     ),
     BlockEnd(1),
-    Finish(ToolCalls),
+    Finish(ToolCalls, None),
     Done,
   ]
   match lux_events_to_messages_sse(events) {
@@ -1579,9 +1579,9 @@ test "encode - stream double finish pairs usages with lower bound" {
       @lux.LucentConversationMeta::new(Some("msg_df"), Some("claude"), None),
     ),
     Usage(@lux.LucentUsage::new(11, 22, 33)),
-    Finish(Stop),
+    Finish(Stop, None),
     Usage(@lux.LucentUsage::new(44, 55, 99)),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   match lux_events_to_messages_sse(events) {
@@ -1614,7 +1614,7 @@ test "encode - stream finish before usage pairs forward" {
     ConversationStart(
       @lux.LucentConversationMeta::new(Some("msg_fb"), Some("claude"), None),
     ),
-    Finish(Stop),
+    Finish(Stop, None),
     Usage(@lux.LucentUsage::new(7, 8, 15)),
     Done,
   ]

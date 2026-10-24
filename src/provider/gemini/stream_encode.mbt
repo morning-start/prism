@@ -283,7 +283,24 @@ fn gemini_encode_frames(
             ),
           )
         }
-      Finish(fr) => {
+      Finish(fr, ss) => {
+        // CR-006 批次 2：命中序列是 Anthropic 的响应侧概念，Gemini 的
+        // finishReason 是封闭枚举且无此值 → 显式 Unsupported（与非流式
+        // response.mbt 同规则），绝不静默丢弃。
+        match ss {
+          Some(v) =>
+            diagnostics.push(
+              @lux.ConversionDiagnostic::unsupported(
+                "candidates.stop_sequence",
+                Some(
+                  "hit stop sequence \"" +
+                  v +
+                  "\" has no gemini carrier (finishReason has no stop_sequence value); dropped",
+                ),
+              ),
+            )
+          None => ()
+        }
         // 先补发未结束的工具块，保证工具链不丢参数
         if pending_tool_index is Some(_) {
           let id_part = if pending_tool_id == "" {

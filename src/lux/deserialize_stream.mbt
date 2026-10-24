@@ -109,7 +109,13 @@ pub fn LucentStreamEvent::from_json(
                   }
                 None => return Err("missing finish_reason")
               }
-              Ok(Finish(fr))
+              // CR-006 批次 2：命中序列可选键，缺失/非字符串软失败为 None
+              // （治理 §4：标准可选字段反序列化不失败）。
+              let ss = match m.get("stop_sequence") {
+                Some(String(v)) => Some(v)
+                _ => None
+              }
+              Ok(Finish(fr, ss))
             }
             "usage" => {
               let usage = match m.get("usage") {

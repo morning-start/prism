@@ -97,10 +97,12 @@ allowed, the other is what happened.
 Semantics: `stop_sequence.is_some()` ⟺ the source protocol reported
 `stop_reason == "stop_sequence"` (Anthropic Messages). Only Messages has this
 concept; the other three targets drop it with an explicit `Unsupported`
-diagnostic. On the **streaming** path the value currently has no IR carrier
-(`Finish` takes only the reason), so it is dropped **with a `Degraded`
-diagnostic** — a deliberate, diagnosed degradation pending a separate proposal
-for the stream payload (changing `Finish`'s arity is a breaking change).
+diagnostic. On the **streaming** path the value rides `Finish`'s second
+payload slot (`Finish(reason, stop_sequence?)`, CR-006 batch 2, governance
+§5): the constructor `LucentStreamEvent::finish(reason)` covers the
+reason-only case, and the stream accumulator writes it into
+`LucentChoice.stop_sequence` — so streaming accumulation and non-streaming
+decoding share the same field instead of maintaining a second vocabulary.
 
 Serialization: `None` emits no key at all (preserves the pre-existing byte
 shape); deserialization treats missing / empty / non-string as `None` (soft
@@ -121,7 +123,7 @@ Normalized streaming events. See `src/lux/stream.mbt` for the full enum.
 | `BlockDiscard` | `index` | 已废弃（CR-003 选项 B）：无生产者；读取兼容保留 |
 | `Annotations` | `(index, Array[LucentAnnotation])` | Citation/annotation side-channel |
 | `Usage` | `LucentUsage` | Token counts |
-| `Finish` | `LucentFinishReason` | Stream complete |
+| `Finish` | `(LucentFinishReason, String?)` | Stream complete; second slot = hit stop sequence (CR-006 batch 2, optional) |
 | `Error` | `LucentError` | Typed error event |
 | `Done` | — | Stream terminated (emitted by session layer in conversion paths) |
 

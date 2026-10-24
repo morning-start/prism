@@ -490,7 +490,7 @@ fn ends_with_finish(events : Array[@lux.LucentStreamEvent]) -> Bool {
     false
   } else {
     match events[events.length() - 1] {
-      Finish(_) => true
+      Finish(_, _) => true
       _ => false
     }
   }

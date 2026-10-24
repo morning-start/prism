@@ -182,7 +182,7 @@ test "CR-002 messages encoder pairs usage with finish in any order" {
     BlockDelta(0, @lux.LucentBlockDelta::text_delta("hi")),
     BlockEnd(0),
     Usage(@lux.LucentUsage::new(10, 20, 30)),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   match @messages.lux_events_to_messages_sse(events) {
@@ -210,7 +210,7 @@ test "CR-002 gemini encoder pairs usage with finishReason frame" {
     BlockDelta(0, @lux.LucentBlockDelta::text_delta("hi")),
     BlockEnd(0),
     Usage(@lux.LucentUsage::new(10, 20, 30)),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   match @gemini.lux_events_to_gemini_sse(events) {
@@ -251,7 +251,7 @@ test "CR-002 gemini unpaired usage is emitted independently" {
     ),
     Usage(@lux.LucentUsage::new(7, 2, 9)),
     Usage(@lux.LucentUsage::new(10, 20, 30)),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   match @gemini.lux_events_to_gemini_sse(events) {

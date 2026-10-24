@@ -1107,7 +1107,7 @@ test "gemini decode - stream thinking and text block lifecycle" {
   assert_eq(events[14], BlockEnd(3))
   assert_eq(events[15], BlockStart(4, ToolCall("fc_f_0", "f")))
   assert_eq(events[17], BlockEnd(4))
-  assert_eq(events[18], Finish(Stop))
+  assert_eq(events[18], Finish(Stop, None))
   assert_eq(events[19], Done)
 }
 
@@ -1177,7 +1177,7 @@ test "gemini decode - stream usage and done emitted once" {
   // （否则 OpenAI 目标的 usage 帧会落到 [DONE] 之后而被客户端丢弃）。
   // CR-002 A1：首帧为 ConversationStart，其后事件整体后移一位。
   assert_eq(event_summary(events), "?S0D0E0FUX")
-  assert_eq(events[4], Finish(Length))
+  assert_eq(events[4], Finish(Length, None))
   match events[5] {
     Usage(u) => {
       assert_eq(u.prompt_tokens, 3)

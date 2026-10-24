@@ -592,7 +592,7 @@ test "openai_sse_to_events - tool call stream" {
   match openai_sse_to_events(sse) {
     Ok(cr) => {
       let events = cr.value()
-      // 应有 BlockStart(0, ToolCall) + BlockDelta(ToolArgumentsDelta)×2 + BlockEnd + Finish(ToolCalls) + Done
+      // 应有 BlockStart(0, ToolCall) + BlockDelta(ToolArgumentsDelta)×2 + BlockEnd + Finish(ToolCalls, None) + Done
       let has_tool_block_start = {
         let mut found = false
         for ev in events {
@@ -726,7 +726,7 @@ test "lux_events_to_openai_sse - text sequence" {
     BlockStart(0, Text),
     BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
     BlockEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   match lux_events_to_openai_sse(events) {
@@ -747,7 +747,7 @@ test "lux_events_to_openai_sse - tool call sequence" {
   let events : Array[@lux.LucentStreamEvent] = [
     BlockStart(0, @lux.LucentBlockType::tool_call("c1", "f")),
     BlockDelta(0, @lux.LucentBlockDelta::tool_arguments_delta("{}")),
-    Finish(ToolCalls),
+    Finish(ToolCalls, None),
     Done,
   ]
   match lux_events_to_openai_sse(events) {
@@ -765,7 +765,7 @@ test "lux_events_to_openai_sse - tool call sequence" {
 ///|
 test "lux_events_to_openai_sse - usage frame" {
   let events : Array[@lux.LucentStreamEvent] = [
-    Finish(Stop),
+    Finish(Stop, None),
     Usage(@lux.LucentUsage::new(10, 2, 12)),
     Done,
   ]
@@ -1854,7 +1854,7 @@ test "encode - stream ctx prefills chunk identity" {
     let (label, meta, expects) = c
     let events : Array[@lux.LucentStreamEvent] = [
       BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
-      Finish(Stop),
+      Finish(Stop, None),
       Done,
     ]
     match lux_events_to_openai_sse_with_ctx(events, Some(meta)) {
@@ -1887,7 +1887,7 @@ test "encode - stream thinking/refusal/native deltas" {
     ),
     BlockStart(0, Text),
     BlockEnd(1),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   match lux_events_to_openai_sse(events) {

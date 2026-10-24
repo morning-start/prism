@@ -165,7 +165,7 @@ test "wasm_events_to_sse - openai SSE encode" {
     BlockStart(0, bt),
     BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
     BlockEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   let json_arr = events.map(fn(ev) { ev.to_json() })
@@ -398,7 +398,7 @@ fn convert_source_sse() -> Result[String, String] {
     BlockStart(0, Text),
     BlockDelta(0, @lux.LucentBlockDelta::text_delta("Hello")),
     BlockEnd(0),
-    Finish(Stop),
+    Finish(Stop, None),
     Done,
   ]
   match @openai.lux_events_to_openai_sse(events) {

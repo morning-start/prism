@@ -189,30 +189,18 @@ fn messages_decode_frames(
           Some(delta) =>
             match @internal.field_str(delta, "stop_reason") {
               Some(reason) => {
+                // CR-006 批次 2：命中序列有 IR 载体了 —— `Finish` 的第二
+                // 位置参数与 `LucentChoice.stop_sequence` 同构。官方语义：
+                // `stop_sequence` 与 `stop_reason: "stop_sequence"` 配对
+                // 出现，非 None 即命中值（缺失/空串按 None 处理）。
+                let hit = match @internal.field_str(delta, "stop_sequence") {
+                  Some(v) => if v == "" { None } else { Some(v) }
+                  None => None
+                }
                 events.push(
-                  Finish(@lux.LucentFinishReason::from_string(reason)),
+                  Finish(@lux.LucentFinishReason::from_string(reason), hit),
                 )
                 st.finish_seen = true
-                // CR-005：流式的「命中序列」值无 IR 载体（`Finish` 只有一个
-                // 位置参数；改载荷属破坏性变更，见 CR-005 §2.2 方案 A/C，
-                // 另立提案）。此处是**有意识的降级**，因此必须显式诊断，
-                // 不能静默丢失。
-                match @internal.field_str(delta, "stop_sequence") {
-                  Some(v) =>
-                    if v != "" {
-                      diagnostics.push(
-                        @lux.ConversionDiagnostic::degraded(
-                          "stream.delta.stop_sequence",
-                          Some(
-                            "hit stop sequence \"" +
-                            v +
-                            "\" has no IR carrier on the streaming path (Finish carries only the reason); value dropped. Non-streaming path preserves it via LucentChoice.stop_sequence",
-                          ),
-                        ),
-                      )
-                    }
-                  None => ()
-                }
               }
               None => ()
             }
@@ -256,7 +244,7 @@ fn messages_decode_frames(
         // 事件判断，否则逐帧路径会重复补 Finish（规整器虽会去重，但语义应
         // 在解码侧就正确）。
         if !st.finish_seen {
-          events.push(Finish(Stop))
+          events.push(Finish(Stop, None))
           st.finish_seen = true
         }
         events.push(Done)

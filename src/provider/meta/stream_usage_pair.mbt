@@ -46,14 +46,14 @@ pub fn pair_usages_with_finish(
   let mut i = 0
   while i < n {
     match events[i] {
-      Finish(_) => {
+      Finish(_, _) => {
         // 窗口下界：上一个 Finish 之后
         let mut lower = 0
         let mut prev = i - 1
         let mut prev_done = false
         while prev >= 0 && !prev_done {
           match events[prev] {
-            Finish(_) => {
+            Finish(_, _) => {
               lower = prev + 1
               prev_done = true
             }
@@ -66,7 +66,7 @@ pub fn pair_usages_with_finish(
         let mut next_done = false
         while nxt < n && !next_done {
           match events[nxt] {
-            Finish(_) => {
+            Finish(_, _) => {
               upper = nxt
               next_done = true
             }
