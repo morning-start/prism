@@ -50,6 +50,9 @@ node tools/conformance/run-all.mjs
 
 ## 五组检查
 
+> 2026-10-24 起扩展为**七组**：新增 [6] 真实流式管线与 [7] 真实 socket 回放
+> （见「局限」节的说明），run-all 步骤编号 6/7/8 对应本文件 [5]/[6]/[7] 组。
+
 ### [1] 权威枚举 vs 仓库白名单
 
 从官方 SDK 抽取取值集合，与 `src/provider/meta/finish.mbt` 里的三个白名单数组逐值比对：
@@ -149,5 +152,13 @@ CI 里有一道 `Assert generated artifacts are up to date`：若生成物与仓
   2026-10-24 首跑即实锤 4 类真实缺陷（gemini 分帧符、双逗号 JSON、
   responses extra 捕获口径、gemini usage/finish 帧序）并全部修复。
   尚未覆盖：逐帧增量路径（StreamConverter feed 语义）、工具调用全链路流。
+- **真实 socket 回放已接入（[7] 组，`replay.mjs`）**：本地协议服务器 +
+  三家官方 SDK 全链路 —— SDK 发出真实 HTTP 请求（auth 头 / URL 形态 /
+  wire 请求体进 Prism 请求解码）→ 服务器回放源协议流 → Prism 真实转换 →
+  官方 SDK 解析器逐帧消费（文本拼接 / 终止原因 / usage 聚合 /
+  error → APIError 不静默）。跨协议中转用 fetch 包装层实现
+  （包装必须先于 SDK 构造 —— anthropic SDK 构造时绑定全局 fetch，实测）。
+  SDK 解码器的硬约束（anthropic 跳过无 `event:` 行的帧）本身成为
+  回放组合选取的依据。
 - **js driver 产物不入库**（_build 下，每次 run-all 现场构建），
   MoonBit 编译器版本变化会导致产物字节级不同，但这不影响校验语义。
