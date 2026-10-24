@@ -650,7 +650,11 @@ test "messages encode - response finish reason and cache usage details" {
     (Length, "max_tokens"),
     (ToolCalls, "tool_use"),
     (ContentFilter, "refusal"),
-    (Safety, "end_turn"),
+    // Safety → refusal：官方对 refusal 的定义即 "streaming classifiers
+    // intervene to handle potential policy violations"，是 stop_reason 枚举里
+    // 与「安全拦截」语义对等的唯一值（此前映射 "safety" 不在官方 7 值内，
+    // 被收敛 end_turn，把拦截伪装成正常结束 —— 校验系统实测发现）
+    (Safety, "refusal"),
     (Recitation, "end_turn"),
     (MalformedToolCall, "end_turn"),
     (Error, "end_turn"),

@@ -20,6 +20,8 @@ pub fn responses_incomplete_reason(@lux.LucentFinishReason) -> String?
 
 pub fn responses_status_json(@lux.LucentFinishReason, String, Array[@lux.ConversionDiagnostic]) -> String
 
+pub fn responses_termination_reason(String, String?) -> @lux.LucentFinishReason
+
 // Errors
 
 // Types and methods

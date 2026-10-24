@@ -186,12 +186,26 @@ fn responses_decode_frames(
             let idx = @internal.field_int(jv, "output_index").unwrap_or(0)
             events.push(BlockEnd(idx))
           }
-          "response.completed" => {
+          "response.completed" | "response.incomplete" | "response.failed" => {
+            // CR-006：三个官方终止事件此前只有 completed 被处理，incomplete /
+            // failed 连同 Done 一起静默消失——response.failed 的流经 Prism 中转
+            // 后对下游表现为「什么都没发生」（实测 0 事件，零诊断）。
+            // status 映射走 @meta.responses_termination_reason，与非流式共用
+            // 同一函数（incomplete_details.reason 的 content_filter 细分等
+            // 语义两侧一致）。
             match @internal.obj_get(jv, "response") {
               Some(r) => {
                 match @internal.field_str(r, "status") {
-                  Some(s) =>
-                    events.push(Finish(@lux.LucentFinishReason::from_string(s)))
+                  Some(s) => {
+                    let reason = match
+                      @internal.obj_get(r, "incomplete_details") {
+                      Some(d) => @internal.field_str(d, "reason")
+                      None => None
+                    }
+                    events.push(
+                      Finish(@meta.responses_termination_reason(s, reason)),
+                    )
+                  }
                   None => ()
                 }
                 match @internal.obj_get(r, "usage") {
@@ -224,17 +238,77 @@ fn responses_decode_frames(
                   }
                   None => ()
                 }
+                // failed 时的 error 对象（{code, message}）：与非流式同形带出，
+                // 产生显式 Error 事件 + 诊断。调用方只知道失败不够，得知道为什么。
+                if @internal.field_str(r, "status") == Some("failed") {
+                  match @internal.obj_get(r, "error") {
+                    Some(err) => {
+                      let code = @internal.field_str(err, "code").unwrap_or("")
+                      let message = @internal.field_str(err, "message").unwrap_or(
+                        "",
+                      )
+                      if code != "" || message != "" {
+                        events.push(
+                          Error(
+                            @lux.LucentError::new(
+                              @lux.LucentErrorKind::from_string(code),
+                              message,
+                              if code == "" {
+                                None
+                              } else {
+                                Some(code)
+                              },
+                            ),
+                          ),
+                        )
+                        diagnostics.push(
+                          @lux.ConversionDiagnostic::degraded(
+                            "response.error",
+                            Some(
+                              "response failed (code: " + code + "): " + message,
+                            ),
+                          ),
+                        )
+                      }
+                    }
+                    None => ()
+                  }
+                }
               }
               None => ()
             }
             events.push(Done)
           }
-          "error" =>
-            match @internal.field_str(jv, "error") {
-              Some(err_msg) =>
-                events.push(Error(@lux.LucentError::simple(err_msg)))
-              None => ()
+          "error" => {
+            // 官方 ResponseErrorEvent 是扁平结构（spec 58391 行起）：
+            // {type:"error", code, message, param, sequence_number}
+            // 此前只读嵌套 jv["error"]（非官方形态），官方帧被静默吞掉。
+            // 顺序：先官方扁平（code/message 顶层），再兼容非官方嵌套形态。
+            let flat_code = @internal.field_str(jv, "code")
+            let flat_msg = @internal.field_str(jv, "message")
+            match (flat_code, flat_msg) {
+              (Some(_), Some(_)) => {
+                let kind = @lux.LucentErrorKind::from_string(
+                  flat_code.unwrap_or(""),
+                )
+                events.push(
+                  Error(
+                    @lux.LucentError::new(
+                      kind,
+                      flat_msg.unwrap_or(""),
+                      flat_code,
+                    ),
+                  ),
+                )
+              }
+              _ =>
+                match @internal.field_str(jv, "error") {
+                  Some(err_msg) =>
+                    events.push(Error(@lux.LucentError::simple(err_msg)))
+                  None => ()
+                }
             }
+          }
           _ => ()
         }
       }

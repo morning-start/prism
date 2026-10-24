@@ -225,14 +225,19 @@ test "cr005 - gemini stream passes Native finish reason through" {
 /// 诊断键使用目标协议的**真实字段名**（stop_reason / finish_reason /
 /// finishReason / status），而不是统一叫 finish_reason。
 test "cr005 - converged finish_reason is diagnosed" {
+  // Safety 在 openai 无对等值；在 messages 用 Recitation（同样无对等值）
+  // 验证收敛带诊断。Safety 此前映射 "safety"（非法）收敛 end_turn；
+  // 现映射官方对等值 refusal（"streaming classifiers intervene to handle
+  // potential policy violations"）直通，不再产生诊断 —— 用 Recitation 保留
+  // 「收敛必诊断」的契约覆盖。
   let events : Array[@lux.LucentStreamEvent] = [
     ConversationStart(
       @lux.LucentConversationMeta::new(Some("m"), Some("c"), None),
     ),
-    Finish(Safety),
+    Finish(Recitation),
     Done,
   ]
-  // messages：Safety 无 Anthropic 对等值 → end_turn + Unsupported
+  // messages：Recitation 无 Anthropic 对等值 → end_turn + 诊断
   match @messages.lux_events_to_messages_sse(events) {
     Err(e) => fail("encode failed: " + e)
     Ok(cr) => {

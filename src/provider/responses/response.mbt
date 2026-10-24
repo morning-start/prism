@@ -157,53 +157,37 @@ pub fn responses_json_to_lux_response(
   let msg = @lux.LucentMessage::new(Assistant, content)
   // status → finish_reason
   //
-  // `status: "incomplete"` 此前一律映射为 Length —— 但 vendored 官方 OpenAPI 的
-  // `incomplete_details.reason`（Response 级）枚举是
-  // `max_output_tokens` / `max_messages` / `content_filter` / `steered`，
-  // 其中 **content_filter 是被内容过滤截断**，与「达到 token 上限」是完全不同
-  // 的语义，压成 Length 会让调用方误以为只是没写完。
+  // 映射抽到 @meta.responses_termination_reason（CR-006 §2.1）：流式解码此前
+  // 只认 response.completed，response.incomplete / response.failed 全部静默
+  // 丢弃，根因即「两路径各写一份映射」——这里改为两条路径共用同一函数。
+  // 映射语义逐值不变（见 @meta/termination.mbt 的映射表）。
   //
-  // `failed` 时的 `error` 对象（{code, message}，均 required）此前被整体丢弃，
-  // 调用方只知道失败了、不知道为什么 —— 补 Degraded 诊断显式带出。
-  let finish = match @internal.field_str(jv, "status") {
-    Some("completed") => @lux.Stop
-    Some("incomplete") =>
-      match @internal.obj_get(jv, "incomplete_details") {
-        Some(d) =>
-          match @internal.field_str(d, "reason") {
-            // 内容过滤截断 ≠ token 上限截断
-            Some("content_filter") => ContentFilter
-            // 官方 reason 枚举里其余的「限额」类原因都是 Length 语义
-            Some("max_output_tokens") => Length
-            Some("max_messages") => Length
-            // `steered`（安全边界主动停）等无 IR 对等值 → 原样保留，不丢数据
-            Some(other) => @lux.LucentFinishReason::from_string(other)
-            // reason 缺失（Response 级为可选字段）→ 保持保守默认 Length
-            None => Length
-          }
-        // incomplete_details 缺失 → 保持保守默认 Length
-        None => Length
-      }
-    Some("failed") => {
-      match @internal.obj_get(jv, "error") {
-        Some(err) => {
-          let code = @internal.field_str(err, "code").unwrap_or("")
-          let message = @internal.field_str(err, "message").unwrap_or("")
-          if code != "" || message != "" {
-            diagnostics.push(
-              @lux.ConversionDiagnostic::degraded(
-                "response.error",
-                Some("response failed (code: " + code + "): " + message),
-              ),
-            )
-          }
+  // `failed` 时的 `error` 对象（{code, message}，均 required）不能整体丢弃，
+  // 补 Degraded 诊断显式带出。
+  let status = @internal.field_str(jv, "status")
+  let finish = @meta.responses_termination_reason(
+    status.unwrap_or(""),
+    match @internal.obj_get(jv, "incomplete_details") {
+      Some(d) => @internal.field_str(d, "reason")
+      None => None
+    },
+  )
+  if status == Some("failed") {
+    match @internal.obj_get(jv, "error") {
+      Some(err) => {
+        let code = @internal.field_str(err, "code").unwrap_or("")
+        let message = @internal.field_str(err, "message").unwrap_or("")
+        if code != "" || message != "" {
+          diagnostics.push(
+            @lux.ConversionDiagnostic::degraded(
+              "response.error",
+              Some("response failed (code: " + code + "): " + message),
+            ),
+          )
         }
-        None => ()
       }
-      Error
+      None => ()
     }
-    Some(other) => @lux.LucentFinishReason::from_string(other)
-    None => Stop
   }
   let choice = @lux.LucentChoice::new(0, msg, finish, None)
   // usage（含 reasoning/cached 细化用量，标准 §9）

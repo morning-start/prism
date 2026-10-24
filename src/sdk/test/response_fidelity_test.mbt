@@ -198,8 +198,9 @@ test "response matrix - single-result targets diagnose dropped choices" {
 /// 收敛为 `end_turn`，且**无诊断**。这四个值语义差异极大（安全拦截 / 复述 /
 /// 工具调用畸形 / 上游出错），压成 end_turn 会让调用方误以为模型正常说完。
 test "response matrix - messages diagnoses converged stop_reason" {
+  // Safety → refusal（官方对等值直通，不诊断），不再在本表内；
+  // Recitation / MalformedToolCall / Error 无 Anthropic 对等值 → end_turn + 诊断
   let cases : Array[@lux.LucentFinishReason] = [
-    Safety,
     Recitation,
     MalformedToolCall,
     Error,

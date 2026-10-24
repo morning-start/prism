@@ -147,9 +147,11 @@ pub fn messages_stop_reason_json(
     ToolCalls => "tool_use"
     ContentFilter => "refusal"
     Native(s) => s
-    // 以下四个显式给出候选，让它们在诊断里保留可读来源（否则会以 IR 拼写
-    // 落进兜底，诊断信息仍正确，但这里更直白）
-    Safety => "safety"
+    // Safety → refusal：Anthropic 官方文档对 `refusal` 的定义即
+    // "streaming classifiers intervene to handle potential policy violations"，
+    // 是 stop_reason 枚举里与「安全拦截」语义对等的唯一值。此前给 "safety"
+    // （不在官方 7 值白名单内）→ 被裁决收敛 end_turn，把拦截伪装成正常结束。
+    Safety => "refusal"
     Recitation => "recitation"
     MalformedToolCall => "malformed_tool_call"
     Error => "error"

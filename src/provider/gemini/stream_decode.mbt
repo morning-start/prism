@@ -33,6 +33,7 @@ pub fn gemini_sse_to_events(
   sse_str : String,
 ) -> Result[@lux.ConversionResult[Array[@lux.LucentStreamEvent]], String] {
   let events : Array[@lux.LucentStreamEvent] = []
+  let diagnostics : Array[@lux.ConversionDiagnostic] = []
   // Gemini 流式用单 \n 分隔消息（非标准 SSE），归一化为 \n\n
   // 先将 \n\n 压为 \n，再将 \n 展开为 \n\n，保证每个 data: 行独占一个消息块。
   // 必须 replace_all：String::replace 只替换首次出现，用 replace 会让第 2 帧
@@ -264,6 +265,47 @@ pub fn gemini_sse_to_events(
       }
       None => ()
     }
+    // CR-006：promptFeedback.blockReason（提示词被安全策略整体拦截）。
+    // 流式此前完全忽略它——candidates 缺失或无 finishReason 时不发 Finish，
+    // 累加器默认 Stop，把「被拦截」伪装成「正常结束」。与非流式
+    // gemini/response.mbt 的同语义处理对齐：Safety + Degraded 诊断。
+    // finishReason 已发过 Finish 的帧不重复发。
+    match @internal.obj_get(jv, "promptFeedback") {
+      Some(pf) =>
+        match @internal.field_str(pf, "blockReason") {
+          Some(reason) => {
+            let mut finish_seen_here = false
+            let mut k = 0
+            while k < events.length() {
+              match events[k] {
+                Finish(_) => finish_seen_here = true
+                _ => ()
+              }
+              k = k + 1
+            }
+            if !finish_seen_here {
+              let (t3, th3) = close_gemini_blocks(
+                events, open_text, open_thinking,
+              )
+              open_text = t3
+              open_thinking = th3
+              events.push(Finish(Safety))
+              diagnostics.push(
+                @lux.ConversionDiagnostic::degraded(
+                  "promptFeedback.blockReason",
+                  Some(
+                    "prompt blocked by gemini safety policy: " +
+                    reason +
+                    "; represented as finish_reason=safety",
+                  ),
+                ),
+              )
+            }
+          }
+          None => ()
+        }
+      None => ()
+    }
     i = i + 1
   }
   let (_, _) = close_gemini_blocks(events, open_text, open_thinking)
@@ -280,7 +322,7 @@ pub fn gemini_sse_to_events(
   if !done_emitted {
     events.push(Done)
   }
-  Ok(@lux.ConversionResult::new(events))
+  Ok(@lux.ConversionResult::new(events).with_diagnostics(diagnostics))
 }
 
 ///|
