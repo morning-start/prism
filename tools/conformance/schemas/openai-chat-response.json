@@ -1,0 +1,743 @@
+{
+  "$ref": "#/definitions/ChatCompletion",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "ChatCompletion": {
+      "additionalProperties": false,
+      "description": "Represents a chat completion response returned by model, based on the provided input.",
+      "properties": {
+        "choices": {
+          "description": "A list of chat completion choices. Can be more than one if `n` is greater than 1.",
+          "items": {
+            "$ref": "#/definitions/ChatCompletion.Choice"
+          },
+          "type": "array"
+        },
+        "created": {
+          "description": "The Unix timestamp (in seconds) of when the chat completion was created.",
+          "type": "number"
+        },
+        "id": {
+          "description": "A unique identifier for the chat completion.",
+          "type": "string"
+        },
+        "metadata": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Metadata"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Set of 16 key-value pairs that can be attached to an object. This can be useful for storing additional information about the object in a structured format, and querying for objects via API or the dashboard.\n\nKeys are strings with a maximum length of 64 characters. Values are strings with a maximum length of 512 characters."
+        },
+        "model": {
+          "description": "The model used for the chat completion.",
+          "type": "string"
+        },
+        "moderation": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ChatCompletion.Moderation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Moderation results for the request input and generated output, if moderated completions were requested."
+        },
+        "object": {
+          "const": "chat.completion",
+          "description": "The object type, which is always `chat.completion`.",
+          "type": "string"
+        },
+        "service_tier": {
+          "description": "Specifies the processing type used for serving the request.\n\n- If set to 'auto', then the request will be processed with the service tier   configured in the Project settings. Unless otherwise configured, the Project   will use 'default'.\n- If set to 'default', then the request will be processed with the standard   pricing and performance for the selected model.\n- If set to   '[flex](https://developers.openai.com/api/docs/guides/flex-processing)', then   the request will be processed with the Flex Processing service tier.\n- To opt-in to   [Fast mode](https://developers.openai.com/api/docs/guides/fast-mode) at the   request level, include the `service_tier=fast` or `service_tier=priority`   parameter for Responses or Chat Completions. The response will show   `service_tier=priority` regardless of if you specify `service_tier=fast` or   `priority` in your request.\n- When not set, the default behavior is 'auto'.\n\nWhen the `service_tier` parameter is set, the response body will include the `service_tier` value based on the processing mode actually used to serve the request. This response value may be different from the value set in the parameter.",
+          "enum": [
+            "auto",
+            "default",
+            "flex",
+            "scale",
+            "priority",
+            "fast",
+            null
+          ],
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "system_fingerprint": {
+          "deprecated": "This fingerprint represents the backend configuration that the model\nruns with.\n\nCan be used in conjunction with the `seed` request parameter to understand when\nbackend changes have been made that might impact determinism.",
+          "type": "string"
+        },
+        "usage": {
+          "$ref": "#/definitions/CompletionUsage",
+          "description": "Usage statistics for the completion request."
+        }
+      },
+      "required": [
+        "id",
+        "choices",
+        "created",
+        "model",
+        "object"
+      ],
+      "type": "object"
+    },
+    "ChatCompletion.Choice": {
+      "additionalProperties": false,
+      "properties": {
+        "finish_reason": {
+          "description": "The reason the model stopped generating tokens. This will be `stop` if the model hit a natural stop point or a provided stop sequence, `length` if the maximum number of tokens specified in the request was reached, `content_filter` if content was omitted due to a flag from our content filters, `tool_calls` if the model called a tool, or `function_call` (deprecated) if the model called a function. Read the [Model Spec](https://model-spec.openai.com/2025-12-18.html) for more.",
+          "enum": [
+            "stop",
+            "length",
+            "tool_calls",
+            "content_filter",
+            "function_call"
+          ],
+          "type": "string"
+        },
+        "index": {
+          "description": "The index of the choice in the list of choices.",
+          "type": "number"
+        },
+        "logprobs": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ChatCompletion.Choice.Logprobs"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Log probability information for the choice."
+        },
+        "message": {
+          "$ref": "#/definitions/ChatCompletionMessage",
+          "description": "A chat completion message generated by the model."
+        }
+      },
+      "required": [
+        "finish_reason",
+        "index",
+        "logprobs",
+        "message"
+      ],
+      "type": "object"
+    },
+    "ChatCompletion.Choice.Logprobs": {
+      "additionalProperties": false,
+      "description": "Log probability information for the choice.",
+      "properties": {
+        "content": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/definitions/ChatCompletionTokenLogprob"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A list of message content tokens with log probability information."
+        },
+        "refusal": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/definitions/ChatCompletionTokenLogprob"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A list of message refusal tokens with log probability information."
+        }
+      },
+      "required": [
+        "content",
+        "refusal"
+      ],
+      "type": "object"
+    },
+    "ChatCompletion.Moderation": {
+      "additionalProperties": false,
+      "description": "Moderation results for the request input and generated output, if moderated completions were requested.",
+      "properties": {
+        "input": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ChatCompletion.Moderation.ModerationResults"
+            },
+            {
+              "$ref": "#/definitions/ChatCompletion.Moderation.Error"
+            }
+          ],
+          "description": "Moderation for the request input."
+        },
+        "output": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ChatCompletion.Moderation.ModerationResults"
+            },
+            {
+              "$ref": "#/definitions/ChatCompletion.Moderation.Error"
+            }
+          ],
+          "description": "Moderation for the generated output."
+        }
+      },
+      "required": [
+        "input",
+        "output"
+      ],
+      "type": "object"
+    },
+    "ChatCompletion.Moderation.Error": {
+      "additionalProperties": false,
+      "description": "An error produced while attempting moderation.",
+      "properties": {
+        "code": {
+          "description": "The error code.",
+          "type": "string"
+        },
+        "message": {
+          "description": "The error message.",
+          "type": "string"
+        },
+        "type": {
+          "const": "error",
+          "description": "The object type, which is always `error`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "type"
+      ],
+      "type": "object"
+    },
+    "ChatCompletion.Moderation.ModerationResults": {
+      "additionalProperties": false,
+      "description": "Successful moderation results for the request input or generated output.",
+      "properties": {
+        "model": {
+          "description": "The moderation model used to generate the results.",
+          "type": "string"
+        },
+        "results": {
+          "description": "A list of moderation results.",
+          "items": {
+            "$ref": "#/definitions/ChatCompletion.Moderation.ModerationResults.Result"
+          },
+          "type": "array"
+        },
+        "type": {
+          "const": "moderation_results",
+          "description": "The object type, which is always `moderation_results`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model",
+        "results",
+        "type"
+      ],
+      "type": "object"
+    },
+    "ChatCompletion.Moderation.ModerationResults.Result": {
+      "additionalProperties": false,
+      "description": "A moderation result produced for the response input or output.",
+      "properties": {
+        "categories": {
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "description": "A dictionary of moderation categories to booleans, True if the input is flagged under this category.",
+          "type": "object"
+        },
+        "category_applied_input_types": {
+          "additionalProperties": {
+            "items": {
+              "enum": [
+                "text",
+                "image"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "description": "Which modalities of input are reflected by the score for each category.",
+          "type": "object"
+        },
+        "category_scores": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "A dictionary of moderation categories to scores.",
+          "type": "object"
+        },
+        "flagged": {
+          "description": "A boolean indicating whether the content was flagged by any category.",
+          "type": "boolean"
+        },
+        "model": {
+          "description": "The moderation model that produced this result.",
+          "type": "string"
+        },
+        "type": {
+          "const": "moderation_result",
+          "description": "The object type, which was always `moderation_result` for successful moderation results.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "categories",
+        "category_applied_input_types",
+        "category_scores",
+        "flagged",
+        "model",
+        "type"
+      ],
+      "type": "object"
+    },
+    "ChatCompletionAudio": {
+      "additionalProperties": false,
+      "description": "If the audio output modality is requested, this object contains data about the audio response from the model. [Learn more](https://developers.openai.com/api/docs/guides/audio).",
+      "properties": {
+        "data": {
+          "description": "Base64 encoded audio bytes generated by the model, in the format specified in the request.",
+          "type": "string"
+        },
+        "expires_at": {
+          "description": "The Unix timestamp (in seconds) for when this audio response will no longer be accessible on the server for use in multi-turn conversations.",
+          "type": "number"
+        },
+        "id": {
+          "description": "Unique identifier for this audio response.",
+          "type": "string"
+        },
+        "transcript": {
+          "description": "Transcript of the audio generated by the model.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "data",
+        "expires_at",
+        "transcript"
+      ],
+      "type": "object"
+    },
+    "ChatCompletionMessage": {
+      "additionalProperties": false,
+      "description": "A chat completion message generated by the model.",
+      "properties": {
+        "annotations": {
+          "description": "Annotations for the message, when applicable, as when using the [web search tool](https://developers.openai.com/api/docs/guides/tools-web-search).",
+          "items": {
+            "$ref": "#/definitions/ChatCompletionMessage.Annotation"
+          },
+          "type": "array"
+        },
+        "audio": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ChatCompletionAudio"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "If the audio output modality is requested, this object contains data about the audio response from the model. [Learn more](https://developers.openai.com/api/docs/guides/audio)."
+        },
+        "content": {
+          "description": "The contents of the message.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "function_call": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ChatCompletionMessage.FunctionCall"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "deprecated": "Deprecated and replaced by `tool_calls`. The name and arguments of a\nfunction that should be called, as generated by the model."
+        },
+        "refusal": {
+          "description": "The refusal message generated by the model.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "role": {
+          "const": "assistant",
+          "description": "The role of the author of this message.",
+          "type": "string"
+        },
+        "tool_calls": {
+          "description": "The tool calls generated by the model, such as function calls.",
+          "items": {
+            "$ref": "#/definitions/ChatCompletionMessageToolCall"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "content",
+        "refusal",
+        "role"
+      ],
+      "type": "object"
+    },
+    "ChatCompletionMessage.Annotation": {
+      "additionalProperties": false,
+      "description": "A URL citation when using web search.",
+      "properties": {
+        "type": {
+          "const": "url_citation",
+          "description": "The type of the URL citation. Always `url_citation`.",
+          "type": "string"
+        },
+        "url_citation": {
+          "$ref": "#/definitions/ChatCompletionMessage.Annotation.URLCitation",
+          "description": "A URL citation when using web search."
+        }
+      },
+      "required": [
+        "type",
+        "url_citation"
+      ],
+      "type": "object"
+    },
+    "ChatCompletionMessage.Annotation.URLCitation": {
+      "additionalProperties": false,
+      "description": "A URL citation when using web search.",
+      "properties": {
+        "end_index": {
+          "description": "The index of the last character of the URL citation in the message.",
+          "type": "number"
+        },
+        "start_index": {
+          "description": "The index of the first character of the URL citation in the message.",
+          "type": "number"
+        },
+        "title": {
+          "description": "The title of the web resource.",
+          "type": "string"
+        },
+        "url": {
+          "description": "The URL of the web resource.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "end_index",
+        "start_index",
+        "title",
+        "url"
+      ],
+      "type": "object"
+    },
+    "ChatCompletionMessage.FunctionCall": {
+      "additionalProperties": false,
+      "deprecated": "Deprecated and replaced by `tool_calls`. The name and arguments of a\nfunction that should be called, as generated by the model.",
+      "properties": {
+        "arguments": {
+          "description": "The arguments to call the function with, as generated by the model in JSON format. Note that the model does not always generate valid JSON, and may hallucinate parameters not defined by your function schema. Validate the arguments in your code before calling your function.",
+          "type": "string"
+        },
+        "name": {
+          "description": "The name of the function to call.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "arguments",
+        "name"
+      ],
+      "type": "object"
+    },
+    "ChatCompletionMessageCustomToolCall": {
+      "additionalProperties": false,
+      "description": "A call to a custom tool created by the model.",
+      "properties": {
+        "custom": {
+          "$ref": "#/definitions/ChatCompletionMessageCustomToolCall.Custom",
+          "description": "The custom tool that the model called."
+        },
+        "id": {
+          "description": "The ID of the tool call.",
+          "type": "string"
+        },
+        "type": {
+          "const": "custom",
+          "description": "The type of the tool. Always `custom`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "custom",
+        "type"
+      ],
+      "type": "object"
+    },
+    "ChatCompletionMessageCustomToolCall.Custom": {
+      "additionalProperties": false,
+      "description": "The custom tool that the model called.",
+      "properties": {
+        "input": {
+          "description": "The input for the custom tool call generated by the model.",
+          "type": "string"
+        },
+        "name": {
+          "description": "The name of the custom tool to call.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "input",
+        "name"
+      ],
+      "type": "object"
+    },
+    "ChatCompletionMessageFunctionToolCall": {
+      "additionalProperties": false,
+      "description": "A call to a function tool created by the model.",
+      "properties": {
+        "function": {
+          "$ref": "#/definitions/ChatCompletionMessageFunctionToolCall.Function",
+          "description": "The function that the model called."
+        },
+        "id": {
+          "description": "The ID of the tool call.",
+          "type": "string"
+        },
+        "type": {
+          "const": "function",
+          "description": "The type of the tool. Currently, only `function` is supported.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "function",
+        "type"
+      ],
+      "type": "object"
+    },
+    "ChatCompletionMessageFunctionToolCall.Function": {
+      "additionalProperties": false,
+      "description": "The function that the model called.",
+      "properties": {
+        "arguments": {
+          "description": "The arguments to call the function with, as generated by the model in JSON format. Note that the model does not always generate valid JSON, and may hallucinate parameters not defined by your function schema. Validate the arguments in your code before calling your function.",
+          "type": "string"
+        },
+        "name": {
+          "description": "The name of the function to call.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "arguments",
+        "name"
+      ],
+      "type": "object"
+    },
+    "ChatCompletionMessageToolCall": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ChatCompletionMessageFunctionToolCall"
+        },
+        {
+          "$ref": "#/definitions/ChatCompletionMessageCustomToolCall"
+        }
+      ],
+      "description": "A call to a function tool created by the model."
+    },
+    "ChatCompletionTokenLogprob": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A list of integers representing the UTF-8 bytes representation of the token. Useful in instances where characters are represented by multiple tokens and their byte representations must be combined to generate the correct text representation. Can be `null` if there is no bytes representation for the token."
+        },
+        "logprob": {
+          "description": "The log probability of this token, if it is within the top 20 most likely tokens. Otherwise, the value `-9999.0` is used to signify that the token is very unlikely.",
+          "type": "number"
+        },
+        "token": {
+          "description": "The token.",
+          "type": "string"
+        },
+        "top_logprobs": {
+          "description": "List of the most likely tokens and their log probability, at this token position. The number of entries may be fewer than the requested `top_logprobs`.",
+          "items": {
+            "$ref": "#/definitions/ChatCompletionTokenLogprob.TopLogprob"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "token",
+        "bytes",
+        "logprob",
+        "top_logprobs"
+      ],
+      "type": "object"
+    },
+    "ChatCompletionTokenLogprob.TopLogprob": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "A list of integers representing the UTF-8 bytes representation of the token. Useful in instances where characters are represented by multiple tokens and their byte representations must be combined to generate the correct text representation. Can be `null` if there is no bytes representation for the token."
+        },
+        "logprob": {
+          "description": "The log probability of this token, if it is within the top 20 most likely tokens. Otherwise, the value `-9999.0` is used to signify that the token is very unlikely.",
+          "type": "number"
+        },
+        "token": {
+          "description": "The token.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "token",
+        "bytes",
+        "logprob"
+      ],
+      "type": "object"
+    },
+    "CompletionUsage": {
+      "additionalProperties": false,
+      "description": "Usage statistics for the completion request.",
+      "properties": {
+        "completion_tokens": {
+          "description": "Number of tokens in the generated completion.",
+          "type": "number"
+        },
+        "completion_tokens_details": {
+          "$ref": "#/definitions/CompletionUsage.CompletionTokensDetails",
+          "description": "Breakdown of tokens used in a completion."
+        },
+        "prompt_tokens": {
+          "description": "Number of tokens in the prompt.",
+          "type": "number"
+        },
+        "prompt_tokens_details": {
+          "$ref": "#/definitions/CompletionUsage.PromptTokensDetails",
+          "description": "Breakdown of tokens used in the prompt."
+        },
+        "total_tokens": {
+          "description": "Total number of tokens used in the request (prompt + completion).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "completion_tokens",
+        "prompt_tokens",
+        "total_tokens"
+      ],
+      "type": "object"
+    },
+    "CompletionUsage.CompletionTokensDetails": {
+      "additionalProperties": false,
+      "description": "Breakdown of tokens used in a completion.",
+      "properties": {
+        "accepted_prediction_tokens": {
+          "description": "When using Predicted Outputs, the number of tokens in the prediction that appeared in the completion.",
+          "type": "number"
+        },
+        "audio_tokens": {
+          "description": "Audio input tokens generated by the model.",
+          "type": "number"
+        },
+        "reasoning_tokens": {
+          "description": "Tokens generated by the model for reasoning.",
+          "type": "number"
+        },
+        "rejected_prediction_tokens": {
+          "description": "When using Predicted Outputs, the number of tokens in the prediction that did not appear in the completion. However, like reasoning tokens, these tokens are still counted in the total completion tokens for purposes of billing, output, and context window limits.",
+          "type": "number"
+        },
+        "text_tokens": {
+          "description": "Text output tokens generated by the model.",
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "CompletionUsage.PromptTokensDetails": {
+      "additionalProperties": false,
+      "description": "Breakdown of tokens used in the prompt.",
+      "properties": {
+        "audio_tokens": {
+          "description": "Audio input tokens present in the prompt.",
+          "type": "number"
+        },
+        "cache_write_tokens": {
+          "description": "The unadjusted number of prompt tokens written to cache.",
+          "type": "number"
+        },
+        "cached_tokens": {
+          "description": "Cached tokens present in the prompt.",
+          "type": "number"
+        },
+        "image_tokens": {
+          "description": "Image input tokens present in the prompt.",
+          "type": "number"
+        },
+        "text_tokens": {
+          "description": "Text input tokens present in the prompt.",
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "Metadata": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Set of 16 key-value pairs that can be attached to an object. This can be useful for storing additional information about the object in a structured format, and querying for objects via API or the dashboard.\n\nKeys are strings with a maximum length of 64 characters. Values are strings with a maximum length of 512 characters.",
+      "type": "object"
+    }
+  }
+}

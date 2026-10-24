@@ -1,0 +1,58 @@
+{
+  "desc": "官方 spec 内嵌真实 response.completed 事件的 response 体",
+  "schema": "openai-responses-response.json",
+  "payload": {
+    "id": "resp_67c9fdcecf488190bdd9a0409de3a1ec07b8b0ad4e5eb654",
+    "object": "response",
+    "created_at": 1741290958,
+    "status": "completed",
+    "error": null,
+    "incomplete_details": null,
+    "instructions": "You are a helpful assistant.",
+    "max_output_tokens": null,
+    "model": "gpt-6-astra",
+    "output": [
+      {
+        "id": "msg_67c9fdcf37fc8190ba82116e33fb28c507b8b0ad4e5eb654",
+        "type": "message",
+        "status": "completed",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "output_text",
+            "text": "Hi there! How can I assist you today?",
+            "annotations": []
+          }
+        ]
+      }
+    ],
+    "parallel_tool_calls": true,
+    "previous_response_id": null,
+    "reasoning": {
+      "effort": null,
+      "summary": null
+    },
+    "store": true,
+    "temperature": 1,
+    "text": {
+      "format": {
+        "type": "text"
+      }
+    },
+    "tool_choice": "auto",
+    "tools": [],
+    "top_p": 1,
+    "truncation": "disabled",
+    "usage": {
+      "input_tokens": 37,
+      "output_tokens": 11,
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 48
+    },
+    "user": null,
+    "metadata": {}
+  },
+  "expect": true
+}

@@ -1,0 +1,45 @@
+{
+  "_generated": "2026-10-24",
+  "_sources": {
+    "messages.stop_reason": "@anthropic-ai/sdk (Message.stop_reason -> StopReason)",
+    "openai.finish_reason": "schemas/endpoints/openai-openapi.yaml (vendored, MIT)",
+    "gemini.finishReason": "@google/genai (FinishReason enum)"
+  },
+  "messages.stop_reason": [
+    "end_turn",
+    "max_tokens",
+    "stop_sequence",
+    "tool_use",
+    "pause_turn",
+    "refusal",
+    "model_context_window_exceeded"
+  ],
+  "openai.finish_reason": [
+    "stop",
+    "length",
+    "tool_calls",
+    "content_filter",
+    "function_call"
+  ],
+  "gemini.finishReason": [
+    "FINISH_REASON_UNSPECIFIED",
+    "STOP",
+    "MAX_TOKENS",
+    "SAFETY",
+    "RECITATION",
+    "LANGUAGE",
+    "OTHER",
+    "BLOCKLIST",
+    "PROHIBITED_CONTENT",
+    "SPII",
+    "MALFORMED_FUNCTION_CALL",
+    "IMAGE_SAFETY",
+    "UNEXPECTED_TOOL_CALL",
+    "TOO_MANY_TOOL_CALLS",
+    "IMAGE_PROHIBITED_CONTENT",
+    "NO_IMAGE",
+    "IMAGE_RECITATION",
+    "IMAGE_OTHER",
+    "CONTINUATION"
+  ]
+}

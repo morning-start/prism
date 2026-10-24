@@ -68,12 +68,23 @@ let openai_finish_reasons : Array[String] = [
 ///|
 /// Google Gemini `finishReason` 的封闭合法值集合（全大写）。
 ///
-/// 来源：Gemini `GenerateContentResponse.candidates[].finishReason`。
+/// 来源：`@google/genai` 官方 SDK 的 `FinishReason` 枚举（19 个值），由
+/// `tools/conformance/gen-schemas.mjs` 抽取到 `tools/conformance/schemas/authority.json`，
+/// 并由 `node tools/conformance/validate.mjs` 的 [1] 组逐值比对 —— **不要手改本数组，
+/// 以 authority.json 为准**。
+///
+/// 历史教训：上一版是手写的 16 个值，同时存在两类错误（均由上述比对实测发现）：
+///   1. 缺失 5 个官方值（`NO_IMAGE` / `CONTINUATION` / `IMAGE_OTHER` /
+///      `IMAGE_RECITATION` / `IMAGE_PROHIBITED_CONTENT`）→ 这些值在
+///      gemini→gemini 同源往返时被判非法，收敛成 `OTHER` 并打 Degraded 诊断，
+///      违反「同源往返必须 Exact」。
+///   2. 编造 2 个不存在的值（`MALFORMED_RESPONSE` / `MISSING_THOUGHT_SIGNATURE`）
+///      → 会放行官方并不认可的取值。
 let gemini_finish_reasons : Array[String] = [
   "FINISH_REASON_UNSPECIFIED", "STOP", "MAX_TOKENS", "SAFETY", "RECITATION", "LANGUAGE",
   "OTHER", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "MALFORMED_FUNCTION_CALL",
-  "IMAGE_SAFETY", "UNEXPECTED_TOOL_CALL", "TOO_MANY_TOOL_CALLS", "MALFORMED_RESPONSE",
-  "MISSING_THOUGHT_SIGNATURE",
+  "IMAGE_SAFETY", "UNEXPECTED_TOOL_CALL", "TOO_MANY_TOOL_CALLS", "IMAGE_PROHIBITED_CONTENT",
+  "NO_IMAGE", "IMAGE_RECITATION", "IMAGE_OTHER", "CONTINUATION",
 ]
 
 ///|

@@ -117,6 +117,46 @@ jobs:
       - name: Run conformance property tests (native)
         run: moon test --target native src/sdk/test
 
+  # 官方 schema 校验：用三家官方 SDK 的类型定义当裁判，验证 Prism 产出会被真实
+  # API 接受。这是 MoonBit 测试做不到的一层（它只能验证"自己跟自己一致"）。
+  #
+  # 覆盖四个维度（详见 tools/conformance/validate.mjs）：
+  #   [1] 权威枚举 vs 仓库白名单 —— 抓"编造值 / 漏官方值"
+  #   [2] 校验器自检           —— 证明裁判本身没有失效
+  #   [3] 跨协议词汇泄漏       —— 抓 pause_turn 泄漏到 openai 这类问题
+  #   [4] golden 回放          —— 用官方 spec 内嵌的真实样本回放
+  oracle:
+    name: Official Schema Oracle (Node)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tools/conformance/package-lock.json
+
+      - name: Install oracle dependencies
+        working-directory: tools/conformance
+        run: npm ci
+
+      - name: Run all conformance checks (single entry)
+        run: node tools/conformance/run-all.mjs
+
+      # golden/schema 是生成物且入库：若官方 SDK 升级导致枚举变化，git diff 会
+      # 显式暴露，必须人工确认后提交 —— 避免"官方加了值但我们悄悄没跟上"。
+      - name: Assert generated artifacts are up to date
+        run: |
+          git add -A tools/conformance/schemas fixtures/golden
+          if ! git diff --cached --quiet; then
+            echo "::error::生成的 schema/golden 与仓库不一致；请本地运行 node tools/conformance/run-all.mjs 后提交"
+            git diff --cached --stat
+            exit 1
+          fi
+
   coverage:
     name: Coverage Baseline
     runs-on: ubuntu-latest

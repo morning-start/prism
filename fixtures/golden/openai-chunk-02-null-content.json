@@ -1,0 +1,22 @@
+{
+  "desc": "官方 spec 内嵌真实 chunk：finish_reason=null，delta={content}",
+  "schema": "openai-chat-chunk.json",
+  "payload": {
+    "id": "chatcmpl-123",
+    "object": "chat.completion.chunk",
+    "created": 1694268190,
+    "model": "gpt-6-astra",
+    "system_fingerprint": "fp_44709d6fcb",
+    "choices": [
+      {
+        "index": 0,
+        "delta": {
+          "content": "Hello"
+        },
+        "logprobs": null,
+        "finish_reason": null
+      }
+    ]
+  },
+  "expect": true
+}
