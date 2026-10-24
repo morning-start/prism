@@ -1,0 +1,14 @@
+pkgtype(kind: "executable")
+
+import {
+  "morning-start/prism/wasm",
+}
+
+options(
+  targets: {
+    // js-target driver：仅 js 后端编译（extern "js" 在 wasm-gc 不受支持）
+    "driver_js.mbt": [ "js" ],
+    // 非 js 后端的占位 main，保证各 target 都能编译检查
+    "driver_stub.mbt": [ "wasm", "wasm-gc", "native", "llvm" ],
+  },
+)

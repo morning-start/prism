@@ -72,6 +72,9 @@ const NOISE_KNOWN = new Set([
   // 这些不是 Prism 的问题，是上游 schema 演进快于示例更新。归入噪音，
   // 避免把"样本过时"误报成"转换错误"。
   'access_programs', 'output_text', 'input_tokens_details', 'safety_identifier',
+  // Anthropic TextBlock.citations：TS 类型必填，官方文档为可选字段
+  // （仅当输出含引用时出现）。Prism 不建模引用溯源，缺失合法。
+  'citations',
 ]);
 
 /**

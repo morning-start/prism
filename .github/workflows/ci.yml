@@ -143,7 +143,15 @@ jobs:
         working-directory: tools/conformance
         run: npm ci
 
-      - name: Run all conformance checks (single entry)
+      # oracle job 需要 MoonBit 工具链：步骤 5 会构建 js driver，
+      # 让 Node 直接驱动真实转换管线（而非仅校验手写样本）
+      - name: Set up MoonBit
+        uses: hustcer/setup-moonbit@v1
+
+      - name: Update dependencies
+        run: moon update
+
+      - name: Run all conformance checks (single entry, incl. real pipeline)
         run: node tools/conformance/run-all.mjs
 
       # golden/schema 是生成物且入库：若官方 SDK 升级导致枚举变化，git diff 会

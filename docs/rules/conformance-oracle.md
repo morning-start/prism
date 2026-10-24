@@ -48,7 +48,7 @@ node tools/conformance/run-all.mjs
 ./scripts/verify.sh --oracle   # 仅 Node 层
 ```
 
-## 四组检查
+## 五组检查
 
 ### [1] 权威枚举 vs 仓库白名单
 
@@ -73,6 +73,30 @@ node tools/conformance/run-all.mjs
 
 从 vendored 的 `schemas/endpoints/openai-openapi.yaml`（官方仓库，MIT）里
 抽出真实响应体与 SSE 帧，逐条过 schema。零成本、离线、无 license 风险。
+
+### [5] 真实管线校验（核心）
+
+前四组校验的是手写样本；这一组校验 **Prism 真实转换的产出**：
+
+```
+官方形态输入 → Prism js-driver（零编组）→ 真实产出 → 官方 schema / 权威枚举
+```
+
+实现：`src/cmd/repl`（仅 js target 编译）把 wasm 层的转换函数挂到
+`globalThis.__prism`，Node 侧 `tools/conformance/prism.mjs` 加载产物后直接调用
+——同一套 ABI（String 进/出 + JSON 信封），无任何文件编组。
+
+校验矩阵：每家源协议的官方样本 decode → IR，再 encode 到全部 4 家目标，
+对产出做官方 schema / Message 形态 / 权威枚举三重校验。
+
+> **缺陷注入验证**（2026-10-24）：把 messages 编码器的 `stop_reason` 键名
+> 改成 `stop_reason_typo` 后重跑，管线校验精确报出
+> `/stop_reason: must have required property`，2 处失败、CI 退出非零；
+> 恢复后回到全绿。这证明本组抓的是**真实管线缺陷**，不是样本摆设。
+
+> 附带发现：往 messages 收敛器注入 `Stop => "stop"`（openai 词汇）**不会**逃逸
+> ——`arbitrate` 白名单裁决器把它收敛回 `end_turn` 并打诊断。CR-005 的修复
+> 仍然有效，这本身也是一次有价值的回归确认。
 
 ## 产物与漂移
 
@@ -114,7 +138,12 @@ CI 里有一道 `Assert generated artifacts are up to date`：若生成物与仓
   不证明「这份 JSON 表达的意思和源一致」。语义一致性由 MoonBit 侧的往返测试保证。
 - **OpenAI 覆盖最全**（有 vendored 官方 OpenAPI + 官方 SDK），
   Anthropic / Gemini 只覆盖 SDK 类型能表达的字段。
+  `responses` / `gemini` 目标目前只校验关键结构字段（object/candidates 存在性），
+  完整 schema 校验待补（需先解决两家 SDK 类型与 wire 形态的已知偏差）。
 - **不能替代真实 API 调用**。schema 通过 ≠ API 接受（服务端可能有额外校验）。
   拿到 API key 后应补录制真实流量（VCR 风格）作为最终验证。
 - **流式只校验单帧**。帧序列的合法性（顺序、配对）由 MoonBit 侧的
-  `stream_event_coverage_test` 覆盖。
+  `stream_event_coverage_test` 覆盖；[5] 组目前只覆盖非流式响应管线，
+  流式管线（convert_stream）复用同一 ABI，接入是机械工作，待补。
+- **js driver 产物不入库**（_build 下，每次 run-all 现场构建），
+  MoonBit 编译器版本变化会导致产物字节级不同，但这不影响校验语义。
