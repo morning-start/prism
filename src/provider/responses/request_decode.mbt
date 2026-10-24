@@ -33,36 +33,6 @@ fn append_field(base : String, field : String) -> String {
 }
 
 ///|
-/// 从 Json 对象中提取非排除字段，构建 extra Json。
-/// 排除的字段名通过 `exclude` 数组指定。
-fn build_extra(jv : Json, exclude : Array[String]) -> Json? {
-  match jv {
-    Object(m) => {
-      let extra_fields : Map[String, Json] = Map([])
-      m.each(fn(k, v) {
-        let mut excluded = false
-        let mut j = 0
-        while j < exclude.length() {
-          if k == exclude[j] {
-            excluded = true
-          }
-          j = j + 1
-        }
-        if !excluded {
-          extra_fields[k] = v
-        }
-      })
-      if extra_fields.is_empty() {
-        None
-      } else {
-        Some(Json::object(extra_fields))
-      }
-    }
-    _ => None
-  }
-}
-
-///|
 /// 解析 input Item → LucentConversationItem
 fn parse_input_item(
   item : Json,

@@ -56,7 +56,23 @@ fn responses_decode_frames(
                 let rid = @internal.field_str(r, "id")
                 let rmodel = @internal.field_str(r, "model")
                 let created_at = @internal.field_int(r, "created_at")
-                let extra = build_extra(r, ["id", "model", "created_at"])
+                // extra 捕获口径与非流式 response.mbt 一致：只捕获 wire 顶层
+                // **IR 未建模**的非建模字段（moderation）。此前用 build_extra
+                // 「剔除白名单外全保留」，把 status / output / usage 等
+                // Response 顶层建模字段也塞进 extra，出站时这些键会被
+                // 编码器当外来/撞名处理（更糟：拼进 response.created 顶层，
+                // 产出非法 JSON —— 双逗号实测可见）。
+                let extra = match @internal.obj_get(r, "moderation") {
+                  Some(v) =>
+                    match
+                      @internal.parse_json_opt(
+                        "{\"moderation\":" + v.stringify() + "}",
+                      ) {
+                      Some(wrapped) => Some(wrapped)
+                      None => None
+                    }
+                  None => None
+                }
                 events.push(
                   ConversationStart(
                     @lux.LucentConversationMeta::new_full(

@@ -79,6 +79,9 @@ pub fn lux_events_to_openai_sse_with_ctx(
           "provider_payload",
           diagnostics,
         )
+        // extra_json 形如 `,"k":v`（非空时），chunk_prefix 以 `,` 结尾 ——
+        // 直接顺序拼接即得合法 JSON。此前对 extra_json 做前导逗号剔除，
+        // extra 非空时会产出 `,,` 非法 JSON（管线校验实测）。
         out.push(
           chunk_prefix(chat_id, chat_model, chat_created) +
           extra_json +

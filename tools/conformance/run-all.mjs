@@ -12,6 +12,7 @@
  *   4. 权威枚举 + schema 自检 + 跨协议泄漏 + golden 回放
  *   5. 构建 js driver（MoonBit → js，让 Node 直接驱动真实转换管线）
  *   6. 真实管线校验：官方样本 → Prism → 产出 → 官方 schema
+ *   7. 真实流式管线校验：官方 SSE → convert_stream → 帧序契约
  *
  * 任一步失败即中断并返回非零退出码。
  */
@@ -86,6 +87,26 @@ run('构建 js driver（真实管线产物）', ['--build-driver']);
   );
   if (r.status !== 0) {
     console.error(`\n✗ 失败于步骤 ${step}: 真实管线校验`);
+    process.exit(r.status ?? 1);
+  }
+}
+
+// [6] 真实流式管线：convert_stream 的逐帧契约校验
+{
+  step++;
+  console.log(`\n[${step}] 真实流式管线校验（convert_stream → 帧序契约）`);
+  const r = spawnSync(
+    process.execPath,
+    ['--input-type=module', '-e', `
+      import { run } from './pipeline-stream.mjs';
+      const s = await run();
+      console.log('总计: ' + s.pass + ' pass / ' + s.fail + ' fail');
+      process.exit(s.fail ? 1 : 0);
+    `],
+    { cwd: HERE, stdio: 'inherit', env: process.env },
+  );
+  if (r.status !== 0) {
+    console.error(`\n✗ 失败于步骤 ${step}: 真实流式管线校验`);
     process.exit(r.status ?? 1);
   }
 }

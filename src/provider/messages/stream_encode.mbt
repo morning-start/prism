@@ -40,97 +40,16 @@ fn messages_meta_cache(meta : @lux.LucentConversationMeta) -> (Int32?, Int32?) {
 ///|
 /// CR-002 A3：把事件流按 Finish 分段配对 Usage。
 ///
-/// 每个 Finish 与它所在窗口（上一个 Finish 与下一个 Finish 之间，开区间）内的
-/// Usage 配对：优先取 Finish **之后**的最后一个 Usage（Anthropic 正常形态：
-/// message_delta 同帧给 stop_reason + usage），否则回退到 Finish **之前**窗口内
-/// 最后一个 Usage（IR 事件序为 [Usage, Finish] 时）。被配对的 Usage 由该 Finish
-/// 合并发射，其余 Usage 独立发射 —— 避免"Finish 输出 output_tokens: 0 把真实用量
-/// 覆盖成 0"。
+/// 配对逻辑已抽到 `@meta.pair_usages_with_finish`（gemini 流编码同样需要
+/// usageMetadata 随 finishReason 帧发射，协议无关的预扫描只写一份）。
+/// 语义不变：每个 Finish 优先配对其**之后**窗口内最后一个 Usage，
+/// 否则回退 Finish 之前窗口内最后一个未被消费的 Usage。
 ///
 /// 返回：(每个 Usage 是否已被消费, 每个 Finish 配对的 Usage)
 fn messages_pair_usages(
   events : Array[@lux.LucentStreamEvent],
 ) -> (Array[Bool], Array[@lux.LucentUsage?]) {
-  let n = events.length()
-  let consumed : Array[Bool] = []
-  let paired : Array[@lux.LucentUsage?] = []
-  let mut k = 0
-  while k < n {
-    consumed.push(false)
-    paired.push(None)
-    k = k + 1
-  }
-  let mut i = 0
-  while i < n {
-    match events[i] {
-      Finish(_) => {
-        // 窗口下界：上一个 Finish 之后
-        let mut lower = 0
-        let mut prev = i - 1
-        let mut prev_done = false
-        while prev >= 0 && !prev_done {
-          match events[prev] {
-            Finish(_) => {
-              lower = prev + 1
-              prev_done = true
-            }
-            _ => prev = prev - 1
-          }
-        }
-        // 窗口上界：下一个 Finish 之前
-        let mut upper = n
-        let mut nxt = i + 1
-        let mut next_done = false
-        while nxt < n && !next_done {
-          match events[nxt] {
-            Finish(_) => {
-              upper = nxt
-              next_done = true
-            }
-            _ => nxt = nxt + 1
-          }
-        }
-        // 1) Finish 之后窗口内最后一个 Usage。
-        // 此处无需 consumed 守卫：窗口上界是下一个 Finish，两个 Finish 的
-        // after 窗口互不重叠，同一 Usage 不会同时落在两个 after 窗口内。
-        let mut after_last = -1
-        let mut j = i + 1
-        while j < upper {
-          match events[j] {
-            Usage(_) => after_last = j
-            _ => ()
-          }
-          j = j + 1
-        }
-        // 2) 否则取 Finish 之前窗口内最后一个 Usage。
-        // 此处**必须**判 consumed：before 窗口的下界只是「上一个 Finish」，
-        // 其间的 Usage 可能已被上一个 Finish 通过 after 窗口取走 —— 不判重
-        // 会让同一个 usage 跟着两个 Finish 各发一遍 message_delta。
-        let mut before_last = -1
-        if after_last < 0 {
-          let mut j2 = lower
-          while j2 < i {
-            match events[j2] {
-              Usage(_) => if !consumed[j2] { before_last = j2 }
-              _ => ()
-            }
-            j2 = j2 + 1
-          }
-        }
-        let chosen = if after_last >= 0 { after_last } else { before_last }
-        if chosen >= 0 {
-          consumed[chosen] = true
-          match events[chosen] {
-            Usage(u) => paired[i] = Some(u)
-            _ => ()
-          }
-        }
-      }
-      _ => ()
-    }
-    i = i + 1
-  }
-  (consumed, paired)
+  @meta.pair_usages_with_finish(events)
 }
 
 ///|
@@ -147,7 +66,10 @@ pub fn lux_events_to_messages_sse(
   while i < events.length() {
     match events[i] {
       ConversationStart(meta) => {
-        let mut fields = "\"type\":\"message_start\""
+        // 官方 message_start 帧的内层 message.type 必须是 "message"
+        // （官方 Message 对象的常量；SDK schema 也是 const "message"）。
+        // 此前写成 "message_start"，严格校验的对端会拒绝首帧。
+        let mut fields = "\"type\":\"message\""
         match meta.id {
           Some(id) =>
             fields = fields + ",\"id\":\"" + @internal.json_escape(id) + "\""

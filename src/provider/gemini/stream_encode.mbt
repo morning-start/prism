@@ -73,6 +73,27 @@ pub fn GeminiStreamState::new() -> GeminiStreamState {
 }
 
 ///|
+/// LucentUsage → usageMetadata JSON 对象（不含外层花括号包裹的信封）。
+/// 键集与官方 GenerateContentResponse.usageMetadata 一致；可选计费项缺失时不输出。
+fn gemini_usage_metadata(u : @lux.LucentUsage) -> String {
+  let mut s = "{\"promptTokenCount\":" +
+    u.prompt_tokens.to_string() +
+    ",\"candidatesTokenCount\":" +
+    u.completion_tokens.to_string() +
+    ",\"totalTokenCount\":" +
+    u.total_tokens.to_string()
+  match u.reasoning_tokens {
+    Some(n) => s = s + ",\"thoughtsTokenCount\":" + n.to_string()
+    None => ()
+  }
+  match u.cached_tokens {
+    Some(n) => s = s + ",\"cachedContentTokenCount\":" + n.to_string()
+    None => ()
+  }
+  s + "}"
+}
+
+///|
 pub fn lux_events_to_gemini_sse(
   events : Array[@lux.LucentStreamEvent],
 ) -> Result[@lux.ConversionResult[String], String] {
@@ -100,6 +121,10 @@ fn gemini_encode_frames(
   let mut acc_signature = st.acc_signature
   // ConversationStart 是否已产出首帧（元数据帧只发一次）
   let mut conv_started = false
+  // CR-002 A3 同款：Usage/Finish 配对预扫描（协议无关逻辑在 @meta）。
+  // 配对的 Usage 随 finishReason 帧同帧发射（官方 usageMetadata 位于
+  // 最后一个 chunk），未配对的独立发射。
+  let (usage_consumed, finish_usage) = @meta.pair_usages_with_finish(events)
   let mut i = 0
   while i < events.length() {
     match events[i] {
@@ -137,6 +162,9 @@ fn gemini_encode_frames(
             Some(v) => "\"modelVersion\":\"" + @internal.json_escape(v) + "\","
             None => ""
           }
+          // extra_json 已自带前导逗号（非空时）；id/model part 亦然，
+          // 直接顺序拼接不会产生空位双逗号。此前三段独立拼接在
+          // 「extra 为空 + id/model 缺失」等组合下会产出 ",," 非法 JSON。
           lines.push(
             "data: {" + id_part + model_part + extra_json + "\"candidates\":[]}",
           )
@@ -283,33 +311,33 @@ fn gemini_encode_frames(
         let finish_str = @meta.gemini_finish_reason(
           fr, "candidates", diagnostics,
         )
+        // 官方 Gemini 流的 usageMetadata 携带在带 finishReason 的**最后一个
+        // chunk** 上，之后不再有数据帧。此前 Usage 事件独立发在 Finish 之后，
+        // 终止帧不带用量且 usage 帧出现在 finishReason 之后（违反帧序）。
+        // 现按 CR-002 A3 同款预扫描把 Finish 与 Usage 配对：配对成功的
+        // Usage 随 finishReason 帧同帧发射，其余独立发射。
+        let usage_part = match finish_usage[i] {
+          Some(u) => ",\"usageMetadata\":" + gemini_usage_metadata(u)
+          None => ""
+        }
         lines.push(
           "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[]},\"finishReason\":\"" +
           finish_str +
-          "\"}]}",
+          "\"}]" +
+          usage_part +
+          "}",
         )
       }
-      Usage(u) => {
-        let mut usage_json = "\"candidates\":[],\"usageMetadata\":{\"promptTokenCount\":" +
-          u.prompt_tokens.to_string() +
-          ",\"candidatesTokenCount\":" +
-          u.completion_tokens.to_string() +
-          ",\"totalTokenCount\":" +
-          u.total_tokens.to_string()
-        match u.reasoning_tokens {
-          Some(n) =>
-            usage_json = usage_json + ",\"thoughtsTokenCount\":" + n.to_string()
-          None => ()
+      Usage(u) =>
+        // 仅未被 Finish 消费的 Usage 独立发射（官方形态：分批给量时
+        // usageMetadata 出现在无 finishReason 的数据 chunk 上，同样合法）
+        if !usage_consumed[i] {
+          lines.push(
+            "data: {\"candidates\":[],\"usageMetadata\":" +
+            gemini_usage_metadata(u) +
+            "}",
+          )
         }
-        match u.cached_tokens {
-          Some(n) =>
-            usage_json = usage_json +
-              ",\"cachedContentTokenCount\":" +
-              n.to_string()
-          None => ()
-        }
-        lines.push("data: {" + usage_json + "}}")
-      }
       _ => ()
     }
     i = i + 1
@@ -344,7 +372,7 @@ fn gemini_encode_frames(
   st.pending_tool_args = pending_tool_args
   st.acc_signature = acc_signature
   Ok(
-    @lux.ConversionResult::new(lines.join("\n") + "\n").with_diagnostics(
+    @lux.ConversionResult::new(lines.join("\n\n") + "\n\n").with_diagnostics(
       diagnostics,
     ),
   )

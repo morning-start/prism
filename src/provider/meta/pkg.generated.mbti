@@ -14,6 +14,8 @@ pub fn meta_extra_fragments(Json?, String, Array[String], String, Array[@lux.Con
 
 pub fn openai_finish_reason_json(@lux.LucentFinishReason, String, Array[@lux.ConversionDiagnostic]) -> String
 
+pub fn pair_usages_with_finish(Array[@lux.LucentStreamEvent]) -> (Array[Bool], Array[@lux.LucentUsage?])
+
 pub fn payload_fragments(Json?, String, Array[String], Array[@lux.ConversionDiagnostic]) -> String
 
 pub fn responses_incomplete_reason(@lux.LucentFinishReason) -> String?

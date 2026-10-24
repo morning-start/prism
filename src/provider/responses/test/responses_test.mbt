@@ -750,7 +750,7 @@ test "responses decode - stream error event and event type fallback" {
 
 ///|
 test "responses decode - stream silent skip and degraded frames" {
-  // 空 data 帧（无诊断）、response.created 的 response 非对象（build_extra
+  // 空 data 帧（无诊断）、response.created 的 response 非对象（extra
   // 回退 None）/ 缺失、output_item.added 的 item 无法解析 / 缺失、
   // delta 缺字段、response.completed 缺 status / usage / response
   let sse = "data: \n\n" +
@@ -785,6 +785,44 @@ test "responses decode - stream silent skip and degraded frames" {
       assert_eq(events[2], Done)
     }
     Err(e) => fail("unexpected Err: \{e}")
+  }
+}
+
+///|
+/// response.created 的 extra 捕获口径：与非流式 response.mbt 一致，只捕获
+/// Response 顶层 IR 未建模字段（moderation）。status / output / usage 等
+/// 建模字段不得进 extra（否则出站时拼进 response.created 顶层产出非法 JSON，
+/// 管线校验实测）；moderation 缺失时 extra 为 None。
+test "responses decode - stream captures only unmodeled top-level fields" {
+  let sse = "event: response.created\n" +
+    "data: {\"type\":\"response.created\",\"response\":{\"id\":\"r_m\",\"model\":\"gpt-4o\",\"created_at\":7,\"status\":\"in_progress\",\"output\":[],\"usage\":{\"input_tokens\":1},\"incomplete_details\":null,\"moderation\":{\"category\":\"harassment\"}}}\n\n" +
+    "event: response.completed\n" +
+    "data: {\"type\":\"response.completed\",\"response\":{\"id\":\"r_m\",\"model\":\"gpt-4o\",\"created_at\":7,\"status\":\"completed\",\"output\":[]}}\n\n"
+  let events = sse_ok(sse)
+  // ConversationStart + Finish + Done（completed 的终止分支）
+  assert_eq(events.length(), 3)
+  match events[0] {
+    ConversationStart(meta) => {
+      let extra = match meta.extra {
+        Some(e) => e
+        None => fail("expected moderation extra")
+      }
+      // 只含 moderation，建模字段（status/output/usage…）一律不进 extra
+      assert_eq(
+        extra.stringify(),
+        "{\"moderation\":{\"category\":\"harassment\"}}",
+      )
+    }
+    _ => fail("expected ConversationStart")
+  }
+  // moderation 缺失 → extra 为 None
+  let no_mod = sse_ok(
+    "event: response.created\n" +
+    "data: {\"type\":\"response.created\",\"response\":{\"id\":\"r_n\",\"model\":\"m\",\"created_at\":1,\"status\":\"in_progress\",\"output\":[]}}\n\n",
+  )
+  match no_mod[0] {
+    ConversationStart(meta) => assert_eq(meta.extra, None)
+    _ => fail("expected ConversationStart")
   }
 }
 

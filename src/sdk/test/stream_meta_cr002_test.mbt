@@ -197,6 +197,78 @@ test "CR-002 messages encoder pairs usage with finish in any order" {
 }
 
 ///|
+/// CR-002 A3 的 gemini 侧同款契约：官方 Gemini 流的 usageMetadata 携带在
+/// 带 finishReason 的最后一个 chunk 上。IR 事件序 [.., Usage, Finish, ..]
+/// 时，配对的 Usage 必须随 finishReason 帧同帧发射，而不是独立帧落在
+/// finishReason 之后（此前独立发射，帧序违反官方形态 —— 管线校验实测）。
+test "CR-002 gemini encoder pairs usage with finishReason frame" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new(Some("r-1"), Some("gm"), None),
+    ),
+    BlockStart(0, Text),
+    BlockDelta(0, @lux.LucentBlockDelta::text_delta("hi")),
+    BlockEnd(0),
+    Usage(@lux.LucentUsage::new(10, 20, 30)),
+    Finish(Stop),
+    Done,
+  ]
+  match @gemini.lux_events_to_gemini_sse(events) {
+    Ok(cr) => {
+      let s = cr.value()
+      // usageMetadata 与 finishReason 同帧
+      let frames : Array[String] = []
+      for line in s.split("\n") {
+        if line.has_prefix("data: ") {
+          frames.push(line.to_owned())
+        }
+      }
+      assert_eq(frames.length(), 3)
+      // 首帧：会话元信息（candidates 为空）
+      assert_true(frames[0].contains("\"responseId\":\"r-1\""))
+      assert_true(frames[0].contains("\"candidates\":[]"))
+      // 内容帧
+      assert_true(frames[1].contains("\"text\":\"hi\""))
+      // 终止帧同时携带 finishReason 与完整用量
+      assert_true(frames[2].contains("\"finishReason\":\"STOP\""))
+      assert_true(frames[2].contains("\"promptTokenCount\":10"))
+      assert_true(frames[2].contains("\"candidatesTokenCount\":20"))
+      // 无独立的 usage-only 帧
+      assert_eq(s.split("\"usageMetadata\"").to_array().length() - 1, 1)
+    }
+    Err(e) => fail("encode failed: " + e)
+  }
+}
+
+///|
+/// 配对的另一半：窗口内**未被任何 Finish 配对**的 Usage 独立发射
+/// （after 窗口取最后一个，先到的 Usage 落单）。官方形态对应
+/// 「分批给量」的流：中间 chunk 带 usageMetadata，最后 chunk 再带终值。
+test "CR-002 gemini unpaired usage is emitted independently" {
+  let events : Array[@lux.LucentStreamEvent] = [
+    ConversationStart(
+      @lux.LucentConversationMeta::new(Some("r-2"), Some("gm"), None),
+    ),
+    Usage(@lux.LucentUsage::new(7, 2, 9)),
+    Usage(@lux.LucentUsage::new(10, 20, 30)),
+    Finish(Stop),
+    Done,
+  ]
+  match @gemini.lux_events_to_gemini_sse(events) {
+    Ok(cr) => {
+      let s = cr.value()
+      // Usage(7,2,9) 未被配对 → 独立帧
+      assert_true(s.contains("\"promptTokenCount\":7"))
+      assert_true(s.contains("\"candidates\":[],\"usageMetadata\""))
+      // Usage(10,20,30) 与 finishReason 同帧（usageMetadata 跟在 candidates 之后）
+      assert_true(s.contains("\"finishReason\":\"STOP\"}],\"usageMetadata\""))
+      assert_true(s.contains("\"promptTokenCount\":10"))
+    }
+    Err(e) => fail("encode failed: " + e)
+  }
+}
+
+///|
 /// T-CR002-5 · acceptance 5：截断流闭合块，两条路径逐字节一致
 test "CR-002 truncated stream closes open blocks" {
   for target in ["messages", "openai"] {
