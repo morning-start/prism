@@ -20,7 +20,7 @@
 | `wrappers/ts` | ⚠️ 不在本仓库快照 | 历史记录声称 Complete，但工作区无此目录（T11 澄清）；接入前需确认仓库同步状态，并纳入 CI（moon build wasm → wrapper 编译 → 集成测试） |
 | `wrappers/go` | ⚠️ 不在本仓库快照 | 同上 |
 
-## Implemented Providers (9 adapters)
+## Implemented Providers (4 adapters)
 
 | Adapter | Protocol | Request | Response | Stream | Capability |
 |---------|----------|---------|----------|--------|------------|
