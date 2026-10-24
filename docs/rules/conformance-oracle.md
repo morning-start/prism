@@ -142,8 +142,12 @@ CI 里有一道 `Assert generated artifacts are up to date`：若生成物与仓
   完整 schema 校验待补（需先解决两家 SDK 类型与 wire 形态的已知偏差）。
 - **不能替代真实 API 调用**。schema 通过 ≠ API 接受（服务端可能有额外校验）。
   拿到 API key 后应补录制真实流量（VCR 风格）作为最终验证。
-- **流式只校验单帧**。帧序列的合法性（顺序、配对）由 MoonBit 侧的
-  `stream_event_coverage_test` 覆盖；[5] 组目前只覆盖非流式响应管线，
-  流式管线（convert_stream）复用同一 ABI，接入是机械工作，待补。
+- **流式管线已接入（[6] 组，`pipeline-stream.mjs`）**：官方 SSE 帧序列 →
+  Prism `convert_stream` → 目标协议 SSE → 逐帧官方形态 + 帧序契约
+  （首帧 / 终止帧唯一且在最后 / content block 生命周期 / 终止枚举），
+  含 CR-006 批次 1 修复的四类终止输入双重锁定。
+  2026-10-24 首跑即实锤 4 类真实缺陷（gemini 分帧符、双逗号 JSON、
+  responses extra 捕获口径、gemini usage/finish 帧序）并全部修复。
+  尚未覆盖：逐帧增量路径（StreamConverter feed 语义）、工具调用全链路流。
 - **js driver 产物不入库**（_build 下，每次 run-all 现场构建），
   MoonBit 编译器版本变化会导致产物字节级不同，但这不影响校验语义。
