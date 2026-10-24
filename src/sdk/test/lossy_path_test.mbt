@@ -1,7 +1,7 @@
 ///|
 /// 有损路径语义比较属性 — 端点归一化差异之外的核心语义必须保真
 ///
-/// 依据：.agent-workplace/docs/design/formal-verification-design.md G5 ↔ M3/M4；
+/// 依据：形式化验收 G5 ↔ M3/M4（docs/reports/iteration-003-acceptance.md）；
 /// TD-FV-4（generator 域收窄导致有损路径无属性覆盖）。
 /// 与 G5 全等属性互补：
 ///   - G5 无损子集：round-trip 后 IR 全等（Eq）

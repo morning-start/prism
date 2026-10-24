@@ -2,7 +2,7 @@
 /// G4 诊断完备性属性测试 — 扩展字段绝不静默丢弃
 ///
 /// 依据：AGENTS.md 硬规则「不支持的能力必须显式报错，绝不静默丢弃」；
-/// 设计：.agent-workplace/docs/design/formal-verification-design.md G4 ↔ M1/M5。
+/// 设计：形式化验收 G4 ↔ M1/M5（docs/reports/iteration-003-acceptance.md）。
 /// 断言：对 4 个 adapter，输入 IR 含扩展内容块 K 时，encode 成功后
 ///   「输出 JSON 含 K 的表示 ∨ diagnostics 含 Degraded/Unsupported 且 field 提及 K」。
 /// 输入域：gen_extended_req()（首条消息必含 1 个扩展块：thinking/audio/native/

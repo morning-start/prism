@@ -377,8 +377,7 @@ $RECYCLE.BIN/
 
 *.wasm
 
-# Agent private workspace (flowstate)
-.agent-workplace/
+# Agent process workspace retired 2026-10-24; team docs live outside the repo
 .workbuddy/memory/
 
 # moon coverage / verify scratch output (moon writes these at the repo root by default)

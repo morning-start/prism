@@ -1,7 +1,7 @@
 ///|
 /// G5 跨协议差分属性 — 同一 IR 经 4 端点 encode→decode 回 IR 归一化一致
 ///
-/// 依据：.agent-workplace/docs/design/formal-verification-design.md G5 ↔ M3；
+/// 依据：形式化验收 G5 ↔ M3（docs/reports/iteration-003-acceptance.md）；
 /// AGENTS.md「归一化到 IR 优先，不写两两直连」。
 /// 断言：公共交集无损子集（gen_text_req / gen_text_resp）内，
 ///   encode(req) → decode → req' 对 4 端点成立，且四者互相相等（Eq）。

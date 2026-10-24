@@ -2,7 +2,8 @@
 /// ═══ 功能组：snapshot（会话快照存储，T8 stage B）═══
 /// ConversationStore（宿主注入 KV）+ 快照还原 + convert_request_with_store。
 ///
-/// 背景（IR 提案：.agent-workplace/docs/report/ir-proposal-previous-response-id.md）：
+/// 背景（IR 治理：docs/lux-ir-design.md ConversationSnapshot 节 +
+/// docs/rules/lucent-ir-evolution.md）：
 /// Responses 的 previous_response_id 是有状态续接——客户端第二轮只带新
 /// input + 上一轮 response id，历史在服务端。中间件把它转到无状态端点
 /// （chat/messages/gemini）时，必须本地保存 response_id → 会话快照，

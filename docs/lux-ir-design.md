@@ -148,8 +148,8 @@ Responses' `previous_response_id` is a server-side stateful continuation;
 converting it to stateless endpoints (chat/messages/gemini) requires the
 middleware to locally store and restore history. This type is the storage
 unit — not part of any wire protocol; `to_json`/`from_json` exist for host
-persistence. IR proposal:
-`.agent-workplace/docs/report/ir-proposal-previous-response-id.md`.
+persistence. IR proposal: accepted via the governance process in
+`docs/rules/lucent-ir-evolution.md` (proposal workspace retired 2026-10-24).
 
 | Field | Type | Notes |
 |-------|------|-------|

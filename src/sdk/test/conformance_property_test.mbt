@@ -1,7 +1,7 @@
 ///|
 /// 属性级 conformance — 随机 IR 编码输出必须通过目标协议 wire-format 校验
 ///
-/// 依据：.agent-workplace/docs/design/formal-verification-design.md G6 ↔ M6；
+/// 依据：形式化验收 G6 ↔ M6（docs/reports/iteration-003-acceptance.md）；
 /// 现有 protocol_conformance_test.mbt 是固定夹具（std_request/std_response），
 /// 本文件用 @qc 生成器把 conformance 升级为属性断言：
 ///   gen_text_req / gen_text_resp（公共交集无损子集）→ 4 adapter encode →

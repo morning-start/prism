@@ -1,5 +1,5 @@
 ---
-source: .agent-workplace/iterations/iteration-004/release/risk-checklists/CR-001-test-report.md
+source: retired process workspace (iteration-004 CR-001 test report)
 source_version: 2026-09-21T00:00:00Z
 source_confidence: 0.95
 promoted_by: fst-promote
@@ -37,8 +37,7 @@ approved_at: 2026-09-21T00:00:00Z
 
 ## 3. 缺陷修复判定式（复现测试由红转绿）
 
-红态原始输出与逐条失败原因留档于 `.agent-workplace/iterations/iteration-004/development/test-failures/CR-001-batch1-red.md`
-（T1.1 / T1.1b / T1.2 / T1.2b / T1.3 / T1.4 六项红；T1.3b / T1.4b 为回归保护绿）。
+红态原始输出属过程态工作区（已退役 2026-10-24）；六项红态与逐条失败原因见本文档 §3。
 
 | 测试 | 修复前（红） | 修复后 |
 |---|---|---|

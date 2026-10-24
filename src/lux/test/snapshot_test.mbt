@@ -1,7 +1,7 @@
 ///|
 /// ConversationSnapshot + previous_response_id 标准字段测试（T8）
 ///
-/// IR 提案：`.agent-workplace/docs/report/ir-proposal-previous-response-id.md`
+/// IR 规范：`docs/lux-ir-design.md` ConversationSnapshot 节
 /// 治理：`docs/rules/lucent-ir-evolution.md`（非破坏性：新增可选标准字段 + 新类型）
 
 ///|

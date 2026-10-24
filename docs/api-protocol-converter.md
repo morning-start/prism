@@ -1,8 +1,7 @@
 # API Protocol Converter — 三端点互转契约（正式版）
 
-> 来源：`.agent-workplace/research/api-protocol-converter/SKILL.md`（研究草稿，
-> gitignored）。本文档为**正式契约**，是 AGENTS.md 引用的权威版本；
-> 详细协议规范与 curl 用例仍在研究目录的 `references/` 中按需查阅。
+> 来源：研究草稿（过程态工作区，已于 2026-10-24 退役）。本文档为**正式契约**，
+> 是 AGENTS.md 引用的权威版本。
 
 Prism 在 Lucent IR 与 wire protocol 之间互转：正式契约覆盖三个端点
 （OpenAI `/v1/chat/completions`、OpenAI `/v1/responses`、Anthropic

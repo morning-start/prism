@@ -77,11 +77,6 @@ function Get-StreamEvents([string]$SchemaText, [string]$SourceText) {
 }
 
 # === adapter 输出侧检查（G6） ===
-# 预期输出字段集来源：
-#   openai   -> .agent-workplace/research/api-protocol-converter/references/chat-completions-spec.md
-#   messages -> .agent-workplace/research/api-protocol-converter/references/messages-spec.md
-#   responses-> .agent-workplace/research/api-protocol-converter/references/responses-spec.md
-#   gemini   -> .agent-workplace/research/api-protocol-converter/references/three-protocol-guide.md
 # 规则：adapter request_encode 实际输出的 JSON 字段名必须是目标端点协议允许的字段；
 #       输出协议字段集之外的字段 = 漂移（拼写错误 / 未注册字段 / schema 失配）。
 

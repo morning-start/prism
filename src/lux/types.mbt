@@ -508,8 +508,8 @@ pub extend LucentReasoningSummary with @moonbitlang/core/debug.Debug::{to_repr}
 /// 端点（chat/messages/gemini）时必须由中间件本地保存并还原历史。
 /// 本类型是存储单元：某次 response_id 对应的请求上下文（还原所需）
 /// 与可选响应文本（审计/调试用）。不参与 wire 编解码；
-/// to_json/from_json 供宿主持久化（IR 提案见
-/// .agent-workplace/docs/report/ir-proposal-previous-response-id.md）。
+/// to_json/from_json 供宿主持久化（IR 治理：docs/lux-ir-design.md
+/// ConversationSnapshot 节 + docs/rules/lucent-ir-evolution.md）。
 pub struct ConversationSnapshot {
   response_id : String
   request : LucentRequest

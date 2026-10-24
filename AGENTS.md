@@ -81,15 +81,15 @@ When starting work on this project, read these in order to restore context:
 - `docs/rules/lucent-ir-evolution.md` — mandatory governance before changing
   any Lucent IR field, enum variant, stream event, capability, or payload.
 
-Optional agent workspace (gitignored, created on demand — do NOT assume these
-exist):
+Team workspace (cross-agent shared documents):
 
-- `.agent-workplace/` — `docs/plan/`, `docs/spec/`, `docs/task/`, `docs/report/`
-  (mode outputs), `research/`, `scratch/`; `state/checkpoint.json` and
-  `shared/architecture.md` are written only by flows that use them. A previous
-  convention referenced `.moonbit-pipeline.json` (repo root) and
-  `modes/README.md` as session checkpoints; neither is present in this
-  snapshot — restore context from the docs above instead.
+- `team-workspace/docs/` on the DSH profile side (outside this repo) holds the
+  requirement pool, research/competitor notes, task board, risk register and
+  change log (`00/01/05/06/09-*.md`). Treat those files as the single source
+  of truth for scope, priorities and risks.
+- A previous convention used `.agent-workplace/`, `.moonbit-pipeline.json`
+  (repo root) and `modes/README.md` as session checkpoints. All are retired
+  (2026-10-24) — do not create or reference them.
 
 Progress convention: one feature per commit, commit after each task, pass
 `moon fmt --check` / `moon check` / `moon test` before committing. Once a task
@@ -144,8 +144,7 @@ the agent may commit to git on its own — no need to ask the user first.
 - `moon coverage analyze > cov.txt` from PowerShell writes a **UTF-16** file that
   many tools refuse as binary; convert before grepping.
 - The report's hunk separator is a `…` that PowerShell redirection can mangle, so
-  never key parser logic on it. A separator-agnostic extractor lives at
-  `.agent-workplace/scratch/extract-uncovered.ps1`.
+  never key parser logic on it (parse hunks by line prefixes instead).
 - `moon test -p <pkg>` scopes a run to one package and avoids compiling every
   other package — use it while iterating. Note the subpackage spelling:
   `-p morning-start/prism/lux` is the whitebox package,
@@ -211,8 +210,7 @@ Design principles:
   `lux_request_to_ext` — zero side effects, testable in isolation.
 
 Conversion rules (details: `docs/api-protocol-converter.md` — the formal
-3-endpoint conversion contract; research notes in
-`.agent-workplace/research/api-protocol-converter/`):
+3-endpoint conversion contract):
 
 - Normalize into the IR first, then encode IR → target endpoint. Never write
   pairwise converters between providers.

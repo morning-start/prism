@@ -1,5 +1,5 @@
 ---
-source: .agent-workplace/iterations/iteration-004/release/dod-checklist.md
+source: retired process workspace (iteration-004 release checklist)
 source_version: 2026-09-21T00:00:00Z
 source_confidence: 0.95
 promoted_by: fst-promote

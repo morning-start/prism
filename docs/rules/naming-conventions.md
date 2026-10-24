@@ -2,9 +2,7 @@
 
 > 适用范围：Prism 全仓 MoonBit 代码。目标：任何新增/重构的代码，文件名、
 > 函数名、类型名、测试名都遵循同一套规则，让目录"一眼可读"。
-> 依据：iteration-006/007 全仓盘点（差异清单见
-> `.agent-workplace/docs/task/iteration-006-naming.md` 与
-> `.agent-workplace/docs/task/iteration-007-architecture-review.md`）。
+> 依据：iteration-006/007 全仓盘点（差异清单属过程态工作区，已退役 2026-10-24）。
 
 ---
 

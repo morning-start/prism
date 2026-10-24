@@ -2,9 +2,8 @@
 
 > 日期：2026-09-09　状态：final（正式文档，随 git 提交）
 > 迭代：iteration-003　方略：spec　主题：协议转换形式化验证 P0（L3 属性测试 + schema conformance）
-> 关联：`docs/lux-ir-design.md`、`docs/api-protocol-converter.md`、
-> `.agent-workplace/docs/design/formal-verification-design.md`（设计决策，过程态）
-> 过程态草稿：`.agent-workplace/iterations/iteration-003/release/`（test-report.md、dod-checklist.md、gray-release.md）
+> 关联：`docs/lux-ir-design.md`、`docs/api-protocol-converter.md`（设计决策已并入
+> 正式文档；过程态草稿工作区已于 2026-10-24 退役）
 
 ## 1. DoD 核销（fst-review checklist）
 

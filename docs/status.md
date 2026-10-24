@@ -118,7 +118,7 @@ compilation to reach non-public members).
 ## Iteration-009 架构优化（2026-09-09）
 
 两类目标用户（Agent Framework SDK / Transit Middleware）驱动的接口边界补全；
-审计报告与计划见 `.agent-workplace/docs/`（gitignored）。已完成：
+（iteration-009 审计报告与计划属过程态工作区，已于 2026-10-24 退役。）已完成：
 
 | 项 | 内容 |
 |---|---|
