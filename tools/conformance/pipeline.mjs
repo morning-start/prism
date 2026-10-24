@@ -158,23 +158,25 @@ function record(name, ok, issues = []) {
   }
 }
 
-/** openai chat completion 的官方 schema 整体校验（无 anyOf 分支噪音） */
-function validateOpenAICompletion(obj) {
-  const r = official('openai-chat-response.json', obj);
-  return r.ok ? [] : r.issues;
-}
-
 /**
  * 跑真实管线校验。返回 { pass, fail, failures }。
  * 每家源协议样本：decode → IR，再 encode 到全部 4 家目标，对产出做：
  *   - messages 目标：语义级精确校验（validateAnthropicMessage）
- *   - openai 目标：官方 schema 整体校验（validateOpenAICompletion）
- *   - responses / gemini：信封成功 + 关键字段存在性（schema 见 TODO）
+ *   - openai / responses / gemini：官方 schema 整体校验
+ *     （2026-10-24 起四家目标全部完整 schema 化；responses 的请求回显槽位
+ *      与 gemini 信封形态的处理见 lib.mjs 豁免登记与 docs 本文件头注）
  */
 export async function run() {
   const P = await load();
   console.log('\n[5] 真实管线校验（Prism 实际产出 → 官方 schema）');
   console.log(`    driver abi=${P.abi.value?.abi ?? '?'} providers=${P.providers.join(',')}`);
+
+  // 四家目标 → 官方 schema 文件（gemini 用信封级 GenerateContentResponse）
+  const TARGET_SCHEMA = {
+    openai: 'openai-chat-response.json',
+    responses: 'openai-responses-response.json',
+    gemini: 'gemini-response.json',
+  };
 
   for (const [prov, s] of Object.entries(SAMPLES)) {
     console.log(`\n  源协议 ${prov}`);
@@ -202,21 +204,10 @@ export async function run() {
       }
 
       if (target === 'openai') {
-        record(`${prov} → ${target}: 产出符合官方 schema`, out.object === 'chat.completion',
-          out.object === 'chat.completion' ? [] : validateOpenAICompletion(out).concat([
-            { path: '/object', message: `must be "chat.completion" (got "${out.object}")` },
-          ]));
-        // openai 产出的 finish_reason 必须在权威枚举内
-        const fr = out.choices?.[0]?.finish_reason;
-        if (fr !== undefined && fr !== null) {
-          const legal = authority()['openai.finish_reason'];
-          record(`${prov} → ${target}: finish_reason="${fr}" 在官方枚举内`, legal.includes(fr), [{
-            path: '/choices/0/finish_reason',
-            message: `"${fr}" is not legal`,
-            keyword: 'enum',
-            allowed: legal,
-          }]);
-        }
+        // 整体官方 schema 校验（2026-10-24 升级：此前只查 object 常量，
+        // 实测漏掉 choices[].logprobs / message.refusal 两处 required 缺失）
+        const r = official(TARGET_SCHEMA.openai, out);
+        record(`${prov} → ${target}: 产出符合官方 schema`, r.ok, r.ok ? [] : r.issues);
       } else if (target === 'messages') {
         const issues = validateAnthropicMessage(out);
         record(`${prov} → ${target}: 产出符合官方 Message 形态`, issues.length === 0, issues);
@@ -231,14 +222,32 @@ export async function run() {
               allowed: legal,
             }]);
         }
+      } else if (target === 'responses') {
+        // 完整官方 Response schema（豁免登记见 lib.mjs UPSTREAM_BUGS）
+        const r = official(TARGET_SCHEMA.responses, out);
+        record(`${prov} → ${target}: 产出符合官方 Response schema`, r.ok, r.ok ? [] : r.issues);
+        // status 必须在官方封闭枚举内
+        const LEGAL_STATUS = ['completed', 'failed', 'in_progress', 'cancelled', 'queued', 'incomplete'];
+        record(`${prov} → ${target}: status="${out.status}" 在官方封闭枚举内`,
+          LEGAL_STATUS.includes(out.status), LEGAL_STATUS.includes(out.status) ? [] : [{
+            path: '/status', message: `"${out.status}" is not a legal response status`,
+            keyword: 'enum', allowed: LEGAL_STATUS,
+          }]);
       } else {
-        // responses / gemini：本组先验证关键结构字段存在，schema 校验后续补
-        const okShape =
-          (target === 'responses' && out.object === 'response' && Array.isArray(out.output)) ||
-          (target === 'gemini' && Array.isArray(out.candidates));
-        record(`${prov} → ${target}: 产出携带协议关键结构`, okShape, okShape ? [] : [
-          { path: '(shape)', message: `unexpected shape: ${JSON.stringify(out).slice(0, 150)}` },
-        ]);
+        // gemini：信封级官方 schema（GenerateContentResponse）
+        const r = official(TARGET_SCHEMA.gemini, out);
+        record(`${prov} → ${target}: 产出符合官方 GenerateContentResponse schema`, r.ok, r.ok ? [] : r.issues);
+        // finishReason 必须在权威枚举内
+        const fr = out.candidates?.[0]?.finishReason;
+        if (fr !== undefined && fr !== null) {
+          const legal = authority()['gemini.finishReason'];
+          record(`${prov} → ${target}: finishReason="${fr}" 在官方枚举内`, legal.includes(fr), [{
+            path: '/candidates/0/finishReason',
+            message: `"${fr}" is not legal gemini.finishReason`,
+            keyword: 'enum',
+            allowed: legal,
+          }]);
+        }
       }
     }
   }

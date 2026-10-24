@@ -135,7 +135,14 @@ pub fn responses_json_to_lux_response(
 ) -> Result[@lux.ConversionResult[@lux.LucentResponse], String] {
   let id = @internal.field_str(jv, "id").unwrap_or("")
   let model = @internal.field_str(jv, "model").unwrap_or("")
-  let created = @internal.field_int(jv, "created_at")
+  // created_at 归一：编码器在 IR 无时间戳时写 0 哨兵（官方 schema required），
+  // 解码把 0 归回 None，保证 encode→decode 往返的 IR 恒等（G5 四端点差分
+  // 不变量：其余三端点的 created_at 均为 None，responses 端点不得单方面
+  // 造出 Some(0)）。真实时间戳（>0）原样保留。
+  let created = match @internal.field_int(jv, "created_at") {
+    Some(0) => None
+    other => other
+  }
   let diagnostics : Array[@lux.ConversionDiagnostic] = []
   // server-side 动作 item（web_search_call 等）显式暴露，不静默丢弃
   scan_server_tool_items(jv, diagnostics)
@@ -374,7 +381,9 @@ pub fn lux_response_to_responses(
       ",\"incomplete_details\":{\"reason\":\"" +
       @internal.json_escape(reason) +
       "\"}"
-    None => ""
+    // 官方 schema required：无 incomplete 语义时显式 null（official-null 形状，
+    // 与 error/metadata 同规则；官方成功样本即 "incomplete_details":null）。
+    None => ",\"incomplete_details\":null"
   }
   // CR-005：`stop_sequence` 是 Anthropic 的响应侧概念，Responses 无自定义
   // 终止序列概念（status 与 incomplete_details.reason 均为封闭枚举）→ 显式诊断。
@@ -422,8 +431,33 @@ pub fn lux_response_to_responses(
   }
   let created_part = match resp.created_at {
     Some(n) => ",\"created_at\":" + n.to_string()
-    None => ""
+    // 官方 Response schema 中 `created_at` 是必填的 number。缺失时用 0 兜底
+    // （与流式编码 ConversationStart 的兜底口径一致，见 stream_encode.mbt）；
+    // 时间戳无法从 IR 无中生有，0 是官方接受且自明"未知"的哨兵值。
+    None => ",\"created_at\":0"
   }
+  // official-null 常量形状（conformance oracle [5] 组完整 schema 校验确立的口径，
+  // 依据 = vendored spec 内嵌的真实 response.completed 样本
+  // fixtures/golden/responses-completed.json）：
+  //
+  // - **成功态常量**：`error` / `metadata` 在成功响应里就是 null / {}（官方样本
+  //   实测）。补齐它们不是虚构 —— 是官方 wire 形态的恒定部分，缺失反而会被
+  //   官方 schema 拒绝（均 required）。`incomplete_details` 不在此列：它按
+  //   状态二选一（null 或 {reason}），见下方 incomplete_part。
+  // - **请求回显槽位**：`instructions` / `temperature` / `top_p` / `tool_choice` /
+  //   `tools` / `parallel_tool_calls` 在官方 schema 中 required。真实 API 会回显
+  //   请求参数，但 IR 响应模型不保留请求（无法从源协议获得回显值）。按官方
+  //   可空性诚实取"官方-null"：可空的写 null（instructions/temperature/top_p），
+  //   不可空的写官方默认值（tool_choice:"auto"、tools:[]、parallel_tool_calls:true）。
+  //   消费方读到的形状与官方一致，值语义为"回显未知"，绝不编造具体回显内容。
+  let constants_part = ",\"error\":null" +
+    ",\"metadata\":{}" +
+    ",\"instructions\":null" +
+    ",\"temperature\":null" +
+    ",\"top_p\":null" +
+    ",\"tool_choice\":\"auto\"" +
+    ",\"tools\":[]" +
+    ",\"parallel_tool_calls\":true"
   // provider_payload 出站：响应级扩展载体（对称于请求侧 options.extras）。
   // reasoning_field 等编码旋钮由分拣自动跳过。
   let (payload_kept, payload_foreign) = @internal.split_provider_payload(
@@ -434,6 +468,9 @@ pub fn lux_response_to_responses(
   let reserved : Array[String] = [
     "id", "object", "created_at", "status", "incomplete_details", "model", "output",
     "usage",
+    // official-null 常量形状的自产键（见上方 constants_part 注释）
+     "error", "metadata", "instructions", "temperature", "top_p", "tool_choice",
+    "tools", "parallel_tool_calls",
   ]
   let payload_collided : Array[String] = []
   match payload_kept {
@@ -462,6 +499,7 @@ pub fn lux_response_to_responses(
     @internal.json_escape(resp.id) +
     "\",\"object\":\"response\"" +
     created_part +
+    constants_part +
     ",\"status\":" +
     status_str +
     incomplete_part +

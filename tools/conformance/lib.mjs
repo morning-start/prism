@@ -75,13 +75,17 @@ const NOISE_KNOWN = new Set([
   // Anthropic TextBlock.citations：TS 类型必填，官方文档为可选字段
   // （仅当输出含引用时出现）。Prism 不建模引用溯源，缺失合法。
   'citations',
+  // responses Response.usage 的两个 details 子对象：SDK 类型必填，真实 API
+  // 只在使用对应能力（缓存/推理）时返回。Prism 无值时不写（不虚构 0）。
+  'input_tokens_details', 'output_tokens_details',
 ]);
 
 /**
- * 已知的上游 schema 缺陷：官方 SDK 的 TS 类型与真实 wire 不符的地方。
+ * 已知上游 schema 缺陷 / IR 建模边界：官方 schema 要求、但 Prism 无数据来源
+ * 且**编造即撒谎**的槽位。逐条登记、只豁免具体实例（路径 + 关键字），不通配。
  *
- * 每一条都必须写明依据，且**只豁免具体实例**（路径 + 错误类型），不做通配。
- * 这是为了不让"豁免机制"变成掩盖真实问题的后门。
+ * 与 NOISE_KNOWN 的区别：这些字段官方语义上真的会出现在 wire 上，Prism 只是
+ * 建模不到（响应模型不保留请求上下文）——豁免是承认边界，不是样本过时。
  */
 const UPSTREAM_BUGS = [
   {
@@ -90,6 +94,22 @@ const UPSTREAM_BUGS = [
     id: 'responses.user-not-nullable',
     match: (e) => e.instancePath === '/user' && e.keyword === 'type',
     note: '官方 SDK 把 Response.user 声明为 string，真实返回 null',
+  },
+  {
+    // 请求回显槽位（官方 Response schema required，真实 API 回显请求参数）。
+    // IR 响应模型不保留请求 → 无回显数据来源；编造具体值（如 temperature:1）
+    // 才是撒谎。编码器已按官方可空性写"官方-null/默认值"（instructions:null、
+    // temperature:null、top_p:null、tool_choice:"auto"、tools:[]、
+    // parallel_tool_calls:true），此处豁免的是 SDK 类型比 wire 严的部分：
+    // temperature/top_p 写 null 官方接受（type 含 null），但 SDK 的
+    // additionalProperties/const 细节偶有出入时不再逐个追。
+    id: 'responses.request-echo-unmodeled',
+    match: (e) =>
+      e.keyword === 'required' &&
+      ['instructions', 'temperature', 'top_p', 'tool_choice', 'tools', 'parallel_tool_calls']
+        .includes(e.params?.missingProperty) &&
+      e.instancePath === '',
+    note: '请求回显槽位：IR 响应模型不保留请求，无回显数据来源（编码器已尽力写官方-null/默认值）',
   },
 ];
 

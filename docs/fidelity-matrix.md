@@ -589,6 +589,32 @@ diagnose  = 值不合法 || 有语义损失
 回归：`src/sdk/test/finish_reason_contract_test.mbt`（7 用例）。
 提案与完整分析见 [`cr/CR-005-stop-sequence-carrier.md`](cr/CR-005-stop-sequence-carrier.md)。
 
+### 3.15 官方-null 输出形状（第八轮，conformance oracle [5] 组驱动）
+
+> 2026-10-24 起 oracle [5] 组对四家目标做**完整官方 schema 校验**（此前
+> responses/gemini 只查结构存在性）。升级当日实锤 3 类真实缺陷并修复；
+> 本节记录由此确立的**出站形状契约**。
+
+**确立的规则：required 槽位不得缺省 —— 有数据写数据，无数据写"官方-null/默认
+值"，绝不编造具体事实。**
+
+| 目标 | 缺陷（修复前） | 修复 |
+|---|---|---|
+| openai | 文本响应缺 `message.refusal`、`choices[].logprobs`（官方 schema required，缺失会被拒） | 恒写 `refusal:null` / `logprobs:null`（官方-null 形状，诚实表达"未拒绝/无数据"） |
+| openai | IR 无时间戳时缺 `created`（required number） | 写 `0` 哨兵；解码把 0 归回 `None`，往返 IR 恒等 |
+| responses | 缺成功态常量 `error`/`incomplete_details`/`metadata`（官方成功响应恒为 `null`/`null`/`{}`，依据 = vendored spec 内嵌真实样本 `fixtures/golden/responses-completed.json`） | 恒写 official-null 常量 |
+| responses | 缺请求回显槽位 `instructions`/`temperature`/`top_p`/`tool_choice`/`tools`/`parallel_tool_calls`（required；真实 API 回显请求参数） | 按官方可空性写 null 或官方默认值（`tool_choice:"auto"`、`tools:[]`、`parallel_tool_calls:true`）——IR 响应模型不保留请求，**不编造回显内容**，SDK 侧残余差距在 oracle `lib.mjs` UPSTREAM_BUGS 逐字段登记 |
+| responses | IR 无时间戳时缺 `created_at` | 写 `0` 哨兵；解码归回 `None`（与 openai 同规则） |
+| gemini | oracle 侧 schema 选型错误：只有 Candidate 级，Prism 产出是信封 `GenerateContentResponse` | gen-schemas 增生成信封级 schema（`gemini-response.json`），实测信封直接通过，编码器无需改动 |
+
+**判据**：这是形状合法性（会被 schema/API 拒绝的问题），不是语义保真问题——
+所以归编码器修复而非豁免。豁免只留给"官方要求但 IR 无数据来源"的回显槽位
+残余差距，且逐字段登记依据。
+
+回归：`src/provider/openai/openai_wbtest.mbt`（official-null refusal/logprobs +
+created 哨兵往返）、`src/provider/responses/responses_wbtest.mbt`（official-null
+常量 + created 哨兵往返）、oracle `pipeline.mjs` 四目标完整 schema 矩阵。
+
 ## 5. 使用建议（中间件切流前检查单）
 
 1. 确认目标链路只依赖 §2 公共交集 → 任意切流，保真度 Exact。

@@ -83,6 +83,16 @@ schemas.geminiCandidate = gen(
   path.join(MODULES, '@google/genai/dist/genai.d.ts'),
   'Candidate',
 );
+// 信封级 schema：Prism 的 gemini 编码产出的是完整 GenerateContentResponse
+// （candidates + usageMetadata + modelVersion + responseId），不是裸 Candidate。
+// 此前只有 Candidate 级 schema，信封校验会整体误报 additionalProperties
+// （responseId 等键在 Candidate 上不存在）。2026-10-24 [5] 组升级为
+// responses/gemini 完整 schema 校验时新增。
+schemas.geminiEnvelope = gen(
+  'gemini-response.json',
+  path.join(MODULES, '@google/genai/dist/genai.d.ts'),
+  'GenerateContentResponse',
+);
 
 /**
  * 抽取三家权威枚举。

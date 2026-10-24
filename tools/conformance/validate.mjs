@@ -141,6 +141,49 @@ const SELF_TESTS = [
     run: () => official('gemini-candidate.json', { content: { parts: [] }, finishReason: 'MALFORMED_RESPONSE' }),
     expect: false,
   },
+  // responses / gemini 信封（2026-10-24 [5] 组完整 schema 校验的护栏对）
+  {
+    name: 'Responses Response: official-null 常量形状合法',
+    run: () => official('openai-responses-response.json', {
+      id: 'resp_x', object: 'response', created_at: 0, status: 'completed', model: 'm',
+      error: null, incomplete_details: null, metadata: {}, instructions: null,
+      temperature: null, top_p: null, tool_choice: 'auto', tools: [],
+      parallel_tool_calls: true,
+      output: [{ type: 'message', id: 'msg_0', role: 'assistant', status: 'completed',
+        content: [{ type: 'output_text', text: 'Hi', annotations: [] }] }],
+      usage: { input_tokens: 3, output_tokens: 2, total_tokens: 5 },
+    }),
+    expect: true,
+  },
+  {
+    name: 'Responses Response: 拒绝非法 status',
+    run: () => official('openai-responses-response.json', {
+      id: 'resp_x', object: 'response', created_at: 0, status: 'weird_status', model: 'm',
+      error: null, incomplete_details: null, metadata: {}, instructions: null,
+      temperature: null, top_p: null, tool_choice: 'auto', tools: [],
+      parallel_tool_calls: true,
+      output: [{ type: 'message', id: 'msg_0', role: 'assistant', status: 'completed',
+        content: [{ type: 'output_text', text: 'Hi', annotations: [] }] }],
+    }),
+    expect: false,
+  },
+  {
+    name: 'Gemini envelope: 官方信封形态合法',
+    run: () => official('gemini-response.json', {
+      responseId: 'r1', modelVersion: 'm',
+      candidates: [{ index: 0, content: { role: 'model', parts: [{ text: 'Hi' }] }, finishReason: 'STOP' }],
+      usageMetadata: { promptTokenCount: 3, candidatesTokenCount: 2, totalTokenCount: 5 },
+    }),
+    expect: true,
+  },
+  {
+    name: 'Gemini envelope: 拒绝编造的 finishReason',
+    run: () => official('gemini-response.json', {
+      responseId: 'r1', modelVersion: 'm',
+      candidates: [{ index: 0, content: { role: 'model', parts: [{ text: 'Hi' }] }, finishReason: 'MALFORMED_RESPONSE' }],
+    }),
+    expect: false,
+  },
 ];
 
 for (const t of SELF_TESTS) {

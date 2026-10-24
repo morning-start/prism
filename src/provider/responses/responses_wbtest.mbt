@@ -623,6 +623,89 @@ test "lux_response_to_responses - dual carrier yields Degraded" {
 }
 
 ///|
+/// official-null 常量形状 + created_at 哨兵归一（conformance oracle [5] 组
+/// 完整 schema 校验确立；依据 = vendored spec 内嵌真实样本
+/// fixtures/golden/responses-completed.json）：
+/// - 成功态恒量：error:null、incomplete_details:null、metadata:{}（官方 required）
+/// - 请求回显槽位按官方可空性写"官方-null/默认值"，绝不编造具体回显内容
+/// - created_at 缺失写 0 哨兵，解码归回 None → 往返 IR 恒等
+test "lux_response_to_responses - official-null constants and created sentinel" {
+  let msg = @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("hi")])
+  let resp = @lux.LucentResponse::new(
+    "resp-null",
+    "gpt-5",
+    None,
+    [@lux.LucentChoice::new(0, msg, Stop, None)],
+    None,
+    None,
+  )
+  match lux_response_to_responses(resp) {
+    Ok(cr) => {
+      let s = cr.value()
+      let jv = @internal.parse_json_opt(s).unwrap()
+      // 成功态常量
+      match @internal.obj_get(jv, "error") {
+        Some(Null) => ()
+        _ => assert_true(false)
+      }
+      match @internal.obj_get(jv, "incomplete_details") {
+        Some(Null) => ()
+        _ => assert_true(false)
+      }
+      match @internal.obj_get(jv, "metadata") {
+        Some(Object(m)) => assert_true(m.length() == 0)
+        _ => assert_true(false)
+      }
+      // 请求回显槽位：official-null / 官方默认值
+      match @internal.obj_get(jv, "instructions") {
+        Some(Null) => ()
+        _ => assert_true(false)
+      }
+      match @internal.obj_get(jv, "temperature") {
+        Some(Null) => ()
+        _ => assert_true(false)
+      }
+      match @internal.obj_get(jv, "top_p") {
+        Some(Null) => ()
+        _ => assert_true(false)
+      }
+      match @internal.obj_get(jv, "tool_choice") {
+        Some(String("auto")) => ()
+        _ => assert_true(false)
+      }
+      match @internal.field_arr(jv, "tools") {
+        Some(a) => assert_true(a.length() == 0)
+        None => assert_true(false)
+      }
+      match @internal.obj_get(jv, "parallel_tool_calls") {
+        Some(True) => ()
+        _ => assert_true(false)
+      }
+      // created_at 0 哨兵
+      assert_true(s.contains("\"created_at\":0"))
+      // 往返归一：0 → None（G5 四端点差分不变量）
+      match responses_to_lux_response(s) {
+        Ok(d) => {
+          assert_true(d.value().created_at == None)
+          assert_eq(d.value().id, "resp-null")
+          assert_eq(d.value().choices[0].finish_reason, Stop)
+        }
+        Err(e) => fail("decode failed: \{e}")
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+  // 真实时间戳原样往返
+  match
+    responses_to_lux_response(
+      "{\"id\":\"r1\",\"object\":\"response\",\"created_at\":1741290958,\"status\":\"completed\",\"model\":\"m\",\"output\":[]}",
+    ) {
+    Ok(d) => assert_eq(d.value().created_at, Some(1741290958))
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
 test "encode - image url maps to input_image" {
   let req = @lux.LucentRequest::new(
     "gpt-5",

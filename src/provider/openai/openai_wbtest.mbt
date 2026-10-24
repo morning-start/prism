@@ -567,6 +567,100 @@ test "lux_response_to_openai - refusal encoded" {
 }
 
 ///|
+/// official-null 形状（conformance oracle [5] 组完整 schema 校验确立）：
+/// 官方 ChatCompletion schema 的 Message.required 含 `refusal`（string|null）、
+/// Choice.required 含 `logprobs`（Logprobs|null）——文本响应此前缺这两个键，
+/// 会被官方 schema 拒绝。编码器现恒写 `refusal:null` + `logprobs:null`；
+/// 无 refusal 语义时必须是 null 而非省略。
+test "lux_response_to_openai - official-null refusal and logprobs on text response" {
+  let resp = @lux.LucentResponse::new(
+    "r-1",
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentChoice::new(
+        0,
+        @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("hi")]),
+        Stop,
+        None,
+      ),
+    ],
+    None,
+    None,
+  )
+  match lux_response_to_openai(resp) {
+    Ok(cr) => {
+      let s = cr.value()
+      let jv = @internal.parse_json_opt(s).unwrap()
+      match @internal.field_arr(jv, "choices") {
+        Some(arr) => {
+          let c = arr[0]
+          // message.refusal 显式 null（非缺失、非字符串）
+          match @internal.obj_get(c, "message") {
+            Some(m) =>
+              match @internal.obj_get(m, "refusal") {
+                Some(Null) => ()
+                _ => assert_true(false)
+              }
+            None => assert_true(false)
+          }
+          // choice.logprobs 显式 null
+          match @internal.obj_get(c, "logprobs") {
+            Some(Null) => ()
+            _ => assert_true(false)
+          }
+        }
+        None => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// created 时间戳哨兵归一：IR 无 created_at 时编码写 0（官方 schema required），
+/// 解码把 0 归回 None —— encode→decode 往返 IR 恒等（G5 差分不变量）；
+/// 真实时间戳原样保留。
+test "openai response created sentinel round-trips to None" {
+  let msg = @lux.LucentMessage::new(Assistant, [@lux.LucentContent::text("hi")])
+  let no_ts = @lux.LucentResponse::new(
+    "r-1",
+    "gpt-4o",
+    None,
+    [@lux.LucentChoice::new(0, msg, Stop, None)],
+    None,
+    None,
+  )
+  match lux_response_to_openai(no_ts) {
+    Ok(cr) => {
+      assert_true(cr.value().contains("\"created\":0"))
+      match openai_to_lux_response(cr.value()) {
+        Ok(d) => assert_true(d.value().created_at == None)
+        Err(_) => assert_true(false)
+      }
+    }
+    Err(_) => assert_true(false)
+  }
+  // 真实时间戳不受归一影响
+  let with_ts = @lux.LucentResponse::new(
+    "r-1",
+    "gpt-4o",
+    Some(1700000000),
+    [@lux.LucentChoice::new(0, msg, Stop, None)],
+    None,
+    None,
+  )
+  match
+    openai_to_lux_response(
+      "{\"id\":\"r-1\",\"object\":\"chat.completion\",\"created\":1700000000,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"hi\"},\"finish_reason\":\"stop\"}]}",
+    ) {
+    Ok(d) => assert_eq(d.value().created_at, Some(1700000000))
+    Err(_) => assert_true(false)
+  }
+  let _ = with_ts
+}
+
+///|
 /// === 5. 流解码 ===
 
 ///|

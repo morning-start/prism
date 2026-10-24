@@ -98,7 +98,13 @@ pub fn openai_to_lux_response(
   }
   let id = @internal.field_str(jv, "id").unwrap_or("")
   let model = @internal.field_str(jv, "model").unwrap_or("")
-  let created = @internal.field_int(jv, "created")
+  // created 归一：编码器在 IR 无时间戳时写 0 哨兵（官方 schema required，见
+  // 下方 created_part），解码把 0 归回 None，保证 encode→decode 往返的 IR 恒等
+  // （G5 四端点差分不变量）。真实时间戳（>0）原样保留。
+  let created = match @internal.field_int(jv, "created") {
+    Some(0) => None
+    other => other
+  }
   let choices = parse_choices(jv)
   // 响应级元数据 → provider_payload（响应级扩展载体，对称于请求侧 options.extras。
   // vendored 官方 OpenAPI `CreateChatCompletionResponse` 顶层的非建模字段为
@@ -219,11 +225,17 @@ pub fn lux_response_to_openai(
         ",\"refusal\":\"" +
         @internal.json_escape(refusal_buf[0]) +
         "\""
+    } else {
+      // official-null 形状：官方 ChatCompletion schema 的 Message.required 含
+      // `refusal`（string|null）、Choice.required 含 `logprobs`（Logprobs|null）
+      // —— 缺失会被官方 schema 拒绝。显式 null 满足 required 且诚实表达
+      // "模型未拒绝 / 无 logprobs 数据"，不虚构事实（oracle [5] 组确立）。
+      msg_obj = msg_obj + ",\"refusal\":null"
     }
     // finish_reason 收敛到 OpenAI 合法枚举；与流式编码共用
     // `@meta.openai_finish_reason_json`（该函数返回已带引号的字面量）。
     msg_obj = msg_obj +
-      "},\"finish_reason\":" +
+      "},\"logprobs\":null,\"finish_reason\":" +
       @meta.openai_finish_reason_json(c.finish_reason, "choices", diagnostics)
     // CR-005：`stop_sequence` 是 Anthropic 的响应侧概念（实际命中的终止序列）。
     // OpenAI Chat 的 finish_reason 是封闭枚举且无此值，无载体 → 显式诊断。
@@ -275,7 +287,10 @@ pub fn lux_response_to_openai(
   }
   let created_part = match resp.created_at {
     Some(n) => ",\"created\":" + n.to_string()
-    None => ""
+    // official-null 形状：官方 ChatCompletion schema 中 `created` 是必填 number
+    // （不可空）。IR 无时间戳时用 0 哨兵（与流式编码 chunk_prefix 的兜底口径
+    // 一致）；解码侧把 0 归回 None，往返 IR 恒等。
+    None => ",\"created\":0"
   }
   // provider_payload 出站：响应级扩展载体（对称于请求侧 options.extras，见
   // @internal.split_provider_payload）。此前是**死载体**——解码写入了

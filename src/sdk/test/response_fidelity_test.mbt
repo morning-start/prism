@@ -568,7 +568,8 @@ test "response matrix - responses encode carries incomplete_details" {
   }
   // 内容过滤 → incomplete + content_filter
   // （顶层 status 形如 ,"status":"...","incomplete_details" / ,"status":"...","model"；
-  //   不能只查 "status":"completed"，因为每个 output item 内部也有自己的 status）
+  //   不能只查 "status":"completed"，因为每个 output item 内部也有自己的 status。
+  //   official-null 形状后 completed 态总带 ,"incomplete_details":null，故查它）
   let cf = make(ContentFilter)
   assert_true(
     cf
@@ -577,7 +578,9 @@ test "response matrix - responses encode carries incomplete_details" {
       ",\"status\":\"incomplete\",\"incomplete_details\":{\"reason\":\"content_filter\"}",
     ),
   )
-  assert_false(cf.value().contains(",\"status\":\"completed\",\"model\""))
+  assert_false(
+    cf.value().contains(",\"status\":\"completed\",\"incomplete_details\":null"),
+  )
   // 限额 → incomplete + max_output_tokens
   let len = make(Length)
   assert_true(
@@ -600,7 +603,9 @@ test "response matrix - responses encode carries incomplete_details" {
   assert_true(rsp_diag(mal, "choices.status"))
   // ToolCalls → completed 是语义对等（function_call item 承载），不诊断
   let tc = make(ToolCalls)
-  assert_true(tc.value().contains(",\"status\":\"completed\",\"model\""))
+  assert_true(
+    tc.value().contains(",\"status\":\"completed\",\"incomplete_details\":null"),
+  )
   assert_false(rsp_diag(tc, "choices.status"))
 }
 
@@ -628,8 +633,13 @@ test "response matrix - responses Native finish reason is diagnosed" {
   match @responses.lux_response_to_responses(resp) {
     Err(e) => fail("encode failed: " + e)
     Ok(cr) => {
-      // 不得把 vendor 值泄漏进 status
-      assert_true(cr.value().contains(",\"status\":\"completed\",\"model\""))
+      // 不得把 vendor 值泄漏进 status（official-null 形状后 completed 态总带
+      // ,"incomplete_details":null，见 incomplete_part 的 required 补齐）
+      assert_true(
+        cr
+        .value()
+        .contains(",\"status\":\"completed\",\"incomplete_details\":null"),
+      )
       assert_false(cr.value().contains("vendor_pause"))
       assert_true(rsp_diag(cr, "choices.status"))
     }

@@ -141,8 +141,14 @@ CI 里有一道 `Assert generated artifacts are up to date`：若生成物与仓
   不证明「这份 JSON 表达的意思和源一致」。语义一致性由 MoonBit 侧的往返测试保证。
 - **OpenAI 覆盖最全**（有 vendored 官方 OpenAPI + 官方 SDK），
   Anthropic / Gemini 只覆盖 SDK 类型能表达的字段。
-  `responses` / `gemini` 目标目前只校验关键结构字段（object/candidates 存在性），
-  完整 schema 校验待补（需先解决两家 SDK 类型与 wire 形态的已知偏差）。
+  2026-10-24 起 [5] 组四家目标**全部完整 schema 化**：responses 用官方
+  `Response` schema（请求回显槽位豁免登记于 `lib.mjs` UPSTREAM_BUGS，
+  编码器按官方可空性写 official-null/默认值，绝不编造回显内容）；gemini
+  新增信封级 `GenerateContentResponse` schema（此前只有 Candidate 级，
+  整体校验会误报 additionalProperties）。升级当日实锤并修复 3 类真实缺陷：
+  openai 文本响应缺 `message.refusal` / `choices[].logprobs`（required 但
+  官方-null 形状）、openai/responses 缺 `created`/`created_at` 哨兵、
+  responses 缺成功态常量（`error:null`/`incomplete_details:null`/`metadata:{}`）。
 - **不能替代真实 API 调用**。schema 通过 ≠ API 接受（服务端可能有额外校验）。
   拿到 API key 后应补录制真实流量（VCR 风格）作为最终验证。
 - **流式管线已接入（[6] 组，`pipeline-stream.mjs`）**：官方 SSE 帧序列 →
