@@ -795,6 +795,9 @@ test "lux_response_to_messages - with tool_use" {
       assert_true(s.contains("\"type\":\"tool_use\""))
       assert_true(s.contains("\"id\":\"tu_1\""))
       assert_true(s.contains("\"input\":{\"city\":\"Beijing\"}"))
+      // caller 是官方 ToolUseBlock required（模型直接发起 → "direct"）。
+      // 2026-10-24 [5] 组首次纳入工具调用样本时实测发现缺失会被官方 schema 拒绝。
+      assert_true(s.contains("\"caller\":{\"type\":\"direct\"}"))
     }
     Err(_) => assert_true(false)
   }

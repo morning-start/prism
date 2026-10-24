@@ -72,9 +72,13 @@ fn content_to_block(
     ToolUse(tu) =>
       match tool_use_input_fragment(tu, diagnostics) {
         Some(input_frag) =>
+          // caller: {"type":"direct"} —— 官方 ToolUseBlock required 字段
+          // （模型直接发起的工具调用）。历史 assistant 消息里的 tool_use
+          // 同属模型产出，取值一致。2026-10-24 [5] 组首次纳入工具调用
+          // 样本时实测发现该 required 缺失。
           "{\"type\":\"tool_use\",\"id\":\"" +
           @internal.json_escape(tu.id) +
-          "\",\"name\":\"" +
+          "\",\"caller\":{\"type\":\"direct\"},\"name\":\"" +
           @internal.json_escape(tu.name) +
           "\",\"input\":" +
           input_frag +
@@ -297,7 +301,8 @@ pub fn lux_request_to_messages(
             msgs_json.push(
               "{\"role\":\"assistant\",\"content\":[{\"type\":\"tool_use\",\"id\":\"" +
               @internal.json_escape(tu.id) +
-              "\",\"name\":\"" +
+              // caller required（模型直接发起），见 message_to_json 同处注释
+              "\",\"caller\":{\"type\":\"direct\"},\"name\":\"" +
               @internal.json_escape(tu.name) +
               "\",\"input\":" +
               input_frag +

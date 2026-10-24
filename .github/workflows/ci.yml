@@ -186,8 +186,8 @@ jobs:
           # 基线 173（2026-09-22，native 目标，wbtest 不参与统计）；阈值 200
           # 2026-10-18 实测 198（流式会话化 P0/P1 修复后补测回到阈值内）
           # 2026-10-24 实测 203（CR-006 修复 +9 测试；阈值上调 200→204）。
-          # 2026-10-24 三次实测 204（[5] 组四目标完整 schema 化：official-null 形状
-          # 新分支均有 wbtest 对覆盖；阈值保持 204，实测 == 阈值）。
+          # 2026-10-24 四次实测 204（CR-007 legacy function_call 修复：新分支
+          # 由 4 个 wbtest 对配平，含防御性闭块路径；阈值保持 204）。
           # 其中结构性不可测（不会因补测而下降，只会在新增代码时被突破）：
           #   src/examples/sdk-basic/main.mbt  82  println 演示体
           #   src/wasm/memory.mbt             38  %identity 指针双关 ABI

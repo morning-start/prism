@@ -280,6 +280,56 @@ fn openai_decode_frames(
                 }
                 None => ()
               }
+              // 旧式 delta.function_call（CR-007 §1.2）
+              //
+              // 与新式 delta.tool_calls[] 并存的 legacy 载体：单数、无 index、
+              // 无 id。此前无此分支 → 旧式流解出 0 个内容块，
+              // 转 messages 后整条流只剩 message_start/message_delta/message_stop
+              // （声称 tool_use 却无任何工具内容），且零诊断。
+              //
+              // 索引分配：delta.function_call 只有一路工具（不支持并行），
+              // 固定占用索引 0 —— 与 text 块同槽，故先闭合已开的 text 块
+              // （与 tool_calls 分支的 idx==0 处理同规则）。
+              match @internal.obj_get(delta, "function_call") {
+                Some(fc_delta) => {
+                  let idx : Int32 = 0
+                  if current_tool_block >= 0 && current_tool_block != idx {
+                    events.push(BlockEnd(current_tool_block))
+                  }
+                  if current_tool_block != idx {
+                    if idx == 0 && text_block_open {
+                      events.push(BlockEnd(0))
+                      text_block_open = false
+                    }
+                    // 注意：不闭 thinking 块 —— 单数 function_call 恒占索引 0，
+                    // 与 thinking（索引 1）不冲突，reasoning 模型（先思考后调
+                    // 工具）的 thinking 块应当继续存活（与 tool_calls 分支只在
+                    // idx==1 时才闭 thinking 的规则一致）。
+                    // 旧式无 id：与响应侧同一合成规则（CR-007 §2.3 决策点一 A）
+                    let name = @internal.field_str(fc_delta, "name").unwrap_or(
+                      "",
+                    )
+                    events.push(
+                      BlockStart(
+                        idx,
+                        @lux.LucentBlockType::tool_call("call_fn_0", name),
+                      ),
+                    )
+                    current_tool_block = idx
+                  }
+                  match @internal.field_str(fc_delta, "arguments") {
+                    Some(args) =>
+                      events.push(
+                        BlockDelta(
+                          idx,
+                          @lux.LucentBlockDelta::tool_arguments_delta(args),
+                        ),
+                      )
+                    None => ()
+                  }
+                }
+                None => ()
+              }
             }
             None => ()
           }

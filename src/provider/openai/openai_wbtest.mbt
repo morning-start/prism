@@ -427,6 +427,157 @@ test "openai_to_lux_response - assistant with tool_calls" {
 }
 
 ///|
+/// CR-007 §1.1：旧式 `message.function_call`（单数、无 id）此前无解码分支，
+/// 工具调用**整体丢失**且零诊断 —— 转 messages 后得到
+/// `{"content":[],"stop_reason":"tool_use"}`（声称调了工具却没有内容）。
+test "openai_to_lux_response - legacy function_call decoded" {
+  let json = "{\"id\":\"c-2\",\"object\":\"chat.completion\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":null,\"function_call\":{\"name\":\"search\",\"arguments\":\"{\\\"q\\\":\\\"x\\\"}\"}},\"finish_reason\":\"function_call\"}]}"
+  match openai_to_lux_response(json) {
+    Ok(cr) => {
+      let resp = cr.value()
+      assert_eq(resp.choices[0].finish_reason, ToolCalls)
+      // 工具调用必须幸存（此前 content 长度 0）
+      assert_eq(resp.choices[0].message.content.length(), 1)
+      match resp.choices[0].message.content[0] {
+        ToolUse(tu) => {
+          assert_eq(tu.name, "search")
+          // 旧式无 id → 确定性合成（CR-007 §2.3 决策点一 A）
+          assert_eq(tu.id, "call_fn_0")
+        }
+        _ => assert_true(false)
+      }
+      // 静默丢失的反面：这里本来就不该有诊断，但内容必须在
+      assert_eq(cr.diagnostics().length(), 0)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// CR-007 §1.2：旧式 `delta.function_call` 流式同样丢失（整条流只剩
+/// start/delta/stop，无 content 块）。修复后必须产出
+/// BlockStart(ToolCall) + ToolArgumentsDelta。
+test "openai_sse_to_events - legacy function_call stream" {
+  let sse = "data: {\"id\":\"c-3\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"function_call\":{\"name\":\"search\",\"arguments\":\"\"}},\"finish_reason\":null}]}\n\ndata: {\"id\":\"c-3\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"function_call\":{\"arguments\":\"{\\\"q\\\":1}\"}},\"finish_reason\":null}]}\n\ndata: {\"id\":\"c-3\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"function_call\"}]}\n\ndata: [DONE]\n\n"
+  match openai_sse_to_events(sse) {
+    Ok(cr) => {
+      let events = cr.value()
+      let mut saw_start = false
+      let mut saw_args = false
+      for e in events {
+        match e {
+          BlockStart(_, ToolCall(id, name)) => {
+            saw_start = true
+            assert_eq(id, "call_fn_0")
+            assert_eq(name, "search")
+          }
+          BlockDelta(_, ToolArgumentsDelta(args)) =>
+            // 首帧 arguments 为空串（官方旧式形态即如此），故只挑含实际
+            // 内容的增量校验 —— 空串增量本身是合法的（与 tool_calls 分支同）。
+            if args.contains("q") {
+              saw_args = true
+            }
+          _ => ()
+        }
+      }
+      // 数据丢失的反面：块起始与参数增量都必须在
+      assert_true(saw_start)
+      assert_true(saw_args)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// CR-007 §1.2 边界：旧式 `function_call` 与已开的 text 块同槽（索引 0）。
+/// 单数载体不支持并行，故必须先闭合 text 块再起工具块 —— 否则下游按索引
+/// 去重会把 BlockStart 当重复事件丢弃（与 tool_calls 分支的 idx==0 同规则）。
+/// 同时覆盖 `arguments` 缺失（官方首帧常只带 name）的路径。
+test "openai_sse_to_events - legacy function_call after text block" {
+  let sse = "data: {\"id\":\"c-4\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"let me check\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"c-4\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{\"function_call\":{\"name\":\"search\"}},\"finish_reason\":null}]}\n\ndata: {\"id\":\"c-4\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"function_call\"}]}\n\ndata: [DONE]\n\n"
+  match openai_sse_to_events(sse) {
+    Ok(cr) => {
+      let events = cr.value()
+      // 事件序列必须是：Text BlockStart → TextDelta → **Text BlockEnd** →
+      // Tool BlockStart → Finish —— BlockEnd(0) 不能被跳过
+      let mut saw_text_end = false
+      let mut saw_tool_start = false
+      let mut text_end_before_tool = false
+      for e in events {
+        match e {
+          BlockEnd(0) => if !saw_tool_start { saw_text_end = true }
+          BlockStart(0, ToolCall(_, name)) => {
+            saw_tool_start = true
+            assert_eq(name, "search")
+            text_end_before_tool = saw_text_end
+          }
+          _ => ()
+        }
+      }
+      assert_true(saw_text_end)
+      assert_true(saw_tool_start)
+      // 顺序断言：text 块必须先闭合，工具块才能占用同一索引
+      assert_true(text_end_before_tool)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
+/// CR-007 §1.2 防御性路径配平：单数 `function_call` 恒占索引 0，与
+/// thinking（索引 1）或复数 tool_calls[index=1] 块冲突时必须先闭合旧块。
+/// 混合序列：thinking → function_call（闭 thinking）→ tool_calls@1
+/// （闭 function_call 块）→ function_call（闭 tool_calls@1）。
+/// 与 tool_calls 分支的块管理完全同规则，确保下游按索引去重不丢块。
+test "openai_sse_to_events - legacy function_call closes conflicting blocks" {
+  let frame =
+    #|{"id":"c-5","object":"chat.completion.chunk","created":1,"model":"gpt-4o","choices":[{"index":0,"delta":__DELTA__,"finish_reason":null}]}
+  let mk = fn(delta : String) -> String {
+    let f = frame.replace_all(old="__DELTA__", new=delta)
+    "data: " + f + "\n\n"
+  }
+  let sse = mk("{\"role\":\"assistant\",\"reasoning\":\"think\"}") +
+    mk("{\"function_call\":{\"name\":\"search\",\"arguments\":\"\"}}") +
+    mk(
+      "{\"tool_calls\":[{\"index\":1,\"id\":\"t1\",\"function\":{\"name\":\"f1\",\"arguments\":\"{}\"}}]}",
+    ) +
+    mk("{\"function_call\":{\"name\":\"search2\",\"arguments\":\"{}\"}}") +
+    mk(
+      "{\"tool_calls\":[{\"index\":1,\"id\":\"t2\",\"function\":{\"name\":\"f2\",\"arguments\":\"{}\"}}]}",
+    ) +
+    "data: {\"id\":\"c-5\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\ndata: [DONE]\n\n"
+  match openai_sse_to_events(sse) {
+    Ok(cr) => {
+      let events = cr.value()
+      // 实测闭合链（fc 恒占索引 0，不闭 thinking；thinking 由 tool_calls@1
+      // 占索引 1 时才闭合）：
+      //   Start(1,Think) Start(0,fc1) End(0) End(1) Start(1,tc1) End(1)
+      //   Start(0,fc2) End(0) Start(1,tc2) End(1)
+      //   ↑ fc1 抢索引 0 先开块；随后 tc1@1 先闭 fc1(0) 再闭 thinking(1)
+      let ends : Array[Int32] = []
+      let mut saw_tool_start = 0
+      for e in events {
+        match e {
+          BlockEnd(idx) => ends.push(idx)
+          BlockStart(_, ToolCall(_, _)) => saw_tool_start += 1
+          _ => ()
+        }
+      }
+      // 五次闭合：fc1→0、thinking→1、tc1→1、fc2→0、finish 收尾 tc2→1
+      // （wbtest 直连解码器不走 EventNormalizer 的 finish 合成，故有第 5 次）
+      assert_eq(ends.length(), 5)
+      assert_eq(ends[0], 0) // fc1 被 tc1@1 顶掉
+      assert_eq(ends[1], 1) // thinking 被 tc1@1 闭合
+      assert_eq(ends[2], 1) // tc1 被 fc2 顶掉
+      assert_eq(ends[3], 0) // fc2 被 tc2 顶掉
+      assert_eq(ends[4], 1) // finish_reason=tool_calls 收尾 tc2
+      assert_eq(saw_tool_start, 4)
+    }
+    Err(_) => assert_true(false)
+  }
+}
+
+///|
 test "ai_chat_to_lux_response - refusal decoded" {
   let json = "{\"id\":\"c-1\",\"model\":\"gpt-4o\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":null,\"refusal\":\"cannot\"},\"finish_reason\":\"stop\"}]}"
   match openai_to_lux_response(json) {

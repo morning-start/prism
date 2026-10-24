@@ -136,9 +136,15 @@ pub fn lux_events_to_messages_sse(
           Text => "{\"type\":\"text\",\"text\":\"\"}"
           Thinking => "{\"type\":\"thinking\",\"thinking\":\"\"}"
           ToolCall(id, name) =>
+            // `caller` 是 Anthropic SDK 新版 ToolUseBlock 的 required 字段：
+            // {"type":"direct"} 表示"模型直接发起该工具调用"。Prism 出站的
+            // tool_use 恒为模型产出（服务端工具不走此路径），故 direct 是
+            // 事实正确的取值，不是编造（官方 ServToolCaller 仅用于
+            // code_execution 类服务端工具）。2026-10-24 [5] 组首次纳入
+            // 工具调用样本时实测发现该 required 缺失。
             "{\"type\":\"tool_use\",\"id\":\"" +
             @internal.json_escape(id) +
-            "\",\"name\":\"" +
+            "\",\"caller\":{\"type\":\"direct\"},\"name\":\"" +
             @internal.json_escape(name) +
             "\",\"input\":{}}"
           Refusal => "{\"type\":\"text\",\"text\":\"\"}"

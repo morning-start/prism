@@ -53,12 +53,12 @@ compilation to reach non-public members).
 
 - **sdk/test**: 2026-10-24（第九轮，CR-006 批次 1）新增 `stream_termination_test`（responses 三终止事件逐值映射、`response.failed` 的 Error 事件 + 诊断、官方扁平 error 帧兼容嵌套形态、流式与非流式同值不变量、gemini `promptFeedback.blockReason` → `Finish(Safety)` + 诊断、无双 Finish、`Safety → refusal` 收敛；十个用例）；配套抽出 `src/provider/meta/termination.mbt`（responses 流式/非流式共用 status 映射）
 
-**Total: 1435 tests passing (native + wasm-gc), 2026-10-24（`moon test` 全量；未覆盖行 204，阈值 204 —— `src/cmd/repl/driver_stub.mbt` 为结构性不可测已登记）。**
+**Total: 1439 tests passing (native + wasm-gc), 2026-10-24（`moon test` 全量；未覆盖行 204，阈值 204 —— `src/cmd/repl/driver_stub.mbt` 为结构性不可测已登记）。**
 
 ### 官方 schema 校验（Node oracle，2026-10-24 上线）
 
 - **为什么**：MoonBit 测试只能证明「Prism 与自己一致」，证明不了「Prism 与官方协议一致」。逐字段手写断言曾真实漏掉「白名单漏官方值 / 编造假值 / 官方 error 帧形态不匹配 / 源协议词汇泄漏」四类问题。
-- **怎么做**：三家官方 SDK 的 TS 类型 → JSON Schema → ajv 当裁判；八步检查（权威枚举 / 校验器自检 / 跨协议泄漏 / golden 回放 / **真实管线** / **真实流式管线** / **真实 socket 回放**）。真实管线用 `src/cmd/repl` 的 js 产物零编组驱动 Prism 实际转换，对产出做官方 schema 校验，已通过缺陷注入验证能抓真错。**2026-10-24 第二轮：[5] 组四家目标全部完整 schema 化**（responses 官方 Response schema + 请求回显槽位豁免登记；gemini 新增信封级 GenerateContentResponse schema），升级当日实锤并修复 openai `refusal`/`logprobs`/`created` 与 responses 成功态常量/`created_at` 五处 required 缺失（详见 [`fidelity-matrix.md`](fidelity-matrix.md) §3.15）。
+- **怎么做**：三家官方 SDK 的 TS 类型 → JSON Schema → ajv 当裁判；八步检查（权威枚举 / 校验器自检 / 跨协议泄漏 / golden 回放 / **真实管线** / **真实流式管线** / **真实 socket 回放**）。真实管线用 `src/cmd/repl` 的 js 产物零编组驱动 Prism 实际转换，对产出做官方 schema 校验，已通过缺陷注入验证能抓真错。**2026-10-24 第二轮：[5] 组四家目标全部完整 schema 化**（responses 官方 Response schema + 请求回显槽位豁免登记；gemini 新增信封级 GenerateContentResponse schema），升级当日实锤并修复 openai `refusal`/`logprobs`/`created` 与 responses 成功态常量/`created_at` 五处 required 缺失（详见 [`fidelity-matrix.md`](fidelity-matrix.md) §3.15）。**第三轮：样本矩阵首次纳入工具调用**（openai legacy `function_call`，CR-007），当日实锤该形态工具体整体丢失（已修）与 messages 出站 `tool_use` 缺 `caller`（已修）；并确立「真相断言」模式——schema 全绿不等于内容正确，断言工具体必须幸存。
 - **入口**：`node tools/conformance/run-all.mjs`（CI 与 `scripts/verify.sh` 同步接入）；设计与豁免治理见 [`rules/conformance-oracle.md`](rules/conformance-oracle.md)。
 
 ### 实时流式（首字延迟）

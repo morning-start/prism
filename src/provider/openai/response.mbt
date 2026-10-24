@@ -49,6 +49,32 @@ fn parse_choices(jv : Json) -> Array[@lux.LucentChoice] {
               }
               None => ()
             }
+            // 旧式 function_call（CR-007 §1.1）
+            //
+            // OpenAI legacy function calling 在 message 上用**单数**字段
+            // `function_call: {name, arguments}`（无 `id`），与新式
+            // `tool_calls: [{id, function:{name, arguments}}]` 是并存的两套载体，
+            // 官方 `finish_reason` 枚举亦分别有 `function_call` / `tool_calls`。
+            //
+            // 此前只读 `tool_calls[]`，旧式响应解出 `content: []` —— 工具调用
+            // **整体丢失**且零诊断，转 messages 后得到
+            // `{"content":[],"stop_reason":"tool_use"}`（声称调了工具却没有内容）。
+            //
+            // 旧式字段无 id，按确定性规则合成（CR-007 §2.3 决策点一 A）：
+            // 与 responses 侧 `fc_0` / `msg_0` 同类的合成前缀做法，
+            // 保证同源往返可复现、tool_result 回程可对上。
+            match @internal.obj_get(msg_jv, "function_call") {
+              Some(fc_obj) => {
+                let name = @internal.field_str(fc_obj, "name").unwrap_or("")
+                let args = @internal.field_str(fc_obj, "arguments").unwrap_or(
+                  "{}",
+                )
+                content.push(
+                  @lux.LucentContent::tool_use("call_fn_0", name, args, None),
+                )
+              }
+              None => ()
+            }
             // refusal
             match @internal.field_str(msg_jv, "refusal") {
               Some(r) => content.push(@lux.LucentContent::refusal(r))

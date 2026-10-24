@@ -95,7 +95,9 @@ function Get-AdapterExpectedFields([string]$Adapter) {
       "stop_sequences","stream","metadata","tools","tool_choice","thinking","output_config",
       "type","text","signature","thinking","id","name","input","is_error","tool_use_id",
       "source","media_type","data","url","input_schema","description","budget_tokens","effort","format",
-      "schema","disable_parallel_tool_use","role","content")
+      # caller：ToolUseBlock required 字段（@anthropic-ai/sdk 新版类型），取值
+      # direct / ServerToolCaller。2026-10-24 加入（CR-007 §1 配套，官方 schema 拒绝缺失）。
+      "schema","disable_parallel_tool_use","caller","role","content")
     "responses" = @("model","instructions","max_output_tokens","temperature","top_p","stream",
       "store","tools","reasoning","parallel_tool_calls","previous_response_id","type","role",
       "content","id","call_id","name","arguments","output","status","summary","text","image_url",

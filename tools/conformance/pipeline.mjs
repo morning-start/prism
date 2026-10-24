@@ -62,6 +62,32 @@ const SAMPLES = {
       stop_details: null,
     },
   },
+  // CR-007 §1：OpenAI legacy function calling（单数 message.function_call，
+  // 无 id）。此前完全无解码分支 → 工具调用整体丢失且零诊断。此样本让
+  // [5] 组的跨协议矩阵覆盖这条真实存量路径。
+  'openai-legacy-fc': {
+    response: {
+      id: 'chatcmpl-legacy',
+      object: 'chat.completion',
+      created: 1700000000,
+      model: 'gpt-4o',
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: 'assistant',
+            content: null,
+            function_call: { name: 'search', arguments: '{"q":"x"}' },
+          },
+          finish_reason: 'function_call',
+        },
+      ],
+      usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 },
+    },
+    // 真相断言：这条路径的价值就是「工具体幸存」，schema 通过还不够
+    source: 'openai',
+    expectToolUse: true,
+  },
 };
 
 /**
@@ -179,14 +205,29 @@ export async function run() {
   };
 
   for (const [prov, s] of Object.entries(SAMPLES)) {
+    // 样本可声明真实源协议（样本键名可带变体后缀，如 openai-legacy-fc）
+    const src = s.source ?? prov;
     console.log(`\n  源协议 ${prov}`);
     // 1) 官方样本 → IR（decode 必须成功）
-    const dec = P.call('to_lux_resp', prov, JSON.stringify(s.response));
+    const dec = P.call('to_lux_resp', src, JSON.stringify(s.response));
     if (!dec.ok) {
       record(`${prov}: 官方样本 decode → IR`, false, [{ path: '(driver)', message: dec.error }]);
       continue;
     }
     record(`${prov}: 官方样本 decode → IR（diag=${dec.diagnostics.length}）`, true);
+
+    // 1b) 真相断言：样本声称含工具调用时必须真的解出 tool_use
+    //     （CR-007 §1.1 —— schema 全绿但工具体丢失，是此前实际发生的事）
+    if (s.expectToolUse) {
+      const kinds = dec.value.choices.flatMap((c) =>
+        (c.message?.content ?? []).map((b) => b.type));
+      record(`${prov}: 解出的 IR 保留工具调用（content 含 tool_use）`,
+        kinds.includes('tool_use'), [{
+          path: '/choices/0/message/content',
+          message: `工具调用丢失，实际 content types = [${kinds.join(', ')}]`,
+          keyword: 'expectation',
+        }]);
+    }
 
     // 2) IR → 每家目标 encode，产出过官方 schema
     for (const target of ['openai', 'messages', 'responses', 'gemini']) {
@@ -211,6 +252,25 @@ export async function run() {
       } else if (target === 'messages') {
         const issues = validateAnthropicMessage(out);
         record(`${prov} → ${target}: 产出符合官方 Message 形态`, issues.length === 0, issues);
+        // 真相断言：源含工具调用 → 目标的 content 必须是非空 tool_use 块。
+        // 此前 function_call 源转 messages 产出 {"content":[],"stop_reason":"tool_use"}，
+        // 即"声称调了工具却没有任何工具内容"，而 shape 校验全绿（CR-007 §1.1）。
+        if (s.expectToolUse) {
+          const blocks = out.content ?? [];
+          const toolBlocks = blocks.filter((b) => b.type === 'tool_use');
+          record(`${prov} → messages: 工具调用块幸存（content 非空且含 tool_use）`,
+            toolBlocks.length > 0 && blocks.length > 0, [{
+              path: '/content',
+              message: `工具调用块丢失：content = ${JSON.stringify(blocks).slice(0, 120)}`,
+              keyword: 'expectation',
+            }]);
+          record(`${prov} → messages: stop_reason 与工具块一致（tool_use）`,
+            out.stop_reason === 'tool_use', [{
+              path: '/stop_reason',
+              message: `有工具块时 stop_reason 应为 tool_use（实际 "${out.stop_reason}"）`,
+              keyword: 'expectation',
+            }]);
+        }
         // stop_reason 必须在权威枚举内
         if (out.stop_reason !== undefined && out.stop_reason !== null) {
           const legal = authority()['messages.stop_reason'];

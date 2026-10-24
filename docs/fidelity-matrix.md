@@ -583,8 +583,10 @@ diagnose  = 值不合法 || 有语义损失
    `src/sdk/test/stop_sequence_carrier_test.mbt`）；
 2. **`function_call` vs `tool_calls`**：OpenAI 合法枚举里这是两个不同项，但
    IR 都映射到 `ToolCalls`，回程一律输出 `tool_calls` —— OpenAI → IR → OpenAI
-   无法保住 `function_call`。此前无人记录。修复需增 IR 变体，属破坏性变更，
-   待治理决策。
+   无法保住 `function_call`。**2026-10-24 重查修正定性**（[`cr/CR-007`](cr/CR-007-function-call-legacy.md)）：
+   枚举退化只是次要面，主因是该形态的**工具体整体丢失**（非流式与流式都是
+   静默丢内容、零诊断）——已修（CR-007 §1）；枚举区分度按非破坏性方案
+   `LucentChoice.tool_call_style : String?` 提案中（CR-007 §2，待批准）。
 
 回归：`src/sdk/test/finish_reason_contract_test.mbt`（7 用例）。
 提案与完整分析见 [`cr/CR-005-stop-sequence-carrier.md`](cr/CR-005-stop-sequence-carrier.md)。
