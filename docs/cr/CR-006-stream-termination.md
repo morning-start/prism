@@ -1,6 +1,7 @@
 # CR-006：流式终止信息的载体（`Finish` 载荷）
 
-> 状态：**待决策**（含一个破坏性变更，需治理 §5 批准）
+> 状态：**批次 1 已落地**（`0.1.5`，commit `d41d6bc`）；批次 2 **待决策**
+>（含一个破坏性变更，需治理 §5 批准；推荐方案 A，理由见 §3.3）
 > 来源：CR-005 §6.8 遗留项「流式 `stop_sequence` 无 IR 载体」
 > 影响面：**协议转换 + SDK/Agent 消费**（两者兼有）
 > 变更类型：**破坏性**（§5「修改 stream event 的载荷结构」）+ 5 个非破坏性缺陷修复
@@ -345,19 +346,21 @@ pub fn LucentStreamEvent::finish(reason : LucentFinishReason) -> LucentStreamEve
 
 ## 6. 验收清单
 
-**批次 1（`0.1.5`，不需要治理）**
+**批次 1（`0.1.5`，不需要治理）— ✅ 已全部落地（2026-10-24，commit `d41d6bc`）**
 
-- [ ] `responses`：`response.incomplete` → `Finish` + `Usage` + `Done`，
+- [x] `responses`：`response.incomplete` → `Finish` + `Usage` + `Done`，
       `incomplete_details.reason` 逐值对齐非流式
-- [ ] `responses`：`response.failed` → `Error`（含 code/message）+ `Finish(Error)` + `Done`
-- [ ] `responses`：官方扁平 `error` → `Error`；保留非官方嵌套形态兼容
-- [ ] `@meta.responses_termination_reason` 抽出，非流式与流式**共用**（非流式行为零变化）
-- [ ] `gemini`：流式 `promptFeedback.blockReason` → `Finish(Safety)` + Degraded 诊断
-- [ ] 回归：`src/sdk/test/stream_termination_test.mbt`
+- [x] `responses`：`response.failed` → `Error`（含 code/message）+ `Finish(Error)` + `Done`
+- [x] `responses`：官方扁平 `error` → `Error`；保留非官方嵌套形态兼容
+- [x] `@meta.responses_termination_reason` 抽出，非流式与流式**共用**（非流式行为零变化）
+- [x] `gemini`：流式 `promptFeedback.blockReason` → `Finish(Safety)` + Degraded 诊断
+- [x] 回归：`src/sdk/test/stream_termination_test.mbt`
       （五类终止/错误输入 × 生产；流式与非流式对同一响应体解出**同一** `finish_reason`；
       官方 error 帧不再被吞；`response.failed` 的流不再是空流）
-- [ ] 每处修复做**反向验证**（回退后测试必须失败）
-- [ ] 门禁全绿
+- [x] 每处修复做**反向验证**（回退后测试必须失败）
+- [x] 门禁全绿（fmt 0 / check(+73, deny-warn) 0 / native+wasm-gc 1426×2 /
+      oracle run-all 6 步（validate 23 + pipeline 14 + self-check 7）/
+      drift `-Strict` PASS / coverage 203≤204；`moon.mod` → `0.1.5`）
 
 **批次 2（`0.2.0`，需 §5 批准）**
 
