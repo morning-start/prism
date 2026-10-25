@@ -72,14 +72,22 @@ Gemini JSON ◄──[encode]── Lucent IR ◄──[decode]── OpenAI JSO
 ```
 
 ```
-### ADR-004 WASM 产物加载冒烟进 CI（TASK-2c，规划）
-- 状态：提议（TL，待实现；随 wrappers CI 化一起落地）
+### ADR-004 WASM 产物加载冒烟进 CI（TASK-2c）
+- 状态：已实现（2026-10-25，commit 4d0f446；CI job `wasm-smoke`）
 - 背景：POC-1 暴露 ABI 假阴性——moon test 的 wasm-gc runner 不校验主模块
-  导出段，1442 tests 全绿但产物在真实引擎无法加载（RISK-007）
-- 决策：CI 增加 Node 冒烟 job：WebAssembly.compile + 导出计数断言（28）+
-  wasm_abi_version 调用 + 1 次转换，复用 .agent-team/poc/task2-node-load.mjs
-- 备选方案：不加 —— 放弃原因：ABI 回归只能在消费者侧发现，重演本次 POC
-- 何时重构：无（长期护栏）
+  导出段，1442 tests 全绿但产物在真实引擎无法加载（RISK-007）；QA 验收
+  TASK-2b 时确认修复新增的两个配置面（targets 拆分 / wasm-gc link options）
+  也无护栏，且 moonc 对 exports 清单中不存在的函数静默忽略（P2-1 根因）
+- 决策：CI 新增 wasm-smoke job：Node 22 引擎加载两后端产物，断言
+  ①导出数 ≥25 且 29 项关键锚点在位（QA P2-2 宽松口径，不用精确计数避免
+  _start 干扰）②abi=1 ③每后端 1 次真实转换 + 诊断透出 ④wasm-gc 降级
+  语义（scratch=0/错误信封）⑤js-string-builtins 宿主契约负向验证
+  （缺 options 实例化必须失败）⑥流会话含 finished 自查 ⑦纯 wasm scratch
+  协议全链路。脚本 scripts/wasm_smoke.mjs 可独立运行
+- 备选方案：不加 —— 放弃原因：ABI 回归只能在消费者侧发现，本次两起缺陷
+  （POC-1 / P2-1）均为测试全绿假阴性
+- 何时重构：无（长期护栏）；wrappers 集成测试（TASK-5）落地后，本冒烟
+  作为其前置快速检查保留
 ```
 
 ### 历史架构裁决（登记于正式文档，此处仅索引）
