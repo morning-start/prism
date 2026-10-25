@@ -13,7 +13,7 @@
 | 保真度边界 | [`docs/fidelity-matrix.md`](../../docs/fidelity-matrix.md) | 4×4 矩阵，每格 Exact/Degraded/Unsupported/Invalid |
 | Adapter 实现契约 | [`docs/provider-guide.md`](../../docs/provider-guide.md) | 新增 provider 的 6 函数 + 文件布局 |
 | 字段分类规则 | AGENTS.md §Field classification | standard vs extension（extra/provider_payload 安全阀） |
-| WASM ABI | `src/cmd/main/moon.pkg` exports + `wasm_abi_version` | 28 导出字符串 ABI；增量会话句柄 ABI（T5/CR-002） |
+| WASM ABI | `src/cmd/main/moon.pkg` exports + `wasm_abi_version` | 29 导出字符串 ABI（每后端一份 exports 清单：wasm 带 memory 导出、wasm-gc 带 js-string-builtins）；增量会话句柄 ABI（T5/CR-002，含 `wasm_stream_finished` 自查导出，QA 验收 P2-1 补齐 2026-10-25） |
 
 ## 核心数据流（两消费者类型）
 

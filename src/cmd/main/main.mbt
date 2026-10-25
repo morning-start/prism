@@ -134,6 +134,13 @@ pub fn wasm_stream_finish(handle : Int32) -> String {
 }
 
 ///|
+/// 查询会话是否已收尾 → {"value": true|false}
+/// （宿主在释放前自查；未 finish 就释放意味着尾部帧与终止符静默丢失）
+pub fn wasm_stream_finished(handle : Int32) -> String {
+  @wasm.wasm_stream_finished(handle)
+}
+
+///|
 /// 释放会话句柄
 pub fn wasm_stream_free(handle : Int32) -> String {
   @wasm.wasm_stream_free(handle)
