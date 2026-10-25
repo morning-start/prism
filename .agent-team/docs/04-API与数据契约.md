@@ -25,13 +25,24 @@
 M1 新增第三入口：**wasm 宿主** —— 字符串 ABI 进出（`String in/out`，零 provider 耦合），
 wrapper 是 ABI 的类型化包装，**不得**在 wrapper 内重写转换逻辑。
 
-## M1 新增契约（REQ-001，待 POC 后由 TL 细化）
+## M1 新增契约（REQ-001，POC-1 已定形态，TASK-4 实施时细化实现）
 
 | 接口 | 形态 | 输入 | 输出 | 业务语义确认（PM） |
 |---|---|---|---|---|
-| `convert(from, to, payload)` | TS 函数 | 协议名 × 协议名 × JSON 字符串 | JSON 字符串 + 诊断 | 与 wasm `wasm_convert_*` 语义一一对应，不做二次抽象 |
-| `stream session` | TS 类（句柄式） | 逐 chunk feed | 逐帧事件 | 对应 wasm `wasm_stream_new/feed/finish`；`finish()` 必须在宿主 `finally` 调用（终止符契约） |
-| 诊断出口 | 结构化对象 | — | `{ level, code, message, ... }` | **绝不静默丢弃**：wrapper 不允许吞诊断，必须透出给调用方 |
+| `convert(from, to, payload)` | TS 函数 | 协议名 × 协议名 × JSON 字符串 | JSON 字符串 + 诊断 | 与 wasm `wasm_convert_req/resp/stream` 语义一一对应，不做二次抽象 |
+| `stream session` | TS 类（句柄式） | 逐 chunk feed | 逐帧事件 | 对应 wasm `wasm_stream_new/feed/finish/free`；`finish()` 必须在宿主 `finally` 调用（终止符契约）；`finished()` 自查已可用（259ea74） |
+| 诊断出口 | 结构化对象 | — | `{ field, status: exact/degraded/unsupported/invalid, detail }` | **绝不静默丢弃**：wrapper 不允许吞诊断，必须透出给调用方 |
+
+### Wrapper 绑定的 WASM 宿主契约（POC-1/TASK-2b 实测，2026-10-25）
+
+| 项 | 契约 | 依据 |
+|---|---|---|
+| 产物 | `_build/<target>/<mode>/build/cmd/main/main.wasm` | 29 项 ABI 导出（`src/cmd/main/moon.pkg` exports 唯一真值） |
+| wasm-gc 实例化 | `WebAssembly.instantiate(bytes, {}, { builtins: ['js-string'], importedStringConstants: '_' })`——缺 options 硬失败 | POC-1 + QA 负向验证（TASK-2b） |
+| 最低 Node 版本 | ≥ 22（wasm-gc 与 js-string builtins 默认启用，无需 flag） | POC-1（本机 v24 验证） |
+| wasm 后端 String 通道 | scratch 协议：长度头 = UTF-16 code units（`skills/prism-wasm/references/string-abi.md` 已修正），offset ≥ 8，memory.buffer 每次现取 | TASK-2c 实测 |
+| scratch/log 通道 | wasm-gc/js 后端**降级**（`wasm_init_scratch`→0、`wasm_read_scratch_arg`→错误信封）；wrapper 不得依赖 | RISK-006 关闭记录 + TD-004 |
+| 冒烟护栏 | `node scripts/wasm_smoke.mjs`（CI job `wasm-smoke`）：产物可加载性 + 29 锚点 + 转换/诊断/降级/契约负向 | TASK-2c |
 
 ## 错误与异常约定
 
