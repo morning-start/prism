@@ -41,6 +41,12 @@ options(
       "export-memory-name": "memory",
     },
     "wasm-gc": {
+      // JS string builtins：开启后 MoonBit String 的 ABI 即 JS string（externref），
+      // 宿主可直接传/收原生字符串；关闭时 String 是 GC 内部结构，导出不可用。
+      // 宿主实例化须传：WebAssembly.instantiate(bytes, {}, {
+      //   builtins: ["js-string"], importedStringConstants: "_" })
+      "use-js-builtin-string": true,
+      "imported-string-constants": "_",
       "exports": [
         "wasm_to_lux_req",
         "wasm_lux_req_to_provider",

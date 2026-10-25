@@ -3,3 +3,14 @@ import {
   "morning-start/prism/sdk",
   "moonbitlang/core/json",
 }
+
+options(
+  targets: {
+    // 线性内存指针技巧（%identity 把 Int32 强转为 GC 引用）仅纯 wasm 后端
+    // 合法；wasm-gc 下模块被引擎校验拒绝（RISK-006 / POC-1）。
+    // wasm-gc / js 后端用 memory_wasmgc.mbt 的降级实现（js 无共享线性
+    // 内存语义，scratch/log 通道同样降级）。
+    "memory.mbt": [ "wasm", "native", "llvm" ],
+    "memory_wasmgc.mbt": [ "wasm-gc", "js" ],
+  },
+)
