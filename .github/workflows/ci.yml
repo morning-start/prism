@@ -150,8 +150,12 @@ jobs:
       - name: Update dependencies
         run: moon update
 
-      - name: Build wasm-gc artifact
-        run: moon build --target wasm-gc
+      # 冒烟脚本对双后端都做存在性断言（wasm 产物缺失即 FAIL——run 51 实证），
+      # 故此处与 wasm-smoke job 同口径构建双后端
+      - name: Build both backends
+        run: |
+          moon build --target wasm
+          moon build --target wasm-gc
 
       - name: WASM ABI smoke (consumer-side guard)
         run: node scripts/wasm_smoke.mjs

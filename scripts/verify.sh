@@ -56,7 +56,8 @@ if [ "$RUN_ORACLE" = 1 ]; then
     echo "  请先运行: cd wrappers/ts && npm install"
     fail=$((fail+1))
   else
-    step "moon build --target wasm-gc（wrapper 依赖产物）" moon build --target wasm-gc
+    # 冒烟脚本对双后端都做存在性断言，须构建双后端（与 CI wrapper job 同口径）
+    step "moon build 双后端（wrapper 依赖产物）" bash -c "moon build --target wasm && moon build --target wasm-gc"
     step "WASM ABI 冒烟（wrapper 前置）"           node scripts/wasm_smoke.mjs
     step "wrapper 编译（tsc）"                     bash -c "cd wrappers/ts && npm run build --silent"
     step "wrapper 集成测试（node --test）"         bash -c "cd wrappers/ts && npm test"
