@@ -1,6 +1,9 @@
 # WASM Exported Functions
 
-All 23 exported functions from prism.wasm.
+29 ABI exports per backend (`src/cmd/main/moon.pkg` is the single source of
+truth; wasm backend additionally exports `memory`). Scratch/log exports are
+**degraded stubs** on wasm-gc/js (see string-abi.md); conversion exports are
+identical across backends.
 
 ## IR Conversion (6)
 
@@ -83,6 +86,28 @@ Stream conversion with logging
 ### wasm_list_providers() → String
 JSON array of all provider names
 
+## Stream Sessions (5)
+
+### wasm_stream_new(source, target) → String
+{"value": handle} — allocate incremental stream session
+
+### wasm_stream_feed(handle, chunk) → String
+{"value": ["<target SSE frame>", ...]}
+
+### wasm_stream_finish(handle) → String
+Flush trailing half-frame + held Finish frame
+
+### wasm_stream_finished(handle) → String
+{"value": true|false} — host self-check before free (added 2026-10-25)
+
+### wasm_stream_free(handle) → String
+{"value": true} — slot reusable after free
+
 ## Providers
 
-`openai`, `openai-responses`, `openai-codex`, `openai-azure`, `openai-vllm`, `anthropic`, `gemini`, `gemini-vertex`, `gemini-interactions`
+Primary names (verified via `wasm_list_providers()`, 2026-10-25):
+`responses`, `openai`, `messages`, `gemini`
+
+Aliases (e.g. `openai-responses`, `claude-messages`, `google`, `openai-chat`)
+also resolve via `match_provider_name`; see `src/sdk/registry.mbt` for the
+authoritative list.
