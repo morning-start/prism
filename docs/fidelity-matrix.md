@@ -448,7 +448,7 @@ gemini = `modelStatus`（无 vendored spec，手工维护）。
    gemini `functionResponse.name` 需回查 ToolCall 重建 id→name 映射
    （`src/provider/gemini/request_encode.mbt` `build_tool_name_map`）；
    orphan tool result 走 Degraded 回退。IR 载体提案待治理
-   （登记于 team-workspace/docs/00-需求池.md REQ-002）。
+   （登记于 .agent-team/docs/00-需求池.md REQ-002）。
 2. **reasoning.encrypted_content**（Responses 无状态推理续接凭据）无 IR
    载体，decode 打 Degraded 诊断。
 3. **parallel_tool_calls 能力声明**与协议实际能力不一致（§1 注释）。

@@ -1,6 +1,7 @@
 # Prism Project Status
 
-> Last updated: 2026-10-24（CR-006 批次 1 + 官方 schema 校验系统后）
+> Last updated: 2026-10-25（文档规范化：团队流程文档迁入 `.agent-team/docs/`，CR-006 批次 1 + 官方 schema 校验系统后）
+> 跨 Agent 团队流程文档（需求池/里程碑/任务板/风险/变更记录）：仓库内 `.agent-team/docs/`；技术文档索引见 `docs/README.md`。
 
 ## Module Completion
 

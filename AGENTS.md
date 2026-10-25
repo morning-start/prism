@@ -83,13 +83,20 @@ When starting work on this project, read these in order to restore context:
 
 Team workspace (cross-agent shared documents):
 
-- `team-workspace/docs/` on the DSH profile side (outside this repo) holds the
-  requirement pool, research/competitor notes, task board, risk register and
-  change log (`00/01/05/06/09-*.md`). Treat those files as the single source
-  of truth for scope, priorities and risks.
-- A previous convention used `.agent-workplace/`, `.moonbit-pipeline.json`
-  (repo root) and `modes/README.md` as session checkpoints. All are retired
-  (2026-10-24) — do not create or reference them.
+- `.agent-team/docs/` (repo root, git-tracked) holds the full team flow
+  documents `00`–`09`: requirement pool + project charter, research/competitor
+  notes, feasibility & POC log, architecture ADRs (increment-level; the single
+  source of truth for architecture remains `docs/architecture.md`), API/data
+  contract index, task board, risk register, acceptance criteria & cases,
+  acceptance reports and the change log. Treat `00-需求池.md` (charter +
+  roadmap) as the single source of truth for scope, priorities and risks.
+- A previous convention stored these documents in the DSH profile side
+  `team-workspace/docs/` (outside this repo). That location is retired
+  (2026-10-25, CHG-001 in `.agent-team/docs/09-变更记录.md`) — do not create or
+  update documents there.
+- Older retired conventions: `.agent-workplace/`, `.moonbit-pipeline.json`
+  (repo root) and `modes/README.md` as session checkpoints (retired
+  2026-10-24) — do not create or reference them either.
 
 Progress convention: one feature per commit, commit after each task, pass
 `moon fmt --check` / `moon check` / `moon test` before committing. Once a task

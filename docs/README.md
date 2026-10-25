@@ -1,8 +1,8 @@
 # Prism 正式文档索引
 
 > 所有正式文档（git tracked）集中在此。过程态工作区 `.agent-workplace/` 已于
-> 2026-10-24 退役；跨 Agent 共享的需求池/任务板/风险/变更记录在 DSH 侧
-> `team-workspace/docs/`（仓库外）。
+> 2026-10-24 退役；跨 Agent 共享的团队流程文档（需求池/任务板/风险/变更记录等
+> 00–09 全套）在仓库内 `.agent-team/docs/`（2026-10-25 起，随项目走）。
 
 ## 核心文档
 
@@ -50,4 +50,4 @@
 
 - 包内 README：`src/lux/README.md`、`src/sdk/README.md`（文件索引 + 依赖规则）
 - 使用指南：根目录 [`USAGE.md`](../USAGE.md)（MoonBit / Go / TS wrapper + 4 场景）
-- 跨 Agent 共享文档（需求池/任务板/风险/变更记录）：DSH 侧 `team-workspace/docs/`（仓库外）
+- 跨 Agent 团队流程文档（章程与需求池/调研/任务板/风险/验收/变更记录 00–09）：仓库内 [`.agent-team/docs/`](../.agent-team/docs/00-需求池.md)
