@@ -11,7 +11,7 @@
 | `src/lux` (Lucent IR) | ✅ Stable | v1 schema, types + builders + stream events + diagnostics；T8 新增 previous_response_id 标准字段 + ConversationSnapshot |
 | `src/internal` | ✅ Stable | JSON helpers, SSE parser（含 T5 增量 SseFrameSplitter）, shared primitives |
 | `src/sdk` | ✅ Stable | Facade, context, registry+match（T6 动态注册 + endpoint 配置）, pipeline/codec_pipeline, convert（T4 钩子链 / T5 StreamConverter / T8 快照还原）, hooks, error（T7 类型化）, diagnostics（T10 策略+聚合）, snapshot |
-| `src/wasm` | ✅ Stable | 28 exported functions (per `src/cmd/main/moon.pkg` exports list; check via `scripts/export_count.sh`), scratch memory, log buffer；T5 增量会话句柄 ABI + T11 ABI 版本导出 |
+| `src/wasm` | ✅ Stable | 29 exported functions per backend (per `src/cmd/main/moon.pkg` exports list; wasm 后端另含 memory 导出；check via `scripts/export_count.sh`), scratch memory, log buffer；T5 增量会话句柄 ABI（含 `wasm_stream_finished`）+ T11 ABI 版本导出。**wasm-gc 后端**：memory ABI 按后端拆分（`memory_wasmgc.mbt` 降级实现，scratch/log 6 导出不可用，RISK-006 已关闭）+ js-string-builtins（宿主须传 `builtins:['js-string'], importedStringConstants:'_'`） |
 | `src/provider/openai` | ✅ Complete | Chat Completions + stream + capability |
 | `src/provider/messages` | ✅ Complete | Anthropic Messages API + extended thinking |
 | `src/provider/responses` | ✅ Complete | OpenAI Responses API |
@@ -136,6 +136,7 @@ compilation to reach non-public members).
 | T10 | `DiagnosticPolicy` + `DiagnosticCollector`（策略熔断 + 降级率统计） |
 | T11 | `wasm_abi_version` 导出 + wrappers 状态澄清 |
 | T12 | REQ-003：openai/messages/responses capability `parallel_tool_calls` 声明 Absent→Full（消除声明漂移，fidelity-matrix §1 同步） |
+| T13 | TASK-2/2b：wasm-gc 后端可加载性（POC-1 发现 moon.pkg 缺 wasm-gc 导出块 + memory.mbt 指针技巧非法 → moon.pkg 修 exports + js-string-builtins；memory ABI 按后端拆分 `memory_wasmgc.mbt` 降级；`wasm_stream_finished` 补 wrapper 与导出；RISK-006 关闭，RISK-007 CI 冒烟提级） |
 
 ## IR Evolution Backlog (from 2026-09 protocol audit)
 
