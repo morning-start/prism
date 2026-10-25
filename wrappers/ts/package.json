@@ -1,0 +1,44 @@
+{
+  "name": "@morning-start/prism-wasm",
+  "version": "0.1.0",
+  "description": "TypeScript wrapper for the Prism wasm artifact (wasm-gc backend): cross-protocol LLM request/response/stream conversion over the Lucent IR with typed diagnostics.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/morning-start/prism",
+    "directory": "wrappers/ts"
+  },
+  "keywords": [
+    "llm",
+    "openai",
+    "anthropic",
+    "gemini",
+    "wasm",
+    "protocol",
+    "middleware",
+    "lucent-ir"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test \"test/*.test.mjs\""
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}

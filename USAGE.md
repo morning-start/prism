@@ -154,36 +154,93 @@ func main() {
 
 ## 4. TypeScript wrapper 使用
 
+> 实现位于 [`wrappers/ts/`](wrappers/ts/)（`@morning-start/prism-wasm`，零运行时依赖，
+> Node ≥ 22 —— wasm-gc 与 js-string builtins 默认启用）。本节示例与实际行为可复现，
+> 集成测试见 `wrappers/ts/test/`。
+
 ### 4.1 安装
 
 ```bash
-bun add @morning-start/prism-wasm
+npm install @morning-start/prism-wasm
 ```
 
-### 4.2 快速开始
+需要 Prism 的 wasm-gc 产物（仓库根执行 `moon build --target wasm-gc`，
+得到 `_build/wasm-gc/release/build/cmd/main/main.wasm`）。
+
+### 4.2 快速开始：请求转换
 
 ```typescript
-import { PrismClient } from "@morning-start/prism-wasm";
-import { readFileSync } from "fs";
+import { loadPrism } from "@morning-start/prism-wasm";
+import { readFileSync } from "node:fs";
 
-const client = new PrismClient(readFileSync("prism.wasm"));
+const client = await loadPrism(readFileSync("main.wasm"));
+client.abiVersion; // "1"（加载时已做 29 导出锚点校验 + ABI 锁定）
 
-// 编码请求
-const req = client.encodeRequest("openai", "你好");
-console.log(req);
+// 请求转换：OpenAI Chat Completions → Anthropic Messages
+const result = client.convertRequest(
+  "openai",
+  JSON.stringify({
+    model: "gpt-4o-mini",
+    max_tokens: 1024,
+    messages: [{ role: "user", content: "hello" }],
+  }),
+  "messages",
+);
+console.log(result.value);       // Anthropic /v1/messages 请求 JSON
+console.log(result.diagnostics); // [] —— Exact 转换，零丢失
+```
 
-// 解码 SSE
-const events = client.decodeSSE("anthropic", sseText);
-for (const event of events) {
-  if (event.type === "text_delta") {
-    process.stdout.write(event.text);
+### 4.3 流式转换
+
+逐 chunk feed、逐帧产出；`finish()` 冲刷尾部半帧（CR-002 终止符契约），
+务必放在 `finally`；`free()` 幂等。
+
+```typescript
+const session = client.createStream("openai", "messages");
+try {
+  for await (const chunk of upstreamSSE) {
+    for (const frame of session.feed(chunk)) {
+      process.stdout.write(frame); // 可直接转发的 Anthropic SSE 帧
+    }
   }
+} finally {
+  for (const frame of session.finish()) process.stdout.write(frame);
+  session.free();
+}
+```
+
+不变量（集成测试已验证）：`feed()` + `finish()` 输出拼接 === 同输入的
+`convertStream()` 整批输出。
+
+### 4.4 诊断与错误处理
+
+wrapper 不吞错、不重试、不降级：诊断逐字透出，一切失败抛 `PrismError`
+（稳定 `code`：`LOAD_FAILED / MISSING_EXPORT / ABI_MISMATCH / ENVELOPE_INVALID
+/ CONVERSION_ERROR / SESSION_STATE`）。
+
+```typescript
+// 省略 max_tokens → messages 目标按契约补 4096，打 Degraded 诊断
+const degraded = client.convertRequest(
+  "openai",
+  JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: "hi" }] }),
+  "messages",
+);
+for (const d of degraded.diagnostics) {
+  console.log(`${d.status}: ${d.field} — ${d.detail}`);
 }
 
-// 查询能力
-const cap = client.capability("openai");
-console.log(cap);  // → { provider: "openai" }
+try {
+  client.convertRequest("nonexistent", "{}", "messages");
+} catch (err) {
+  if (err instanceof PrismError) console.error(err.code, err.message);
+}
 ```
+
+### 4.5 其余入口
+
+`convertResponse` / `convertStream` / `convertStreamEvent` / `listProviders()`
+（→ `["responses","openai","messages","gemini"]`）。完整 API 表见
+[`wrappers/ts/README.md`](wrappers/ts/README.md)。
 
 ---
 
