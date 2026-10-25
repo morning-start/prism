@@ -27,6 +27,19 @@ import { readFileSync, existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+// Node 版本前置检查（RISK-008）：js-string builtins 需要 V8 足够新的引擎。
+// Node 22.x（≤22.23 实测）会**静默忽略** instantiate 的 builtins 选项，随后以
+// 隐晦的 Import "_" 错误失败；给出明确报错代替谜语。
+const [nodeMajor] = process.versions.node.split('.').map(Number)
+if (nodeMajor < 23) {
+  console.error(
+    `SMOKE FAIL — Node ${process.versions.node} 不满足 js-string builtins 宿主契约\n` +
+    `  （v22.x 会静默忽略 builtins 编译选项 → Import "_" 假错误，见 RISK-008）\n` +
+    `  请用 Node >= 24 运行本脚本（CI 已锁 node-version: '24'）`,
+  )
+  process.exit(1)
+}
+
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const mode = process.argv.includes('--release') ? 'release' : 'debug'
 const buildDir = t => join(root, '_build', t, mode, 'build', 'cmd', 'main', 'main.wasm')

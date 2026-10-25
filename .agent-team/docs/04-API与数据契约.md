@@ -39,7 +39,7 @@ wrapper 是 ABI 的类型化包装，**不得**在 wrapper 内重写转换逻辑
 |---|---|---|
 | 产物 | `_build/<target>/<mode>/build/cmd/main/main.wasm` | 29 项 ABI 导出（`src/cmd/main/moon.pkg` exports 唯一真值） |
 | wasm-gc 实例化 | `WebAssembly.instantiate(bytes, {}, { builtins: ['js-string'], importedStringConstants: '_' })`——缺 options 硬失败 | POC-1 + QA 负向验证（TASK-2b） |
-| 最低 Node 版本 | ≥ 22（wasm-gc 与 js-string builtins 默认启用，无需 flag） | POC-1（本机 v24 验证） |
+| 最低 Node 版本 | ≥ 24（wasm-gc 与 js-string builtins 可靠启用，无需 flag；v22.23.3 实测静默忽略 builtins 选项 → RISK-008，下限由 22 上修 24） | POC-1（本机 v24 验证）+ Actions run `40193791363` 反例 |
 | wasm 后端 String 通道 | scratch 协议：长度头 = UTF-16 code units（`skills/prism-wasm/references/string-abi.md` 已修正），offset ≥ 8，memory.buffer 每次现取 | TASK-2c 实测 |
 | scratch/log 通道 | wasm-gc/js 后端**降级**（`wasm_init_scratch`→0、`wasm_read_scratch_arg`→错误信封）；wrapper 不得依赖 | RISK-006 关闭记录 + TD-004 |
 | 冒烟护栏 | `node scripts/wasm_smoke.mjs`（CI job `wasm-smoke`）：产物可加载性 + 29 锚点 + 转换/诊断/降级/契约负向 | TASK-2c |

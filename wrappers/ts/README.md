@@ -10,7 +10,8 @@ Lucent IR, running fully in-process via WebAssembly.
   decision made during conversion is surfaced, never swallowed.
 - **ABI-locked** — load fails fast (`MISSING_EXPORT` / `ABI_MISMATCH`) when the
   artifact drifts from the 29-export ABI the wrapper binds.
-- Requires **Node ≥ 22** (wasm-gc + js-string builtins are enabled by default).
+- Requires **Node ≥ 24** (wasm-gc + js-string builtins are reliably enabled;
+  Node 22.x silently drops the `builtins` instantiate option — RISK-008).
 
 ## Install
 

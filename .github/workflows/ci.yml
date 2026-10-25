@@ -24,6 +24,9 @@ jobs:
 
       - name: Set up MoonBit
         uses: hustcer/setup-moonbit@v1
+        with:
+          version: 0.10.15+943464bfa
+          core-version: 0.10.15+943464bfa
 
       - name: Check formatting
         run: moon fmt --check
@@ -37,6 +40,9 @@ jobs:
 
       - name: Set up MoonBit
         uses: hustcer/setup-moonbit@v1
+        with:
+          version: 0.10.15+943464bfa
+          core-version: 0.10.15+943464bfa
 
       - name: Update dependencies
         run: moon update
@@ -53,6 +59,9 @@ jobs:
 
       - name: Set up MoonBit
         uses: hustcer/setup-moonbit@v1
+        with:
+          version: 0.10.15+943464bfa
+          core-version: 0.10.15+943464bfa
 
       - name: Update dependencies
         run: moon update
@@ -69,6 +78,9 @@ jobs:
 
       - name: Set up MoonBit
         uses: hustcer/setup-moonbit@v1
+        with:
+          version: 0.10.15+943464bfa
+          core-version: 0.10.15+943464bfa
 
       - name: Update dependencies
         run: moon update
@@ -93,11 +105,14 @@ jobs:
 
       - name: Set up MoonBit
         uses: hustcer/setup-moonbit@v1
+        with:
+          version: 0.10.15+943464bfa
+          core-version: 0.10.15+943464bfa
 
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
 
       - name: Update dependencies
         run: moon update
@@ -123,11 +138,14 @@ jobs:
 
       - name: Set up MoonBit
         uses: hustcer/setup-moonbit@v1
+        with:
+          version: 0.10.15+943464bfa
+          core-version: 0.10.15+943464bfa
 
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
 
       - name: Update dependencies
         run: moon update
@@ -159,6 +177,9 @@ jobs:
 
       - name: Set up MoonBit
         uses: hustcer/setup-moonbit@v1
+        with:
+          version: 0.10.15+943464bfa
+          core-version: 0.10.15+943464bfa
 
       - name: Update dependencies
         run: moon update
@@ -177,6 +198,9 @@ jobs:
 
       - name: Set up MoonBit
         uses: hustcer/setup-moonbit@v1
+        with:
+          version: 0.10.15+943464bfa
+          core-version: 0.10.15+943464bfa
 
       - name: Update dependencies
         run: moon update
@@ -206,7 +230,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: npm
           cache-dependency-path: tools/conformance/package-lock.json
 
@@ -218,6 +242,9 @@ jobs:
       # 让 Node 直接驱动真实转换管线（而非仅校验手写样本）
       - name: Set up MoonBit
         uses: hustcer/setup-moonbit@v1
+        with:
+          version: 0.10.15+943464bfa
+          core-version: 0.10.15+943464bfa
 
       - name: Update dependencies
         run: moon update
@@ -245,6 +272,9 @@ jobs:
 
       - name: Set up MoonBit
         uses: hustcer/setup-moonbit@v1
+        with:
+          version: 0.10.15+943464bfa
+          core-version: 0.10.15+943464bfa
 
       - name: Update dependencies
         run: moon update

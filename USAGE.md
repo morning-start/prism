@@ -155,7 +155,8 @@ func main() {
 ## 4. TypeScript wrapper 使用
 
 > 实现位于 [`wrappers/ts/`](wrappers/ts/)（`@morning-start/prism-wasm`，零运行时依赖，
-> Node ≥ 22 —— wasm-gc 与 js-string builtins 默认启用）。本节示例与实际行为可复现，
+> Node ≥ 24 —— wasm-gc 与 js-string builtins 可靠启用；Node 22.x 会静默忽略
+> builtins 实例化选项（RISK-008），勿用）。本节示例与实际行为可复现，
 > 集成测试见 `wrappers/ts/test/`。
 
 ### 4.1 安装
