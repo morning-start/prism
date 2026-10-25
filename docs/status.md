@@ -19,8 +19,8 @@
 | `src/cmd/main` | ✅ Complete | WASM exports only |
 | `src/cmd/repl` | ✅ Complete | js-target driver（`globalThis.__prism`，供 Node 校验零编组驱动真实转换；非 js target 为 stub） |
 | `tools/conformance/` | ✅ Complete | 官方 schema 校验系统（Node）：权威枚举 / 自检 / 跨协议泄漏 / golden / 真实管线（四目标完整 schema）/ 流式管线 / socket 回放，见 `docs/rules/conformance-oracle.md` |
-| `wrappers/ts` | ⚠️ 不在本仓库快照 | 历史记录声称 Complete，但工作区无此目录（T11 澄清）；接入前需确认仓库同步状态，并纳入 CI（moon build wasm → wrapper 编译 → 集成测试） |
-| `wrappers/go` | ⚠️ 不在本仓库快照 | 同上 |
+| `wrappers/ts` | ✅ MVP 落库 | `@morning-start/prism-wasm` 0.1.0（零运行时依赖，Node ≥22）：`loadPrism`（29 导出锚点校验 + `wasm_abi_version` 锁定）+ `convert{Request,Response,Stream,StreamEvent}`（信封解码，诊断逐字透出）+ `StreamSession`（feed/finish/finished/free，CR-002 终止符契约）；16 项集成测试（TC-1~4 全覆盖）；USAGE §4 与 README 与实际行为一致；只绑 wasm-gc 后端（纯 wasm scratch 通道未绑，TD-004）；QA 验收有条件通过→整改后待复核（08-验收报告 TASK-4 节） |
+| `wrappers/go` | ⚠️ 未落库 | 待 TS wrapper 验收后按同一宿主契约（04-API与数据契约 §Wrapper 绑定的 WASM 宿主契约）实施 |
 
 ## Implemented Providers (4 adapters)
 
@@ -55,7 +55,7 @@ compilation to reach non-public members).
 
 - **sdk/test**: 2026-10-24（第九轮，CR-006 批次 1）新增 `stream_termination_test`（responses 三终止事件逐值映射、`response.failed` 的 Error 事件 + 诊断、官方扁平 error 帧兼容嵌套形态、流式与非流式同值不变量、gemini `promptFeedback.blockReason` → `Finish(Safety)` + 诊断、无双 Finish、`Safety → refusal` 收敛；十个用例）；配套抽出 `src/provider/meta/termination.mbt`（responses 流式/非流式共用 status 映射）
 
-**Total: 1439 tests passing (native + wasm-gc), 2026-10-24（`moon test` 全量；未覆盖行 204，阈值 204 —— `src/cmd/repl/driver_stub.mbt` 为结构性不可测已登记）。**
+**Total: 1442 tests passing (native + wasm-gc), 2026-10-25（`moon test` 全量；另 wrappers/ts 16 项 Node 集成测试独立跑 `npm test`）。**
 
 ### 官方 schema 校验（Node oracle，2026-10-24 上线）
 
@@ -137,6 +137,7 @@ compilation to reach non-public members).
 | T11 | `wasm_abi_version` 导出 + wrappers 状态澄清 |
 | T12 | REQ-003：openai/messages/responses capability `parallel_tool_calls` 声明 Absent→Full（消除声明漂移，fidelity-matrix §1 同步） |
 | T13 | TASK-2/2b：wasm-gc 后端可加载性（POC-1 发现 moon.pkg 缺 wasm-gc 导出块 + memory.mbt 指针技巧非法 → moon.pkg 修 exports + js-string-builtins；memory ABI 按后端拆分 `memory_wasmgc.mbt` 降级；`wasm_stream_finished` 补 wrapper 与导出；RISK-006 关闭，RISK-007 CI 冒烟提级） |
+| T14 | TASK-4：`wrappers/ts` TS wrapper 落库（`@morning-start/prism-wasm` 0.1.0，16 集成测试，USAGE §4 重写可复现；QA 有条件通过 P1-1 属 core 层 → TASK-4b 另立 + TD-006 登记，R-2/R-3 已整改）；实测 ABI 认知修正：`wasm_abi_version` 信封 value 为对象、`wasm_list_providers` 为裸数组（TD-005） |
 
 ## IR Evolution Backlog (from 2026-09 protocol audit)
 
