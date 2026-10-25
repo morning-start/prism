@@ -95,6 +95,13 @@ async function checkBackend(target, load) {
   else ok(`${target}: 导出数 ${names.length - 1} ≥ 25`)
   if (missing.length) fail(`${target}: 缺关键导出 ${missing.join(', ')}`)
   else ok(`${target}: ${CORE_EXPORTS.length} 项关键导出全在位`)
+  if (missing.length) {
+    // fail-fast per backend（QA TASK-2c 验收 P2-1）：锚点缺失时 moonc 已静默
+    // 忽略了清单漂移，后续调用类断言只会以未捕获 TypeError crash——失败已
+    // 计数，跳到下一后端，保持失败报告可读。
+    console.log(`  ↷ ${target}: 跳过调用类断言（锚点缺失）`)
+    return
+  }
   const { instance } = await load(bytes)
   const e = instance.exports
   if (target === 'wasm-gc') {

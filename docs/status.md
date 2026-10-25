@@ -11,7 +11,7 @@
 | `src/lux` (Lucent IR) | ✅ Stable | v1 schema, types + builders + stream events + diagnostics；T8 新增 previous_response_id 标准字段 + ConversationSnapshot |
 | `src/internal` | ✅ Stable | JSON helpers, SSE parser（含 T5 增量 SseFrameSplitter）, shared primitives |
 | `src/sdk` | ✅ Stable | Facade, context, registry+match（T6 动态注册 + endpoint 配置）, pipeline/codec_pipeline, convert（T4 钩子链 / T5 StreamConverter / T8 快照还原）, hooks, error（T7 类型化）, diagnostics（T10 策略+聚合）, snapshot |
-| `src/wasm` | ✅ Stable | 29 exported functions per backend (per `src/cmd/main/moon.pkg` exports list; wasm 后端另含 memory 导出；check via `scripts/export_count.sh`), scratch memory, log buffer；T5 增量会话句柄 ABI（含 `wasm_stream_finished`）+ T11 ABI 版本导出。**wasm-gc 后端**：memory ABI 按后端拆分（`memory_wasmgc.mbt` 降级实现，scratch/log 6 导出不可用，RISK-006 已关闭）+ js-string-builtins（宿主须传 `builtins:['js-string'], importedStringConstants:'_'`） |
+| `src/wasm` | ✅ Stable | 29 exported functions per backend (per `src/cmd/main/moon.pkg` exports list; wasm 后端另含 memory 导出；check via `scripts/export_count.sh`), scratch memory, log buffer；T5 增量会话句柄 ABI（含 `wasm_stream_finished`）+ T11 ABI 版本导出。**wasm-gc 后端**：memory ABI 按后端拆分（`memory_host.mbt` 降级实现，scratch/log 6 导出不可用，RISK-006 已关闭）+ js-string-builtins（宿主须传 `builtins:['js-string'], importedStringConstants:'_'`）；ABI 冒烟护栏 `scripts/wasm_smoke.mjs`（CI `wasm-smoke`，RISK-007 关闭） |
 | `src/provider/openai` | ✅ Complete | Chat Completions + stream + capability |
 | `src/provider/messages` | ✅ Complete | Anthropic Messages API + extended thinking |
 | `src/provider/responses` | ✅ Complete | OpenAI Responses API |
