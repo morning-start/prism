@@ -104,7 +104,7 @@ test('TC-3: Degraded diagnostics surface to the caller (never swallowed)', () =>
 
 // --- TC-2: streaming equivalence ----------------------------------------------
 
-const STREAM_FRAMES = [
+const STREAM_FRAMES = ([
   JSON.stringify({
     id: 'w1', object: 'chat.completion.chunk', created: 1, model: 'gpt-4o-mini',
     choices: [{ index: 0, delta: { role: 'assistant', content: 'Hel' }, finish_reason: null }],
@@ -117,7 +117,7 @@ const STREAM_FRAMES = [
     id: 'w1', object: 'chat.completion.chunk', created: 1, model: 'gpt-4o-mini',
     choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
   }),
-].map(j => `data: ${j}\n\n`) + 'data: [DONE]\n\n'
+].map(j => `data: ${j}\n\n`).join('')) + 'data: [DONE]\n\n'
 
 test('TC-2: incremental session output === whole-batch conversion', () => {
   const batch = client.convertStream('openai', STREAM_FRAMES, 'messages')
@@ -198,6 +198,58 @@ test('TC-4c: finished() self-check flips false→true across finish', () => {
   } finally {
     session.free()
   }
+})
+
+// --- Response / single-event contracts (QA P2-2 collection) --------------------
+
+const OPENAI_RESP = JSON.stringify({
+  id: 'r1', object: 'chat.completion', created: 1, model: 'gpt-4o-mini',
+  choices: [{ index: 0, message: { role: 'assistant', content: 'resp text' }, finish_reason: 'stop' }],
+  usage: { prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 },
+})
+
+test('convertResponse openai→messages maps content/stop_reason/usage', () => {
+  const result = client.convertResponse('openai', OPENAI_RESP, 'messages')
+  const parsed = JSON.parse(result.value)
+  assert.equal(parsed.type, 'message')
+  assert.equal(parsed.role, 'assistant')
+  assert.equal(parsed.stop_reason, 'end_turn')
+  assert.equal(parsed.usage.input_tokens, 1)
+  assert.equal(parsed.usage.output_tokens, 2)
+  assert.deepEqual(result.diagnostics, [])
+})
+
+test('convertStreamEvent converts one SSE event into target frames', () => {
+  const one = `data: ${JSON.stringify({
+    id: 'e1', object: 'chat.completion.chunk', created: 1, model: 'gpt-4o-mini',
+    choices: [{ index: 0, delta: { content: 'x' }, finish_reason: null }],
+  })}\n\n`
+  const result = client.convertStreamEvent('openai', one, 'messages')
+  assert.ok(result.value.includes('event: content_block_start'))
+  assert.ok(result.value.includes('"text_delta"'))
+  assert.ok(result.value.includes('event: content_block_stop'))
+  assert.deepEqual(result.diagnostics, [])
+})
+
+test('finish() is idempotent (second call returns [])', () => {
+  const session = client.createStream('openai', 'messages')
+  try {
+    session.feed(STREAM_FRAMES)
+    const first = session.finish()
+    assert.ok(first.length >= 1, 'first finish() must flush trailing frames')
+    assert.deepEqual(session.finish(), [], 'second finish() must be a no-op')
+  } finally {
+    session.free()
+  }
+})
+
+test('finish() after free() raises SESSION_STATE', () => {
+  const session = client.createStream('openai', 'messages')
+  session.free()
+  assert.throws(
+    () => session.finish(),
+    (err) => err instanceof PrismError && err.code === 'SESSION_STATE',
+  )
 })
 
 // --- Error paths ----------------------------------------------------------------

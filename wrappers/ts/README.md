@@ -22,7 +22,7 @@ You need a Prism wasm-gc artifact. Build it from the repo root:
 
 ```bash
 moon build --target wasm-gc
-# → _build/wasm-gc/release/build/cmd/main/main.wasm
+# → _build/wasm-gc/debug/build/cmd/main/main.wasm（默认 debug；--release 产 release/）
 ```
 
 ## Quick start

@@ -165,7 +165,7 @@ npm install @morning-start/prism-wasm
 ```
 
 需要 Prism 的 wasm-gc 产物（仓库根执行 `moon build --target wasm-gc`，
-得到 `_build/wasm-gc/release/build/cmd/main/main.wasm`）。
+得到 `_build/wasm-gc/debug/build/cmd/main/main.wasm`；`--release` 产 release/）。
 
 ### 4.2 快速开始：请求转换
 
