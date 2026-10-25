@@ -18,6 +18,12 @@ pub fn pair_usages_with_finish(Array[@lux.LucentStreamEvent]) -> (Array[Bool], A
 
 pub fn payload_fragments(Json?, String, Array[String], Array[@lux.ConversionDiagnostic]) -> String
 
+pub fn require_request_array_field(Json, String, Array[@lux.ConversionDiagnostic]) -> Unit
+
+pub fn require_request_field_flexible(Json, String, Array[@lux.ConversionDiagnostic]) -> Unit
+
+pub fn require_request_object(Json) -> Result[Unit, String]
+
 pub fn responses_incomplete_reason(@lux.LucentFinishReason) -> String?
 
 pub fn responses_status_json(@lux.LucentFinishReason, String, Array[@lux.ConversionDiagnostic]) -> String

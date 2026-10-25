@@ -49,6 +49,23 @@
 配对矩阵（request / response / stream 三向各 16 格）由
 `src/sdk/test/convert_matrix_test.mbt` 的 24 个配对测试覆盖。
 
+## 2b. 请求解码形状边界（TASK-4b，2026-10-25，QA P1-1 / TD-006 清偿）
+
+4 端 request decode 入口（openai / responses / messages / gemini）对
+「可解析但结构畸形」的请求文档不再静默降级为空 IR 请求：
+
+| 输入形态 | 行为 | 保真度 |
+|---|---|---|
+| 顶层非 Object（数组 / 标量 / null） | decode 返回 Err（`request document must be a JSON object`），不产出 IR | Invalid（显式） |
+| `messages` / `contents` 存在但非数组（非 null） | Invalid 诊断（`field = messages/contents`），按缺失继续、不产空请求 | Invalid（显式，降级续行） |
+| `input` 存在但既非 string 也非数组（非 null） | Invalid 诊断（`field = input`），同上 | Invalid（显式，降级续行） |
+| 关键字段缺失 / null | 按缺失宽松处理（既有合法行为不变） | — |
+
+实现：`src/provider/meta/request_shape.mbt` 共享守卫 + 4 端 decode 入口接线；
+负向测试 4 端 ×（顶层数组 / 顶层标量 / 关键字段错型）矩阵见各 provider
+`test/*_test.mbt` "decode guard - *"，wasm 层观察口径 = TC-7（Err 信封）/
+TC-8（诊断透出）。
+
 ## 3. 高级能力保真度（按 source → target）
 
 图例：✅ Exact · 🟡 Degraded（打诊断） · ❌ Unsupported（剔除+诊断/拒绝）

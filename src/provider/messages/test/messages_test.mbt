@@ -717,3 +717,36 @@ test "messages decode - content block missing type degrades with diagnostic" {
 test "messages decode - request without messages yields empty conversation" {
   assert_eq(decode_ok("{\"model\":\"m\"}").conversation.length(), 0)
 }
+
+///|
+/// === TASK-4b：request decode 顶层形状守卫（QA P1-1，ACC-004 / TC-7 / TC-8）===
+
+///|
+test "decode guard - top-level array request is rejected with Err" {
+  // 回退即红：守卫移除后该文档将静默降级为空 IR 请求
+  assert_true(@messages.messages_to_lux_request("[1,2,3]") is Err(_))
+  assert_true(@messages.messages_to_lux_request("42") is Err(_))
+  assert_true(@messages.messages_to_lux_request("\"text\"") is Err(_))
+  assert_true(@messages.messages_to_lux_request("null") is Err(_))
+}
+
+///|
+test "decode guard - messages wrong type yields Invalid diagnostic" {
+  // messages: 42 → Invalid 诊断透出，不静默成空请求
+  match @messages.messages_to_lux_request("{\"model\":\"m\",\"messages\":42}") {
+    Ok(cr) => {
+      let diags = cr.diagnostics()
+      assert_eq(diags.length(), 1)
+      assert_eq(diags[0].status(), Invalid)
+      assert_eq(diags[0].field, "messages")
+    }
+    Err(e) => fail("expected Ok with Invalid diagnostic, got: \{e}")
+  }
+}
+
+///|
+test "decode guard - null and missing messages stay lenient" {
+  // null 按缺失宽松处理；缺失同（既有合法行为，回归锚点）
+  assert_true(@messages.messages_to_lux_request("{\"messages\":null}") is Ok(_))
+  assert_true(@messages.messages_to_lux_request("{\"model\":\"m\"}") is Ok(_))
+}

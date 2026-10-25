@@ -279,9 +279,16 @@ pub fn openai_to_lux_request(
     Ok(v) => v
     Err(e) => return Err(e)
   }
+  // 顶层形状守卫（TASK-4b，QA P1-1）：非 Object 一律 Err，不产出 IR
+  match @meta.require_request_object(jv) {
+    Err(e) => return Err(e)
+    Ok(_) => ()
+  }
   let model = @internal.field_str(jv, "model").unwrap_or("")
   // 诊断收集：decode 全程共用（工具 kind / 非 function 工具等）
   let diagnostics : Array[@lux.ConversionDiagnostic] = []
+  // 关键字段类型守卫（TASK-4b）：messages 存在但非数组 → Invalid，不静默成空请求
+  @meta.require_request_array_field(jv, "messages", diagnostics)
   // reasoning_effort 非常规档位的降级诊断标志
   let mut push_degraded = false
   let mut ignored_effort : String? = None

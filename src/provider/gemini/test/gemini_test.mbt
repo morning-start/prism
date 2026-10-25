@@ -1240,3 +1240,36 @@ test "gemini decode - stream fallback done and skipped frames" {
     "?X",
   )
 }
+
+///|
+/// === TASK-4b：request decode 顶层形状守卫（QA P1-1，ACC-004 / TC-7 / TC-8）===
+
+///|
+test "decode guard - top-level array request is rejected with Err" {
+  // 回退即红：守卫移除后该文档将静默降级为空 IR 请求
+  assert_true(@gemini.gemini_to_lux_request("[1,2,3]") is Err(_))
+  assert_true(@gemini.gemini_to_lux_request("42") is Err(_))
+  assert_true(@gemini.gemini_to_lux_request("\"text\"") is Err(_))
+  assert_true(@gemini.gemini_to_lux_request("null") is Err(_))
+}
+
+///|
+test "decode guard - contents wrong type yields Invalid diagnostic" {
+  // contents: 42 → Invalid 诊断透出，不静默成空请求
+  match @gemini.gemini_to_lux_request("{\"contents\":42}") {
+    Ok(cr) => {
+      let diags = cr.diagnostics()
+      assert_eq(diags.length(), 1)
+      assert_eq(diags[0].status(), Invalid)
+      assert_eq(diags[0].field, "contents")
+    }
+    Err(e) => fail("expected Ok with Invalid diagnostic, got: \{e}")
+  }
+}
+
+///|
+test "decode guard - null and missing contents stay lenient" {
+  // null 按缺失宽松处理；缺失同（既有合法行为，回归锚点）
+  assert_true(@gemini.gemini_to_lux_request("{\"contents\":null}") is Ok(_))
+  assert_true(@gemini.gemini_to_lux_request("{}") is Ok(_))
+}

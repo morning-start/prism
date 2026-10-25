@@ -455,7 +455,14 @@ pub fn gemini_to_lux_request(
     Ok(v) => v
     Err(e) => return Err(e)
   }
+  // 顶层形状守卫（TASK-4b，QA P1-1）：非 Object 一律 Err，不产出 IR
+  match @meta.require_request_object(jv) {
+    Err(e) => return Err(e)
+    Ok(_) => ()
+  }
   let diagnostics : Array[@lux.ConversionDiagnostic] = []
+  // 关键字段类型守卫（TASK-4b）：contents 存在但非数组 → Invalid，不静默成空请求
+  @meta.require_request_array_field(jv, "contents", diagnostics)
   let model = @internal.field_str(jv, "model").unwrap_or("")
   let instructions = parse_system_instruction(jv)
   let instr_opt = if instructions.length() > 0 {

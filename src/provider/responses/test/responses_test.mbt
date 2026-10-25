@@ -926,3 +926,38 @@ test "responses decode - response encode covers thinking tool refusal and usage"
     Err(e) => fail("encode failed: \{e}")
   }
 }
+
+///|
+/// === TASK-4b：request decode 顶层形状守卫（QA P1-1，ACC-004 / TC-7 / TC-8）===
+
+///|
+test "decode guard - top-level array request is rejected with Err" {
+  // 回退即红：守卫移除后该文档将静默降级为空 IR 请求
+  assert_true(@responses.responses_to_lux_request("[1,2,3]") is Err(_))
+  assert_true(@responses.responses_to_lux_request("42") is Err(_))
+  assert_true(@responses.responses_to_lux_request("\"text\"") is Err(_))
+  assert_true(@responses.responses_to_lux_request("null") is Err(_))
+}
+
+///|
+test "decode guard - input wrong type yields Invalid diagnostic" {
+  // input: 42（官方契约 string|Array）→ Invalid 诊断透出，不静默成空请求
+  match @responses.responses_to_lux_request("{\"model\":\"m\",\"input\":42}") {
+    Ok(cr) => {
+      let diags = cr.diagnostics()
+      assert_eq(diags.length(), 1)
+      assert_eq(diags[0].status(), Invalid)
+      assert_eq(diags[0].field, "input")
+    }
+    Err(e) => fail("expected Ok with Invalid diagnostic, got: \{e}")
+  }
+}
+
+///|
+test "decode guard - string input stays lenient (polymorphic carrier)" {
+  // input 的官方 string 形态必须放行（多态载体回归锚点）
+  assert_true(
+    @responses.responses_to_lux_request("{\"input\":\"hello\"}") is Ok(_),
+  )
+  assert_true(@responses.responses_to_lux_request("{\"input\":null}") is Ok(_))
+}

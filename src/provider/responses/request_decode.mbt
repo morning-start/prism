@@ -380,7 +380,14 @@ pub fn responses_to_lux_request(
     Ok(v) => v
     Err(e) => return Err(e)
   }
+  // 顶层形状守卫（TASK-4b，QA P1-1）：非 Object 一律 Err，不产出 IR
+  match @meta.require_request_object(jv) {
+    Err(e) => return Err(e)
+    Ok(_) => ()
+  }
   let diagnostics : Array[@lux.ConversionDiagnostic] = []
+  // 关键字段类型守卫（TASK-4b）：input 官方契约 string|Array，其余错型 → Invalid
+  @meta.require_request_field_flexible(jv, "input", diagnostics)
   let model = @internal.field_str(jv, "model").unwrap_or("")
   let instructions = match @internal.field_str(jv, "instructions") {
     Some(s) => Some([@lux.LucentContent::text(s)])
