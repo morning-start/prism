@@ -48,6 +48,19 @@ if [ "$RUN_ORACLE" = 1 ]; then
   else
     step "官方 schema 校验（Node oracle）" node tools/conformance/run-all.mjs
   fi
+
+  # wrapper 层（Node）：与 CI wrapper job（TASK-5 / ACC-005）等价
+  if [ ! -d wrappers/ts/node_modules ]; then
+    echo ""
+    echo "✗ wrappers/ts/node_modules 不存在"
+    echo "  请先运行: cd wrappers/ts && npm install"
+    fail=$((fail+1))
+  else
+    step "moon build --target wasm-gc（wrapper 依赖产物）" moon build --target wasm-gc
+    step "WASM ABI 冒烟（wrapper 前置）"           node scripts/wasm_smoke.mjs
+    step "wrapper 编译（tsc）"                     bash -c "cd wrappers/ts && npm run build --silent"
+    step "wrapper 集成测试（node --test）"         bash -c "cd wrappers/ts && npm test"
+  fi
 fi
 
 echo ""

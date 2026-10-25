@@ -110,6 +110,46 @@ jobs:
       - name: Run WASM ABI smoke
         run: node scripts/wasm_smoke.mjs
 
+  # TS wrapper 集成链路（TASK-5 / ACC-005）：构建 wasm-gc 产物 → ABI 冒烟 →
+  # wrapper 编译（tsc）→ 16 项 Node 集成测试。独立 job 与主测试并行跑，
+  # 失败只红本 job，不与 core 测试失败混淆；wrapper 测试内置产物缺失
+  # fail-fast（ACC-001 CI 豁免项随本 job 上线关闭）。
+  wrapper:
+    name: TS Wrapper (build + integration)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up MoonBit
+        uses: hustcer/setup-moonbit@v1
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Update dependencies
+        run: moon update
+
+      - name: Build wasm-gc artifact
+        run: moon build --target wasm-gc
+
+      - name: WASM ABI smoke (consumer-side guard)
+        run: node scripts/wasm_smoke.mjs
+
+      - name: Install wrapper dev dependencies
+        working-directory: wrappers/ts
+        run: npm ci
+
+      - name: Compile wrapper (tsc)
+        working-directory: wrappers/ts
+        run: npm run build
+
+      - name: Run wrapper integration tests
+        working-directory: wrappers/ts
+        run: npm test
+
   api:
     name: API Surface
     runs-on: ubuntu-latest
