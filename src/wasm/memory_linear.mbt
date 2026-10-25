@@ -1,13 +1,14 @@
 ///|
 /// WASM 内存管理：scratch buffer、LE 字节辅助、日志系统
 ///
-/// **仅纯 wasm 后端编译**（`src/wasm/moon.pkg` targets 配置）。
+/// **仅线性内存后端编译：wasm / native / llvm**（`src/wasm/moon.pkg`
+/// targets 配置）。
 ///
 /// 这些 ABI 用 `= "%identity"` 把 Int32 强转为 Bytes / FixedArray[Byte]
 /// 引用——线性内存指针技巧，MoonBit runtime 在纯 wasm 下用引用计数
 /// （非移动 GC），对象地址固定，技巧成立；wasm-gc 后端下类型是 GC 托管
 /// 结构，i32 无法 cast 成 (ref n)，模块会被引擎校验拒绝（RISK-006）。
-/// wasm-gc 后端的降级实现见 memory_wasmgc.mbt。
+/// 宿主托管内存后端（wasm-gc/js）的降级实现见 memory_host.mbt。
 
 ///|
 /// === 纯 WASM 大字符串支持 ===
@@ -20,12 +21,6 @@
 /// Bytes 在 WASM 线性内存中的布局：
 ///   对象头 (8B: rc + meta/len) | 数据载荷
 /// 返回的指针指向数据载荷起始位置（对象头之后）。
-
-///|
-/// 通过 SDK 注册表查找 provider
-fn lookup(provider : String) -> @sdk.ProviderRegistration? {
-  @sdk.match_provider_name(provider)
-}
 
 ///|
 /// 将 Bytes 引用转为线性内存地址（i32）。

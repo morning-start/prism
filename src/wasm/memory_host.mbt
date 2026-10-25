@@ -1,5 +1,5 @@
 ///|
-/// WASM 内存管理（wasm-gc 后端专用，TASK-2b 方案 A 降级实现）
+/// WASM 内存/日志 ABI（宿主托管内存后端：wasm-gc、js，TASK-2b 方案 A 降级实现）
 ///
 /// 背景（RISK-006 / POC-1，见 .agent-team/docs/02-技术可行性.md）：
 /// 原 memory.mbt 的 scratch/log ABI 用 `= "%identity"` 把 Int32 强转为
@@ -8,15 +8,9 @@
 /// (ref n)，生成的模块被引擎校验直接拒绝，连坐其余 22 项合法转换导出
 /// 也无法加载。
 ///
-/// 本文件提供 wasm-gc 后端的降级实现：scratch/log 6 个导出按原签名返回
-/// 无效指针（0）或错误信封，保证模块可加载、22 项转换导出可用。
-/// 大字符串/日志通道在 wasm-gc 的完整重建（方案 B）登记为 TD-004。
-
-///|
-/// 通过 SDK 注册表查找 provider
-fn lookup(provider : String) -> @sdk.ProviderRegistration? {
-  @sdk.match_provider_name(provider)
-}
+/// 本文件提供宿主托管内存后端的降级实现：scratch/log 6 个导出按原签名
+/// 返回无效指针（0）或错误信封，保证模块可加载、22 项转换导出可用。
+/// 大字符串/日志通道的完整重建（方案 B）登记为 TD-004。
 
 ///|
 /// wasm-gc 下暂存缓冲区不可用（线性内存指针技巧不成立），恒返回 0。

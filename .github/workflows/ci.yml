@@ -79,6 +79,37 @@ jobs:
       - name: Run tests (wasm-gc)
         run: moon test --target wasm-gc
 
+  # WASM ABI 冒烟（TASK-2c / RISK-007）：moon test 的 wasm-gc runner 不校验
+  # 主模块导出段，moonc 对 exports 清单里不存在的函数静默忽略——"测试全绿
+  # 但产物无法加载"的假阴性已发生两次（POC-1 / P2-1）。本 job 是消费者侧
+  # 防线：构建两后端产物 → Node 引擎加载 → 关键导出在位 + abi + 真实转换
+  # + wasm-gc 降级语义/宿主契约/流会话 + wasm scratch 协议全断言。
+  wasm-smoke:
+    name: WASM ABI Smoke (Node)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up MoonBit
+        uses: hustcer/setup-moonbit@v1
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Update dependencies
+        run: moon update
+
+      - name: Build both backends
+        run: |
+          moon build --target wasm
+          moon build --target wasm-gc
+
+      - name: Run WASM ABI smoke
+        run: node scripts/wasm_smoke.mjs
+
   api:
     name: API Surface
     runs-on: ubuntu-latest
@@ -190,7 +221,7 @@ jobs:
           # 由 4 个 wbtest 对配平，含防御性闭块路径；阈值保持 204）。
           # 其中结构性不可测（不会因补测而下降，只会在新增代码时被突破）：
           #   src/examples/sdk-basic/main.mbt  82  println 演示体
-          #   src/wasm/memory.mbt             38  %identity 指针双关 ABI
+          #   src/wasm/memory_linear.mbt      38  %identity 指针双关 ABI
           #   src/cmd/main/main.mbt           29  进程级 CLI 导出入口
           #   src/cmd/repl/driver_stub.mbt     1  非 js target 占位 main
           #   （另有 sdk/event_stream 等的零散分支洞，见 coverage 报告）

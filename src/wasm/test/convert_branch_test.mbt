@@ -15,7 +15,8 @@
 ///
 /// Every test is prefixed `wasm convert - ` so `moon test -f "*wasm convert*"`
 /// selects the whole file. Blackbox: only the public String-in/String-out
-/// surface of `@wasm` is exercised (never the `memory.mbt` scratch/log ABI).
+/// surface of `@wasm` is exercised (never the `memory_linear.mbt`/
+/// `memory_host.mbt` scratch/log ABI).
 
 ///|
 /// === 辅助 ===

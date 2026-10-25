@@ -19,7 +19,7 @@
 | internal | `json.mbt`、`extras.mbt`、`usage.mbt`、`sse.mbt` | — |
 | sdk | `prism.mbt`、`context.mbt`、`convert.mbt`、`pipeline.mbt` 等 | — |
 | provider/* | `capability.mbt`、`request_decode.mbt` 等六文件 | — |
-| wasm | `convert.mbt`、`memory.mbt` | —（已统一，iteration-006；导出函数仍保留 `wasm_` 前缀，见 §3.1） |
+| wasm | `convert.mbt`、`memory_linear.mbt` / `memory_host.mbt`（按后端条件编译，ADR-003） | —（已统一，iteration-006；2026-10-25 memory 按后端拆分；导出函数仍保留 `wasm_` 前缀，见 §3.1） |
 
 ### 1.2 编解码文件用功能前缀
 

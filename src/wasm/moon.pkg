@@ -6,11 +6,13 @@ import {
 
 options(
   targets: {
-    // 线性内存指针技巧（%identity 把 Int32 强转为 GC 引用）仅纯 wasm 后端
-    // 合法；wasm-gc 下模块被引擎校验拒绝（RISK-006 / POC-1）。
-    // wasm-gc / js 后端用 memory_wasmgc.mbt 的降级实现（js 无共享线性
-    // 内存语义，scratch/log 通道同样降级）。
-    "memory.mbt": [ "wasm", "native", "llvm" ],
-    "memory_wasmgc.mbt": [ "wasm-gc", "js" ],
+    // memory ABI 按后端拆分（ADR-003 / RISK-006 / POC-1）：
+    // - memory_linear.mbt：线性内存指针技巧（%identity 把 Int32 强转为
+    //   GC 引用）仅纯 wasm 后端合法；native/llvm 同走线性内存。
+    // - memory_host.mbt：宿主托管内存后端（wasm-gc / js）的降级实现，
+    //   scratch/log 6 导出返回无效指针/错误信封，模块可加载。
+    // 共享辅助（lookup 等）在 convert.mbt，非条件编译。
+    "memory_linear.mbt": [ "wasm", "native", "llvm" ],
+    "memory_host.mbt": [ "wasm-gc", "js" ],
   },
 )

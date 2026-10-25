@@ -2,72 +2,79 @@
 
 How strings pass between host and WASM in prism.wasm.
 
-## Memory Layout
+> **2026-10-25 修订（TASK-2c）**：本规范曾把长度头单位记为"字节"，
+> 经 `scripts/wasm_smoke.mjs` 全链路验证，实际单位是 **UTF-16 code units**。
+> 且两个 wasm 后端的字符串通道不同——按后端区分阅读。
+
+## 后端差异（关键！）
+
+| 后端 | String 参数传入 | String 返回值 | 说明 |
+|---|---|---|---|
+| **wasm-gc**（推荐宿主） | 直接传 JS string | 直接收 JS string | `use-js-builtin-string` 开启，MoonBit String ABI = JS string。宿主须以 `WebAssembly.instantiate(bytes, {}, { builtins: ['js-string'], importedStringConstants: '_' })` 实例化 |
+| **wasm**（纯线性内存） | scratch 协议（下述） | 线性内存指针（下述） | MoonBit String 是 GC 对象，i32 指针 + 长度头交换 |
+
+## 纯 wasm 后端：scratch 协议（String 参数）
 
 ```
-┌──────────────┬─────────────────────┐
-│ Length (4B)   │ UTF-16LE Data       │
-│ u32 LE       │ (byte_len bytes)    │
-└──────────────┴─────────────────────┘
-  ptr - 4        ptr
+┌──────────────────┬──────────────────────┐
+│ Length (u32 LE)  │ UTF-16LE Data        │
+│ code-unit 数     │ (length × 2 字节)    │
+└──────────────────┴──────────────────────┘
+  offset - 4         offset
 ```
 
-- **Length**: u32 little-endian byte count at `ptr - 4`
-- **Data**: UTF-16LE encoded characters at `ptr`
-- **Byte length** = character count × 2
-
-## Write String (Host → WASM)
+- **Length**: u32 little-endian，单位是 **UTF-16 code units**（不是字节）
+- **offset 必须 ≥ 8**：`wasm_init_scratch` 返回的指针指向 MoonBit 8 字节
+  对象头（rc + meta）之后的载荷，`offset - 4` 不能落入对象头
+- 多参数用不同 offset（stride 8192 推荐）
 
 ```javascript
-function writeString(memory, ptr, str) {
-  const byteLen = str.length * 2;
-  new DataView(memory.buffer).setUint32(ptr - 4, byteLen, true);
-  const view = new Uint16Array(memory.buffer, ptr, str.length);
-  for (let i = 0; i < str.length; i++) view[i] = str.charCodeAt(i);
+const bufPtr = exports.wasm_init_scratch(65536);
+function putArg(offset, str) {
+  const dv = new DataView(memory.buffer); // memory 可能增长，每次现取
+  dv.setUint32(bufPtr + offset - 4, str.length, true); // code units
+  for (let i = 0; i < str.length; i++)
+    dv.setUint16(bufPtr + offset + i * 2, str.charCodeAt(i), true);
+}
+putArg(8, 'openai'); putArg(8192, reqJson); putArg(16384, 'messages');
+const outPtr = exports.wasm_convert_req(bufPtr + 8, bufPtr + 8192, bufPtr + 16384);
+```
+
+## 纯 wasm 后端：读取返回值（String 出）
+
+返回值是线性内存指针，`ptr - 4` 处 u32 LE 存 **UTF-16 code-unit 数**：
+
+```javascript
+function readString(ptr) {
+  const dv = new DataView(memory.buffer);
+  const len = dv.getUint32(ptr - 4, true); // code units
+  let r = '';
+  for (let i = 0; i < len; i++) r += String.fromCharCode(dv.getUint16(ptr + i * 2, true));
+  return r;
 }
 ```
 
-```python
-def write_string(memory, ptr, s):
-    encoded = s.encode('utf-16-le')
-    memory.write(struct.pack('<I', len(encoded)), ptr - 4)
-    memory.write(encoded, ptr)
-```
+⚠️ memory 可能因 wasm 内部分配而增长：任何 `memory.buffer` 引用都要在
+每次交互时重新获取（旧 buffer 会 detach）。
 
-## Read String (WASM → Host)
+## wasm-gc 后端
 
 ```javascript
-function readString(memory, ptr) {
-  const byteLen = new DataView(memory.buffer).getUint32(ptr - 4, true);
-  const view = new Uint16Array(memory.buffer, ptr, byteLen / 2);
-  return String.fromCharCode(...view);
-}
+const { instance } = await WebAssembly.instantiate(bytes, {}, {
+  builtins: ['js-string'],
+  importedStringConstants: '_',
+});
+// String 参数直接传 JS string，返回值直接是 JS string：
+const env = JSON.parse(instance.exports.wasm_convert_req('openai', reqJson, 'messages'));
 ```
 
-```python
-def read_string(memory, ptr):
-    byte_len = struct.unpack('<I', memory.read(ptr - 4, 4))[0]
-    return memory.read(ptr, byte_len).decode('utf-16-le')
-```
+注意：`wasm_init_scratch` / `wasm_log_init` / `wasm_log_pos` /
+`wasm_read_scratch_arg` 在 wasm-gc/js 后端是**降级实现**（返回 0 或错误
+信封）——宿主托管内存下线性内存指针技巧不存在。String 直传即可，无需
+scratch。
 
-## Scratch Buffer
+## 信封契约（两后端一致）
 
-For passing multiple string arguments:
-
-1. `wasm_init_scratch(size)` → bufPtr
-2. Write strings at offsets (stride 8192 recommended)
-3. `wasm_read_scratch_arg(bufPtr, offset)` reads them back
-
-```
-bufPtr + 0      → arg 0
-bufPtr + 8192   → arg 1
-bufPtr + 16384  → arg 2
-```
-
-## Fixed Scratch Region
-
-WASM has a fixed scratch region at 0x0400 with stride 512. For strings < 252 characters, write directly there. For larger strings, use `wasm_init_scratch`.
-
-## MoonBit Object Header
-
-All MoonBit objects in WASM have an 8-byte header (rc + meta). `wasm_init_scratch` returns a pointer to the data payload (after the header).
+所有转换导出返回 JSON 信封字符串：
+`{"value": "<目标协议 JSON>", "diagnostics": [{"field", "status", "detail"}]}`
+错误形态：`{"error": "message", "diagnostics": []}`。诊断绝不静默丢弃。

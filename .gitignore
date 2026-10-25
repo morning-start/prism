@@ -386,3 +386,6 @@ $RECYCLE.BIN/
 /cov.utf16.txt
 /uncovered.log
 /uncovered.txt
+
+# DSH sandbox ACL 诊断/回滚目录（diagnose-windows-sandbox-acl 技能产物，本机环境专用）
+.acl-recovery/

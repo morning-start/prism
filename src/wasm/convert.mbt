@@ -11,6 +11,13 @@
 /// === 辅助 ===
 
 ///|
+/// 通过 SDK 注册表查找 provider。
+/// 所有后端共用（放在非条件编译文件，避免随 memory ABI 拆分而重复）。
+fn lookup(provider : String) -> @sdk.ProviderRegistration? {
+  @sdk.match_provider_name(provider)
+}
+
+///|
 /// 错误信封：{"error":"...","diagnostics":[]}（与成功信封的诊断字段一致）
 pub fn wasm_to_lux_request(provider : String, json_str : String) -> String {
   match lookup(provider) {

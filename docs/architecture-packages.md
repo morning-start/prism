@@ -124,8 +124,13 @@ graph TD
 
 | 文件 | 职责 |
 |------|------|
-| `convert.mbt` | `wasm_convert_*` / `wasm_sdk_*` / `wasm_to_lux_*` 等 28 个导出函数（以 `src/cmd/main/moon.pkg` 导出清单为准，可用 `scripts/export_count.sh` 核对） |
-| `memory.mbt` | `wasm_convert_*_trace` 带 trace 的变体（可选诊断输出） |
+| `convert.mbt` | 转换导出主体（`wasm_convert_*` / `wasm_sdk_*` / `wasm_to_lux_*`）+ 全后端共享辅助（`lookup`） |
+| `memory_host.mbt` | 宿主托管内存后端（wasm-gc / js）：scratch/log 6 导出降级实现（返回 0/错误信封），trace 3 导出直调转换 |
+| `memory_linear.mbt` | 线性内存后端（wasm / native / llvm）：scratch/log 真实实现（`%identity` 指针技巧，ADR-003） |
+
+按后端条件编译的拆分见 `src/wasm/moon.pkg` targets；产物为 29 项 ABI 导出
+（以 `src/cmd/main/moon.pkg` 导出清单为准，可用 `scripts/export_count.sh` 核对）。
+消费者侧契约护栏：`node scripts/wasm_smoke.mjs`（CI job `wasm-smoke`）。
 
 **依赖**：lux + sdk + core。**不直接调用任何 provider，全部经 sdk 注册表分发。**
 
