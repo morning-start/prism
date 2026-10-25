@@ -142,7 +142,7 @@ graph TD
 | `response.mbt` | `openai_to_lux_response` / `lux_response_to_openai`：响应双向 |
 | `stream_decode.mbt` | `openai_sse_to_events`：SSE → LucentStreamEvent |
 | `stream_encode.mbt` | `lux_events_to_openai_sse`：LucentStreamEvent → SSE |
-| `capability.mbt` | `capability()`：声明 tool_calling=Full、parallel_tool_calls=Absent（协议实际支持，声明待修正，见 fidelity-matrix §1） / reasoning / multimodal / structured_output=Full |
+| `capability.mbt` | `capability()`：声明 tool_calling=Full、parallel_tool_calls=Full（REQ-003 修正，2026-10-25） / reasoning / multimodal / structured_output=Full |
 
 **依赖**：lux + internal + core。
 
