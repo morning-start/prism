@@ -55,7 +55,7 @@ compilation to reach non-public members).
 
 - **sdk/test**: 2026-10-24（第九轮，CR-006 批次 1）新增 `stream_termination_test`（responses 三终止事件逐值映射、`response.failed` 的 Error 事件 + 诊断、官方扁平 error 帧兼容嵌套形态、流式与非流式同值不变量、gemini `promptFeedback.blockReason` → `Finish(Safety)` + 诊断、无双 Finish、`Safety → refusal` 收敛；十个用例）；配套抽出 `src/provider/meta/termination.mbt`（responses 流式/非流式共用 status 映射）
 
-**Total: 1442 tests passing (native + wasm-gc), 2026-10-25（`moon test` 全量；另 wrappers/ts 16 项 Node 集成测试独立跑 `npm test`）。**
+**Total: 1454 tests passing (native + wasm-gc), 2026-10-25（`moon test` 全量；另 wrappers/ts 16 项 Node 集成测试独立跑 `npm test`，CI wrapper job 与 `verify.sh --oracle` 均已接入）。**
 
 ### 官方 schema 校验（Node oracle，2026-10-24 上线）
 
@@ -138,6 +138,8 @@ compilation to reach non-public members).
 | T12 | REQ-003：openai/messages/responses capability `parallel_tool_calls` 声明 Absent→Full（消除声明漂移，fidelity-matrix §1 同步） |
 | T13 | TASK-2/2b：wasm-gc 后端可加载性（POC-1 发现 moon.pkg 缺 wasm-gc 导出块 + memory.mbt 指针技巧非法 → moon.pkg 修 exports + js-string-builtins；memory ABI 按后端拆分 `memory_wasmgc.mbt` 降级；`wasm_stream_finished` 补 wrapper 与导出；RISK-006 关闭，RISK-007 CI 冒烟提级） |
 | T14 | TASK-4：`wrappers/ts` TS wrapper 落库（`@morning-start/prism-wasm` 0.1.0，16 集成测试，USAGE §4 重写可复现；QA 有条件通过 P1-1 属 core 层 → TASK-4b 另立 + TD-006 登记，R-2/R-3 已整改）；实测 ABI 认知修正：`wasm_abi_version` 信封 value 为对象、`wasm_list_providers` 为裸数组（TD-005） |
+| T15 | TASK-4b：request decode 顶层形状守卫（`src/provider/meta/request_shape.mbt` 四端共享：顶层非 Object→Err、messages/contents 错型→Invalid 诊断、responses input 多态版；4 端负向矩阵 12 项测试；fidelity-matrix §2b；QA P1-1 / TD-006 清偿） |
+| T16 | TASK-5：CI `wrapper` job（构建 wasm-gc→冒烟→npm ci→tsc→16 集成测试，独立失败面）+ `verify.sh --oracle` 本地等价四步（ACC-001 CI 豁免项关闭） |
 
 ## IR Evolution Backlog (from 2026-09 protocol audit)
 
