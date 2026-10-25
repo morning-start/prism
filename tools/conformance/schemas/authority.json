@@ -1,5 +1,5 @@
 {
-  "_generated": "2026-10-24",
+  "_generated": "2026-10-25",
   "_sources": {
     "messages.stop_reason": "@anthropic-ai/sdk (Message.stop_reason -> StopReason)",
     "openai.finish_reason": "schemas/endpoints/openai-openapi.yaml (vendored, MIT)",

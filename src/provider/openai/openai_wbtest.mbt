@@ -2489,3 +2489,12 @@ test "openai decode - all non-function tool kinds map correctly" {
     Err(e) => fail("decode failed: \{e}")
   }
 }
+
+///|
+/// #C Chat Completions 原生支持 parallel_tool_calls 请求参数（多 tool_calls
+/// 响应），能力声明须为 Full，与适配器实际解码/编码行为一致（消除声明漂移）。
+test "capability - parallel tool calls declared full" {
+  let caps = capability().capabilities
+  assert_eq(caps.parallel_tool_calls, Full)
+  assert_eq(caps.tool_calling, Full)
+}

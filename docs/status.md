@@ -1,6 +1,7 @@
 # Prism Project Status
 
-> Last updated: 2026-10-25（文档规范化：团队流程文档迁入 `.agent-team/docs/`，CR-006 批次 1 + 官方 schema 校验系统后）
+> Last updated: 2026-10-25（REQ-003 capability 声明修正：openai/messages/responses
+> parallel_tool_calls Absent→Full；团队流程文档迁入 `.agent-team/docs/` 后）
 > 跨 Agent 团队流程文档（需求池/里程碑/任务板/风险/变更记录）：仓库内 `.agent-team/docs/`；技术文档索引见 `docs/README.md`。
 
 ## Module Completion
@@ -134,6 +135,7 @@ compilation to reach non-public members).
 | T9 | `docs/fidelity-matrix.md` 4×4 保真度矩阵（切流决策依据） |
 | T10 | `DiagnosticPolicy` + `DiagnosticCollector`（策略熔断 + 降级率统计） |
 | T11 | `wasm_abi_version` 导出 + wrappers 状态澄清 |
+| T12 | REQ-003：openai/messages/responses capability `parallel_tool_calls` 声明 Absent→Full（消除声明漂移，fidelity-matrix §1 同步） |
 
 ## IR Evolution Backlog (from 2026-09 protocol audit)
 

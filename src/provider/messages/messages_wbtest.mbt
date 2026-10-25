@@ -2040,3 +2040,13 @@ test "decode - tool_result with non-string non-array content reports Invalid" {
     Err(e) => fail("decode failed: \{e}")
   }
 }
+
+///|
+/// #C Messages 原生支持并行工具调用（disable_parallel_tool_use 默认 false，
+/// 单条 assistant 消息可返回多个 tool_use 块），能力声明须为 Full，
+/// 与适配器实际解码/编码行为一致（消除声明漂移）。
+test "capability - parallel tool calls declared full" {
+  let caps = capability().capabilities
+  assert_eq(caps.parallel_tool_calls, Full)
+  assert_eq(caps.tool_calling, Full)
+}

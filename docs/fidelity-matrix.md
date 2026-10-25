@@ -12,15 +12,17 @@
 | 能力 | openai-chat | responses | messages | gemini |
 |---|---|---|---|---|
 | tool_calling | Full | Full | Full | Full |
-| parallel_tool_calls | Absent* | Absent* | Absent* | Full |
+| parallel_tool_calls | Full | Full | Full | Full |
 | reasoning | Full | Full | Full | Full |
 | multimodal_input | Full | Full | Full | Full |
 | structured_output | Full | Full | Full | Full |
 | 输入模态 | Text, Image | Text, Image, Pdf | Text, Image | Text, Image, Audio, Video, Pdf |
 | 输出模态 | Text | Text | Text | Text |
 
-\* 声明为 Absent 但协议实际支持并行工具调用（extras 语义反传已实现双向测试）；
-声明待修正，属已知技术债（不影响转换正确性）。
+（REQ-003 修正记录：`parallel_tool_calls` 原声明 `Absent*` 并挂此脚注
+"协议实际支持、声明待修正"；2026-10-25 已将 openai-chat / responses / messages
+三处声明修正为 `Full`，脚注随之移除。回归见各 provider `*_wbtest.mbt`
+"capability - parallel tool calls declared full"。）
 
 ## 2. 公共交集（12 条最小矩阵）——**全格 Exact**
 
@@ -451,7 +453,8 @@ gemini = `modelStatus`（无 vendored spec，手工维护）。
    （登记于 .agent-team/docs/00-需求池.md REQ-002）。
 2. **reasoning.encrypted_content**（Responses 无状态推理续接凭据）无 IR
    载体，decode 打 Degraded 诊断。
-3. **parallel_tool_calls 能力声明**与协议实际能力不一致（§1 注释）。
+3. ~~**parallel_tool_calls 能力声明**与协议实际能力不一致（§1 注释）~~
+   （REQ-003 已修复，2026-10-25：三处 capability 声明修正为 Full）。
 4. **ReasoningEffort 档位**：`minimal`（openai）与 `max`（anthropic）
    在跨端时降级到最近档位并打诊断。
 5. **响应侧 `stop_sequence` 无 IR 载体**（2026-10-22 记录；**CR-005 已修复**）：

@@ -1913,3 +1913,13 @@ test "encode - stream non text block start and error finish" {
     Err(e) => fail("encode error: \{e}")
   }
 }
+
+///|
+/// #C Responses 原生支持 parallel_tool_calls 请求参数（官方 schema required，
+/// 多 function_call 输出），能力声明须为 Full，与适配器实际解码/编码行为
+/// 一致（消除声明漂移）。
+test "capability - parallel tool calls declared full" {
+  let caps = capability().capabilities
+  assert_eq(caps.parallel_tool_calls, Full)
+  assert_eq(caps.tool_calling, Full)
+}
