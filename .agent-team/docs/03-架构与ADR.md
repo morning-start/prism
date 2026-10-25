@@ -46,6 +46,42 @@ Gemini JSON ◄──[encode]── Lucent IR ◄──[decode]── OpenAI JSO
 - 何时重构：M1 完成评审时（RISK-001 降级/关闭）重新排序 M2/M3
 ```
 
+```
+### ADR-003 wasm 导出 ABI 按后端条件编译：线性内存指针技巧仅限纯 wasm，
+### wasm-gc/js 走降级实现 + js-string-builtins
+- 状态：已接受（2026-10-25，TL 决策，TASK-2b 方案 A，commit d9ceb41）
+- 背景：POC-1（Node 加载验证）发现 memory.mbt 的 scratch/log ABI 用
+  `= "%identity"` 把 Int32 强转为 Bytes/FixedArray 引用——该技巧依赖
+  纯 wasm 后端的引用计数非移动 GC；wasm-gc 下类型是 GC 托管结构，
+  生成的模块被 V8 校验直接拒绝，22 项合法转换导出被连坐（RISK-006）。
+  另发现 moon.pkg 的 link.exports 从未声明 wasm-gc 后端（f1e3311 修复）
+- 决策：①memory ABI 按后端拆分——memory.mbt 限 [wasm, native, llvm]，
+  新增 memory_wasmgc.mbt 限 [wasm-gc, js]，降级实现签名与原 ABI 一致
+  （scratch/log 返回 0/错误信封，trace 直调转换）；②wasm-gc 开启
+  use-js-builtin-string（String ABI = JS string，宿主直传原生字符串），
+  常量命名空间 "_"；③宿主契约：instantiate 须传 builtins:['js-string']
+  + importedStringConstants:'_'（Node ≥ 22 无需 flag）
+- 备选方案：B）用 wasm-gc 合法方式完整重建大字符串/日志通道 ——
+  放弃原因：工期 2~3d 且 MVP 不依赖这 6 个导出，列技术债 TD-004 待偿；
+  C）wasm-pack 中间层 —— 放弃原因：POC 证明裸 import 即可，多一层
+  打包徒增维护面
+- 后果：wasm-gc 下 scratch/log 6 导出降级（调用得错误信封而非数据），
+  wrapper 层须在文档中声明；ACC-001 验收标准不受影响（不依赖这 6 导出）
+- 何时重构：wrappers MVP 落地后，若宿主确需 wasm-gc 大字符串/日志通道，
+  启动方案 B（TD-004 偿还）
+```
+
+```
+### ADR-004 WASM 产物加载冒烟进 CI（TASK-2c，规划）
+- 状态：提议（TL，待实现；随 wrappers CI 化一起落地）
+- 背景：POC-1 暴露 ABI 假阴性——moon test 的 wasm-gc runner 不校验主模块
+  导出段，1442 tests 全绿但产物在真实引擎无法加载（RISK-007）
+- 决策：CI 增加 Node 冒烟 job：WebAssembly.compile + 导出计数断言（28）+
+  wasm_abi_version 调用 + 1 次转换，复用 .agent-team/poc/task2-node-load.mjs
+- 备选方案：不加 —— 放弃原因：ABI 回归只能在消费者侧发现，重演本次 POC
+- 何时重构：无（长期护栏）
+```
+
 ### 历史架构裁决（登记于正式文档，此处仅索引）
 
 | 裁决 | 位置 |
