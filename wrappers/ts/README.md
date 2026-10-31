@@ -106,7 +106,7 @@ Error codes:
 |---|---|
 | `LOAD_FAILED` | Host engine rejected the artifact (Node < 22, missing js-string builtins, corrupt bytes). |
 | `MISSING_EXPORT` | Artifact lacks part of the 29-export ABI (build drift). |
-| `ABI_MISMATCH` | `wasm_abi_version` ≠ expected (default `"1"`; pass `{ expectedAbi }` to pin differently). |
+| `ABI_MISMATCH` | `wasm_abi_version` ≠ expected (default `"2"`; pass `{ expectedAbi }` to pin differently). |
 | `ENVELOPE_INVALID` | wasm returned a malformed envelope — integrity failure, never a conversion issue. |
 | `CONVERSION_ERROR` | wasm returned an error envelope (unknown provider, malformed payload, …). |
 | `SESSION_STATE` | Illegal stream session usage (feed after finish, use after free). |
@@ -116,7 +116,7 @@ Error codes:
 ### `loadPrism(bytes, options?) → Promise<PrismClient>`
 
 Instantiate + anchor-check + ABI-lock. Also available as `PrismClient.load`.
-`options.expectedAbi` (default `"1"`) locks the ABI; `client.irSchema` exposes
+`options.expectedAbi` (default `"2"`) locks the ABI; `client.irSchema` exposes
 the Lucent IR schema version the artifact was built against.
 
 ### `PrismClient`
@@ -143,7 +143,7 @@ the Lucent IR schema version the artifact was built against.
 
 ## Versioning contract
 
-- The wrapper pins `wasm_abi_version` (currently `"1"`); an artifact built by a
+- The wrapper pins `wasm_abi_version` (currently `"2"`); an artifact built by a
   different ABI is refused at load time. Bump both sides together.
 - Scratch/log exports (`wasm_init_scratch` …) are **degraded stubs** on the
   wasm-gc backend and intentionally not bound — see

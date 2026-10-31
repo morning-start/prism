@@ -8,7 +8,7 @@
 // 检查内容（口径经 QA P2-2 确认：宽松计数，不精确匹配避免 _start 干扰）：
 //   1. 两个后端产物（wasm / wasm-gc）都能通过引擎校验并实例化
 //   2. 每个后端 ≥25 项导出且 29 项关键锚点导出全在位
-//   3. wasm_abi_version 返回 abi="1"
+//   3. wasm_abi_version 返回 abi="2"（TD-005 信封统一 → v2）
 //   4. 每后端 1 次真实转换（openai→messages）语义断言 + 诊断透出断言
 //   5. wasm-gc：js-string-builtins 宿主契约生效（不带 options 必须失败）
 //   6. wasm-gc：scratch/log 降级语义（wasm_init_scratch=0、
@@ -119,8 +119,15 @@ async function checkBackend(target, load) {
   const e = instance.exports
   if (target === 'wasm-gc') {
     const abi = String(e['wasm_abi_version']())
-    if (!abi.includes('"abi":"1"')) fail(`${target}: abi 版本异常 ${abi}`)
-    else ok(`${target}: wasm_abi_version → abi=1`)
+    if (!abi.includes('"abi":"2"')) fail(`${target}: abi 版本异常 ${abi}`)
+    else ok(`${target}: wasm_abi_version → abi=2`)
+    // TD-005 信封统一：查询类出口全部走 {value, diagnostics} 信封（ABI v2）
+    const providersEnv = JSON.parse(e['wasm_list_providers']())
+    if (!Array.isArray(providersEnv.value) || !providersEnv.value.includes('openai')) {
+      fail(`${target}: wasm_list_providers 未返回含 openai 的信封数组`)
+    } else if (providersEnv.error) {
+      fail(`${target}: wasm_list_providers 返回错误信封`)
+    } else ok(`${target}: wasm_list_providers → 信封数组（TD-005 统一）`)
     assertConvertEnvelope(e['wasm_convert_req']('openai', OPENAI_REQ, 'messages'), target)
     // 降级语义探针（TASK-2b 方案 A 契约）
     if (e['wasm_init_scratch'](8192) !== 0) fail('wasm-gc: wasm_init_scratch 未降级为 0')
@@ -151,8 +158,8 @@ async function checkBackend(target, load) {
       return readStr(e0.wasm_abi_version())
     }
     const abi = scratchProbe(e)
-    if (!abi.includes('"abi":"1"')) fail(`${target}: abi 版本异常 ${abi}`)
-    else ok(`${target}: wasm_abi_version → abi=1（scratch 协议读取）`)
+    if (!abi.includes('"abi":"2"')) fail(`${target}: abi 版本异常 ${abi}`)
+    else ok(`${target}: wasm_abi_version → abi=2（scratch 协议读取）`)
     scratchConvert(e, target)
   }
 }

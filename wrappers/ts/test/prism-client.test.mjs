@@ -54,8 +54,8 @@ const messagesContentText = result => {
 
 // --- Load & ABI anchoring ----------------------------------------------------
 
-test('loadPrism returns a client with abi=1 and known providers', () => {
-  assert.equal(client.abiVersion, '1')
+test('loadPrism returns a client with abi=2 and known providers', () => {
+  assert.equal(client.abiVersion, '2')
   const providers = client.listProviders()
   for (const p of ['responses', 'openai', 'messages', 'gemini']) {
     assert.ok(providers.includes(p), `expected provider ${p} in ${JSON.stringify(providers)}`)

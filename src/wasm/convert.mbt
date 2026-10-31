@@ -323,10 +323,14 @@ pub fn wasm_convert_stream_event(
 
 ///|
 /// 全部 provider 主名称的 JSON 数组
+///
+/// TD-005（M2 信封统一裁决）：所有查询类出口统一 `{value, diagnostics}`
+/// 信封。此前本导出返回裸数组，是唯一例外（wrapper/skills 均按特例绑定）；
+/// 统一后宿主侧错误处理路径不再分叉。ABI v2（出口返回形态变更 → bump）。
 pub fn wasm_list_providers() -> String {
   let names = @sdk.list_provider_names()
   let arr : Array[Json] = names.map(fn(n) { Json::string(n) })
-  Json::array(arr).stringify()
+  wasm_envelope(Json::array(arr))
 }
 
 ///|
@@ -337,7 +341,7 @@ pub fn wasm_list_providers() -> String {
 /// - `abi`：导出签名（名称/参数/返回信封）变化时递增
 /// - `ir_schema`：从真实 LucentRequest 读取（避免与实现漂移），
 ///   随 Lucent IR 演进（docs/rules/lucent-ir-evolution.md）
-pub const WASM_ABI_VERSION : String = "1"
+pub const WASM_ABI_VERSION : String = "2"
 
 ///|
 pub fn wasm_abi_version() -> String {

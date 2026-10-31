@@ -11,7 +11,7 @@ test "wasm_abi_version - returns abi and ir schema versions" {
       match map.get("value") {
         Some(Object(fields)) => {
           match fields.get("abi") {
-            Some(String(v)) => assert_eq(v, "1")
+            Some(String(v)) => assert_eq(v, "2")
             _ => fail("expected abi string")
           }
           match fields.get("ir_schema") {

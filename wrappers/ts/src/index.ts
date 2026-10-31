@@ -1,7 +1,7 @@
 // Prism TypeScript wrapper — binds the wasm-gc artifact (Node >= 22).
 //
 // Contract sources (single sources of truth, do not duplicate logic here):
-//   - ABI exports:   src/cmd/main/moon.pkg (29-item list, wasm_abi_version = "1")
+//   - ABI exports:   src/cmd/main/moon.pkg (29-item list, wasm_abi_version = "2")
 //   - Envelope:      {"value": <target JSON string>, "diagnostics": [{field, status, detail}]}
 //                    error: {"error": "...", "diagnostics": []}
 //   - Host contract: WebAssembly.instantiate(bytes, {}, { builtins: ['js-string'],
@@ -134,20 +134,6 @@ function parseEnvelope(raw: string): ParsedEnvelope {
   }
 }
 
-/**
- * Parse a raw export return that is a bare JSON document (no envelope —
- * e.g. `wasm_list_providers` returns a bare string array).
- */
-function parseBareJson<T>(raw: string, validate: (value: unknown) => T, context: string): T {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(raw)
-  } catch (cause) {
-    throw new PrismError('ENVELOPE_INVALID', `${context}: value is not JSON: ${raw.slice(0, 120)}`, [], { cause })
-  }
-  return validate(parsed)
-}
-
 function expectString(value: unknown, context: string): string {
   if (typeof value !== 'string') {
     throw new PrismError('ENVELOPE_INVALID', `${context}: expected string, got ${typeof value}`)
@@ -203,7 +189,7 @@ declare const WebAssembly: WebAssemblyLike
 
 export interface PrismOptions {
   /**
-   * Expected `wasm_abi_version`. Defaults to "1". Load fails with
+   * Expected `wasm_abi_version`. Defaults to "2". Load fails with
    * `ABI_MISMATCH` when the artifact disagrees — a rolling middleware should
    * refuse to run against a drifted artifact rather than silently misconvert.
    */
@@ -229,12 +215,12 @@ export class PrismClient {
    *
    * - Validates the 29-item ABI anchor set up front (moonc silently ignores
    *   drifted export names — the consumer must anchor-check).
-   * - Locks `wasm_abi_version` against `options.expectedAbi` (default "1").
+   * - Locks `wasm_abi_version` against `options.expectedAbi` (default "2").
    *
    * @throws {PrismError} LOAD_FAILED / MISSING_EXPORT / ABI_MISMATCH
    */
   static async load(bytes: WasmBytes, options: PrismOptions = {}): Promise<PrismClient> {
-    const expectedAbi = options.expectedAbi ?? '1'
+    const expectedAbi = options.expectedAbi ?? '2'
     let module: WasmModuleLike
     let instance: WasmInstanceLike
     try {
@@ -259,7 +245,7 @@ export class PrismClient {
       )
     }
     const raw = instance.exports as RawExports
-    // value is the version document object {"abi":"1","ir_schema":"v1"}
+    // value is the version document object {"abi":"2","ir_schema":"v1"}
     const abiEnv = parseEnvelope(raw.wasm_abi_version())
     const abiDoc = abiEnv.value as { abi?: unknown; ir_schema?: unknown }
     if (abiDoc === null || typeof abiDoc !== 'object' || typeof abiDoc.abi !== 'string') {
@@ -314,18 +300,13 @@ export class PrismClient {
     return new StreamSession(this.#raw, handle)
   }
 
-  /** All provider primary names known to the artifact (bare JSON array — no envelope). */
+  /** All provider primary names known to the artifact (enveloped — ABI v2, TD-005). */
   listProviders(): readonly string[] {
-    return parseBareJson(
-      this.#raw.wasm_list_providers(),
-      value => {
-        if (!Array.isArray(value) || !value.every(x => typeof x === 'string')) {
-          throw new PrismError('ENVELOPE_INVALID', 'wasm_list_providers: expected a bare JSON array of strings')
-        }
-        return value as readonly string[]
-      },
-      'wasm_list_providers',
-    )
+    const env = parseEnvelope(this.#raw.wasm_list_providers())
+    if (!Array.isArray(env.value) || !env.value.every(x => typeof x === 'string')) {
+      throw new PrismError('ENVELOPE_INVALID', 'wasm_list_providers: expected a JSON array of strings')
+    }
+    return env.value as readonly string[]
   }
 }
 

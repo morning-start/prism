@@ -292,16 +292,22 @@ test "wasm convert - convert_stream unknown provider returns error" {
 }
 
 ///|
-/// === wasm_list_providers（convert.mbt:320）===
+/// === wasm_list_providers（convert.mbt）===
 
 ///|
-/// 该导出在既有黑盒套件中无任何调用 → 整个函数体未覆盖。返回裸 JSON 数组
-/// （无信封）。覆盖 wasm_list_providers:320。
-test "wasm convert - list_providers returns JSON array" {
+/// TD-005 信封统一：本导出从裸 JSON 数组改为 `{value, diagnostics}` 信封
+/// （ABI v2）。此前整个函数体在黑盒套件中零覆盖，此处一并补齐断言。
+test "wasm convert - list_providers returns enveloped array" {
   let result = @wasm.wasm_list_providers()
   let jv = @json.parse(result) catch { _ => Json::null() }
   match jv {
-    Array(items) => {
+    Object(env) => {
+      // 错误信封先行排除
+      assert_true(env.get("error") is None)
+      let items = match env.get("value") {
+        Some(Array(items)) => items
+        _ => fail("expected enveloped JSON array of provider names")
+      }
       let names : Array[String] = []
       for item in items {
         match item {
@@ -314,7 +320,7 @@ test "wasm convert - list_providers returns JSON array" {
       assert_true(names.contains("messages"))
       assert_true(names.contains("gemini"))
     }
-    _ => fail("expected JSON array of provider names")
+    _ => fail("expected {value, diagnostics} envelope")
   }
 }
 

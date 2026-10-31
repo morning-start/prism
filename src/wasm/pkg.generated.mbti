@@ -2,7 +2,7 @@
 package "morning-start/prism/wasm"
 
 // Values
-pub const WASM_ABI_VERSION : String = "1"
+pub const WASM_ABI_VERSION : String = "2"
 
 pub fn wasm_abi_version() -> String
 

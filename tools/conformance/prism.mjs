@@ -60,7 +60,8 @@ export async function load() {
 
   loaded = {
     abi: JSON.parse(raw.abi_version()),
-    providers: JSON.parse(raw.list_providers()),
+    // TD-005（ABI v2）：list_providers 统一为 {value, diagnostics} 信封
+    providers: JSON.parse(raw.list_providers()).value,
     /**
      * 调用并解信封。返回 { ok, value, diagnostics, error }。
      * 信封形态：成功 {"value": X, "diagnostics": [...]}，

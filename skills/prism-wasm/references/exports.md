@@ -84,7 +84,8 @@ Stream conversion with logging
 ## Query (1)
 
 ### wasm_list_providers() → String
-JSON array of all provider names
+{"value": ["<provider name>", ...], "diagnostics": []} — enveloped since ABI v2
+(TD-005 unification; was a bare array before v2)
 
 ## Stream Sessions (5)
 

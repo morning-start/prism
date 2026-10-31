@@ -175,7 +175,7 @@ import { loadPrism } from "@morning-start/prism-wasm";
 import { readFileSync } from "node:fs";
 
 const client = await loadPrism(readFileSync("main.wasm"));
-client.abiVersion; // "1"（加载时已做 29 导出锚点校验 + ABI 锁定）
+client.abiVersion; // "2"（加载时已做 29 导出锚点校验 + ABI 锁定）
 
 // 请求转换：OpenAI Chat Completions → Anthropic Messages
 const result = client.convertRequest(
