@@ -370,7 +370,7 @@ pub fn openai_to_lux_request(
   let extras = @internal.collect_extra_fields(jv, [
     "model", "messages", "tools", "tool_choice", "temperature", "top_p", "max_completion_tokens",
     "max_tokens", "stream", "stop", "response_format", "store", "reasoning_effort",
-    "top_k", "n",
+    "top_k", "n", "parallel_tool_calls",
   ])
   // response_format → structured_output
   let structured = match @internal.obj_get(jv, "response_format") {
@@ -422,6 +422,8 @@ pub fn openai_to_lux_request(
       @lux.LucentOptions::new(
         temperature, top_p, top_k, max_tokens, stop, stream, candidate_count, structured,
         store, extras,
+      ).with_parallel_tool_calls(
+        @internal.field_bool(jv, "parallel_tool_calls"),
       ),
       None,
       reasoning,

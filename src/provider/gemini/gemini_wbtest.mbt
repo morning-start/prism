@@ -1736,3 +1736,106 @@ test "encode - non-object tool arguments fall back with Invalid diagnostic" {
     Err(e) => fail("encode: \{e}")
   }
 }
+
+///|
+/// B-003：Gemini 无请求级并行开关 → 标准字段与 extras 旧载荷（含语义反向
+/// 的 disable_parallel_tool_use）都打 Unsupported 诊断并从 extras 剔除
+/// （绝不静默丢弃，对齐 store 处理）。
+test "encode - parallel_tool_calls unsupported by gemini with diagnostic" {
+  let build = fn(
+    parallel : Bool?,
+    extras : Map[String, Json]?,
+  ) -> @lux.LucentRequest {
+    let base = @lux.LucentOptions::new(
+      None,
+      None,
+      None,
+      None,
+      None,
+      false,
+      None,
+      None,
+      None,
+      extras,
+    )
+    let opts = match parallel {
+      Some(b) => base.with_parallel_tool_calls(Some(b))
+      None => base
+    }
+    @lux.LucentRequest::new(
+      "gemini-2.0-flash",
+      None,
+      [
+        @lux.LucentConversationItem::message(
+          @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
+        ),
+      ],
+      None,
+      None,
+      opts,
+      None,
+      None,
+      None,
+      None,
+    )
+  }
+  // 标准字段：Unsupported 诊断
+  match lux_request_to_gemini(build(Some(false), None)) {
+    Ok(cr) => {
+      let mut hit = false
+      for d in cr.diagnostics() {
+        if d.status == Unsupported && d.field == "options.parallel_tool_calls" {
+          hit = true
+        }
+      }
+      assert_true(hit)
+    }
+    Err(e) => fail("encode failed: \{e}")
+  }
+  // extras 旧载荷（两个方向）：同样 Unsupported 且不落入 generationConfig
+  match
+    lux_request_to_gemini(
+      build(None, Some({ "parallel_tool_calls": Json::boolean(true) })),
+    ) {
+    Ok(cr) => {
+      let mut hit = false
+      for d in cr.diagnostics() {
+        if d.status == Unsupported && d.field == "options.parallel_tool_calls" {
+          hit = true
+        }
+      }
+      assert_true(hit)
+      assert_false(cr.value().contains("parallel_tool_calls"))
+    }
+    Err(e) => fail("encode failed: \{e}")
+  }
+  match
+    lux_request_to_gemini(
+      build(None, Some({ "disable_parallel_tool_use": Json::boolean(true) })),
+    ) {
+    Ok(cr) => {
+      let mut hit = false
+      for d in cr.diagnostics() {
+        if d.status == Unsupported && d.field == "options.parallel_tool_calls" {
+          hit = true
+        }
+      }
+      assert_true(hit)
+      assert_false(cr.value().contains("disable_parallel_tool_use"))
+    }
+    Err(e) => fail("encode failed: \{e}")
+  }
+  // 未设置且 extras 无旧载荷：零诊断（缺省路径输出不变）
+  match lux_request_to_gemini(build(None, None)) {
+    Ok(cr) => {
+      let mut hit = false
+      for d in cr.diagnostics() {
+        if d.field == "options.parallel_tool_calls" {
+          hit = true
+        }
+      }
+      assert_false(hit)
+    }
+    Err(e) => fail("encode failed: \{e}")
+  }
+}

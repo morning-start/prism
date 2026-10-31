@@ -1383,6 +1383,91 @@ test "encode - request options top_p reasoning summary structured output and par
 }
 
 ///|
+/// B-003：responses 标准字段优先直出 + extras 同名旧载荷回退；decode 提升。
+test "encode/decode - responses parallel_tool_calls standard field" {
+  // encode：标准字段直出
+  let req = @lux.LucentRequest::new(
+    "gpt-5",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::new(
+      None,
+      None,
+      None,
+      None,
+      None,
+      false,
+      None,
+      None,
+      None,
+      Some({ "parallel_tool_calls": Json::boolean(true) }),
+    ).with_parallel_tool_calls(Some(false)),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_responses(req) {
+    Ok(cr) => {
+      assert_true(cr.value().contains("\"parallel_tool_calls\":false"))
+      // extras 载荷（true）被消费，不双写
+      assert_false(cr.value().contains("\"parallel_tool_calls\":true"))
+    }
+    Err(e) => fail("encode failed: \{e}")
+  }
+  // encode 回退：无标准字段时 extras 同名载荷仍生效（兼容）
+  let legacy = @lux.LucentRequest::new(
+    "gpt-5",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
+      ),
+    ],
+    None,
+    None,
+    @lux.LucentOptions::new(
+      None,
+      None,
+      None,
+      None,
+      None,
+      false,
+      None,
+      None,
+      None,
+      Some({ "parallel_tool_calls": Json::boolean(false) }),
+    ),
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_responses(legacy) {
+    Ok(cr) => assert_true(cr.value().contains("\"parallel_tool_calls\":false"))
+    Err(e) => fail("encode legacy failed: \{e}")
+  }
+  // decode：wire 字段提升为标准字段，不落 extras
+  let wire = "{\"model\":\"gpt-5\",\"parallel_tool_calls\":true,\"input\":[]}"
+  match responses_to_lux_request(wire) {
+    Ok(cr) => {
+      assert_eq(cr.value().options.parallel_tool_calls, Some(true))
+      match cr.value().options.extras {
+        Some(m) => assert_true(m.get("parallel_tool_calls") is None)
+        None => ()
+      }
+    }
+    Err(e) => fail("decode failed: \{e}")
+  }
+}
+
+///|
 /// lux_events_to_responses_sse_with_ctx：ctx 预置 response id（帧内无
 /// ConversationStart 时复用），ConversationStart.extra 按归属门控合并进
 /// response.created，以及 extra 非 Object 时不合并。

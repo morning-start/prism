@@ -90,7 +90,7 @@ TC-8（诊断透出）。
 | 能力 | → responses | → openai-chat | → messages | → gemini |
 |---|---|---|---|---|
 | 文本/工具/流式 | ✅ | ✅ | ✅ | ✅ |
-| parallel_tool_calls（extras） | ✅ | ✅ | ✅ 语义反传（T3 修复） | ✅ |
+| parallel_tool_calls（B-003 标准字段） | ✅ 直出 | ✅ 直出 | ✅ 语义反传 → disable_parallel_tool_use（T3 修复） | ❌ Unsupported 诊断（无请求级开关） |
 | reasoning_effort | ✅ | ✅ | ✅ adaptive + output_config | 🟡 档位降级 |
 | 消息级 reasoning_content | ✅ reasoning 项 | 🟡 透传 reasoning_content | ✅ thinking 块 | ✅ thoughts |
 | response_format | ✅ | ✅ | ✅ output_config.format | ✅ responseSchema |

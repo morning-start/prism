@@ -2050,3 +2050,80 @@ test "capability - parallel tool calls declared full" {
   assert_eq(caps.parallel_tool_calls, Full)
   assert_eq(caps.tool_calling, Full)
 }
+
+///|
+/// B-003：标准字段语义反向 → disable_parallel_tool_use；extras 同名旧载荷
+/// 回退（兼容）。decode 端 Messages wire 无请求级并行字段，不提升。
+test "encode - standard parallel_tool_calls inverts and wins over extras" {
+  let build = fn(
+    parallel : Bool?,
+    extras : Map[String, Json]?,
+  ) -> @lux.LucentRequest {
+    let base = @lux.LucentOptions::new(
+      None,
+      None,
+      None,
+      None,
+      None,
+      false,
+      None,
+      None,
+      None,
+      extras,
+    )
+    let opts = match parallel {
+      Some(b) => base.with_parallel_tool_calls(Some(b))
+      None => base
+    }
+    @lux.LucentRequest::new(
+      "claude-sonnet-4",
+      None,
+      [
+        @lux.LucentConversationItem::message(
+          @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
+        ),
+      ],
+      None,
+      None,
+      opts,
+      None,
+      None,
+      None,
+      None,
+    )
+  }
+  // 标准字段 false → disable=true（语义反向）
+  match lux_request_to_messages(build(Some(false), None)) {
+    Ok(cr) => {
+      assert_true(cr.value().contains("\"disable_parallel_tool_use\":true"))
+      assert_false(cr.value().contains("parallel_tool_calls"))
+    }
+    Err(e) => fail("encode failed: \{e}")
+  }
+  // 标准字段 true → disable=false
+  match lux_request_to_messages(build(Some(true), None)) {
+    Ok(cr) =>
+      assert_true(cr.value().contains("\"disable_parallel_tool_use\":false"))
+    Err(e) => fail("encode failed: \{e}")
+  }
+  // 标准字段优先：extras 同名载荷 true 被覆盖消费，不双写
+  match
+    lux_request_to_messages(
+      build(Some(false), Some({ "parallel_tool_calls": Json::boolean(true) })),
+    ) {
+    Ok(cr) => {
+      assert_true(cr.value().contains("\"disable_parallel_tool_use\":true"))
+      assert_false(cr.value().contains("\"disable_parallel_tool_use\":false"))
+    }
+    Err(e) => fail("encode failed: \{e}")
+  }
+  // 回退：无标准字段时 extras 同名载荷仍生效（同样语义反向：false → disable=true）
+  match
+    lux_request_to_messages(
+      build(None, Some({ "parallel_tool_calls": Json::boolean(false) })),
+    ) {
+    Ok(cr) =>
+      assert_true(cr.value().contains("\"disable_parallel_tool_use\":true"))
+    Err(e) => fail("encode failed: \{e}")
+  }
+}

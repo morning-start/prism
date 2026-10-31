@@ -434,6 +434,10 @@ pub struct LucentOptions {
   /// Responses 有状态续接载体（T8 标准可选字段）：上一轮 response id。
   /// 无状态端点（chat/messages/gemini）出站时由目标端拒绝或降级。
   previous_response_id : String?
+  /// 并行工具调用开关（B-003 标准可选字段）：Chat `parallel_tool_calls` /
+  /// Responses `parallel_tool_calls` 的直接载体；Messages 侧语义反向
+  /// （`disable_parallel_tool_use`），由编码端换算。None = 未表达（wire 缺省）。
+  parallel_tool_calls : Bool?
   extras : Map[String, Json]?
 } derive(Eq, Debug)
 

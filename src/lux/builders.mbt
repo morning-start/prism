@@ -349,6 +349,7 @@ pub fn LucentOptions::default() -> LucentOptions {
     structured_output: None,
     store: None,
     previous_response_id: None,
+    parallel_tool_calls: None,
     extras: None,
   }
 }
@@ -379,6 +380,8 @@ pub fn LucentOptions::new(
     // T8 标准可选字段经 with_previous_response_id 设置（new 保持不变，
     // 避免破坏既有 10 参数调用点）
     previous_response_id: None,
+    // B-003 标准可选字段经 with_parallel_tool_calls 设置（同 T8 策略）
+    parallel_tool_calls: None,
     extras,
   }
 }
@@ -390,6 +393,17 @@ pub fn LucentOptions::with_previous_response_id(
   id : String?,
 ) -> LucentOptions {
   { ..self, previous_response_id: id, }
+}
+
+///|
+/// 设置 parallel_tool_calls（B-003；并行工具调用开关）
+///
+/// None = 未表达（wire 缺省，不输出目标端字段）。
+pub fn LucentOptions::with_parallel_tool_calls(
+  self : LucentOptions,
+  enabled : Bool?,
+) -> LucentOptions {
+  { ..self, parallel_tool_calls: enabled, }
 }
 
 ///|

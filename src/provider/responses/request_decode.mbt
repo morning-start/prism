@@ -416,22 +416,25 @@ pub fn responses_to_lux_request(
   let extras = @internal.collect_extra_fields(jv, [
     "model", "instructions", "input", "tools", "tool_choice", "temperature", "top_p",
     "max_output_tokens", "stream", "reasoning", "text", "store", "previous_response_id",
-    "top_k",
+    "top_k", "parallel_tool_calls",
   ])
   // previous_response_id（T8）：提升为 IR 标准可选字段，不再落 extras
   //（消除双载体）。旧 extras 载荷在 encode 侧回退识别（兼容）。
+  // parallel_tool_calls（B-003）：同策略提升为标准可选字段。
   let opts = @lux.LucentOptions::new(
-    temperature,
-    top_p,
-    top_k,
-    max_tokens,
-    None,
-    stream,
-    None,
-    structured,
-    store,
-    extras,
-  ).with_previous_response_id(@internal.field_str(jv, "previous_response_id"))
+      temperature,
+      top_p,
+      top_k,
+      max_tokens,
+      None,
+      stream,
+      None,
+      structured,
+      store,
+      extras,
+    )
+    .with_previous_response_id(@internal.field_str(jv, "previous_response_id"))
+    .with_parallel_tool_calls(@internal.field_bool(jv, "parallel_tool_calls"))
   let result = @lux.ConversionResult::new(
     @lux.LucentRequest::new(
       model,

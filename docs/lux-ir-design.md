@@ -28,6 +28,16 @@ Complete LLM request with conversation, tools, and generation options.
 | `metadata` | `Map[String, String]?` | | Opaque metadata |
 | `extra` | `Map[String, Json]?` | | Provider-specific extensions |
 
+`options.parallel_tool_calls` (B-003, standard optional field): request-level
+parallel tool call switch. Chat/Responses carry it verbatim
+(`parallel_tool_calls`); Messages encodes the semantic inverse
+(`disable_parallel_tool_use`); Gemini has no request-level control → explicit
+`Unsupported` diagnostic (never silently dropped). Legacy `extras` payloads
+(same-name key or the inverse `disable_parallel_tool_use`) are still honored
+when the standard field is absent — decoders promote the wire field and no
+longer park it in `extras`. IR proposal: accepted via the governance process in
+`docs/rules/lucent-ir-evolution.md` (non-breaking: optional standard field).
+
 ### Extension channels
 
 The IR has **two** extension carriers with deliberately different semantics. They

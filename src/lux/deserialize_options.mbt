@@ -68,6 +68,8 @@ pub fn LucentOptions::from_json(jv : Json) -> Result[LucentOptions, String] {
       let store = get_bool_opt(m, "store")
       // previous_response_id（T8 标准可选字段；缺失/非法软失败为 None）
       let previous_response_id = get_str_opt(m, "previous_response_id")
+      // parallel_tool_calls（B-003 标准可选字段；缺失/错型软失败为 None）
+      let parallel_tool_calls = get_bool_opt(m, "parallel_tool_calls")
       let extras = match m.get("extras") {
         Some(Object(entries)) => Some(entries)
         _ => None
@@ -83,6 +85,7 @@ pub fn LucentOptions::from_json(jv : Json) -> Result[LucentOptions, String] {
         structured_output,
         store,
         previous_response_id,
+        parallel_tool_calls,
         extras,
       })
     }

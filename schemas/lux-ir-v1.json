@@ -310,6 +310,7 @@
         "structured_output": { "$ref": "#/definitions/LucentStructuredOutput" },
         "store": { "type": "boolean" },
         "previous_response_id": { "type": "string" },
+        "parallel_tool_calls": { "type": "boolean", "description": "并行工具调用开关（B-003）：Chat/Responses 直接载体，Messages 侧语义反向（disable_parallel_tool_use），Gemini 无请求级对应（Unsupported 诊断）" },
         "extras": { "type": "object", "additionalProperties": { "$ref": "#/definitions/JsonValue" }, "description": "厂商私有扩展（软失败保留）" }
       },
       "required": ["stream"]

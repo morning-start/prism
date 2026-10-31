@@ -367,6 +367,11 @@ pub fn LucentOptions::to_json(self : LucentOptions) -> Json {
     Some(id) => fields["previous_response_id"] = Json::string(id)
     None => ()
   }
+  // parallel_tool_calls（B-003 标准可选字段）：None = 未表达，不输出
+  match self.parallel_tool_calls {
+    Some(b) => fields["parallel_tool_calls"] = Json(b)
+    None => ()
+  }
   match self.extras {
     Some(ext) => fields["extras"] = Json::object(ext)
     None => ()

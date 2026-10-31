@@ -587,32 +587,41 @@ pub fn lux_request_to_messages(
       )
     None => ()
   }
-  // parallel_tool_calls（OpenAI 系）→ disable_parallel_tool_use（语义反向，标准 §2）
-  // extras 中透传的 parallel_tool_calls 由本分支消费，不落入输出 JSON。
+  // parallel_tool_calls（B-003）：标准字段语义反向 → disable_parallel_tool_use。
+  // 标准字段优先；extras 旧载荷回退（兼容：同名 parallel_tool_calls）。消费后
+  // 从 merged_extras 剔除，不落入输出 JSON。
   // 标准：Chat parallel_tool_calls=false <-> Messages disable_parallel_tool_use=true
   // （修复记录：此前两个分支的输出值互反——parallel=true 会产出 disable=true，
   //  与标准相反；T3 options_ext_test 回归门禁捕获）
   let mut merged_extras = opts.extras
-  match opts.extras {
-    Some(m) =>
-      match m.get("parallel_tool_calls") {
-        Some(True) => {
-          parts.push("\"disable_parallel_tool_use\":false")
-          merged_extras = @internal.extras_without(
-            opts.extras,
-            "parallel_tool_calls",
-          )
-        }
-        Some(False) => {
-          parts.push("\"disable_parallel_tool_use\":true")
-          merged_extras = @internal.extras_without(
-            opts.extras,
-            "parallel_tool_calls",
-          )
-        }
-        _ => ()
+  match opts.parallel_tool_calls {
+    Some(b) => {
+      // 语义反向：parallel=true → disable=false
+      let v = if b { "false" } else { "true" }
+      parts.push("\"disable_parallel_tool_use\":" + v)
+    }
+    None =>
+      match merged_extras {
+        Some(m) =>
+          match m.get("parallel_tool_calls") {
+            Some(True) => {
+              parts.push("\"disable_parallel_tool_use\":false")
+              merged_extras = @internal.extras_without(
+                opts.extras,
+                "parallel_tool_calls",
+              )
+            }
+            Some(False) => {
+              parts.push("\"disable_parallel_tool_use\":true")
+              merged_extras = @internal.extras_without(
+                opts.extras,
+                "parallel_tool_calls",
+              )
+            }
+            _ => ()
+          }
+        None => ()
       }
-    None => ()
   }
   // previous_response_id：仅 Responses 有语义；跨端出站时若无可恢复历史必须拒绝（标准 §3.2）
   // T8：标准字段优先判定；extras 旧载荷回退（兼容）。两者都从输出中剔除。

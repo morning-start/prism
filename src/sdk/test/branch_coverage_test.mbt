@@ -1170,9 +1170,10 @@ test "sdk branch - diagnostics status labels and counts" {
 }
 
 ///|
-/// === context.mbt：merge_parallel_tool_extras 的两个 Some 分支 ===
-test "sdk branch - context parallel tool extras merging" {
-  // extras 已存在 + 未设置 parallel_tool_calls 键 → m.copy() 后注入（L318）
+/// === context.mbt：parallel_tool_calls 标准字段传递（B-003）===
+test "sdk branch - context parallel tool calls standard field" {
+  // B-003：with_parallel_tool_calls → IR 标准字段（不再注入 extras）；
+  // 用户 extras 原样保留（tenant 不动，parallel_tool_calls 键不被注入）
   let extras : Map[String, Json] = Map([])
   extras["tenant"] = Json::string("acme")
   let opts = @sdk.PrismOptions::new(None, None, None, None, Some(extras)).with_parallel_tool_calls(
@@ -1183,29 +1184,22 @@ test "sdk branch - context parallel tool extras merging" {
     "gpt-4o",
     opts,
   )
+  assert_eq(req.options.parallel_tool_calls, Some(true))
   match req.options.extras {
     Some(m) => {
       assert_eq(m.get("tenant"), Some(Json::string("acme")))
-      assert_eq(m.get("parallel_tool_calls"), Some(Json::boolean(true)))
+      // 旧 extras 注入路径已移除：extras 不再出现该键
+      assert_true(m.get("parallel_tool_calls") is None)
     }
-    None => fail("expected merged extras")
+    None => fail("expected user extras preserved")
   }
-  // extras 已含 parallel_tool_calls → 用户值优先，原样返回（L323）
-  let user_extras : Map[String, Json] = Map([])
-  user_extras["parallel_tool_calls"] = Json::boolean(false)
-  let opts2 = @sdk.PrismOptions::new(None, None, None, None, Some(user_extras)).with_parallel_tool_calls(
-    true,
-  )
+  // 未设置时标准字段为 None，extras 缺省路径输出不变
   let req2 = @sdk.context_to_lux_request(
     @sdk.Context::new().add_user("hi"),
     "gpt-4o",
-    opts2,
+    @sdk.PrismOptions::new(None, None, None, None, Some(extras)),
   )
-  match req2.options.extras {
-    Some(m) =>
-      assert_eq(m.get("parallel_tool_calls"), Some(Json::boolean(false)))
-    None => fail("expected user extras preserved")
-  }
+  assert_true(req2.options.parallel_tool_calls is None)
 }
 
 ///|

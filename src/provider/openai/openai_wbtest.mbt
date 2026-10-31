@@ -2023,6 +2023,64 @@ test "encode - extras disable_parallel_tool_use maps to parallel_tool_calls" {
 }
 
 ///|
+/// B-003：标准字段优先直出；extras 旧载荷（同名/语义反向）回退已另测。
+test "encode - standard parallel_tool_calls takes precedence over extras" {
+  let opts = @lux.LucentOptions::new(
+    None,
+    None,
+    None,
+    None,
+    None,
+    false,
+    None,
+    None,
+    None,
+    // extras 同时带旧载荷：标准字段必须赢
+    Some({ "parallel_tool_calls": Json::boolean(true) }),
+  ).with_parallel_tool_calls(Some(false))
+  let req = @lux.LucentRequest::new(
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
+      ),
+    ],
+    None,
+    None,
+    opts,
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai(req) {
+    Ok(cr) => {
+      assert_true(cr.value().contains("\"parallel_tool_calls\":false"))
+      // extras 载荷（true）被消费，不双写：输出不得再含 true 形态
+      assert_false(cr.value().contains("\"parallel_tool_calls\":true"))
+    }
+    Err(e) => fail("encode failed: \{e}")
+  }
+}
+
+///|
+/// B-003 decode：wire `parallel_tool_calls` 提升为标准字段，不再落 extras。
+test "decode - wire parallel_tool_calls becomes standard field" {
+  let json = "{\"model\":\"gpt-4o\",\"parallel_tool_calls\":false,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}"
+  match openai_to_lux_request(json) {
+    Ok(cr) => {
+      assert_eq(cr.value().options.parallel_tool_calls, Some(false))
+      match cr.value().options.extras {
+        Some(m) => assert_true(m.get("parallel_tool_calls") is None)
+        None => ()
+      }
+    }
+    Err(e) => fail("decode failed: \{e}")
+  }
+}
+
+///|
 /// extras 旧载荷回退：previous_response_id 从 extras 读取（标准字段路径已另测）
 test "encode - extras previous_response_id degrades to diagnostic" {
   let opts = @lux.LucentOptions::new(

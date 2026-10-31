@@ -273,10 +273,10 @@ pub fn context_to_lux_request(
     None,
     opts.structured_output,
     opts.store,
-    // parallel_tool_calls 经 extras 语义反传（openai 直接消费；
-    // messages 消费反向的 disable_parallel_tool_use，由编码端换算）
-    merge_parallel_tool_extras(opts),
-  )
+    // B-003：parallel_tool_calls 提升为 IR 标准可选字段，不再注入 extras
+    //（4 端编码器直接消费标准字段；messages 语义反向由编码端换算）
+    opts.extras,
+  ).with_parallel_tool_calls(opts.parallel_tool_calls)
   // reasoning：显式关闭优先；否则 effort 或 enabled 任一设置即启用
   let reasoning : @lux.LucentReasoningConfig? = match opts.reasoning_enabled {
     Some(false) => Some(@lux.LucentReasoningConfig::disabled())
@@ -305,27 +305,3 @@ pub fn context_to_lux_request(
 }
 
 ///|
-/// 合并 parallel_tool_calls 到 extras（T3）
-///
-/// 用户 extras 优先保留；parallel_tool_calls 仅在用户未显式设置同名键时
-/// 注入（Extension 字段规则：可选、不覆盖用户数据）。未设置时原样返回
-/// 用户 extras——保证缺省路径输出不变。
-fn merge_parallel_tool_extras(opts : PrismOptions) -> Map[String, Json]? {
-  match opts.parallel_tool_calls {
-    None => opts.extras
-    Some(enabled) => {
-      let merged : Map[String, Json] = match opts.extras {
-        Some(m) => m.copy()
-        None => Map([])
-      }
-      // 用户已显式通过 extras 设置则不覆盖
-      match merged.get("parallel_tool_calls") {
-        Some(_) => Some(merged)
-        None => {
-          merged["parallel_tool_calls"] = Json::boolean(enabled)
-          Some(merged)
-        }
-      }
-    }
-  }
-}

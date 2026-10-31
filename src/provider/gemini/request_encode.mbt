@@ -620,14 +620,52 @@ pub fn lux_request_to_gemini(
     opts.extras,
     "previous_response_id",
   )
+  // parallel_tool_calls（B-003）：Gemini 无请求级并行开关（toolConfig 只有
+  // functionCallingMode，属调用模式而非并行控制）。标准字段与 extras 旧载荷
+  // （含语义反向的 disable_parallel_tool_use）都不静默丢弃 → Unsupported 诊断
+  // 并从 extras 剔除（绝不静默丢弃，对齐 store 处理）。
+  let mut parallel_handled = false
+  if opts.parallel_tool_calls is Some(_) {
+    diagnostics.push(
+      @lux.ConversionDiagnostic::unsupported(
+        "options.parallel_tool_calls",
+        Some("gemini has no request-level parallel tool calls control"),
+      ),
+    )
+    parallel_handled = true
+  }
+  let mut parallel_stripped = stripped_extras
+  match stripped_extras {
+    Some(m) => {
+      let had_p = m.get("parallel_tool_calls") is Some(_)
+      let had_d = m.get("disable_parallel_tool_use") is Some(_)
+      if had_p || had_d {
+        if !parallel_handled {
+          diagnostics.push(
+            @lux.ConversionDiagnostic::unsupported(
+              "options.parallel_tool_calls",
+              Some("gemini has no request-level parallel tool calls control"),
+            ),
+          )
+        }
+        parallel_stripped = @internal.extras_without_keys(stripped_extras, [
+          "parallel_tool_calls", "disable_parallel_tool_use",
+        ])
+      }
+    }
+    None => ()
+  }
   // 扩展通道（见 docs/lux-ir-design.md）：`request.extra` 是程序作者显式给定的
   // 目标端扩展（落在**请求体顶层**，gemini 的请求级扩展 safetySettings /
   // cachedContent / toolConfig 都在顶层），`options.extras` 是解码侧保留的源协议
   // wire 遗留（落在 generationConfig 内）。优先级
   // 目标按 IR 编码出的字段 > `request.extra` > `options.extras`。
-  let overridden = @internal.overlapping_extra_keys(stripped_extras, req.extra)
+  let overridden = @internal.overlapping_extra_keys(
+    parallel_stripped,
+    req.extra,
+  )
   @lux.push_extras_overridden(overridden, diagnostics)
-  let extras_kept = @internal.extras_without_keys(stripped_extras, overridden)
+  let extras_kept = @internal.extras_without_keys(parallel_stripped, overridden)
   // extras 跨端过滤：可证明属于其它协议的键剔除并报 Unsupported 诊断
   // （extras 在 gemini 落在 generationConfig 内，故「原生」包含 generationConfig 键）
   let foreign = @internal.foreign_extra_keys(extras_kept, "gemini")

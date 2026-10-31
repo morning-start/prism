@@ -293,6 +293,32 @@ test "@lux.LucentOptions blackbox - stop array round trips" {
 }
 
 ///|
+/// === B-003：parallel_tool_calls 标准可选字段 round-trip ===
+test "@lux.LucentOptions blackbox - parallel_tool_calls round trips" {
+  let opts = @lux.LucentOptions::default().with_parallel_tool_calls(Some(false))
+  let s = opts.to_json().stringify()
+  // 序列化：标准字段名直出（不再包 extras）
+  assert_true(s.contains("\"parallel_tool_calls\":false"))
+  assert_false(s.contains("extras"))
+  let parsed = @json.parse(s)
+  match @lux.LucentOptions::from_json(parsed) {
+    Ok(d) => assert_eq(d, opts)
+    Err(e) => fail("parallel_tool_calls round trip failed: " + e)
+  }
+  // None = 未表达：不出现在序列化输出
+  let plain = @lux.LucentOptions::default().to_json().stringify()
+  assert_false(plain.contains("parallel_tool_calls"))
+  // 错型软失败为 None（扩展字段不炸反序列化）
+  let bad = @lux.LucentOptions::from_json(
+    @json.parse("{\"stream\":false,\"parallel_tool_calls\":\"yes\"}"),
+  )
+  match bad {
+    Ok(d) => assert_true(d.parallel_tool_calls is None)
+    Err(e) => fail("wrong-typed parallel_tool_calls should soft-fail: " + e)
+  }
+}
+
+///|
 /// === @lux.LucentCapabilities round-trip（覆盖 get_support_level 成功路径）===
 test "@lux.LucentCapabilities blackbox - full round trip via JSON string" {
   let caps = @lux.LucentCapabilities::create(

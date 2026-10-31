@@ -442,29 +442,52 @@ pub fn lux_request_to_responses(
       )
     None => ()
   }
-  // disable_parallel_tool_use（Anthropic 系）→ parallel_tool_calls（语义反向，标准 §2）
-  // extras 中透传的 disable_parallel_tool_use 由本分支消费，不落入输出 JSON。
+  // parallel_tool_calls（B-003）：标准字段优先；extras 旧载荷回退（兼容）。
+  // 回退序：① 语义反向的 disable_parallel_tool_use（Anthropic 系 extras），
+  // ② 同名 parallel_tool_calls。消费后从 merged_extras 剔除，不落入输出 JSON
+  // 双写；标准字段 "Chat parallel_tool_calls=false <-> Messages disable=true"。
   let mut merged_extras = opts.extras
-  match opts.extras {
-    Some(m) =>
-      match m.get("disable_parallel_tool_use") {
-        Some(True) => {
-          parts.push("\"parallel_tool_calls\":false")
-          merged_extras = @internal.extras_without(
-            opts.extras,
-            "disable_parallel_tool_use",
-          )
-        }
-        Some(False) => {
-          parts.push("\"parallel_tool_calls\":true")
-          merged_extras = @internal.extras_without(
-            opts.extras,
-            "disable_parallel_tool_use",
-          )
-        }
-        _ => ()
+  match opts.parallel_tool_calls {
+    Some(b) => parts.push("\"parallel_tool_calls\":" + b.to_string())
+    None =>
+      match merged_extras {
+        Some(m) =>
+          match m.get("disable_parallel_tool_use") {
+            Some(True) => {
+              parts.push("\"parallel_tool_calls\":false")
+              merged_extras = @internal.extras_without(
+                opts.extras,
+                "disable_parallel_tool_use",
+              )
+            }
+            Some(False) => {
+              parts.push("\"parallel_tool_calls\":true")
+              merged_extras = @internal.extras_without(
+                opts.extras,
+                "disable_parallel_tool_use",
+              )
+            }
+            _ =>
+              match m.get("parallel_tool_calls") {
+                Some(True) => {
+                  parts.push("\"parallel_tool_calls\":true")
+                  merged_extras = @internal.extras_without(
+                    opts.extras,
+                    "parallel_tool_calls",
+                  )
+                }
+                Some(False) => {
+                  parts.push("\"parallel_tool_calls\":false")
+                  merged_extras = @internal.extras_without(
+                    opts.extras,
+                    "parallel_tool_calls",
+                  )
+                }
+                _ => ()
+              }
+          }
+        None => ()
       }
-    None => ()
   }
   merged_extras = @internal.extras_without(
     merged_extras, "previous_response_id",
