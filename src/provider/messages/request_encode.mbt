@@ -599,6 +599,10 @@ pub fn lux_request_to_messages(
       // 语义反向：parallel=true → disable=false
       let v = if b { "false" } else { "true" }
       parts.push("\"disable_parallel_tool_use\":" + v)
+      // 标准字段已表达 → extras 旧载荷主动剔除（QA M2 验收 P2-2）
+      merged_extras = @internal.extras_without_keys(merged_extras, [
+        "parallel_tool_calls", "disable_parallel_tool_use",
+      ])
     }
     None =>
       match merged_extras {

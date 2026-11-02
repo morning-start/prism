@@ -127,11 +127,11 @@ class PrismGateway {
 
   /**
    * 列出支持的 Provider
-   * @returns {string[]} Provider ID 列表
+   * @returns {string[]} Provider ID 列表（ABI v2：wasm 返回统一信封，此处解出 value）
    */
   listProviders() {
     const resultPtr = this.instance.exports.wasm_list_providers();
-    return JSON.parse(this._readString(resultPtr));
+    return JSON.parse(this._readString(resultPtr)).value;
   }
 }
 

@@ -2081,6 +2081,55 @@ test "decode - wire parallel_tool_calls becomes standard field" {
 }
 
 ///|
+/// B-003 P2-2 整改：标准字段 Some 时 extras 旧载荷键主动剔除——
+/// 输出正确且无冗余诊断（不留撞名/foreign 过滤兜底）。
+test "encode - standard parallel_tool_calls strips legacy extras keys silently" {
+  let opts = @lux.LucentOptions::new(
+    None,
+    None,
+    None,
+    None,
+    None,
+    false,
+    None,
+    None,
+    None,
+    Some({
+      "parallel_tool_calls": Json::boolean(true),
+      "disable_parallel_tool_use": Json::boolean(true),
+    }),
+  ).with_parallel_tool_calls(Some(false))
+  let req = @lux.LucentRequest::new(
+    "gpt-4o",
+    None,
+    [
+      @lux.LucentConversationItem::message(
+        @lux.LucentMessage::new(User, [@lux.LucentContent::text("hi")]),
+      ),
+    ],
+    None,
+    None,
+    opts,
+    None,
+    None,
+    None,
+    None,
+  )
+  match lux_request_to_openai(req) {
+    Ok(cr) => {
+      assert_true(cr.value().contains("\"parallel_tool_calls\":false"))
+      assert_false(cr.value().contains("disable_parallel_tool_use"))
+      // 标准字段的剔除是静默的：无 options.extras 相关诊断
+      for d in cr.diagnostics() {
+        assert_false(d.field == "options.extras.parallel_tool_calls")
+        assert_false(d.field == "options.extras.disable_parallel_tool_use")
+      }
+    }
+    Err(e) => fail("encode failed: \{e}")
+  }
+}
+
+///|
 /// extras 旧载荷回退：previous_response_id 从 extras 读取（标准字段路径已另测）
 test "encode - extras previous_response_id degrades to diagnostic" {
   let opts = @lux.LucentOptions::new(

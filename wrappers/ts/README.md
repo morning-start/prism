@@ -128,7 +128,7 @@ the Lucent IR schema version the artifact was built against.
 | `convertStream(from, sse, to)` | `{ value, diagnostics }` | Whole SSE text → SSE text |
 | `convertStreamEvent(from, sseEvent, to)` | `{ value, diagnostics }` | Single SSE event |
 | `createStream(from, to)` | `StreamSession` | Incremental handle session |
-| `listProviders()` | `string[]` | e.g. `["responses","openai","messages","gemini"]` |
+| `listProviders()` | `string[]` | e.g. `["responses","openai","messages","gemini"]` (ABI v2: envelope unwrapped by the wrapper) |
 
 ### `StreamSession`
 

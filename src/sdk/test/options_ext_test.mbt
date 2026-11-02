@@ -137,7 +137,7 @@ test "with_structured_output - JsonObject maps to json_object" {
 }
 
 ///|
-/// === parallel_tool_calls（extras 语义反传）===
+/// === parallel_tool_calls（B-003 标准字段语义反向）===
 test "with_parallel_tool_calls - false inverts per target" {
   let opts = @sdk.PrismOptions::default().with_parallel_tool_calls(false)
   let p_openai = @sdk.Prism::new().with_provider("openai")

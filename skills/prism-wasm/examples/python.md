@@ -198,10 +198,10 @@ class PrismGateway:
         列出支持的 Provider
 
         Returns:
-            Provider ID 列表
+            Provider ID 列表（ABI v2：wasm 返回统一信封，此处解出 value）
         """
         result_ptr = self.instance.exports(self.store)['wasm_list_providers'](self.store)
-        return json.loads(self._read_string(result_ptr))
+        return json.loads(self._read_string(result_ptr))["value"]
 ```
 
 ## Flask 网关服务器

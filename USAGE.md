@@ -504,7 +504,7 @@ class AuditGateway:
 | | `decode_sse` | provider, sse_str | PrismEvent[] | SSE 文本 → 事件列表 |
 | | `capability` | provider | dict | 查询能力声明 |
 | **工具** | `convert` | from, to, dir, payload | Provider JSON | 跨协议转换 |
-| | `list_providers` | — | string[] | 列出所有 Provider |
+| | `list_providers` | — | `{"value": string[], "diagnostics": []}`（ABI v2 统一信封） | 列出所有 Provider |
 | | `ping` | — | "pong" | 健康检查 |
 
 ### 当前支持的 Provider

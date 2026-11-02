@@ -55,7 +55,7 @@ compilation to reach non-public members).
 
 - **sdk/test**: 2026-10-24（第九轮，CR-006 批次 1）新增 `stream_termination_test`（responses 三终止事件逐值映射、`response.failed` 的 Error 事件 + 诊断、官方扁平 error 帧兼容嵌套形态、流式与非流式同值不变量、gemini `promptFeedback.blockReason` → `Finish(Safety)` + 诊断、无双 Finish、`Safety → refusal` 收敛；十个用例）；配套抽出 `src/provider/meta/termination.mbt`（responses 流式/非流式共用 status 映射）
 
-**Total: 1454 tests passing (native + wasm-gc), 2026-10-25（`moon test` 全量；另 wrappers/ts 16 项 Node 集成测试独立跑 `npm test`，CI wrapper job 与 `verify.sh --oracle` 均已接入）。**
+**Total: 1461 tests passing (native + wasm-gc), 2026-10-31（`moon test` 全量；另 wrappers/ts 16 项 Node 集成测试独立跑 `npm test`，CI wrapper job 与 `verify.sh --oracle` 均已接入）。**
 
 ### 官方 schema 校验（Node oracle，2026-10-24 上线）
 
@@ -140,6 +140,8 @@ compilation to reach non-public members).
 | T14 | TASK-4：`wrappers/ts` TS wrapper 落库（`@morning-start/prism-wasm` 0.1.0，16 集成测试，USAGE §4 重写可复现；QA 有条件通过 P1-1 属 core 层 → TASK-4b 另立 + TD-006 登记，R-2/R-3 已整改）；实测 ABI 认知修正：`wasm_abi_version` 信封 value 为对象、`wasm_list_providers` 为裸数组（TD-005） |
 | T15 | TASK-4b：request decode 顶层形状守卫（`src/provider/meta/request_shape.mbt` 四端共享：顶层非 Object→Err、messages/contents 错型→Invalid 诊断、responses input 多态版；4 端负向矩阵 12 项测试；fidelity-matrix §2b；QA P1-1 / TD-006 清偿） |
 | T16 | TASK-5：CI `wrapper` job（构建 wasm-gc→冒烟→npm ci→tsc→16 集成测试，独立失败面）+ `verify.sh --oracle` 本地等价四步（ACC-001 CI 豁免项关闭） |
+| T17 | M2-2.1 TD-005 信封统一（commit `e5ba9e9`，2026-10-31）：`wasm_list_providers` 补 `{value,diagnostics}` 信封 + `WASM_ABI_VERSION` 1→2；同步冒烟/oracle driver（漏网消费点，TL 自查发现）/wrapper（expectedAbi 默认 2）/skills/USAGE/README；wasm 黑盒补信封断言 |
+| T18 | M2-2.3 B-003 parallel_tool_calls 标准字段提升（commit `06d53ee` + P2 整改，2026-10-31）：`LucentOptions.parallel_tool_calls : Bool?`（T8 先例）+ `with_parallel_tool_calls`；SDK 删 extras 注入；4 端 encode（openai/responses 直出+extras 回退、messages 语义反向、gemini Unsupported 诊断——修正旧矩阵 gemini 列失实）；decode 提升不落 extras；三端 Some 分支主动剔除 extras 旧载荷键（P2-2 整改）；schema/design/fidelity-matrix 同步；测试 1454→1461 |
 
 ## IR Evolution Backlog (from 2026-09 protocol audit)
 
@@ -158,10 +160,13 @@ carriers are pending governance per `docs/rules/lucent-ir-evolution.md`:
 - **ReasoningEffort `Minimal` tier**: OpenAI `reasoning_effort: "minimal"`
   (gpt-5 family) degrades to `Low` with a diagnostic; Anthropic `"max"`
   degrades to `XHigh`.
-- **parallel_tool_calls as a standard option**: currently exchanged via the
-  `extras` map with semantic inversion per target (`parallel_tool_calls` ↔
-  `disable_parallel_tool_use`); both directions are tested. SDK 侧已有
-  `PrismOptions::with_parallel_tool_calls`（T3），IR 标准字段提升待治理。
+- **parallel_tool_calls as a standard option**: ~~currently exchanged via the
+  `extras` map with semantic inversion per target~~ **已治理（B-003，
+  2026-10-31）**：`LucentOptions.parallel_tool_calls : Bool?` 标准可选字段
+  （T8 先例），SDK `with_parallel_tool_calls` 直设；openai/responses 直出 +
+  extras 旧载荷回退，messages 语义反向 `disable_parallel_tool_use`，gemini
+  显式 Unsupported 诊断（修正旧矩阵失实 ✅）。decode 端 wire 字段提升，
+  不再落 extras。
 
 ## Build & Verify
 

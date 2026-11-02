@@ -71,8 +71,8 @@ pub struct PrismOptions {
   reasoning_effort : @lux.LucentReasoningEffort?
   /// 结构化输出（IR 标准字段：JsonObject/Text/JsonSchema）
   structured_output : @lux.LucentStructuredOutput?
-  /// 并行工具调用；经 extras 语义反传给各 provider
-  /// （messages: disable_parallel_tool_use；openai: parallel_tool_calls）
+  /// 并行工具调用（B-003：直设 IR 标准字段 LucentOptions.parallel_tool_calls；
+  /// messages 目标语义反向 disable_parallel_tool_use，gemini 显式 Unsupported）
   parallel_tool_calls : Bool?
 }
 
@@ -143,7 +143,7 @@ pub fn PrismOptions::with_structured_output(
 }
 
 ///|
-/// 设置并行工具调用（经 extras 语义反传，见字段注释）
+/// 设置并行工具调用（B-003：直设 IR 标准字段，见字段注释）
 pub fn PrismOptions::with_parallel_tool_calls(
   self : PrismOptions,
   enabled : Bool,

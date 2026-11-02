@@ -269,10 +269,10 @@ class PrismGateway {
     return JSON.parse(this._readString(resultPtr));
   }
 
-  // 列出支持的 Provider
+  // 列出支持的 Provider（ABI v2：统一信封）
   listProviders() {
     const resultPtr = this.exports.wasm_list_providers();
-    return JSON.parse(this._readString(resultPtr));
+    return JSON.parse(this._readString(resultPtr)).value;
   }
 }
 ```

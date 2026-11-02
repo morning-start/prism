@@ -105,7 +105,7 @@ TC-8（诊断透出）。
 |---|---|---|---|---|
 | 文本/工具/流式 | ✅ | ✅ | ✅ | ✅ |
 | thinking + signature | ✅ reasoning 项 | ❌ signature 无载体（诊断）；effort 可映射 | ✅ | ✅ thoughts（signature 🟡） |
-| disable_parallel_tool_use（extras） | ✅ | ✅ 语义反传 | ✅ | ✅ |
+| disable_parallel_tool_use（extras 旧载荷） | ✅ 语义反传 | ✅ 语义反传 | ✅ 直出 | ❌ Unsupported 诊断+剔除（B-003：gemini 无请求级并行开关；旧行为经 generationConfig 静默透传，已修正） |
 | 服务端工具（bash/code_execution 等非 function kind） | ❌ 诊断剔除 | ❌ 诊断剔除 | ✅ | ❌ 诊断剔除（gemini 仅 functionDeclarations） |
 | 图像输入 | ✅ | ✅ | ✅ | ✅ |
 
@@ -180,6 +180,7 @@ TC-8（诊断透出）。
 | structured_output=JsonSchema | ✅ | ✅ | ✅ | ✅ `responseSchema` |
 | structured_output=Text | ✅ | ✅ | ✅ | ❌ 诊断（Gemini 无显式 text 模式，默认即 text） |
 | structured_output=Native | ❌ 诊断 | ❌ 诊断 | ❌ 诊断 | ❌ 诊断 |
+| parallel_tool_calls（B-003） | ✅ 直出 | ✅ 直出 | ✅ 语义反向 `disable_parallel_tool_use` | ❌ 诊断（无请求级开关；extras 旧载荷同样剔除+诊断） |
 
 修正的三处具体缺陷：
 

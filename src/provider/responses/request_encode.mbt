@@ -448,7 +448,14 @@ pub fn lux_request_to_responses(
   // 双写；标准字段 "Chat parallel_tool_calls=false <-> Messages disable=true"。
   let mut merged_extras = opts.extras
   match opts.parallel_tool_calls {
-    Some(b) => parts.push("\"parallel_tool_calls\":" + b.to_string())
+    Some(b) => {
+      parts.push("\"parallel_tool_calls\":" + b.to_string())
+      // 标准字段已表达 → extras 旧载荷（两个方向）主动剔除，不留给下游
+      // 撞名检测 / foreign 过滤兜底（避免冗余诊断噪音，QA M2 验收 P2-2）
+      merged_extras = @internal.extras_without_keys(merged_extras, [
+        "parallel_tool_calls", "disable_parallel_tool_use",
+      ])
+    }
     None =>
       match merged_extras {
         Some(m) =>
