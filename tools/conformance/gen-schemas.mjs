@@ -114,8 +114,10 @@ const openapi = YAML.parse(
 const openaiFinish = openapi?.components?.schemas?.CreateChatCompletionStreamResponse
   ?.properties?.choices?.items?.properties?.finish_reason?.enum ?? null;
 
+// 注意：本产物**不含生成时间戳**——CI 的「生成产物与仓库一致」断言要求
+// 同一天/跨天重生成都必须字节相同（此前写入当天日期，导致跨天运行必红；
+// 2026-11-02 M2 首轮 Actions 暴露）。生成历史由 git 记录即可。
 const authority = {
-  _generated: new Date().toISOString().slice(0, 10),
   _sources: {
     'messages.stop_reason': '@anthropic-ai/sdk (Message.stop_reason -> StopReason)',
     'openai.finish_reason': 'schemas/endpoints/openai-openapi.yaml (vendored, MIT)',
